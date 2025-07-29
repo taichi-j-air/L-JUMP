@@ -17,6 +17,8 @@ const Auth = () => {
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [user, setUser] = useState<User | null>(null);
+  const [resetEmail, setResetEmail] = useState("");
+  const [resetLoading, setResetLoading] = useState(false);
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -111,6 +113,30 @@ const Auth = () => {
     }
   };
 
+  const handlePasswordReset = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setResetLoading(true);
+    setError(null);
+    setMessage(null);
+
+    try {
+      const redirectUrl = `${window.location.origin}/`;
+      
+      const { error } = await supabase.auth.resetPasswordForEmail(resetEmail, {
+        redirectTo: redirectUrl,
+      });
+
+      if (error) throw error;
+
+      setMessage("パスワードリセット用のメールを送信しました。メールをチェックしてください。");
+      setResetEmail("");
+    } catch (error: any) {
+      setError(error.message);
+    } finally {
+      setResetLoading(false);
+    }
+  };
+
   // Redirect if already authenticated
   if (user) {
     return null;
@@ -127,9 +153,10 @@ const Auth = () => {
         </CardHeader>
         <CardContent>
           <Tabs defaultValue="signin" className="w-full">
-            <TabsList className="grid w-full grid-cols-2">
+            <TabsList className="grid w-full grid-cols-3">
               <TabsTrigger value="signin">ログイン</TabsTrigger>
               <TabsTrigger value="signup">サインアップ</TabsTrigger>
+              <TabsTrigger value="reset">パスワードリセット</TabsTrigger>
             </TabsList>
             
             <TabsContent value="signin">
@@ -199,6 +226,25 @@ const Auth = () => {
                 </div>
                 <Button type="submit" className="w-full" disabled={loading}>
                   {loading ? "アカウント作成中..." : "アカウント作成"}
+                </Button>
+              </form>
+            </TabsContent>
+
+            <TabsContent value="reset">
+              <form onSubmit={handlePasswordReset} className="space-y-4">
+                <div className="space-y-2">
+                  <Label htmlFor="reset-email">メールアドレス</Label>
+                  <Input
+                    id="reset-email"
+                    type="email"
+                    value={resetEmail}
+                    onChange={(e) => setResetEmail(e.target.value)}
+                    required
+                    placeholder="your@email.com"
+                  />
+                </div>
+                <Button type="submit" className="w-full" disabled={resetLoading}>
+                  {resetLoading ? "送信中..." : "パスワードリセットメール送信"}
                 </Button>
               </form>
             </TabsContent>

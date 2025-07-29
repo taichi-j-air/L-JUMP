@@ -24,13 +24,20 @@ interface AuthEmailData {
 }
 
 const handler = async (req: Request): Promise<Response> => {
+  console.log("🚀 Auth email function called!");
+  console.log("Method:", req.method);
+  console.log("Headers:", Object.fromEntries(req.headers));
+
   // Handle CORS preflight requests
   if (req.method === "OPTIONS") {
+    console.log("📤 Returning CORS headers");
     return new Response(null, { headers: corsHeaders });
   }
 
   try {
+    console.log("📧 Processing email request...");
     const payload = await req.text();
+    console.log("📦 Payload received:", payload.substring(0, 200) + "...");
     const headers = Object.fromEntries(req.headers);
     
     let emailData: AuthEmailData;
