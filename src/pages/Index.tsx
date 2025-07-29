@@ -106,7 +106,12 @@ const Index = () => {
               </CardDescription>
             </CardHeader>
             <CardContent>
-              <Button className="w-full">設定開始</Button>
+              <Button 
+                className="w-full" 
+                onClick={() => navigate("/line-api-settings")}
+              >
+                設定開始
+              </Button>
             </CardContent>
           </Card>
           
