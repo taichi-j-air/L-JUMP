@@ -13,6 +13,7 @@ import ProfileManagement from "./pages/ProfileManagement";
 import FlexMessageDesigner from "./pages/FlexMessageDesigner";
 import MediaLibrary from "./pages/MediaLibrary";
 import NotFound from "./pages/NotFound";
+import ResetPassword from "./pages/ResetPassword";
 
 const queryClient = new QueryClient();
 
@@ -33,6 +34,7 @@ const App = () => (
                 <Routes>
                   <Route path="/" element={<Index />} />
                   <Route path="/auth" element={<Auth />} />
+                  <Route path="/reset-password" element={<ResetPassword />} />
                   <Route path="/line-api-settings" element={<LineApiSettings />} />
                   <Route path="/webhook-settings" element={<WebhookSettings />} />
                   <Route path="/profile-management" element={<ProfileManagement />} />
