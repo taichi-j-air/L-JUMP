@@ -24,6 +24,7 @@ export type Database = {
           line_channel_secret: string | null
           updated_at: string
           user_id: string
+          user_role: string | null
           webhook_url: string | null
         }
         Insert: {
@@ -35,6 +36,7 @@ export type Database = {
           line_channel_secret?: string | null
           updated_at?: string
           user_id: string
+          user_role?: string | null
           webhook_url?: string | null
         }
         Update: {
@@ -46,6 +48,7 @@ export type Database = {
           line_channel_secret?: string | null
           updated_at?: string
           user_id?: string
+          user_role?: string | null
           webhook_url?: string | null
         }
         Relationships: []
