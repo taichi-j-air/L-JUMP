@@ -151,7 +151,7 @@ const handler = async (req: Request): Promise<Response> => {
     }
 
     const emailResponse = await resend.emails.send({
-      from: "FlexMaster <noreply@ljunp.com>",
+      from: "FlexMaster <onboarding@resend.dev>",
       to: [user.email],
       subject: subject,
       html: htmlContent,
