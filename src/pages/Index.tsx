@@ -150,6 +150,24 @@ const Index = () => {
               </Button>
             </CardContent>
           </Card>
+          
+          <Card className="md:col-span-2 lg:col-span-3">
+            <CardHeader>
+              <CardTitle className="text-primary">Flexメッセージデザイナー</CardTitle>
+              <CardDescription>
+                インタラクティブなFlexメッセージを作成・配信
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <Button 
+                className="w-full" 
+                size="lg"
+                onClick={() => navigate("/flex-message-designer")}
+              >
+                メッセージを作成
+              </Button>
+            </CardContent>
+          </Card>
         </div>
       </main>
     </div>
