@@ -62,10 +62,8 @@ const handler = async (req: Request): Promise<Response> => {
       throw new Error("SUPABASE_ANON_KEY environment variable is not set");
     }
     
-    // Set redirect URL based on email action type
-    const redirectUrl = email_action_type === 'recovery' 
-      ? `${redirect_to}reset-password` 
-      : redirect_to;
+    // Set redirect URL based on email action type - use redirect_to as provided
+    const redirectUrl = redirect_to;
     
     const verificationUrl = `${site_url}/auth/v1/verify?token=${token_hash}&type=${email_action_type}&redirect_to=${encodeURIComponent(redirectUrl)}&apikey=${supabaseAnonKey}`;
     console.log("🔗 Generated verification URL:", verificationUrl);
