@@ -55,7 +55,7 @@ const Auth = () => {
     try {
       const redirectUrl = `${window.location.origin}/`;
       
-      const { error } = await supabase.auth.signUp({
+      const { data, error } = await supabase.auth.signUp({
         email,
         password,
         options: {
@@ -68,9 +68,18 @@ const Auth = () => {
 
       if (error) throw error;
 
-      setMessage("確認メールを送信しました。メールをチェックしてアカウントを確認してください。");
+      // Check if user was created but needs email confirmation
+      if (data.user && !data.session) {
+        setMessage("確認メールを送信しました。メールをチェックしてアカウントを確認してください。");
+      } else if (data.session) {
+        setMessage("アカウントが作成されました。自動的にログインします。");
+      }
     } catch (error: any) {
-      setError(error.message);
+      if (error.message.includes("User already registered")) {
+        setError("このメールアドレスは既に登録されています。ログインタブをお試しください。");
+      } else {
+        setError(error.message);
+      }
     } finally {
       setLoading(false);
     }

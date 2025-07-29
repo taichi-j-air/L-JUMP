@@ -9,7 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Badge } from "@/components/ui/badge";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
-import { ArrowLeft, Send, Plus, Trash2, Image, MessageSquare, Move, Save, Eye, GripVertical } from "lucide-react";
+import { ArrowLeft, Send, Plus, Trash2, Image, MessageSquare, Move, Save, Eye, GripVertical, ChevronDown, ChevronRight } from "lucide-react";
 import { MediaSelector } from "@/components/MediaSelector";
 import { ColorPicker } from "@/components/ui/color-picker";
 import {
@@ -56,6 +56,7 @@ interface FlexElement {
     aspectRatio?: string;
     aspectMode?: string;
     style?: string;
+    height?: string;
     action?: {
       type: 'message' | 'uri' | 'postback';
       label?: string;
@@ -97,6 +98,8 @@ const SortableItem = ({ element, onUpdate, onDelete }: {
   onUpdate: (id: string, properties: any) => void;
   onDelete: (id: string) => void;
 }) => {
+  const [isCollapsed, setIsCollapsed] = useState(true);
+  
   const {
     attributes,
     listeners,
@@ -284,7 +287,6 @@ const SortableItem = ({ element, onUpdate, onDelete }: {
                 <SelectContent>
                   <SelectItem value="message">メッセージ送信</SelectItem>
                   <SelectItem value="uri">URL開く</SelectItem>
-                  <SelectItem value="postback">ポストバック</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -302,6 +304,20 @@ const SortableItem = ({ element, onUpdate, onDelete }: {
                 />
               </div>
             )}
+
+            {element.properties.action?.type === 'message' && (
+              <div className="space-y-2">
+                <Label>送信メッセージ</Label>
+                <Input
+                  value={element.properties.action?.text || ''}
+                  onChange={(e) => onUpdate(element.id, { 
+                    ...element.properties, 
+                    action: { ...element.properties.action, text: e.target.value } 
+                  })}
+                  placeholder="送信するメッセージ"
+                />
+              </div>
+            )}
             
             <div className="grid grid-cols-2 gap-2">
               <div className="space-y-2">
@@ -314,20 +330,34 @@ const SortableItem = ({ element, onUpdate, onDelete }: {
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="primary">Primary</SelectItem>
-                    <SelectItem value="secondary">Secondary</SelectItem>
-                    <SelectItem value="link">Link</SelectItem>
+                    <SelectItem value="primary">プライマリ</SelectItem>
+                    <SelectItem value="secondary">セカンダリ</SelectItem>
+                    <SelectItem value="link">リンク</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
               <div className="space-y-2">
-                <Label>色</Label>
-                <Input
-                  value={element.properties.color || ''}
-                  onChange={(e) => onUpdate(element.id, { ...element.properties, color: e.target.value })}
-                  placeholder="#855566"
+                <Label>ボタン色</Label>
+                <ColorPicker
+                  color={element.properties.color || '#0066cc'}
+                  onChange={(color) => onUpdate(element.id, { ...element.properties, color })}
                 />
               </div>
+            </div>
+            <div className="space-y-2">
+              <Label>ボタン高さ</Label>
+              <Select
+                value={element.properties.height || 'md'}
+                onValueChange={(value) => onUpdate(element.id, { ...element.properties, height: value })}
+              >
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="sm">小</SelectItem>
+                  <SelectItem value="md">中</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
           </div>
         );
@@ -339,7 +369,7 @@ const SortableItem = ({ element, onUpdate, onDelete }: {
 
   return (
     <div ref={setNodeRef} style={style} className="bg-background border-2 border-dashed border-muted hover:border-primary/50 rounded-lg p-4 mb-3 shadow-sm">
-      <div className="flex items-center justify-between mb-3">
+      <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
           <div 
             {...attributes} 
@@ -354,6 +384,14 @@ const SortableItem = ({ element, onUpdate, onDelete }: {
             {element.type === 'image' && '画像'}
             {element.type === 'button' && 'ボタン'}
           </Badge>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => setIsCollapsed(!isCollapsed)}
+            className="p-1"
+          >
+            {isCollapsed ? <ChevronRight className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+          </Button>
         </div>
         <Button
           variant="ghost"
@@ -365,7 +403,11 @@ const SortableItem = ({ element, onUpdate, onDelete }: {
         </Button>
       </div>
       
-      {renderElementEditor()}
+      {!isCollapsed && (
+        <div className="mt-3">
+          {renderElementEditor()}
+        </div>
+      )}
     </div>
   );
 };
@@ -500,13 +542,13 @@ const FlexMessageDesigner = () => {
         case 'text':
           return {
             type: 'text',
-            text: props.text || '',
+            text: (props.text || '').replace(/\n/g, '\n'),
             ...(props.size && { size: props.size }),
             ...(props.weight && props.weight !== 'normal' && { weight: props.weight }),
             ...(props.color && props.color !== '#000000' && { color: props.color }),
             ...(props.align && props.align !== 'start' && { align: props.align }),
             ...(props.margin && { margin: props.margin }),
-            ...(props.wrap && { wrap: props.wrap })
+            wrap: true
           };
         
         case 'image':
@@ -525,6 +567,7 @@ const FlexMessageDesigner = () => {
             type: 'button',
             ...(props.style && { style: props.style }),
             ...(props.color && { color: props.color }),
+            ...(props.height && { height: props.height }),
             ...(props.margin && { margin: props.margin }),
             action: props.action || { type: 'uri', uri: 'https://line.me/' }
           };
@@ -539,13 +582,12 @@ const FlexMessageDesigner = () => {
       altText: design.name || "Flexメッセージ",
       contents: {
         type: "bubble",
-        body: {
-          type: "box",
-          layout: "vertical",
-          ...(design.body.spacing && { spacing: design.body.spacing }),
-          ...(design.body.backgroundColor && { backgroundColor: design.body.backgroundColor }),
-          contents
-        },
+      body: {
+        type: "box",
+        layout: "vertical",
+        spacing: "none",
+        contents
+      },
         ...(design.styles && { styles: design.styles })
       }
     };
@@ -956,7 +998,7 @@ const FlexMessageDesigner = () => {
                       <p className="text-sm">要素を追加するとプレビューが表示されます</p>
                     </div>
                   ) : (
-                    <div className="bg-white rounded-lg p-3 shadow-sm border max-w-[280px] mx-auto">
+                    <div className="bg-white rounded-lg shadow-sm border max-w-[280px] mx-auto">
                       <div className="space-y-2">
                         {design.body.contents.map((element, index) => (
                           <div key={element.id} className="flex">
@@ -973,7 +1015,8 @@ const FlexMessageDesigner = () => {
                                   fontWeight: element.properties.weight === 'bold' ? 'bold' : 'normal',
                                   textAlign: element.properties.align as any || 'left',
                                   padding: element.properties.backgroundColor !== '#ffffff' ? '4px 8px' : undefined,
-                                  borderRadius: element.properties.backgroundColor !== '#ffffff' ? '4px' : undefined
+                                  borderRadius: element.properties.backgroundColor !== '#ffffff' ? '4px' : undefined,
+                                  whiteSpace: 'pre-wrap'
                                 }}
                               >
                                 {element.properties.text || 'テキスト'}
@@ -994,13 +1037,19 @@ const FlexMessageDesigner = () => {
                             {element.type === 'button' && (
                               <div className="flex-1">
                                 <button 
-                                  className="w-full py-2 px-4 rounded border text-sm font-medium"
+                                  className="w-full rounded border text-sm font-medium"
                                   style={{
-                                    backgroundColor: element.properties.style === 'primary' ? '#0066cc' : 
-                                                   element.properties.style === 'secondary' ? '#f0f0f0' : 'transparent',
-                                    color: element.properties.style === 'primary' ? 'white' : 
-                                          element.properties.style === 'secondary' ? '#333' : '#0066cc',
-                                    borderColor: element.properties.style === 'link' ? '#0066cc' : 'transparent'
+                                    backgroundColor: element.properties.color || (
+                                      element.properties.style === 'primary' ? '#0066cc' : 
+                                      element.properties.style === 'secondary' ? '#f0f0f0' : 'transparent'
+                                    ),
+                                    color: element.properties.color ? 
+                                      (element.properties.color === '#ffffff' || element.properties.color === '#f0f0f0' ? '#333' : 'white') :
+                                      (element.properties.style === 'primary' ? 'white' : 
+                                       element.properties.style === 'secondary' ? '#333' : '#0066cc'),
+                                    borderColor: element.properties.style === 'link' ? 
+                                      (element.properties.color || '#0066cc') : 'transparent',
+                                    padding: element.properties.height === 'sm' ? '8px 16px' : '12px 16px'
                                   }}
                                 >
                                   {element.properties.action?.label || 'ボタン'}
