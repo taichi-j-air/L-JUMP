@@ -62,11 +62,22 @@ const handler = async (req: Request): Promise<Response> => {
       throw new Error("SUPABASE_ANON_KEY environment variable is not set");
     }
     
+    // Detailed logging for debugging
+    console.log("📧 Email data:", JSON.stringify(email_data, null, 2));
+    console.log("🔑 Token hash:", token_hash);
+    console.log("🌐 Site URL:", site_url);
+    console.log("📍 Redirect URL:", redirect_to);
+    
     // Set redirect URL based on email action type - use redirect_to as provided
     const redirectUrl = redirect_to;
     
     const verificationUrl = `${site_url}/verify?token=${token_hash}&type=${email_action_type}&redirect_to=${encodeURIComponent(redirectUrl)}&apikey=${supabaseAnonKey}`;
     console.log("🔗 Generated verification URL:", verificationUrl);
+    console.log("📝 URL breakdown:");
+    console.log("  - Protocol:", verificationUrl.split('://')[0]);
+    console.log("  - Domain:", verificationUrl.split('/')[2]);
+    console.log("  - Path:", verificationUrl.split('?')[0].split('/').slice(3).join('/'));
+    console.log("  - Query params:", verificationUrl.split('?')[1]);
 
     // Determine email content based on action type
     let subject = "";

@@ -14,6 +14,7 @@ import FlexMessageDesigner from "./pages/FlexMessageDesigner";
 import MediaLibrary from "./pages/MediaLibrary";
 import NotFound from "./pages/NotFound";
 import ResetPassword from "./pages/ResetPassword";
+import EmailVerify from "./pages/EmailVerify";
 
 const queryClient = new QueryClient();
 
@@ -34,6 +35,7 @@ const App = () => (
                 <Routes>
                   <Route path="/" element={<Index />} />
                   <Route path="/auth" element={<Auth />} />
+                  <Route path="/verify" element={<EmailVerify />} />
                   <Route path="/reset-password" element={<ResetPassword />} />
                   <Route path="/line-api-settings" element={<LineApiSettings />} />
                   <Route path="/webhook-settings" element={<WebhookSettings />} />
