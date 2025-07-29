@@ -9,8 +9,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Badge } from "@/components/ui/badge";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
-import { ArrowLeft, Send, Plus, Trash2, Image, MessageSquare, Move, Save } from "lucide-react";
+import { ArrowLeft, Send, Plus, Trash2, Image, MessageSquare, Move, Save, Eye, GripVertical } from "lucide-react";
 import { MediaSelector } from "@/components/MediaSelector";
+import { ColorPicker } from "@/components/ui/color-picker";
 import {
   DndContext,
   closestCenter,
@@ -134,13 +135,11 @@ const SortableItem = ({ element, onUpdate, onDelete }: {
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="xxs">XXS</SelectItem>
-                    <SelectItem value="xs">XS</SelectItem>
-                    <SelectItem value="sm">Small</SelectItem>
-                    <SelectItem value="md">Medium</SelectItem>
-                    <SelectItem value="lg">Large</SelectItem>
-                    <SelectItem value="xl">XL</SelectItem>
-                    <SelectItem value="xxl">XXL</SelectItem>
+                    <SelectItem value="xs">極小</SelectItem>
+                    <SelectItem value="sm">小</SelectItem>
+                    <SelectItem value="md">中</SelectItem>
+                    <SelectItem value="lg">大</SelectItem>
+                    <SelectItem value="xl">特大</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
@@ -154,19 +153,18 @@ const SortableItem = ({ element, onUpdate, onDelete }: {
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="normal">Normal</SelectItem>
-                    <SelectItem value="bold">Bold</SelectItem>
+                    <SelectItem value="normal">標準</SelectItem>
+                    <SelectItem value="bold">太字</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
             </div>
             <div className="grid grid-cols-2 gap-2">
               <div className="space-y-2">
-                <Label>色</Label>
-                <Input
-                  value={element.properties.color || '#000000'}
-                  onChange={(e) => onUpdate(element.id, { ...element.properties, color: e.target.value })}
-                  placeholder="#000000"
+                <Label>文字色</Label>
+                <ColorPicker
+                  color={element.properties.color || '#000000'}
+                  onChange={(color) => onUpdate(element.id, { ...element.properties, color })}
                 />
               </div>
               <div className="space-y-2">
@@ -185,6 +183,13 @@ const SortableItem = ({ element, onUpdate, onDelete }: {
                   </SelectContent>
                 </Select>
               </div>
+            </div>
+            <div className="space-y-2">
+              <Label>背景色</Label>
+              <ColorPicker
+                color={element.properties.backgroundColor || '#ffffff'}
+                onChange={(backgroundColor) => onUpdate(element.id, { ...element.properties, backgroundColor })}
+              />
             </div>
           </div>
         );
@@ -333,11 +338,16 @@ const SortableItem = ({ element, onUpdate, onDelete }: {
   };
 
   return (
-    <div ref={setNodeRef} style={style} className="bg-background border rounded-lg p-4 mb-3">
+    <div ref={setNodeRef} style={style} className="bg-background border-2 border-dashed border-muted hover:border-primary/50 rounded-lg p-4 mb-3 shadow-sm">
       <div className="flex items-center justify-between mb-3">
         <div className="flex items-center gap-2">
-          <div {...attributes} {...listeners} className="cursor-move p-1 hover:bg-muted rounded">
-            <Move className="w-4 h-4" />
+          <div 
+            {...attributes} 
+            {...listeners} 
+            className="cursor-grab active:cursor-grabbing p-2 hover:bg-primary/10 rounded-md border border-primary/20 transition-colors"
+            title="ドラッグして並び替え"
+          >
+            <GripVertical className="w-4 h-4 text-primary" />
           </div>
           <Badge variant="outline" className="text-xs">
             {element.type === 'text' && 'テキスト'}
@@ -494,6 +504,7 @@ const FlexMessageDesigner = () => {
             ...(props.size && { size: props.size }),
             ...(props.weight && props.weight !== 'normal' && { weight: props.weight }),
             ...(props.color && props.color !== '#000000' && { color: props.color }),
+            ...(props.backgroundColor && props.backgroundColor !== '#ffffff' && { backgroundColor: props.backgroundColor }),
             ...(props.align && props.align !== 'start' && { align: props.align }),
             ...(props.margin && { margin: props.margin }),
             ...(props.wrap && { wrap: props.wrap })
@@ -911,7 +922,11 @@ const FlexMessageDesigner = () => {
                       <Save className="w-4 h-4 mr-2" />
                       {loading ? "保存中..." : currentMessageId ? "上書き保存" : "新規保存"}
                     </Button>
-                    <Button onClick={sendMessage} variant="outline" disabled={loading}>
+                    <Button 
+                      onClick={sendMessage} 
+                      disabled={loading}
+                      className="bg-[#06c755] hover:bg-[#05b84c] text-white border-[#06c755]"
+                    >
                       <Send className="w-4 h-4 mr-2" />
                       {loading ? "送信中..." : "LINE配信"}
                     </Button>
@@ -921,8 +936,86 @@ const FlexMessageDesigner = () => {
             </Card>
           </div>
 
-          {/* 右側：保存済みメッセージ一覧 */}
+          {/* 右側：プレビューと保存済みメッセージ一覧 */}
           <div className="space-y-6">
+            {/* プレビュー画面 */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Eye className="w-5 h-5" />
+                  プレビュー
+                </CardTitle>
+                <CardDescription>
+                  現在作成中のFlexメッセージのプレビューです
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="bg-muted/30 rounded-lg p-4 min-h-[200px]">
+                  {design.body.contents.length === 0 ? (
+                    <div className="text-center py-8 text-muted-foreground">
+                      <MessageSquare className="w-8 h-8 mx-auto mb-2" />
+                      <p className="text-sm">要素を追加するとプレビューが表示されます</p>
+                    </div>
+                  ) : (
+                    <div className="bg-white rounded-lg p-3 shadow-sm border max-w-[280px] mx-auto">
+                      <div className="space-y-2">
+                        {design.body.contents.map((element, index) => (
+                          <div key={element.id} className="flex">
+                            {element.type === 'text' && (
+                              <div 
+                                className="flex-1"
+                                style={{
+                                  color: element.properties.color || '#000000',
+                                  backgroundColor: element.properties.backgroundColor !== '#ffffff' ? element.properties.backgroundColor : undefined,
+                                  fontSize: element.properties.size === 'xs' ? '12px' : 
+                                           element.properties.size === 'sm' ? '14px' :
+                                           element.properties.size === 'lg' ? '18px' :
+                                           element.properties.size === 'xl' ? '20px' : '16px',
+                                  fontWeight: element.properties.weight === 'bold' ? 'bold' : 'normal',
+                                  textAlign: element.properties.align as any || 'left',
+                                  padding: element.properties.backgroundColor !== '#ffffff' ? '4px 8px' : undefined,
+                                  borderRadius: element.properties.backgroundColor !== '#ffffff' ? '4px' : undefined
+                                }}
+                              >
+                                {element.properties.text || 'テキスト'}
+                              </div>
+                            )}
+                            {element.type === 'image' && element.properties.url && (
+                              <div className="flex-1">
+                                <img 
+                                  src={element.properties.url} 
+                                  alt="プレビュー画像" 
+                                  className="w-full h-auto rounded"
+                                  style={{
+                                    aspectRatio: element.properties.aspectRatio?.replace(':', '/') || '20/13'
+                                  }}
+                                />
+                              </div>
+                            )}
+                            {element.type === 'button' && (
+                              <div className="flex-1">
+                                <button 
+                                  className="w-full py-2 px-4 rounded border text-sm font-medium"
+                                  style={{
+                                    backgroundColor: element.properties.style === 'primary' ? '#0066cc' : 
+                                                   element.properties.style === 'secondary' ? '#f0f0f0' : 'transparent',
+                                    color: element.properties.style === 'primary' ? 'white' : 
+                                          element.properties.style === 'secondary' ? '#333' : '#0066cc',
+                                    borderColor: element.properties.style === 'link' ? '#0066cc' : 'transparent'
+                                  }}
+                                >
+                                  {element.properties.action?.label || 'ボタン'}
+                                </button>
+                              </div>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </CardContent>
+            </Card>
             <Card>
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
