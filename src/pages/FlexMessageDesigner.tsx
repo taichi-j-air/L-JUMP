@@ -330,9 +330,9 @@ const SortableItem = ({ element, onUpdate, onDelete }: {
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="primary">プライマリ</SelectItem>
-                    <SelectItem value="secondary">セカンダリ</SelectItem>
-                    <SelectItem value="link">リンク</SelectItem>
+                    <SelectItem value="primary">メイン（濃い色）</SelectItem>
+                    <SelectItem value="secondary">サブ（薄い色）</SelectItem>
+                    <SelectItem value="link">リンク（枠線）</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
@@ -356,6 +356,7 @@ const SortableItem = ({ element, onUpdate, onDelete }: {
                 <SelectContent>
                   <SelectItem value="sm">小</SelectItem>
                   <SelectItem value="md">中</SelectItem>
+                  <SelectItem value="lg">大</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -535,8 +536,10 @@ const FlexMessageDesigner = () => {
   };
 
   const generateFlexJson = () => {
-    const contents = design.body.contents.map(element => {
+    const contents = design.body.contents.map((element, index) => {
       const props = element.properties;
+      const isFirst = index === 0;
+      const isLast = index === design.body.contents.length - 1;
       
       switch (element.type) {
         case 'text':
@@ -547,7 +550,7 @@ const FlexMessageDesigner = () => {
             ...(props.weight && props.weight !== 'normal' && { weight: props.weight }),
             ...(props.color && props.color !== '#000000' && { color: props.color }),
             ...(props.align && props.align !== 'start' && { align: props.align }),
-            ...(props.margin && { margin: props.margin }),
+            ...(!isFirst && { margin: "15px" }),
             wrap: true
           };
         
@@ -558,7 +561,7 @@ const FlexMessageDesigner = () => {
             ...(props.size && { size: props.size }),
             ...(props.aspectRatio && { aspectRatio: props.aspectRatio }),
             ...(props.aspectMode && { aspectMode: props.aspectMode }),
-            ...(props.margin && { margin: props.margin }),
+            ...(!isFirst && { margin: "15px" }),
             ...(props.action && { action: props.action })
           };
         
@@ -568,7 +571,7 @@ const FlexMessageDesigner = () => {
             ...(props.style && { style: props.style }),
             ...(props.color && { color: props.color }),
             ...(props.height && { height: props.height }),
-            ...(props.margin && { margin: props.margin }),
+            ...(!isFirst && { margin: "15px" }),
             action: props.action || { type: 'uri', uri: 'https://line.me/' }
           };
         
@@ -582,12 +585,12 @@ const FlexMessageDesigner = () => {
       altText: design.name || "Flexメッセージ",
       contents: {
         type: "bubble",
-      body: {
-        type: "box",
-        layout: "vertical",
-        spacing: "none",
-        contents
-      },
+        body: {
+          type: "box",
+          layout: "vertical",
+          spacing: "none",
+          contents
+        },
         ...(design.styles && { styles: design.styles })
       }
     };
@@ -999,65 +1002,79 @@ const FlexMessageDesigner = () => {
                     </div>
                   ) : (
                     <div className="bg-white rounded-lg shadow-sm border max-w-[280px] mx-auto">
-                      <div className="space-y-2">
-                        {design.body.contents.map((element, index) => (
-                          <div key={element.id} className="flex">
-                            {element.type === 'text' && (
-                              <div 
-                                className="flex-1"
-                                style={{
-                                  color: element.properties.color || '#000000',
-                                  backgroundColor: element.properties.backgroundColor !== '#ffffff' ? element.properties.backgroundColor : undefined,
-                                  fontSize: element.properties.size === 'xs' ? '12px' : 
-                                           element.properties.size === 'sm' ? '14px' :
-                                           element.properties.size === 'lg' ? '18px' :
-                                           element.properties.size === 'xl' ? '20px' : '16px',
-                                  fontWeight: element.properties.weight === 'bold' ? 'bold' : 'normal',
-                                  textAlign: element.properties.align as any || 'left',
-                                  padding: element.properties.backgroundColor !== '#ffffff' ? '4px 8px' : undefined,
-                                  borderRadius: element.properties.backgroundColor !== '#ffffff' ? '4px' : undefined,
-                                  whiteSpace: 'pre-wrap'
-                                }}
-                              >
-                                {element.properties.text || 'テキスト'}
-                              </div>
-                            )}
-                            {element.type === 'image' && element.properties.url && (
-                              <div className="flex-1">
-                                <img 
-                                  src={element.properties.url} 
-                                  alt="プレビュー画像" 
-                                  className="w-full h-auto rounded"
+                      <div>
+                        {design.body.contents.map((element, index) => {
+                          const isFirst = index === 0;
+                          const isLast = index === design.body.contents.length - 1;
+                          
+                          return (
+                            <div 
+                              key={element.id} 
+                              className="flex"
+                              style={{
+                                marginTop: !isFirst ? '15px' : undefined,
+                                marginBottom: !isLast ? '15px' : undefined
+                              }}
+                            >
+                              {element.type === 'text' && (
+                                <div 
+                                  className="flex-1"
                                   style={{
-                                    aspectRatio: element.properties.aspectRatio?.replace(':', '/') || '20/13'
-                                  }}
-                                />
-                              </div>
-                            )}
-                            {element.type === 'button' && (
-                              <div className="flex-1">
-                                <button 
-                                  className="w-full rounded border text-sm font-medium"
-                                  style={{
-                                    backgroundColor: element.properties.color || (
-                                      element.properties.style === 'primary' ? '#0066cc' : 
-                                      element.properties.style === 'secondary' ? '#f0f0f0' : 'transparent'
-                                    ),
-                                    color: element.properties.color ? 
-                                      (element.properties.color === '#ffffff' || element.properties.color === '#f0f0f0' ? '#333' : 'white') :
-                                      (element.properties.style === 'primary' ? 'white' : 
-                                       element.properties.style === 'secondary' ? '#333' : '#0066cc'),
-                                    borderColor: element.properties.style === 'link' ? 
-                                      (element.properties.color || '#0066cc') : 'transparent',
-                                    padding: element.properties.height === 'sm' ? '8px 16px' : '12px 16px'
+                                    color: element.properties.color || '#000000',
+                                    backgroundColor: element.properties.backgroundColor !== '#ffffff' ? element.properties.backgroundColor : undefined,
+                                    fontSize: element.properties.size === 'xs' ? '12px' : 
+                                             element.properties.size === 'sm' ? '14px' :
+                                             element.properties.size === 'lg' ? '18px' :
+                                             element.properties.size === 'xl' ? '20px' : '16px',
+                                    fontWeight: element.properties.weight === 'bold' ? 'bold' : 'normal',
+                                    textAlign: element.properties.align as any || 'left',
+                                    padding: element.properties.backgroundColor !== '#ffffff' ? '4px 8px' : undefined,
+                                    borderRadius: element.properties.backgroundColor !== '#ffffff' ? '4px' : undefined,
+                                    whiteSpace: 'pre-wrap'
                                   }}
                                 >
-                                  {element.properties.action?.label || 'ボタン'}
-                                </button>
-                              </div>
-                            )}
-                          </div>
-                        ))}
+                                  {element.properties.text || 'テキスト'}
+                                </div>
+                              )}
+                              {element.type === 'image' && element.properties.url && (
+                                <div className="flex-1">
+                                  <img 
+                                    src={element.properties.url} 
+                                    alt="プレビュー画像" 
+                                    className="w-full h-auto rounded"
+                                    style={{
+                                      aspectRatio: element.properties.aspectRatio?.replace(':', '/') || '20/13'
+                                    }}
+                                  />
+                                </div>
+                              )}
+                              {element.type === 'button' && (
+                                <div className="flex-1">
+                                  <button 
+                                    className="w-full rounded text-sm font-medium"
+                                    style={{
+                                      backgroundColor: element.properties.color || (
+                                        element.properties.style === 'primary' ? '#0066cc' : 
+                                        element.properties.style === 'secondary' ? '#f0f0f0' : 'transparent'
+                                      ),
+                                      color: element.properties.color ? 
+                                        (element.properties.color === '#ffffff' || element.properties.color === '#f0f0f0' ? '#333' : 'white') :
+                                        (element.properties.style === 'primary' ? 'white' : 
+                                         element.properties.style === 'secondary' ? '#333' : '#0066cc'),
+                                      border: element.properties.style === 'secondary' ? 'none' : 
+                                              element.properties.style === 'link' ? 
+                                                `1px solid ${element.properties.color || '#0066cc'}` : 'none',
+                                      padding: element.properties.height === 'sm' ? '8px 16px' : 
+                                               element.properties.height === 'lg' ? '16px 16px' : '12px 16px'
+                                    }}
+                                  >
+                                    {element.properties.action?.label || 'ボタン'}
+                                  </button>
+                                </div>
+                              )}
+                            </div>
+                          );
+                        })}
                       </div>
                     </div>
                   )}
