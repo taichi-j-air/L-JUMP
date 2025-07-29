@@ -28,9 +28,11 @@ const LineApiSettings = () => {
     try {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) {
+        console.log("User not authenticated, redirecting to auth page");
         navigate("/auth");
         return;
       }
+      console.log("User authenticated:", user.email);
 
       const { data: profile, error } = await supabase
         .from("profiles")
