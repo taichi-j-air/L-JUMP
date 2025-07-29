@@ -6,6 +6,8 @@ import { BrowserRouter, Routes, Route } from "react-router-dom";
 import Index from "./pages/Index";
 import Auth from "./pages/Auth";
 import LineApiSettings from "./pages/LineApiSettings";
+import WebhookSettings from "./pages/WebhookSettings";
+import ProfileManagement from "./pages/ProfileManagement";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -20,6 +22,8 @@ const App = () => (
           <Route path="/" element={<Index />} />
           <Route path="/auth" element={<Auth />} />
           <Route path="/line-api-settings" element={<LineApiSettings />} />
+          <Route path="/webhook-settings" element={<WebhookSettings />} />
+          <Route path="/profile-management" element={<ProfileManagement />} />
           {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
           <Route path="*" element={<NotFound />} />
         </Routes>

@@ -123,7 +123,13 @@ const Index = () => {
               </CardDescription>
             </CardHeader>
             <CardContent>
-              <Button className="w-full" variant="outline">設定確認</Button>
+              <Button 
+                className="w-full" 
+                variant="outline"
+                onClick={() => navigate("/webhook-settings")}
+              >
+                設定確認
+              </Button>
             </CardContent>
           </Card>
           
@@ -135,7 +141,13 @@ const Index = () => {
               </CardDescription>
             </CardHeader>
             <CardContent>
-              <Button className="w-full" variant="outline">管理画面</Button>
+              <Button 
+                className="w-full" 
+                variant="outline"
+                onClick={() => navigate("/profile-management")}
+              >
+                管理画面
+              </Button>
             </CardContent>
           </Card>
         </div>

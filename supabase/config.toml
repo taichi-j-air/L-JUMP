@@ -1,1 +1,35 @@
 project_id = "rtjxurmuaawyzjcdkqxt"
+
+[api]
+enabled = true
+port = 54321
+schemas = ["public", "graphql_public"]
+
+[db]
+port = 54322
+
+[studio]
+enabled = true
+port = 54323
+
+[inbucket]
+enabled = true
+port = 54324
+
+[storage]
+enabled = true
+port = 54325
+
+[auth]
+enabled = true
+port = 54326
+
+[edge_functions]
+enabled = true
+port = 54327
+
+[analytics]
+enabled = false
+
+[functions.line-webhook]
+verify_jwt = false
