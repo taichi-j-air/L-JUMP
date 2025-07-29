@@ -21,8 +21,22 @@ const ResetPassword = () => {
     const accessToken = searchParams.get('access_token');
     const refreshToken = searchParams.get('refresh_token');
     const type = searchParams.get('type');
+    const error_code = searchParams.get('error_code');
+    const error_description = searchParams.get('error_description');
 
-    console.log("Reset password params:", { accessToken: !!accessToken, refreshToken: !!refreshToken, type });
+    console.log("Reset password params:", { 
+      accessToken: !!accessToken, 
+      refreshToken: !!refreshToken, 
+      type, 
+      error_code, 
+      error_description,
+      allParams: Object.fromEntries(searchParams.entries())
+    });
+
+    if (error_code || error_description) {
+      setError(`認証エラー: ${error_description || error_code}`);
+      return;
+    }
 
     if (accessToken && refreshToken && type === 'recovery') {
       // Set the session with the tokens from the URL
@@ -31,6 +45,8 @@ const ResetPassword = () => {
         refresh_token: refreshToken,
       });
       setMessage("パスワードリセットが確認されました。新しいパスワードを入力してください。");
+    } else if (type === 'recovery' && !accessToken) {
+      setError("パスワードリセットリンクが無効または期限切れです。再度パスワードリセットを試してください。");
     } else {
       setError("無効なパスワードリセットリンクです。");
     }
