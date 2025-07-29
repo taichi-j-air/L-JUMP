@@ -11,16 +11,16 @@ import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
-import { ArrowLeft, Eye, Send, Plus, Trash2, Image, MessageSquare, MousePointer } from "lucide-react";
+import { ArrowLeft, Eye, Send, Plus, Trash2, Image, MessageSquare, MousePointer, Download, Copy } from "lucide-react";
 import { MediaSelector } from "@/components/MediaSelector";
 
 interface FlexMessage {
   id: string;
   name: string;
-  type: 'bubble' | 'carousel';
   content: any;
   created_at: string;
   updated_at: string;
+  user_id: string;
 }
 
 interface BubbleContent {
@@ -71,9 +71,17 @@ const FlexMessageDesigner = () => {
         return;
       }
 
-      // 今後、データベースからFlexメッセージを読み込む
-      // 現在はサンプルデータを表示
-      setMessages([]);
+      // データベースからFlexメッセージを読み込む
+      const { data: flexMessages, error } = await supabase
+        .from('flex_messages')
+        .select('*')
+        .order('created_at', { ascending: false });
+
+      if (error) {
+        throw error;
+      }
+
+      setMessages(flexMessages || []);
     } catch (error) {
       console.error('Error:', error);
       toast({
@@ -200,15 +208,40 @@ const FlexMessageDesigner = () => {
 
     setLoading(true);
     try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) {
+        toast({
+          title: "認証エラー",
+          description: "ログインが必要です",
+          variant: "destructive",
+        });
+        return;
+      }
+
       const flexJson = generateFlexJson();
       
-      // 今後、データベースに保存する機能を実装
-      console.log('Flex Message JSON:', JSON.stringify(flexJson, null, 2));
+      // データベースに保存
+      const { data, error } = await supabase
+        .from('flex_messages')
+        .insert({
+          user_id: user.id,
+          name: messageName,
+          content: flexJson
+        })
+        .select()
+        .single();
+
+      if (error) {
+        throw error;
+      }
       
       toast({
-        title: "成功",
-        description: "Flexメッセージを保存しました",
+        title: "保存成功",
+        description: `「${messageName}」を保存しました`,
       });
+
+      // 一覧を更新
+      checkAuthAndLoadMessages();
 
       // フォームをリセット
       setMessageName("");
@@ -222,13 +255,117 @@ const FlexMessageDesigner = () => {
     } catch (error) {
       console.error('Error saving message:', error);
       toast({
-        title: "エラー",
+        title: "保存エラー",
         description: "メッセージの保存に失敗しました",
         variant: "destructive",
       });
     } finally {
       setLoading(false);
     }
+  };
+
+  const loadMessage = (message: FlexMessage) => {
+    const content = message.content.contents;
+    
+    setMessageName(message.name);
+    setBubbleContent({
+      title: content.body?.contents?.find((c: any) => c.type === 'text' && c.weight === 'bold')?.text || '',
+      subtitle: content.body?.contents?.find((c: any) => c.type === 'text' && c.color === '#666666' && !c.wrap)?.text || '',
+      text: content.body?.contents?.find((c: any) => c.type === 'text' && c.wrap)?.text || '',
+      imageUrl: content.hero?.url || '',
+      buttons: content.footer?.contents?.map((btn: any) => ({
+        type: btn.action.type,
+        label: btn.action.label,
+        text: btn.action.text,
+        uri: btn.action.uri,
+        data: btn.action.data
+      })) || []
+    });
+    
+    toast({
+      title: "読み込み完了",
+      description: `「${message.name}」を読み込みました`,
+    });
+  };
+
+  const sendSavedMessage = async (message: FlexMessage) => {
+    setLoading(true);
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) {
+        toast({
+          title: "認証エラー",
+          description: "ログインが必要です",
+          variant: "destructive",
+        });
+        return;
+      }
+
+      const { data, error } = await supabase.functions.invoke('send-flex-message', {
+        body: {
+          flexMessage: message.content,
+          userId: user.id
+        }
+      });
+
+      if (error) {
+        throw error;
+      }
+
+      toast({
+        title: "送信完了",
+        description: `「${message.name}」を送信しました`,
+      });
+      
+    } catch (error) {
+      console.error('Error sending message:', error);
+      toast({
+        title: "送信エラー",
+        description: error.message || "メッセージの送信に失敗しました",
+        variant: "destructive",
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const deleteMessage = async (messageId: string, messageName: string) => {
+    if (!confirm(`「${messageName}」を削除しますか？この操作は取り消せません。`)) {
+      return;
+    }
+
+    try {
+      const { error } = await supabase
+        .from('flex_messages')
+        .delete()
+        .eq('id', messageId);
+
+      if (error) {
+        throw error;
+      }
+
+      toast({
+        title: "削除完了",
+        description: `「${messageName}」を削除しました`,
+      });
+
+      checkAuthAndLoadMessages();
+    } catch (error) {
+      console.error('Error deleting message:', error);
+      toast({
+        title: "削除エラー",
+        description: "メッセージの削除に失敗しました",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const copyMessageJson = (message: FlexMessage) => {
+    navigator.clipboard.writeText(JSON.stringify(message.content, null, 2));
+    toast({
+      title: "コピー完了",
+      description: "JSONをクリップボードにコピーしました",
+    });
   };
 
   const testSendMessage = async () => {
@@ -584,6 +721,77 @@ const FlexMessageDesigner = () => {
                     </div>
                   </div>
                 </div>
+              </CardContent>
+            </Card>
+
+            {/* 保存済みメッセージ一覧 */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Download className="w-5 h-5" />
+                  保存済みメッセージ
+                </CardTitle>
+                <CardDescription>
+                  保存したFlexメッセージの一覧です
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                {messages.length === 0 ? (
+                  <div className="text-center py-8 text-muted-foreground">
+                    <MessageSquare className="w-8 h-8 mx-auto mb-2" />
+                    <p className="text-sm">保存されたメッセージがありません</p>
+                  </div>
+                ) : (
+                  <div className="space-y-3 max-h-60 overflow-y-auto">
+                    {messages.map((message) => (
+                      <div key={message.id} className="border rounded-lg p-3">
+                        <div className="flex items-center justify-between mb-2">
+                          <h4 className="font-medium text-sm">{message.name}</h4>
+                          <Badge variant="secondary" className="text-xs">
+                            {new Date(message.created_at).toLocaleDateString('ja-JP')}
+                          </Badge>
+                        </div>
+                        <div className="flex gap-2">
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => loadMessage(message)}
+                            className="text-xs h-7 px-2"
+                          >
+                            読込
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => sendSavedMessage(message)}
+                            disabled={loading}
+                            className="text-xs h-7 px-2"
+                          >
+                            <Send className="w-3 h-3 mr-1" />
+                            配信
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => copyMessageJson(message)}
+                            className="text-xs h-7 px-2"
+                          >
+                            <Copy className="w-3 h-3 mr-1" />
+                            JSON
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => deleteMessage(message.id, message.name)}
+                            className="text-xs h-7 px-2 text-destructive hover:text-destructive"
+                          >
+                            <Trash2 className="w-3 h-3" />
+                          </Button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </CardContent>
             </Card>
 
