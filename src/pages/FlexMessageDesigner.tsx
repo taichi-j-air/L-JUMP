@@ -12,6 +12,7 @@ import { Switch } from "@/components/ui/switch";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { ArrowLeft, Eye, Send, Plus, Trash2, Image, MessageSquare, MousePointer } from "lucide-react";
+import { MediaSelector } from "@/components/MediaSelector";
 
 interface FlexMessage {
   id: string;
@@ -231,14 +232,55 @@ const FlexMessageDesigner = () => {
   };
 
   const testSendMessage = async () => {
-    const flexJson = generateFlexJson();
-    
-    toast({
-      title: "テスト送信",
-      description: "実際の送信機能は今後実装予定です",
-    });
-    
-    console.log('Test send:', JSON.stringify(flexJson, null, 2));
+    if (!bubbleContent.title && !bubbleContent.text) {
+      toast({
+        title: "入力エラー",
+        description: "タイトルまたは本文を入力してください",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) {
+        toast({
+          title: "認証エラー",
+          description: "ログインが必要です",
+          variant: "destructive",
+        });
+        return;
+      }
+
+      const flexJson = generateFlexJson();
+      
+      const { data, error } = await supabase.functions.invoke('send-flex-message', {
+        body: {
+          flexMessage: flexJson,
+          userId: user.id
+        }
+      });
+
+      if (error) {
+        throw error;
+      }
+
+      toast({
+        title: "送信完了",
+        description: "Flexメッセージを送信しました",
+      });
+      
+    } catch (error) {
+      console.error('Error sending message:', error);
+      toast({
+        title: "送信エラー",
+        description: error.message || "メッセージの送信に失敗しました",
+        variant: "destructive",
+      });
+    } finally {
+      setLoading(false);
+    }
   };
 
   if (initialLoading) {
@@ -319,7 +361,18 @@ const FlexMessageDesigner = () => {
                   
                   <TabsContent value="content" className="space-y-4">
                     <div className="space-y-2">
-                      <Label htmlFor="image-url">画像URL（オプション）</Label>
+                      <Label>画像選択</Label>
+                      <MediaSelector 
+                        onSelect={(url) => setBubbleContent(prev => ({ ...prev, imageUrl: url }))}
+                        selectedUrl={bubbleContent.imageUrl}
+                      />
+                      <div className="text-xs text-muted-foreground">
+                        メディアライブラリから画像を選択するか、下記のURLフィールドに直接入力してください
+                      </div>
+                    </div>
+                    
+                    <div className="space-y-2">
+                      <Label htmlFor="image-url">画像URL（直接入力）</Label>
                       <Input
                         id="image-url"
                         value={bubbleContent.imageUrl}
@@ -461,9 +514,9 @@ const FlexMessageDesigner = () => {
                   <Button onClick={saveMessage} disabled={loading} className="flex-1">
                     {loading ? "保存中..." : "メッセージを保存"}
                   </Button>
-                  <Button onClick={testSendMessage} variant="outline">
+                  <Button onClick={testSendMessage} variant="outline" disabled={loading}>
                     <Send className="w-4 h-4 mr-2" />
-                    テスト送信
+                    {loading ? "送信中..." : "LINE配信"}
                   </Button>
                 </div>
               </CardContent>
