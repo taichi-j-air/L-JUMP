@@ -6,13 +6,30 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
-import { Switch } from "@/components/ui/switch";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
-import { ArrowLeft, Eye, Send, Plus, Trash2, Image, MessageSquare, MousePointer, Download, Copy } from "lucide-react";
+import { ArrowLeft, Send, Plus, Trash2, Image, MessageSquare, Move, Save } from "lucide-react";
 import { MediaSelector } from "@/components/MediaSelector";
+import {
+  DndContext,
+  closestCenter,
+  KeyboardSensor,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  DragEndEvent,
+} from '@dnd-kit/core';
+import {
+  arrayMove,
+  SortableContext,
+  sortableKeyboardCoordinates,
+  verticalListSortingStrategy,
+} from '@dnd-kit/sortable';
+import {
+  useSortable,
+} from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
 
 interface FlexMessage {
   id: string;
@@ -23,40 +40,351 @@ interface FlexMessage {
   user_id: string;
 }
 
-interface BubbleContent {
-  title: string;
-  subtitle: string;
-  text: string;
-  imageUrl: string;
-  buttons: Array<{
-    type: 'message' | 'uri' | 'postback';
-    label: string;
+interface FlexElement {
+  id: string;
+  type: 'text' | 'image' | 'button' | 'box' | 'icon';
+  properties: {
     text?: string;
-    uri?: string;
-    data?: string;
-  }>;
+    url?: string;
+    size?: string;
+    weight?: string;
+    color?: string;
+    align?: string;
+    margin?: string;
+    wrap?: boolean;
+    aspectRatio?: string;
+    aspectMode?: string;
+    style?: string;
+    action?: {
+      type: 'message' | 'uri' | 'postback';
+      label?: string;
+      text?: string;
+      uri?: string;
+      data?: string;
+    };
+    layout?: string;
+    spacing?: string;
+    backgroundColor?: string;
+  };
 }
+
+interface FlexDesign {
+  name: string;
+  body: {
+    type: 'box';
+    layout: 'vertical';
+    spacing?: string;
+    backgroundColor?: string;
+    contents: FlexElement[];
+  };
+  hero?: FlexElement;
+  footer?: {
+    type: 'box';
+    layout: 'vertical';
+    spacing: string;
+    contents: FlexElement[];
+  };
+  styles?: {
+    body?: {
+      backgroundColor?: string;
+    };
+  };
+}
+
+const SortableItem = ({ element, onUpdate, onDelete }: {
+  element: FlexElement;
+  onUpdate: (id: string, properties: any) => void;
+  onDelete: (id: string) => void;
+}) => {
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+  } = useSortable({ id: element.id });
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+  };
+
+  const renderElementEditor = () => {
+    switch (element.type) {
+      case 'text':
+        return (
+          <div className="space-y-3">
+            <div className="space-y-2">
+              <Label>テキスト内容</Label>
+              <Textarea
+                value={element.properties.text || ''}
+                onChange={(e) => onUpdate(element.id, { ...element.properties, text: e.target.value })}
+                placeholder="テキストを入力してください"
+                rows={2}
+              />
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              <div className="space-y-2">
+                <Label>サイズ</Label>
+                <Select
+                  value={element.properties.size || 'md'}
+                  onValueChange={(value) => onUpdate(element.id, { ...element.properties, size: value })}
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="xxs">XXS</SelectItem>
+                    <SelectItem value="xs">XS</SelectItem>
+                    <SelectItem value="sm">Small</SelectItem>
+                    <SelectItem value="md">Medium</SelectItem>
+                    <SelectItem value="lg">Large</SelectItem>
+                    <SelectItem value="xl">XL</SelectItem>
+                    <SelectItem value="xxl">XXL</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label>太さ</Label>
+                <Select
+                  value={element.properties.weight || 'normal'}
+                  onValueChange={(value) => onUpdate(element.id, { ...element.properties, weight: value })}
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="normal">Normal</SelectItem>
+                    <SelectItem value="bold">Bold</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              <div className="space-y-2">
+                <Label>色</Label>
+                <Input
+                  value={element.properties.color || '#000000'}
+                  onChange={(e) => onUpdate(element.id, { ...element.properties, color: e.target.value })}
+                  placeholder="#000000"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>配置</Label>
+                <Select
+                  value={element.properties.align || 'start'}
+                  onValueChange={(value) => onUpdate(element.id, { ...element.properties, align: value })}
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="start">左</SelectItem>
+                    <SelectItem value="center">中央</SelectItem>
+                    <SelectItem value="end">右</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+          </div>
+        );
+
+      case 'image':
+        return (
+          <div className="space-y-3">
+            <div className="space-y-2">
+              <Label>画像選択</Label>
+              <MediaSelector 
+                onSelect={(url) => onUpdate(element.id, { ...element.properties, url })}
+                selectedUrl={element.properties.url}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>画像URL（直接入力）</Label>
+              <Input
+                value={element.properties.url || ''}
+                onChange={(e) => onUpdate(element.id, { ...element.properties, url: e.target.value })}
+                placeholder="https://example.com/image.jpg"
+              />
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              <div className="space-y-2">
+                <Label>サイズ</Label>
+                <Select
+                  value={element.properties.size || 'full'}
+                  onValueChange={(value) => onUpdate(element.id, { ...element.properties, size: value })}
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="xxs">XXS</SelectItem>
+                    <SelectItem value="xs">XS</SelectItem>
+                    <SelectItem value="sm">Small</SelectItem>
+                    <SelectItem value="md">Medium</SelectItem>
+                    <SelectItem value="lg">Large</SelectItem>
+                    <SelectItem value="xl">XL</SelectItem>
+                    <SelectItem value="xxl">XXL</SelectItem>
+                    <SelectItem value="full">Full</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label>アスペクト比</Label>
+                <Select
+                  value={element.properties.aspectRatio || '1:1'}
+                  onValueChange={(value) => onUpdate(element.id, { ...element.properties, aspectRatio: value })}
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="1:1">1:1</SelectItem>
+                    <SelectItem value="20:13">20:13</SelectItem>
+                    <SelectItem value="16:9">16:9</SelectItem>
+                    <SelectItem value="4:3">4:3</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+          </div>
+        );
+
+      case 'button':
+        return (
+          <div className="space-y-3">
+            <div className="space-y-2">
+              <Label>ボタンラベル</Label>
+              <Input
+                value={element.properties.action?.label || ''}
+                onChange={(e) => onUpdate(element.id, { 
+                  ...element.properties, 
+                  action: { ...element.properties.action, label: e.target.value } 
+                })}
+                placeholder="ボタンに表示するテキスト"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>ボタンタイプ</Label>
+              <Select
+                value={element.properties.action?.type || 'uri'}
+                onValueChange={(value) => onUpdate(element.id, { 
+                  ...element.properties, 
+                  action: { ...element.properties.action, type: value } 
+                })}
+              >
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="message">メッセージ送信</SelectItem>
+                  <SelectItem value="uri">URL開く</SelectItem>
+                  <SelectItem value="postback">ポストバック</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            
+            {element.properties.action?.type === 'uri' && (
+              <div className="space-y-2">
+                <Label>リンクURL</Label>
+                <Input
+                  value={element.properties.action?.uri || ''}
+                  onChange={(e) => onUpdate(element.id, { 
+                    ...element.properties, 
+                    action: { ...element.properties.action, uri: e.target.value } 
+                  })}
+                  placeholder="https://example.com"
+                />
+              </div>
+            )}
+            
+            <div className="grid grid-cols-2 gap-2">
+              <div className="space-y-2">
+                <Label>スタイル</Label>
+                <Select
+                  value={element.properties.style || 'primary'}
+                  onValueChange={(value) => onUpdate(element.id, { ...element.properties, style: value })}
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="primary">Primary</SelectItem>
+                    <SelectItem value="secondary">Secondary</SelectItem>
+                    <SelectItem value="link">Link</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label>色</Label>
+                <Input
+                  value={element.properties.color || ''}
+                  onChange={(e) => onUpdate(element.id, { ...element.properties, color: e.target.value })}
+                  placeholder="#855566"
+                />
+              </div>
+            </div>
+          </div>
+        );
+
+      default:
+        return null;
+    }
+  };
+
+  return (
+    <div ref={setNodeRef} style={style} className="bg-background border rounded-lg p-4 mb-3">
+      <div className="flex items-center justify-between mb-3">
+        <div className="flex items-center gap-2">
+          <div {...attributes} {...listeners} className="cursor-move p-1 hover:bg-muted rounded">
+            <Move className="w-4 h-4" />
+          </div>
+          <Badge variant="outline" className="text-xs">
+            {element.type === 'text' && 'テキスト'}
+            {element.type === 'image' && '画像'}
+            {element.type === 'button' && 'ボタン'}
+          </Badge>
+        </div>
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={() => onDelete(element.id)}
+          className="text-destructive hover:text-destructive"
+        >
+          <Trash2 className="w-4 h-4" />
+        </Button>
+      </div>
+      
+      {renderElementEditor()}
+    </div>
+  );
+};
 
 const FlexMessageDesigner = () => {
   const [loading, setLoading] = useState(false);
   const [initialLoading, setInitialLoading] = useState(true);
   const [messages, setMessages] = useState<FlexMessage[]>([]);
-  const [selectedMessage, setSelectedMessage] = useState<FlexMessage | null>(null);
-  const [isEditing, setIsEditing] = useState(false);
+  const [currentMessageId, setCurrentMessageId] = useState<string | null>(null);
   
-  // フォーム状態
-  const [messageName, setMessageName] = useState("");
-  const [messageType, setMessageType] = useState<'bubble' | 'carousel'>('bubble');
-  const [bubbleContent, setBubbleContent] = useState<BubbleContent>({
-    title: "",
-    subtitle: "",
-    text: "",
-    imageUrl: "",
-    buttons: []
+  const [design, setDesign] = useState<FlexDesign>({
+    name: "",
+    body: {
+      type: 'box',
+      layout: 'vertical',
+      spacing: 'md',
+      contents: []
+    }
   });
 
   const navigate = useNavigate();
   const { toast } = useToast();
+
+  const sensors = useSensors(
+    useSensor(PointerSensor),
+    useSensor(KeyboardSensor, {
+      coordinateGetter: sortableKeyboardCoordinates,
+    })
+  );
 
   useEffect(() => {
     checkAuthAndLoadMessages();
@@ -71,7 +399,6 @@ const FlexMessageDesigner = () => {
         return;
       }
 
-      // データベースからFlexメッセージを読み込む
       const { data: flexMessages, error } = await supabase
         .from('flex_messages')
         .select('*')
@@ -94,110 +421,128 @@ const FlexMessageDesigner = () => {
     }
   };
 
-  const addButton = () => {
-    if (bubbleContent.buttons.length >= 4) {
-      toast({
-        title: "制限エラー",
-        description: "ボタンは最大4個まで追加できます",
-        variant: "destructive",
+  const addElement = (type: 'text' | 'image' | 'button') => {
+    const newElement: FlexElement = {
+      id: `element-${Date.now()}`,
+      type,
+      properties: type === 'text' 
+        ? { text: 'サンプルテキスト', size: 'md', weight: 'normal', color: '#000000' }
+        : type === 'image'
+        ? { url: '', size: 'full', aspectRatio: '20:13', aspectMode: 'cover' }
+        : { style: 'primary', action: { type: 'uri', label: 'ボタン', uri: 'https://line.me/' } }
+    };
+
+    setDesign(prev => ({
+      ...prev,
+      body: {
+        ...prev.body,
+        contents: [...prev.body.contents, newElement]
+      }
+    }));
+  };
+
+  const updateElement = (id: string, properties: any) => {
+    setDesign(prev => ({
+      ...prev,
+      body: {
+        ...prev.body,
+        contents: prev.body.contents.map(element =>
+          element.id === id ? { ...element, properties } : element
+        )
+      }
+    }));
+  };
+
+  const deleteElement = (id: string) => {
+    setDesign(prev => ({
+      ...prev,
+      body: {
+        ...prev.body,
+        contents: prev.body.contents.filter(element => element.id !== id)
+      }
+    }));
+  };
+
+  const handleDragEnd = (event: DragEndEvent) => {
+    const { active, over } = event;
+
+    if (active.id !== over?.id) {
+      setDesign(prev => {
+        const oldIndex = prev.body.contents.findIndex(item => item.id === active.id);
+        const newIndex = prev.body.contents.findIndex(item => item.id === over?.id);
+
+        return {
+          ...prev,
+          body: {
+            ...prev.body,
+            contents: arrayMove(prev.body.contents, oldIndex, newIndex)
+          }
+        };
       });
-      return;
     }
-
-    setBubbleContent(prev => ({
-      ...prev,
-      buttons: [
-        ...prev.buttons,
-        {
-          type: 'message',
-          label: '',
-          text: ''
-        }
-      ]
-    }));
-  };
-
-  const removeButton = (index: number) => {
-    setBubbleContent(prev => ({
-      ...prev,
-      buttons: prev.buttons.filter((_, i) => i !== index)
-    }));
-  };
-
-  const updateButton = (index: number, field: string, value: string) => {
-    setBubbleContent(prev => ({
-      ...prev,
-      buttons: prev.buttons.map((button, i) => 
-        i === index ? { ...button, [field]: value } : button
-      )
-    }));
   };
 
   const generateFlexJson = () => {
-    const flexMessage = {
+    const contents = design.body.contents.map(element => {
+      const props = element.properties;
+      
+      switch (element.type) {
+        case 'text':
+          return {
+            type: 'text',
+            text: props.text || '',
+            ...(props.size && { size: props.size }),
+            ...(props.weight && props.weight !== 'normal' && { weight: props.weight }),
+            ...(props.color && props.color !== '#000000' && { color: props.color }),
+            ...(props.align && props.align !== 'start' && { align: props.align }),
+            ...(props.margin && { margin: props.margin }),
+            ...(props.wrap && { wrap: props.wrap })
+          };
+        
+        case 'image':
+          return {
+            type: 'image',
+            url: props.url || '',
+            ...(props.size && { size: props.size }),
+            ...(props.aspectRatio && { aspectRatio: props.aspectRatio }),
+            ...(props.aspectMode && { aspectMode: props.aspectMode }),
+            ...(props.margin && { margin: props.margin }),
+            ...(props.action && { action: props.action })
+          };
+        
+        case 'button':
+          return {
+            type: 'button',
+            ...(props.style && { style: props.style }),
+            ...(props.color && { color: props.color }),
+            ...(props.margin && { margin: props.margin }),
+            action: props.action || { type: 'uri', uri: 'https://line.me/' }
+          };
+        
+        default:
+          return null;
+      }
+    }).filter(Boolean);
+
+    return {
       type: "flex",
-      altText: bubbleContent.title || "Flexメッセージ",
+      altText: design.name || "Flexメッセージ",
       contents: {
         type: "bubble",
-        hero: bubbleContent.imageUrl ? {
-          type: "image",
-          url: bubbleContent.imageUrl,
-          size: "full",
-          aspectRatio: "20:13",
-          aspectMode: "cover"
-        } : undefined,
         body: {
           type: "box",
           layout: "vertical",
-          contents: [
-            bubbleContent.title ? {
-              type: "text",
-              text: bubbleContent.title,
-              weight: "bold",
-              size: "xl"
-            } : undefined,
-            bubbleContent.subtitle ? {
-              type: "text",
-              text: bubbleContent.subtitle,
-              size: "sm",
-              color: "#666666",
-              margin: "md"
-            } : undefined,
-            bubbleContent.text ? {
-              type: "text",
-              text: bubbleContent.text,
-              size: "sm",
-              color: "#666666",
-              margin: "md",
-              wrap: true
-            } : undefined
-          ].filter(Boolean)
+          ...(design.body.spacing && { spacing: design.body.spacing }),
+          ...(design.body.backgroundColor && { backgroundColor: design.body.backgroundColor }),
+          contents
         },
-        footer: bubbleContent.buttons.length > 0 ? {
-          type: "box",
-          layout: "vertical",
-          spacing: "sm",
-          contents: bubbleContent.buttons.map(button => ({
-            type: "button",
-            style: "link",
-            height: "sm",
-            action: {
-              type: button.type,
-              label: button.label,
-              ...(button.type === 'message' && { text: button.text }),
-              ...(button.type === 'uri' && { uri: button.uri }),
-              ...(button.type === 'postback' && { data: button.data })
-            }
-          }))
-        } : undefined
+        ...(design.styles && { styles: design.styles })
       }
     };
-
-    return flexMessage;
   };
 
   const saveMessage = async () => {
-    if (!messageName.trim()) {
+    if (!design.name.trim()) {
       toast({
         title: "入力エラー",
         description: "メッセージ名を入力してください",
@@ -220,38 +565,45 @@ const FlexMessageDesigner = () => {
 
       const flexJson = generateFlexJson();
       
-      // データベースに保存
-      const { data, error } = await supabase
-        .from('flex_messages')
-        .insert({
-          user_id: user.id,
-          name: messageName,
-          content: flexJson
-        })
-        .select()
-        .single();
+      if (currentMessageId) {
+        // 上書き保存
+        const { error } = await supabase
+          .from('flex_messages')
+          .update({
+            name: design.name,
+            content: flexJson
+          })
+          .eq('id', currentMessageId);
 
-      if (error) {
-        throw error;
+        if (error) throw error;
+        
+        toast({
+          title: "更新成功",
+          description: `「${design.name}」を更新しました`,
+        });
+      } else {
+        // 新規保存
+        const { data, error } = await supabase
+          .from('flex_messages')
+          .insert({
+            user_id: user.id,
+            name: design.name,
+            content: flexJson
+          })
+          .select()
+          .single();
+
+        if (error) throw error;
+        
+        setCurrentMessageId(data.id);
+        
+        toast({
+          title: "保存成功",
+          description: `「${design.name}」を保存しました`,
+        });
       }
-      
-      toast({
-        title: "保存成功",
-        description: `「${messageName}」を保存しました`,
-      });
 
-      // 一覧を更新
       checkAuthAndLoadMessages();
-
-      // フォームをリセット
-      setMessageName("");
-      setBubbleContent({
-        title: "",
-        subtitle: "",
-        text: "",
-        imageUrl: "",
-        buttons: []
-      });
     } catch (error) {
       console.error('Error saving message:', error);
       toast({
@@ -267,25 +619,79 @@ const FlexMessageDesigner = () => {
   const loadMessage = (message: FlexMessage) => {
     const content = message.content.contents;
     
-    setMessageName(message.name);
-    setBubbleContent({
-      title: content.body?.contents?.find((c: any) => c.type === 'text' && c.weight === 'bold')?.text || '',
-      subtitle: content.body?.contents?.find((c: any) => c.type === 'text' && c.color === '#666666' && !c.wrap)?.text || '',
-      text: content.body?.contents?.find((c: any) => c.type === 'text' && c.wrap)?.text || '',
-      imageUrl: content.hero?.url || '',
-      buttons: content.footer?.contents?.map((btn: any) => ({
-        type: btn.action.type,
-        label: btn.action.label,
-        text: btn.action.text,
-        uri: btn.action.uri,
-        data: btn.action.data
-      })) || []
+    setCurrentMessageId(message.id);
+    setDesign({
+      name: message.name,
+      body: {
+        type: 'box',
+        layout: 'vertical',
+        spacing: content.body?.spacing || 'md',
+        backgroundColor: content.body?.backgroundColor,
+        contents: (content.body?.contents || []).map((item: any, index: number) => ({
+          id: `element-${Date.now()}-${index}`,
+          type: item.type,
+          properties: { ...item, action: item.action }
+        }))
+      },
+      styles: content.styles
     });
     
     toast({
       title: "読み込み完了",
       description: `「${message.name}」を読み込みました`,
     });
+  };
+
+  const sendMessage = async () => {
+    if (design.body.contents.length === 0) {
+      toast({
+        title: "入力エラー",
+        description: "少なくとも1つの要素を追加してください",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) {
+        toast({
+          title: "認証エラー",
+          description: "ログインが必要です",
+          variant: "destructive",
+        });
+        return;
+      }
+
+      const flexJson = generateFlexJson();
+      
+      const { data, error } = await supabase.functions.invoke('send-flex-message', {
+        body: {
+          flexMessage: flexJson,
+          userId: user.id
+        }
+      });
+
+      if (error) {
+        throw error;
+      }
+
+      toast({
+        title: "送信完了",
+        description: "Flexメッセージを送信しました",
+      });
+      
+    } catch (error) {
+      console.error('Error sending message:', error);
+      toast({
+        title: "送信エラー",
+        description: error.message || "メッセージの送信に失敗しました",
+        variant: "destructive",
+      });
+    } finally {
+      setLoading(false);
+    }
   };
 
   const sendSavedMessage = async (message: FlexMessage) => {
@@ -350,6 +756,20 @@ const FlexMessageDesigner = () => {
       });
 
       checkAuthAndLoadMessages();
+      
+      // 削除したメッセージが現在編集中のものだった場合、編集状態をリセット
+      if (currentMessageId === messageId) {
+        setCurrentMessageId(null);
+        setDesign({
+          name: "",
+          body: {
+            type: 'box',
+            layout: 'vertical',
+            spacing: 'md',
+            contents: []
+          }
+        });
+      }
     } catch (error) {
       console.error('Error deleting message:', error);
       toast({
@@ -360,64 +780,21 @@ const FlexMessageDesigner = () => {
     }
   };
 
-  const copyMessageJson = (message: FlexMessage) => {
-    navigator.clipboard.writeText(JSON.stringify(message.content, null, 2));
-    toast({
-      title: "コピー完了",
-      description: "JSONをクリップボードにコピーしました",
+  const newMessage = () => {
+    setCurrentMessageId(null);
+    setDesign({
+      name: "",
+      body: {
+        type: 'box',
+        layout: 'vertical',
+        spacing: 'md',
+        contents: []
+      }
     });
-  };
-
-  const testSendMessage = async () => {
-    if (!bubbleContent.title && !bubbleContent.text) {
-      toast({
-        title: "入力エラー",
-        description: "タイトルまたは本文を入力してください",
-        variant: "destructive",
-      });
-      return;
-    }
-
-    setLoading(true);
-    try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) {
-        toast({
-          title: "認証エラー",
-          description: "ログインが必要です",
-          variant: "destructive",
-        });
-        return;
-      }
-
-      const flexJson = generateFlexJson();
-      
-      const { data, error } = await supabase.functions.invoke('send-flex-message', {
-        body: {
-          flexMessage: flexJson,
-          userId: user.id
-        }
-      });
-
-      if (error) {
-        throw error;
-      }
-
-      toast({
-        title: "送信完了",
-        description: "Flexメッセージを送信しました",
-      });
-      
-    } catch (error) {
-      console.error('Error sending message:', error);
-      toast({
-        title: "送信エラー",
-        description: error.message || "メッセージの送信に失敗しました",
-        variant: "destructive",
-      });
-    } finally {
-      setLoading(false);
-    }
+    toast({
+      title: "新規作成",
+      description: "新しいメッセージを作成します",
+    });
   };
 
   if (initialLoading) {
@@ -455,280 +832,100 @@ const FlexMessageDesigner = () => {
           <div className="space-y-6">
             <Card>
               <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <MessageSquare className="w-5 h-5" />
-                  メッセージ作成
-                </CardTitle>
-                <CardDescription>
-                  インタラクティブなFlexメッセージを作成します
-                </CardDescription>
+                <div className="flex items-center justify-between">
+                  <div>
+                    <CardTitle className="flex items-center gap-2">
+                      <MessageSquare className="w-5 h-5" />
+                      メッセージデザイナー
+                    </CardTitle>
+                    <CardDescription>
+                      ドラッグ&ドロップで要素を並び替えできます
+                    </CardDescription>
+                  </div>
+                  <Button onClick={newMessage} variant="outline" size="sm">
+                    新規作成
+                  </Button>
+                </div>
               </CardHeader>
               <CardContent>
-                <Tabs defaultValue="basic" className="w-full">
-                  <TabsList className="grid w-full grid-cols-3">
-                    <TabsTrigger value="basic">基本情報</TabsTrigger>
-                    <TabsTrigger value="content">コンテンツ</TabsTrigger>
-                    <TabsTrigger value="buttons">ボタン</TabsTrigger>
-                  </TabsList>
-                  
-                  <TabsContent value="basic" className="space-y-4">
-                    <div className="space-y-2">
-                      <Label htmlFor="message-name">メッセージ名</Label>
-                      <Input
-                        id="message-name"
-                        value={messageName}
-                        onChange={(e) => setMessageName(e.target.value)}
-                        placeholder="メッセージに名前を付けてください"
-                      />
-                    </div>
-                    
-                    <div className="space-y-2">
-                      <Label htmlFor="message-type">メッセージタイプ</Label>
-                      <Select value={messageType} onValueChange={(value: 'bubble' | 'carousel') => setMessageType(value)}>
-                        <SelectTrigger>
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="bubble">バブル（単一カード）</SelectItem>
-                          <SelectItem value="carousel" disabled>カルーセル（複数カード）- 今後対応</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-                  </TabsContent>
-                  
-                  <TabsContent value="content" className="space-y-4">
-                    <div className="space-y-2">
-                      <Label>画像選択</Label>
-                      <MediaSelector 
-                        onSelect={(url) => setBubbleContent(prev => ({ ...prev, imageUrl: url }))}
-                        selectedUrl={bubbleContent.imageUrl}
-                      />
-                      <div className="text-xs text-muted-foreground">
-                        メディアライブラリから画像を選択するか、下記のURLフィールドに直接入力してください
-                      </div>
-                    </div>
-                    
-                    <div className="space-y-2">
-                      <Label htmlFor="image-url">画像URL（直接入力）</Label>
-                      <Input
-                        id="image-url"
-                        value={bubbleContent.imageUrl}
-                        onChange={(e) => setBubbleContent(prev => ({ ...prev, imageUrl: e.target.value }))}
-                        placeholder="https://example.com/image.jpg"
-                      />
-                    </div>
-                    
-                    <div className="space-y-2">
-                      <Label htmlFor="title">タイトル</Label>
-                      <Input
-                        id="title"
-                        value={bubbleContent.title}
-                        onChange={(e) => setBubbleContent(prev => ({ ...prev, title: e.target.value }))}
-                        placeholder="メッセージのタイトル"
-                      />
-                    </div>
-                    
-                    <div className="space-y-2">
-                      <Label htmlFor="subtitle">サブタイトル</Label>
-                      <Input
-                        id="subtitle"
-                        value={bubbleContent.subtitle}
-                        onChange={(e) => setBubbleContent(prev => ({ ...prev, subtitle: e.target.value }))}
-                        placeholder="サブタイトル（オプション）"
-                      />
-                    </div>
-                    
-                    <div className="space-y-2">
-                      <Label htmlFor="text">本文</Label>
-                      <Textarea
-                        id="text"
-                        value={bubbleContent.text}
-                        onChange={(e) => setBubbleContent(prev => ({ ...prev, text: e.target.value }))}
-                        placeholder="メッセージの本文を入力してください"
-                        rows={4}
-                      />
-                    </div>
-                  </TabsContent>
-                  
-                  <TabsContent value="buttons" className="space-y-4">
-                    <div className="flex items-center justify-between">
-                      <h3 className="text-lg font-medium">アクションボタン</h3>
-                      <Button
-                        onClick={addButton}
-                        size="sm"
-                        disabled={bubbleContent.buttons.length >= 4}
-                      >
-                        <Plus className="w-4 h-4 mr-2" />
-                        ボタン追加
-                      </Button>
-                    </div>
-                    
-                    {bubbleContent.buttons.length === 0 && (
-                      <p className="text-sm text-muted-foreground text-center py-8">
-                        ボタンが追加されていません。「ボタン追加」をクリックして開始してください。
-                      </p>
-                    )}
-                    
-                    {bubbleContent.buttons.map((button, index) => (
-                      <Card key={index} className="p-4">
-                        <div className="flex items-center justify-between mb-3">
-                          <Badge variant="outline">ボタン {index + 1}</Badge>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => removeButton(index)}
+                <div className="space-y-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="message-name">メッセージ名</Label>
+                    <Input
+                      id="message-name"
+                      value={design.name}
+                      onChange={(e) => setDesign(prev => ({ ...prev, name: e.target.value }))}
+                      placeholder="メッセージに名前を付けてください"
+                    />
+                  </div>
+
+                  <div className="flex gap-2 flex-wrap">
+                    <Button onClick={() => addElement('text')} size="sm" variant="outline">
+                      <Plus className="w-4 h-4 mr-1" />
+                      テキスト
+                    </Button>
+                    <Button onClick={() => addElement('image')} size="sm" variant="outline">
+                      <Image className="w-4 h-4 mr-1" />
+                      画像
+                    </Button>
+                    <Button onClick={() => addElement('button')} size="sm" variant="outline">
+                      <Plus className="w-4 h-4 mr-1" />
+                      ボタン
+                    </Button>
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label>要素の並び替え（ドラッグして順序変更）</Label>
+                    <div className="max-h-96 overflow-y-auto">
+                      {design.body.contents.length === 0 ? (
+                        <div className="text-center py-8 text-muted-foreground border border-dashed rounded-lg">
+                          <MessageSquare className="w-8 h-8 mx-auto mb-2" />
+                          <p className="text-sm">要素を追加して開始してください</p>
+                        </div>
+                      ) : (
+                        <DndContext
+                          sensors={sensors}
+                          collisionDetection={closestCenter}
+                          onDragEnd={handleDragEnd}
+                        >
+                          <SortableContext
+                            items={design.body.contents.map(item => item.id)}
+                            strategy={verticalListSortingStrategy}
                           >
-                            <Trash2 className="w-4 h-4" />
-                          </Button>
-                        </div>
-                        
-                        <div className="space-y-3">
-                          <div className="space-y-2">
-                            <Label>ボタンタイプ</Label>
-                            <Select
-                              value={button.type}
-                              onValueChange={(value) => updateButton(index, 'type', value)}
-                            >
-                              <SelectTrigger>
-                                <SelectValue />
-                              </SelectTrigger>
-                              <SelectContent>
-                                <SelectItem value="message">メッセージ送信</SelectItem>
-                                <SelectItem value="uri">URL開く</SelectItem>
-                                <SelectItem value="postback">ポストバック</SelectItem>
-                              </SelectContent>
-                            </Select>
-                          </div>
-                          
-                          <div className="space-y-2">
-                            <Label>ボタンラベル</Label>
-                            <Input
-                              value={button.label}
-                              onChange={(e) => updateButton(index, 'label', e.target.value)}
-                              placeholder="ボタンに表示するテキスト"
-                            />
-                          </div>
-                          
-                          {button.type === 'message' && (
-                            <div className="space-y-2">
-                              <Label>送信メッセージ</Label>
-                              <Input
-                                value={button.text || ''}
-                                onChange={(e) => updateButton(index, 'text', e.target.value)}
-                                placeholder="ボタンクリック時に送信されるメッセージ"
+                            {design.body.contents.map((element) => (
+                              <SortableItem
+                                key={element.id}
+                                element={element}
+                                onUpdate={updateElement}
+                                onDelete={deleteElement}
                               />
-                            </div>
-                          )}
-                          
-                          {button.type === 'uri' && (
-                            <div className="space-y-2">
-                              <Label>リンクURL</Label>
-                              <Input
-                                value={button.uri || ''}
-                                onChange={(e) => updateButton(index, 'uri', e.target.value)}
-                                placeholder="https://example.com"
-                              />
-                            </div>
-                          )}
-                          
-                          {button.type === 'postback' && (
-                            <div className="space-y-2">
-                              <Label>ポストバックデータ</Label>
-                              <Input
-                                value={button.data || ''}
-                                onChange={(e) => updateButton(index, 'data', e.target.value)}
-                                placeholder="action=buy&item=123"
-                              />
-                            </div>
-                          )}
-                        </div>
-                      </Card>
-                    ))}
-                  </TabsContent>
-                </Tabs>
-                
-                <div className="flex gap-3 mt-6">
-                  <Button onClick={saveMessage} disabled={loading} className="flex-1">
-                    {loading ? "保存中..." : "メッセージを保存"}
-                  </Button>
-                  <Button onClick={testSendMessage} variant="outline" disabled={loading}>
-                    <Send className="w-4 h-4 mr-2" />
-                    {loading ? "送信中..." : "LINE配信"}
-                  </Button>
+                            ))}
+                          </SortableContext>
+                        </DndContext>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="flex gap-3 pt-4">
+                    <Button onClick={saveMessage} disabled={loading} className="flex-1">
+                      <Save className="w-4 h-4 mr-2" />
+                      {loading ? "保存中..." : currentMessageId ? "上書き保存" : "新規保存"}
+                    </Button>
+                    <Button onClick={sendMessage} variant="outline" disabled={loading}>
+                      <Send className="w-4 h-4 mr-2" />
+                      {loading ? "送信中..." : "LINE配信"}
+                    </Button>
+                  </div>
                 </div>
               </CardContent>
             </Card>
           </div>
 
-          {/* 右側：プレビュー */}
+          {/* 右側：保存済みメッセージ一覧 */}
           <div className="space-y-6">
             <Card>
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
-                  <Eye className="w-5 h-5" />
-                  プレビュー
-                </CardTitle>
-                <CardDescription>
-                  作成中のメッセージのプレビューです
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="bg-slate-100 p-4 rounded-lg max-w-sm mx-auto">
-                  <div className="bg-white rounded-lg shadow-sm overflow-hidden">
-                    {bubbleContent.imageUrl && (
-                      <div className="aspect-[20/13] bg-gray-200 flex items-center justify-center">
-                        <img 
-                          src={bubbleContent.imageUrl} 
-                          alt="プレビュー画像" 
-                          className="w-full h-full object-cover"
-                          onError={(e) => {
-                            (e.target as HTMLImageElement).style.display = 'none';
-                          }}
-                        />
-                        <Image className="w-8 h-8 text-gray-400" />
-                      </div>
-                    )}
-                    
-                    <div className="p-4">
-                      {bubbleContent.title && (
-                        <h3 className="font-bold text-lg mb-2">{bubbleContent.title}</h3>
-                      )}
-                      
-                      {bubbleContent.subtitle && (
-                        <p className="text-sm text-gray-600 mb-2">{bubbleContent.subtitle}</p>
-                      )}
-                      
-                      {bubbleContent.text && (
-                        <p className="text-sm text-gray-600 mb-4">{bubbleContent.text}</p>
-                      )}
-                      
-                      {bubbleContent.buttons.length > 0 && (
-                        <div className="space-y-2">
-                          {bubbleContent.buttons.map((button, index) => (
-                            <div key={index} className="border border-blue-500 text-blue-500 text-center py-2 px-4 rounded text-sm">
-                              {button.label || `ボタン ${index + 1}`}
-                            </div>
-                          ))}
-                        </div>
-                      )}
-                      
-                      {!bubbleContent.title && !bubbleContent.subtitle && !bubbleContent.text && !bubbleContent.imageUrl && bubbleContent.buttons.length === 0 && (
-                        <div className="text-center py-8 text-gray-400">
-                          <MessageSquare className="w-8 h-8 mx-auto mb-2" />
-                          <p className="text-sm">コンテンツを追加すると<br />ここにプレビューが表示されます</p>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-
-            {/* 保存済みメッセージ一覧 */}
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Download className="w-5 h-5" />
                   保存済みメッセージ
                 </CardTitle>
                 <CardDescription>
@@ -742,9 +939,9 @@ const FlexMessageDesigner = () => {
                     <p className="text-sm">保存されたメッセージがありません</p>
                   </div>
                 ) : (
-                  <div className="space-y-3 max-h-60 overflow-y-auto">
+                  <div className="space-y-3 max-h-96 overflow-y-auto">
                     {messages.map((message) => (
-                      <div key={message.id} className="border rounded-lg p-3">
+                      <div key={message.id} className={`border rounded-lg p-3 ${currentMessageId === message.id ? 'border-primary bg-primary/5' : ''}`}>
                         <div className="flex items-center justify-between mb-2">
                           <h4 className="font-medium text-sm">{message.name}</h4>
                           <Badge variant="secondary" className="text-xs">
@@ -773,15 +970,6 @@ const FlexMessageDesigner = () => {
                           <Button
                             size="sm"
                             variant="outline"
-                            onClick={() => copyMessageJson(message)}
-                            className="text-xs h-7 px-2"
-                          >
-                            <Copy className="w-3 h-3 mr-1" />
-                            JSON
-                          </Button>
-                          <Button
-                            size="sm"
-                            variant="outline"
                             onClick={() => deleteMessage(message.id, message.name)}
                             className="text-xs h-7 px-2 text-destructive hover:text-destructive"
                           >
@@ -792,21 +980,6 @@ const FlexMessageDesigner = () => {
                     ))}
                   </div>
                 )}
-              </CardContent>
-            </Card>
-
-            {/* JSON出力 */}
-            <Card>
-              <CardHeader>
-                <CardTitle>JSON出力</CardTitle>
-                <CardDescription>
-                  生成されるFlexメッセージのJSON
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <pre className="bg-muted p-4 rounded-lg text-xs overflow-auto max-h-60">
-                  {JSON.stringify(generateFlexJson(), null, 2)}
-                </pre>
               </CardContent>
             </Card>
           </div>
