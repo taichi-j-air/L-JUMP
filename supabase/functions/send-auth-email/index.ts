@@ -65,7 +65,7 @@ const handler = async (req: Request): Promise<Response> => {
     // Set redirect URL based on email action type - use redirect_to as provided
     const redirectUrl = redirect_to;
     
-    const verificationUrl = `${site_url}/auth/v1/verify?token=${token_hash}&type=${email_action_type}&redirect_to=${encodeURIComponent(redirectUrl)}&apikey=${supabaseAnonKey}`;
+    const verificationUrl = `${site_url}/verify?token=${token_hash}&type=${email_action_type}&redirect_to=${encodeURIComponent(redirectUrl)}&apikey=${supabaseAnonKey}`;
     console.log("🔗 Generated verification URL:", verificationUrl);
 
     // Determine email content based on action type
