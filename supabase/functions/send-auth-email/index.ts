@@ -54,8 +54,16 @@ const handler = async (req: Request): Promise<Response> => {
     const { user, email_data } = emailData;
     const { token_hash, redirect_to, email_action_type, site_url } = email_data;
 
-    // Generate the verification URL
-    const verificationUrl = `${site_url}/auth/v1/verify?token=${token_hash}&type=${email_action_type}&redirect_to=${redirect_to}`;
+    // Generate the verification URL with proper Supabase API key
+    const supabaseAnonKey = Deno.env.get("SUPABASE_ANON_KEY");
+    console.log("🔑 Using Supabase Anon Key:", supabaseAnonKey ? "設定済み" : "未設定");
+    
+    if (!supabaseAnonKey) {
+      throw new Error("SUPABASE_ANON_KEY environment variable is not set");
+    }
+    
+    const verificationUrl = `${site_url}/auth/v1/verify?token=${token_hash}&type=${email_action_type}&redirect_to=${redirect_to}&apikey=${supabaseAnonKey}`;
+    console.log("🔗 Generated verification URL:", verificationUrl);
 
     // Determine email content based on action type
     let subject = "";
