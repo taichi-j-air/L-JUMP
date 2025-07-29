@@ -20,7 +20,9 @@ export type Database = {
           display_name: string | null
           id: string
           line_api_status: string | null
+          line_bot_id: string | null
           line_channel_access_token: string | null
+          line_channel_id: string | null
           line_channel_secret: string | null
           updated_at: string
           user_id: string
@@ -32,7 +34,9 @@ export type Database = {
           display_name?: string | null
           id?: string
           line_api_status?: string | null
+          line_bot_id?: string | null
           line_channel_access_token?: string | null
+          line_channel_id?: string | null
           line_channel_secret?: string | null
           updated_at?: string
           user_id: string
@@ -44,7 +48,9 @@ export type Database = {
           display_name?: string | null
           id?: string
           line_api_status?: string | null
+          line_bot_id?: string | null
           line_channel_access_token?: string | null
+          line_channel_id?: string | null
           line_channel_secret?: string | null
           updated_at?: string
           user_id?: string

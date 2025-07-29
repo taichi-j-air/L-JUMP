@@ -20,6 +20,8 @@ const ProfileManagement = () => {
     webhook_url: "",
     line_channel_access_token: "",
     line_channel_secret: "",
+    line_channel_id: "",
+    line_bot_id: "",
   });
   const [userEmail, setUserEmail] = useState("");
   const navigate = useNavigate();
@@ -64,6 +66,8 @@ const ProfileManagement = () => {
           webhook_url: profileData.webhook_url || "",
           line_channel_access_token: profileData.line_channel_access_token || "",
           line_channel_secret: profileData.line_channel_secret || "",
+          line_channel_id: profileData.line_channel_id || "",
+          line_bot_id: profileData.line_bot_id || "",
         });
       }
     } catch (error) {
@@ -306,6 +310,24 @@ const ProfileManagement = () => {
                     profile.line_channel_secret.substring(0, 10) + "..." : 
                     "未設定"
                   }
+                  readOnly
+                  className="bg-muted font-mono text-sm"
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label>チャネルID</Label>
+                <Input
+                  value={profile.line_channel_id || "未設定"}
+                  readOnly
+                  className="bg-muted font-mono text-sm"
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label>LINE Bot ID</Label>
+                <Input
+                  value={profile.line_bot_id || "未設定"}
                   readOnly
                   className="bg-muted font-mono text-sm"
                 />

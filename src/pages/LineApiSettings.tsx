@@ -12,6 +12,8 @@ import { useToast } from "@/hooks/use-toast";
 const LineApiSettings = () => {
   const [channelAccessToken, setChannelAccessToken] = useState("");
   const [channelSecret, setChannelSecret] = useState("");
+  const [channelId, setChannelId] = useState("");
+  const [lineBotId, setLineBotId] = useState("");
   const [loading, setLoading] = useState(false);
   const [initialLoading, setInitialLoading] = useState(true);
   const [currentStatus, setCurrentStatus] = useState<string>("not_configured");
@@ -32,7 +34,7 @@ const LineApiSettings = () => {
 
       const { data: profile, error } = await supabase
         .from("profiles")
-        .select("line_channel_access_token, line_channel_secret, line_api_status")
+        .select("line_channel_access_token, line_channel_secret, line_channel_id, line_bot_id, line_api_status")
         .eq("user_id", user.id)
         .single();
 
@@ -44,6 +46,8 @@ const LineApiSettings = () => {
       if (profile) {
         setChannelAccessToken(profile.line_channel_access_token || "");
         setChannelSecret(profile.line_channel_secret || "");
+        setChannelId(profile.line_channel_id || "");
+        setLineBotId(profile.line_bot_id || "");
         setCurrentStatus(profile.line_api_status || "not_configured");
       }
     } catch (error) {
@@ -68,14 +72,24 @@ const LineApiSettings = () => {
         return;
       }
 
-      const newStatus = channelAccessToken && channelSecret ? "configured" : "not_configured";
+      // Validate required fields
+      if (!channelAccessToken.trim() || !channelSecret.trim() || !channelId.trim() || !lineBotId.trim()) {
+        toast({
+          title: "入力エラー",
+          description: "すべてのフィールドを入力してください",
+          variant: "destructive",
+        });
+        return;
+      }
 
       const { error } = await supabase
         .from("profiles")
         .update({
-          line_channel_access_token: channelAccessToken,
-          line_channel_secret: channelSecret,
-          line_api_status: newStatus,
+          line_channel_access_token: channelAccessToken.trim(),
+          line_channel_secret: channelSecret.trim(),
+          line_channel_id: channelId.trim(),
+          line_bot_id: lineBotId.trim(),
+          line_api_status: "configured",
         })
         .eq("user_id", user.id);
 
@@ -88,7 +102,7 @@ const LineApiSettings = () => {
         return;
       }
 
-      setCurrentStatus(newStatus);
+      setCurrentStatus("configured");
       toast({
         title: "成功",
         description: "LINE API設定が保存されました",
@@ -171,6 +185,34 @@ const LineApiSettings = () => {
                 />
                 <p className="text-sm text-muted-foreground">
                   LINE Developers Console → Basic settings → Channel secretから取得
+                </p>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="channel-id">チャネルID</Label>
+                <Input
+                  id="channel-id"
+                  value={channelId}
+                  onChange={(e) => setChannelId(e.target.value)}
+                  placeholder="チャネルIDを入力してください（例: 1234567890）"
+                  className="font-mono"
+                />
+                <p className="text-sm text-muted-foreground">
+                  LINE Developers Console → Basic settings → Channel IDから取得
+                </p>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="line-bot-id">LINE Bot ID</Label>
+                <Input
+                  id="line-bot-id"
+                  value={lineBotId}
+                  onChange={(e) => setLineBotId(e.target.value)}
+                  placeholder="LINE Bot IDを入力してください（例: @your-bot-id）"
+                  className="font-mono"
+                />
+                <p className="text-sm text-muted-foreground">
+                  LINE Developers Console → Messaging API → LINE公式アカウントから取得
                 </p>
               </div>
 
