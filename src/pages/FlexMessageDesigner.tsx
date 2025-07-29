@@ -504,7 +504,6 @@ const FlexMessageDesigner = () => {
             ...(props.size && { size: props.size }),
             ...(props.weight && props.weight !== 'normal' && { weight: props.weight }),
             ...(props.color && props.color !== '#000000' && { color: props.color }),
-            ...(props.backgroundColor && props.backgroundColor !== '#ffffff' && { backgroundColor: props.backgroundColor }),
             ...(props.align && props.align !== 'start' && { align: props.align }),
             ...(props.margin && { margin: props.margin }),
             ...(props.wrap && { wrap: props.wrap })
