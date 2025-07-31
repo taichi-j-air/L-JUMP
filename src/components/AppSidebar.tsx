@@ -1,4 +1,4 @@
-import { Home, MessageSquare, Settings, FileImage, Webhook, User, Bot } from "lucide-react"
+import { Home, MessageSquare, Settings, FileImage, Webhook, User, Bot, Users } from "lucide-react"
 import { NavLink, useLocation } from "react-router-dom"
 import {
   Sidebar,
@@ -23,6 +23,7 @@ const settingsItems = [
   { title: "LINE API設定", url: "/line-api-settings", icon: Bot },
   { title: "Webhook設定", url: "/webhook-settings", icon: Webhook },
   { title: "プロファイル管理", url: "/profile-management", icon: User },
+  { title: "友達一覧", url: "/friends-list", icon: Users },
 ]
 
 export function AppSidebar() {

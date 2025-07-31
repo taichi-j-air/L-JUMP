@@ -41,10 +41,46 @@ export type Database = {
         }
         Relationships: []
       }
+      line_friends: {
+        Row: {
+          added_at: string
+          created_at: string
+          display_name: string | null
+          id: string
+          line_user_id: string
+          picture_url: string | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          added_at?: string
+          created_at?: string
+          display_name?: string | null
+          id?: string
+          line_user_id: string
+          picture_url?: string | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          added_at?: string
+          created_at?: string
+          display_name?: string | null
+          id?: string
+          line_user_id?: string
+          picture_url?: string | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       profiles: {
         Row: {
           created_at: string
+          delivery_count: number | null
+          delivery_limit: number | null
           display_name: string | null
+          friends_count: number | null
           id: string
           line_api_status: string | null
           line_bot_id: string | null
@@ -58,7 +94,10 @@ export type Database = {
         }
         Insert: {
           created_at?: string
+          delivery_count?: number | null
+          delivery_limit?: number | null
           display_name?: string | null
+          friends_count?: number | null
           id?: string
           line_api_status?: string | null
           line_bot_id?: string | null
@@ -72,7 +111,10 @@ export type Database = {
         }
         Update: {
           created_at?: string
+          delivery_count?: number | null
+          delivery_limit?: number | null
           display_name?: string | null
+          friends_count?: number | null
           id?: string
           line_api_status?: string | null
           line_bot_id?: string | null

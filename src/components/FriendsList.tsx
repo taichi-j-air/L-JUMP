@@ -1,0 +1,97 @@
+import { useEffect, useState } from "react"
+import { supabase } from "@/integrations/supabase/client"
+import { User } from "@supabase/supabase-js"
+import { Avatar, AvatarFallback, AvatarImage } from "./ui/avatar"
+import { Card, CardContent, CardHeader, CardTitle } from "./ui/card"
+import { Badge } from "./ui/badge"
+import { formatDistanceToNow } from "date-fns"
+import { ja } from "date-fns/locale"
+
+interface Friend {
+  id: string
+  line_user_id: string
+  display_name: string | null
+  picture_url: string | null
+  added_at: string
+}
+
+interface FriendsListProps {
+  user: User
+}
+
+export function FriendsList({ user }: FriendsListProps) {
+  const [friends, setFriends] = useState<Friend[]>([])
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    loadFriends()
+  }, [user.id])
+
+  const loadFriends = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('line_friends')
+        .select('*')
+        .eq('user_id', user.id)
+        .order('added_at', { ascending: false })
+
+      if (error) {
+        console.error('Error loading friends:', error)
+      } else {
+        setFriends(data || [])
+      }
+    } catch (error) {
+      console.error('Error:', error)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  if (loading) {
+    return <div className="p-4">読み込み中...</div>
+  }
+
+  if (friends.length === 0) {
+    return (
+      <div className="p-4 text-center text-muted-foreground">
+        まだ友達が追加されていません
+      </div>
+    )
+  }
+
+  return (
+    <div className="space-y-4">
+      {friends.map((friend) => (
+        <Card key={friend.id} className="cursor-pointer hover:bg-muted/50 transition-colors">
+          <CardContent className="p-4">
+            <div className="flex items-center gap-3">
+              <Avatar className="h-10 w-10">
+                <AvatarImage src={friend.picture_url || ""} alt={friend.display_name || ""} />
+                <AvatarFallback>
+                  {friend.display_name?.charAt(0) || "?"}
+                </AvatarFallback>
+              </Avatar>
+              
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2">
+                  <h4 className="font-medium truncate">
+                    {friend.display_name || "名前未設定"}
+                  </h4>
+                  <Badge variant="secondary" className="text-xs">
+                    {formatDistanceToNow(new Date(friend.added_at), { 
+                      addSuffix: true, 
+                      locale: ja 
+                    })}
+                  </Badge>
+                </div>
+                <p className="text-sm text-muted-foreground font-mono">
+                  ID: {friend.line_user_id}
+                </p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      ))}
+    </div>
+  )
+}
