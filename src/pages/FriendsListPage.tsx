@@ -4,9 +4,9 @@ import { useNavigate } from "react-router-dom"
 import { User } from "@supabase/supabase-js"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { FriendsList } from "@/components/FriendsList"
-import { MessageQuotaDisplay } from "@/components/MessageQuotaDisplay"
+import { AppHeader } from "@/components/AppHeader"
 import { Button } from "@/components/ui/button"
-import { ArrowLeft, RefreshCw } from "lucide-react"
+import { RefreshCw } from "lucide-react"
 
 export default function FriendsListPage() {
   const [user, setUser] = useState<User | null>(null)
@@ -55,51 +55,30 @@ export default function FriendsListPage() {
 
   return (
     <div className="min-h-screen bg-background">
-      <header className="border-b">
-        <div className="container mx-auto px-4 py-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-4">
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => navigate("/")}
-                className="flex items-center gap-2"
-              >
-                <ArrowLeft className="w-4 h-4" />
-                ダッシュボードに戻る
-              </Button>
-              <h1 className="text-2xl font-bold">友達一覧</h1>
-            </div>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={refreshPage}
-              className="flex items-center gap-2"
-            >
-              <RefreshCw className="w-4 h-4" />
-              更新
-            </Button>
-          </div>
+      <AppHeader user={user} />
+      
+      <main className="container mx-auto px-4 py-8 pt-20">
+        <div className="flex items-center justify-between mb-6">
+          <h1 className="text-2xl font-bold">友達一覧</h1>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={refreshPage}
+            className="flex items-center gap-2"
+          >
+            <RefreshCw className="w-4 h-4" />
+            更新
+          </Button>
         </div>
-      </header>
-
-      <main className="container mx-auto px-4 py-8">
-        <div className="grid lg:grid-cols-3 gap-6">
-          <div className="lg:col-span-2">
-            <Card>
-              <CardHeader>
-                <CardTitle>友達一覧</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <FriendsList user={user} />
-              </CardContent>
-            </Card>
-          </div>
-          
-          <div className="space-y-6">
-            <MessageQuotaDisplay user={user} />
-          </div>
-        </div>
+        
+        <Card>
+          <CardHeader>
+            <CardTitle>友達一覧</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <FriendsList user={user} />
+          </CardContent>
+        </Card>
       </main>
     </div>
   )

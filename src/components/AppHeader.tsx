@@ -12,6 +12,8 @@ interface Profile {
   line_channel_id?: string
   delivery_limit: number
   delivery_count: number
+  monthly_message_limit: number
+  monthly_message_used: number
   friends_count: number
 }
 
@@ -26,13 +28,17 @@ export function AppHeader({ user }: AppHeaderProps) {
 
   useEffect(() => {
     loadProfile()
+    
+    // Periodic refresh every 30 seconds
+    const interval = setInterval(loadProfile, 30000)
+    return () => clearInterval(interval)
   }, [user.id])
 
   const loadProfile = async () => {
     try {
       const { data, error } = await supabase
         .from('profiles')
-        .select('line_channel_id, delivery_limit, delivery_count, friends_count')
+        .select('line_channel_id, delivery_limit, delivery_count, monthly_message_limit, monthly_message_used, friends_count')
         .eq('user_id', user.id)
         .single()
 
@@ -44,13 +50,16 @@ export function AppHeader({ user }: AppHeaderProps) {
 
       // Get actual LINE quota information
       try {
-        const { data: quotaData, error: quotaError } = await supabase.functions.invoke('get-line-quota')
+        const { data: quotaData, error: quotaError } = await supabase.functions.invoke('get-message-quota', {
+          body: { user_id: user.id }
+        })
         
-        if (!quotaError && quotaData?.quota) {
-          // Update delivery limit with actual quota
+        if (!quotaError && quotaData) {
+          // Update with actual quota data
           setProfile(prev => prev ? {
             ...prev,
-            delivery_limit: quotaData.quota.value || prev.delivery_limit
+            monthly_message_limit: quotaData.limit || prev.monthly_message_limit || 200,
+            monthly_message_used: quotaData.used || prev.monthly_message_used || 0
           } : null)
         }
       } catch (quotaError) {
@@ -118,11 +127,11 @@ export function AppHeader({ user }: AppHeaderProps) {
           </PopoverContent>
         </Popover>
 
-        {/* 配信上限数と配信消化数 */}
+        {/* 月間配信数 */}
         <div className="flex items-center gap-2 text-sm">
-          <span className="text-muted-foreground">配信:</span>
+          <span className="text-muted-foreground">月間配信:</span>
           <Badge variant="secondary">
-            {profile?.delivery_count || 0} / {profile?.delivery_limit || 1000}
+            {profile?.monthly_message_used || 0} / {profile?.monthly_message_limit || 200}
           </Badge>
         </div>
 
