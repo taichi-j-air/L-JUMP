@@ -2,7 +2,6 @@ import { useState } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Button } from "@/components/ui/button"
-import { Switch } from "@/components/ui/switch"
 import { Label } from "@/components/ui/label"
 import { ArrowRight, Plus, X, TestTube } from "lucide-react"
 import { StepScenario, ScenarioTransition } from "@/hooks/useStepScenarios"
@@ -23,10 +22,9 @@ export function ScenarioTransitionCard({
   onRemoveTransition
 }: ScenarioTransitionCardProps) {
   const [selectedScenario, setSelectedScenario] = useState<string>("")
-  const [abTestEnabled, setAbTestEnabled] = useState<boolean>(false)
-  const [selectedAbScenario, setSelectedAbScenario] = useState<string>("")
   
   const currentTransitions = transitions.filter(t => t.from_scenario_id === currentScenario.id)
+  const hasMultipleTransitions = currentTransitions.length >= 2
   const availableOptions = availableScenarios.filter(s => 
     s.id !== currentScenario.id && 
     !currentTransitions.some(t => t.to_scenario_id === s.id)
@@ -39,13 +37,6 @@ export function ScenarioTransitionCard({
     }
   }
 
-  const handleAddAbTransition = () => {
-    if (selectedAbScenario) {
-      onAddTransition(selectedAbScenario)
-      setSelectedAbScenario("")
-    }
-  }
-
   return (
     <Card className="mt-4">
       <CardHeader>
@@ -53,6 +44,17 @@ export function ScenarioTransitionCard({
           <ArrowRight className="h-4 w-4" />
           別シナリオへの移動
         </CardTitle>
+        {currentTransitions.length === 0 && (
+          <p className="text-xs text-muted-foreground mt-2">
+            遷移シナリオを2個以上追加するとABテストが可能になります
+          </p>
+        )}
+        {hasMultipleTransitions && (
+          <p className="text-xs text-green-600 mt-2">
+            <TestTube className="h-3 w-3 inline mr-1" />
+            ABテスト有効：各シナリオに均等分配されます
+          </p>
+        )}
       </CardHeader>
       <CardContent className="space-y-4">
         {/* 既存の移動設定 */}
@@ -75,34 +77,6 @@ export function ScenarioTransitionCard({
           )
         })}
 
-        {/* ABテスト設定 */}
-        <div className="space-y-3 border-t pt-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <Switch
-                id="ab-test"
-                checked={abTestEnabled}
-                onCheckedChange={setAbTestEnabled}
-              />
-              <Label htmlFor="ab-test" className="flex items-center gap-2 text-sm">
-                <TestTube className="h-4 w-4" />
-                ABテスト
-              </Label>
-            </div>
-            {abTestEnabled && (
-              <div className="text-xs text-muted-foreground">
-                移行率は設定数に応じて均等分配
-              </div>
-            )}
-          </div>
-          {abTestEnabled && (
-            <div className="text-xs text-muted-foreground bg-muted/50 p-2 rounded">
-              <strong>ABテストについて：</strong><br />
-              設定したシナリオ遷移の数に応じて、ユーザーの移行率が均等に分配されます。<br />
-              例：2つのシナリオ → 各50%、3つのシナリオ → 各33.3%
-            </div>
-          )}
-        </div>
 
         {/* 新しい移動設定追加 */}
         {availableOptions.length > 0 && (
@@ -131,33 +105,6 @@ export function ScenarioTransitionCard({
               </Button>
             </div>
 
-            {/* ABテスト用の追加設定 */}
-            {abTestEnabled && (
-              <div className="flex gap-2">
-                <Select value={selectedAbScenario} onValueChange={setSelectedAbScenario}>
-                  <SelectTrigger className="flex-1">
-                    <SelectValue placeholder="ABテスト用シナリオを選択" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {availableOptions.filter(s => s.id !== selectedScenario).map((scenario) => (
-                      <SelectItem key={scenario.id} value={scenario.id}>
-                        {scenario.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                <Button 
-                  onClick={handleAddAbTransition} 
-                  disabled={!selectedAbScenario}
-                  size="sm"
-                  className="gap-2"
-                  variant="outline"
-                >
-                  <Plus className="h-4 w-4" />
-                  AB追加
-                </Button>
-              </div>
-            )}
           </div>
         )}
 

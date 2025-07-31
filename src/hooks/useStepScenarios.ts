@@ -31,7 +31,7 @@ export interface StepMessage {
   id: string
   step_id: string
   message_order: number
-  message_type: 'text' | 'media'
+  message_type: 'text' | 'media' | 'flex'
   content: string
   media_url?: string
   created_at: string
@@ -269,7 +269,7 @@ export const useStepScenarios = (userId: string | undefined) => {
   }
 
   // メッセージ作成
-  const createMessage = async (stepId: string, type: 'text' | 'media' = 'text') => {
+  const createMessage = async (stepId: string, type: 'text' | 'media' | 'flex' = 'text') => {
     const stepMessages = messages.filter(m => m.step_id === stepId)
     const messageOrder = stepMessages.length
 

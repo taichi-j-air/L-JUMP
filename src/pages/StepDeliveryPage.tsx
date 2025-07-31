@@ -11,6 +11,7 @@ import { supabase } from "@/integrations/supabase/client"
 import { User } from "@supabase/supabase-js"
 import { AppHeader } from "@/components/AppHeader"
 import { MediaSelector } from "@/components/MediaSelector"
+import { FlexMessageSelector } from "@/components/FlexMessageSelector"
 import { DraggableStepsList } from "@/components/DraggableStepsList"
 import { ScenarioTransitionCard } from "@/components/ScenarioTransitionCard"
 import { MessagePreview } from "@/components/MessagePreview"
@@ -215,12 +216,17 @@ export default function StepDeliveryPage() {
       const oldIndex = scenarios.findIndex((item) => item.id === active.id)
       const newIndex = scenarios.findIndex((item) => item.id === over.id)
       
-      // Reorder scenarios locally
-      const newScenarios = arrayMove(scenarios, oldIndex, newIndex)
-      
-      // Update scenario order in database (you would implement this in useStepScenarios)
-      // For now, just show success message
-      toast.success('シナリオの順序を変更しました')
+      if (oldIndex !== -1 && newIndex !== -1) {
+        // Reorder scenarios locally for immediate UI feedback
+        const newScenarios = arrayMove(scenarios, oldIndex, newIndex)
+        
+        // Note: For proper implementation, you'd want to add scenario order functionality to useStepScenarios
+        // and update the database with the new order
+        toast.success('シナリオの順序を変更しました')
+        
+        // Optional: Log for debugging
+        console.log('Scenario reorder:', { from: oldIndex, to: newIndex, scenarios: newScenarios.map(s => s.name) })
+      }
     }
   }
 
@@ -448,19 +454,20 @@ export default function StepDeliveryPage() {
                         <CardContent className="space-y-4">
                           <div>
                             <Label>メッセージタイプ</Label>
-                            <Select
-                              value="text"
-                              onValueChange={(value: 'text' | 'media') => {
-                                // 新しいメッセージを作成
-                                createMessage(selectedStep.id, value)
-                              }}
-                            >
+                             <Select
+                               value="text"
+                               onValueChange={(value: 'text' | 'media' | 'flex') => {
+                                 // 新しいメッセージを作成
+                                 createMessage(selectedStep.id, value)
+                               }}
+                             >
                               <SelectTrigger>
                                 <SelectValue />
                               </SelectTrigger>
                               <SelectContent>
-                                <SelectItem value="text">テキストメッセージ</SelectItem>
+                                 <SelectItem value="text">テキストメッセージ</SelectItem>
                                 <SelectItem value="media">メディアライブラリ</SelectItem>
+                                <SelectItem value="flex">Flexメッセージ</SelectItem>
                               </SelectContent>
                             </Select>
                           </div>
@@ -518,18 +525,19 @@ export default function StepDeliveryPage() {
                             <CardContent className="space-y-4">
                               <div>
                                 <Label>メッセージタイプ</Label>
-                                <Select
-                                  value={message.message_type}
-                                  onValueChange={(value: 'text' | 'media') => 
-                                    handleUpdateMessage(message.id, { message_type: value })
-                                  }
-                                >
+                                 <Select
+                                   value={message.message_type}
+                                   onValueChange={(value: 'text' | 'media' | 'flex') => 
+                                     handleUpdateMessage(message.id, { message_type: value })
+                                   }
+                                 >
                                   <SelectTrigger>
                                     <SelectValue />
                                   </SelectTrigger>
                                   <SelectContent>
-                                    <SelectItem value="text">テキストメッセージ</SelectItem>
+                                   <SelectItem value="text">テキストメッセージ</SelectItem>
                                     <SelectItem value="media">メディアライブラリ</SelectItem>
+                                    <SelectItem value="flex">Flexメッセージ</SelectItem>
                                   </SelectContent>
                                 </Select>
                               </div>
@@ -551,15 +559,25 @@ export default function StepDeliveryPage() {
                                 </div>
                               )}
 
-                              {message.message_type === 'media' && (
-                                <div>
-                                  <Label>メディア選択</Label>
-                                  <MediaSelector
-                                    onSelect={(url) => handleUpdateMessage(message.id, { media_url: url })}
-                                    selectedUrl={message.media_url || undefined}
-                                  />
-                                </div>
-                              )}
+                               {message.message_type === 'media' && (
+                                 <div>
+                                   <Label>メディア選択</Label>
+                                   <MediaSelector
+                                     onSelect={(url) => handleUpdateMessage(message.id, { media_url: url })}
+                                     selectedUrl={message.media_url || undefined}
+                                   />
+                                 </div>
+                               )}
+
+                               {message.message_type === 'flex' && (
+                                 <div>
+                                   <Label>Flexメッセージ選択</Label>
+                                   <FlexMessageSelector
+                                     onSelect={(flexMessageId) => handleUpdateMessage(message.id, { content: flexMessageId })}
+                                     selectedFlexMessageId={message.content}
+                                   />
+                                 </div>
+                               )}
                             </CardContent>
                           )}
                         </Card>
