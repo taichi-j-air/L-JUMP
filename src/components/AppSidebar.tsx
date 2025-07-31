@@ -20,8 +20,9 @@ import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 
 const menuItems = [
-  { title: "友達一覧", url: "/friends-list", icon: Users },
   { title: "ダッシュボード", url: "/", icon: Home },
+  { title: "友達一覧", url: "/friends-list", icon: Users },
+  { title: "チャット受信箱", url: "/chat-inbox", icon: MessageCircle },
   { title: "Flex メッセージデザイナー", url: "/flex-message-designer", icon: MessageSquare },
   { title: "メディアライブラリ", url: "/media-library", icon: FileImage },
 ]
@@ -49,11 +50,28 @@ export function AppSidebar({ user }: AppSidebarProps) {
   const currentPath = location.pathname
   const [friends, setFriends] = useState<Friend[]>([])
   const [loading, setLoading] = useState(true)
+  const [unreadCount, setUnreadCount] = useState(0)
   
   const collapsed = state === "collapsed"
 
   useEffect(() => {
     loadFriends()
+    loadUnreadCount()
+    
+    // リアルタイムでメッセージの変更を監視
+    const messageSubscription = supabase
+      .channel('chat_messages_changes')
+      .on('postgres_changes', 
+        { event: '*', schema: 'public', table: 'chat_messages' }, 
+        () => {
+          loadUnreadCount()
+        }
+      )
+      .subscribe()
+
+    return () => {
+      supabase.removeChannel(messageSubscription)
+    }
   }, [user.id])
 
   const loadFriends = async () => {
@@ -77,6 +95,23 @@ export function AppSidebar({ user }: AppSidebarProps) {
     }
   }
 
+  const loadUnreadCount = async () => {
+    try {
+      // 受信メッセージ（incoming）の数をカウント
+      const { count, error } = await supabase
+        .from('chat_messages')
+        .select('*', { count: 'exact', head: true })
+        .eq('user_id', user.id)
+        .eq('message_type', 'incoming')
+
+      if (!error && count !== null) {
+        setUnreadCount(count)
+      }
+    } catch (error) {
+      console.error('Error loading unread count:', error)
+    }
+  }
+
 
   const isActive = (path: string) => currentPath === path
   const getNavClass = ({ isActive }: { isActive: boolean }) =>
@@ -97,6 +132,14 @@ export function AppSidebar({ user }: AppSidebarProps) {
                     <NavLink to={item.url} end className={getNavClass}>
                       <item.icon className="h-4 w-4" />
                       {!collapsed && <span>{item.title}</span>}
+                      {item.title === "チャット受信箱" && unreadCount > 0 && (
+                        <Badge 
+                          variant="destructive" 
+                          className="ml-auto h-5 w-5 flex items-center justify-center p-0 text-xs bg-red-500 text-white rounded-full"
+                        >
+                          {unreadCount}
+                        </Badge>
+                      )}
                     </NavLink>
                   </SidebarMenuButton>
                 </SidebarMenuItem>
@@ -105,59 +148,6 @@ export function AppSidebar({ user }: AppSidebarProps) {
           </SidebarGroupContent>
         </SidebarGroup>
 
-        {/* 友達リストと個別チャット */}
-        <SidebarGroup>
-          <SidebarGroupLabel className="text-sm font-semibold">
-            {!collapsed && "友達とチャット"}
-          </SidebarGroupLabel>
-          <SidebarGroupContent>
-            <SidebarMenu>
-              {loading ? (
-                <SidebarMenuItem>
-                  {!collapsed && <div className="text-xs text-muted-foreground p-2">読み込み中...</div>}
-                </SidebarMenuItem>
-              ) : friends.length === 0 ? (
-                <SidebarMenuItem>
-                  {!collapsed && (
-                    <div className="text-xs text-muted-foreground p-2">
-                      <div>友達がいません</div>
-                      <div className="text-xs mt-1">
-                        LINEの公式アカウントから友達追加してください
-                      </div>
-                    </div>
-                  )}
-                </SidebarMenuItem>
-              ) : (
-                friends.map((friend) => (
-                  <SidebarMenuItem key={friend.id}>
-                    <SidebarMenuButton asChild>
-                      <NavLink 
-                        to={`/chat/${friend.id}`} 
-                        className={({ isActive }: { isActive: boolean }) =>
-                          isActive ? "bg-primary/10 text-primary font-medium" : "hover:bg-muted/50"
-                        }
-                      >
-                        <div className="flex items-center gap-2 w-full min-w-0">
-                          <Avatar className="h-5 w-5 flex-shrink-0">
-                            <AvatarImage src={friend.picture_url || ""} />
-                            <AvatarFallback className="text-xs">
-                              {friend.display_name?.charAt(0) || "?"}
-                            </AvatarFallback>
-                          </Avatar>
-                          {!collapsed && (
-                            <span className="text-sm truncate">
-                              {friend.display_name || "名前未設定"}
-                            </span>
-                          )}
-                        </div>
-                      </NavLink>
-                    </SidebarMenuButton>
-                  </SidebarMenuItem>
-                ))
-              )}
-            </SidebarMenu>
-          </SidebarGroupContent>
-        </SidebarGroup>
 
         <SidebarGroup>
           <SidebarGroupLabel className="text-sm font-semibold">設定</SidebarGroupLabel>

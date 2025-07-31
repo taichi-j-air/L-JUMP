@@ -19,6 +19,7 @@ import NotFound from "./pages/NotFound";
 import ResetPassword from "./pages/ResetPassword";
 import EmailVerify from "./pages/EmailVerify";
 import IndividualChatPage from "./pages/IndividualChatPage";
+import ChatInboxPage from "./pages/ChatInboxPage";
 import { supabase } from "@/integrations/supabase/client";
 import { User } from "@supabase/supabase-js";
 
@@ -83,6 +84,7 @@ function AppContent() {
               <Route path="/flex-message-designer" element={<FlexMessageDesigner />} />
               <Route path="/media-library" element={<MediaLibrary />} />
               <Route path="/friends-list" element={<FriendsListPage />} />
+              <Route path="/chat-inbox" element={<ChatInboxPage />} />
               <Route path="/chat/:friendId" element={<IndividualChatPage />} />
               <Route path="*" element={<NotFound />} />
             </Routes>
