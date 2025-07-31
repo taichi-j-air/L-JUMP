@@ -2,6 +2,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { Smartphone } from "lucide-react"
 import { StepMessage } from "@/hooks/useStepScenarios"
+import { FlexMessagePreview } from "./FlexMessagePreview"
 
 interface MessagePreviewProps {
   messages: StepMessage[]
@@ -37,7 +38,7 @@ export function MessagePreview({ messages }: MessagePreviewProps) {
                       <p className="text-sm whitespace-pre-wrap break-words">
                         {message.content || 'テキストメッセージ'}
                       </p>
-                    ) : (
+                    ) : message.message_type === 'media' ? (
                       <div className="space-y-2">
                         {message.media_url ? (
                           <div className="bg-background rounded border p-2 space-y-2">
@@ -68,6 +69,18 @@ export function MessagePreview({ messages }: MessagePreviewProps) {
                             <p className="text-xs text-muted-foreground">メディアが選択されていません</p>
                           </div>
                         )}
+                      </div>
+                    ) : message.message_type === 'flex' ? (
+                      message.flex_message_id ? (
+                        <FlexMessagePreview flexMessageId={message.flex_message_id} />
+                      ) : (
+                        <div className="bg-background rounded border p-2">
+                          <p className="text-xs text-muted-foreground">Flexメッセージが選択されていません</p>
+                        </div>
+                      )
+                    ) : (
+                      <div className="bg-background rounded border p-2">
+                        <p className="text-xs text-muted-foreground">不明なメッセージタイプ</p>
                       </div>
                     )}
                   </div>
