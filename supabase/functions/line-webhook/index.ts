@@ -30,18 +30,29 @@ interface LineWebhookBody {
 }
 
 serve(async (req) => {
+  console.log('=== LINE Webhook Function Called ===')
+  console.log('Method:', req.method)
+  console.log('URL:', req.url)
+  console.log('User-Agent:', req.headers.get('user-agent'))
+  
   // Handle CORS preflight requests
   if (req.method === 'OPTIONS') {
     console.log('CORS preflight request received')
     return new Response(null, { headers: corsHeaders })
   }
 
-  try {
-    console.log('=== LINE Webhook Request Start ===')
-    console.log('Method:', req.method)
-    console.log('URL:', req.url)
-    console.log('Headers:', Object.fromEntries(req.headers.entries()))
+  // LINEの検証リクエストに対する簡単なレスポンス
+  if (req.method === 'GET') {
+    console.log('GET request received - possibly LINE verification')
+    return new Response('LINE Webhook is working!', { 
+      status: 200, 
+      headers: corsHeaders 
+    })
+  }
 
+  try {
+    console.log('Processing POST request from LINE')
+    
     if (req.method !== 'POST') {
       console.log('Method not allowed:', req.method)
       return new Response('Method not allowed', { 
