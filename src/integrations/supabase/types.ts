@@ -309,6 +309,7 @@ export type Database = {
           delivery_days: number | null
           delivery_hours: number | null
           delivery_minutes: number | null
+          delivery_seconds: number
           delivery_type: string
           id: string
           name: string
@@ -322,6 +323,7 @@ export type Database = {
           delivery_days?: number | null
           delivery_hours?: number | null
           delivery_minutes?: number | null
+          delivery_seconds?: number
           delivery_type: string
           id?: string
           name: string
@@ -335,6 +337,7 @@ export type Database = {
           delivery_days?: number | null
           delivery_hours?: number | null
           delivery_minutes?: number | null
+          delivery_seconds?: number
           delivery_type?: string
           id?: string
           name?: string

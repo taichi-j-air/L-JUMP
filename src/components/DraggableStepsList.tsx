@@ -19,17 +19,20 @@ import {
 } from "@dnd-kit/sortable"
 import { CSS } from "@dnd-kit/utilities"
 import { Card, CardContent } from "@/components/ui/card"
-import { GripVertical } from "lucide-react"
+import { GripVertical, Trash2 } from "lucide-react"
 import { Step } from "@/hooks/useStepScenarios"
+import { Button } from "@/components/ui/button"
 
 interface SortableStepCardProps {
   step: Step
   index: number
   isSelected: boolean
   onClick: () => void
+  onDelete: () => void
+  allSteps: Step[]
 }
 
-function SortableStepCard({ step, index, isSelected, onClick }: SortableStepCardProps) {
+function SortableStepCard({ step, index, isSelected, onClick, onDelete, allSteps }: SortableStepCardProps) {
   const {
     attributes,
     listeners,
@@ -45,11 +48,24 @@ function SortableStepCard({ step, index, isSelected, onClick }: SortableStepCard
     opacity: isDragging ? 0.5 : 1,
   }
 
+  const getDeliveryTimeText = () => {
+    if (index === 0) {
+      return "登録後"
+    } else {
+      const parts = []
+      if (step.delivery_days > 0) parts.push(`${step.delivery_days}日後`)
+      if (step.delivery_hours > 0) parts.push(`${step.delivery_hours}時間後`)
+      if (step.delivery_minutes > 0) parts.push(`${step.delivery_minutes}分後`)
+      if (step.delivery_seconds > 0) parts.push(`${step.delivery_seconds}秒後`)
+      return parts.length > 0 ? parts.join(' ') : "即時"
+    }
+  }
+
   return (
     <Card 
       ref={setNodeRef}
       style={style}
-      className={`cursor-pointer transition-colors ${
+      className={`cursor-pointer transition-colors group ${
         isSelected ? 'bg-primary/10 border-primary' : 'hover:bg-muted/50'
       }`}
       onClick={onClick}
@@ -63,18 +79,26 @@ function SortableStepCard({ step, index, isSelected, onClick }: SortableStepCard
           >
             <GripVertical className="h-4 w-4 text-muted-foreground" />
           </div>
-          <div className="w-6 h-6 rounded-full bg-primary text-primary-foreground text-xs flex items-center justify-center">
+          <div className="w-6 h-6 rounded-full bg-primary text-primary-foreground text-xs flex items-center justify-center flex-shrink-0">
             {index + 1}
           </div>
-          <div className="flex-1">
+          <div className="flex-1 min-w-0">
             <h4 className="font-medium">{step.name}</h4>
             <p className="text-xs text-muted-foreground">
-              {step.delivery_type === 'after_registration' 
-                ? `登録後 ${step.delivery_days}日 ${step.delivery_hours}時間 ${step.delivery_minutes}分`
-                : '特定日時'
-              }
+              {getDeliveryTimeText()}
             </p>
           </div>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={(e) => {
+              e.stopPropagation()
+              onDelete()
+            }}
+            className="opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0"
+          >
+            <Trash2 className="h-4 w-4 text-destructive" />
+          </Button>
         </div>
       </CardContent>
     </Card>
@@ -86,13 +110,15 @@ interface DraggableStepsListProps {
   selectedStep: Step | null
   onStepSelect: (step: Step) => void
   onReorder: (newOrder: string[]) => void
+  onStepDelete: (stepId: string) => void
 }
 
 export function DraggableStepsList({ 
   steps, 
   selectedStep, 
   onStepSelect, 
-  onReorder 
+  onReorder,
+  onStepDelete
 }: DraggableStepsListProps) {
   const sensors = useSensors(
     useSensor(PointerSensor),
@@ -128,6 +154,8 @@ export function DraggableStepsList({
               index={index}
               isSelected={selectedStep?.id === step.id}
               onClick={() => onStepSelect(step)}
+              onDelete={() => onStepDelete(step.id)}
+              allSteps={steps}
             />
           ))}
         </div>
