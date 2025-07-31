@@ -881,8 +881,8 @@ const FlexMessageDesigner = () => {
         </div>
       </header>
 
-      <main className="container mx-auto px-4 py-8 max-w-7xl">
-        <div className="grid lg:grid-cols-2 gap-8">
+      <main className="container mx-auto px-2 py-8 max-w-7xl">
+        <div className="flex gap-0">
           {/* 左側：デザイナー */}
           <div className="space-y-6 w-96 flex-shrink-0">
             <Card>
@@ -981,7 +981,7 @@ const FlexMessageDesigner = () => {
           </div>
 
           {/* 右側：プレビューと保存済みメッセージ一覧 */}
-          <div className="space-y-6">
+          <div className="space-y-6 border-l border-border pl-4 flex-1">
             {/* プレビュー画面 */}
             <Card>
               <CardHeader>

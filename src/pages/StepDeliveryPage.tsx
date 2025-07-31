@@ -256,9 +256,9 @@ export default function StepDeliveryPage() {
           <h1 className="text-2xl font-bold">ステップ配信</h1>
         </div>
 
-        <div className="flex gap-4 h-[calc(100vh-200px)]">
+        <div className="flex gap-0 h-[calc(100vh-200px)]">
           {/* Scenarios List */}
-          <div className="w-80 bg-card rounded-lg border p-4 flex-shrink-0">
+          <div className="w-80 bg-card p-4 flex-shrink-0">
             <div className="flex items-center justify-between mb-4">
               <h2 className="text-lg font-semibold">シナリオ一覧</h2>
               <Button onClick={handleCreateNewScenario} size="sm" className="gap-2">
@@ -303,7 +303,7 @@ export default function StepDeliveryPage() {
 
           {/* Steps Creation Tool */}
           {selectedScenario && (
-            <div className="w-80 bg-card rounded-lg border p-4 overflow-y-auto flex-shrink-0">
+            <div className="w-80 bg-card border-l border-border p-4 overflow-y-auto flex-shrink-0">
               <div className="flex items-center justify-between mb-4">
                 <h2 className="text-lg font-semibold">ステップ作成</h2>
                 <Button onClick={handleAddStep} size="sm" className="gap-2">
@@ -358,7 +358,7 @@ export default function StepDeliveryPage() {
 
           {/* Message Creation Screen */}
           {selectedStep && (
-            <div className="flex-1 bg-card rounded-lg p-4 overflow-y-auto min-w-0 w-96 flex-shrink-0">
+            <div className="flex-1 bg-card border-l border-border p-4 overflow-y-auto min-w-0 w-96 flex-shrink-0">
               <div className="flex items-center justify-between mb-4">
                 <h2 className="text-lg font-semibold">メッセージ作成 - {selectedStep.name}</h2>
                 <div className="flex gap-2">
