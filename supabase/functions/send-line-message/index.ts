@@ -70,10 +70,10 @@ serve(async (req) => {
       })
     }
 
-    // Get user's LINE access token
+    // Get user's LINE access token and delivery count
     const { data: profile, error: profileError } = await supabase
       .from('profiles')
-      .select('line_channel_access_token')
+      .select('line_channel_access_token, delivery_count')
       .eq('user_id', user.id)
       .single()
 
@@ -115,6 +115,18 @@ serve(async (req) => {
     }
 
     console.log('Message sent successfully to:', to)
+
+    // Update delivery count
+    const { error: updateError } = await supabase
+      .from('profiles')
+      .update({ 
+        delivery_count: (profile.delivery_count || 0) + 1 
+      })
+      .eq('user_id', user.id)
+
+    if (updateError) {
+      console.error('Error updating delivery count:', updateError)
+    }
 
     return new Response(JSON.stringify({ 
       success: true,

@@ -15,7 +15,7 @@ serve(async (req) => {
   try {
     console.log('Getting LINE quota information')
 
-    if (req.method !== 'GET') {
+    if (req.method !== 'GET' && req.method !== 'POST') {
       return new Response('Method not allowed', { 
         status: 405, 
         headers: corsHeaders 
