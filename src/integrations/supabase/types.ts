@@ -240,7 +240,7 @@ export type Database = {
           id: string
           media_url: string | null
           message_order: number
-          message_type: string
+          message_type: Database["public"]["Enums"]["step_message_type"]
           step_id: string
           updated_at: string
         }
@@ -251,7 +251,7 @@ export type Database = {
           id?: string
           media_url?: string | null
           message_order: number
-          message_type: string
+          message_type: Database["public"]["Enums"]["step_message_type"]
           step_id: string
           updated_at?: string
         }
@@ -262,11 +262,18 @@ export type Database = {
           id?: string
           media_url?: string | null
           message_order?: number
-          message_type?: string
+          message_type?: Database["public"]["Enums"]["step_message_type"]
           step_id?: string
           updated_at?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "fk_step_messages_flex_message_id"
+            columns: ["flex_message_id"]
+            isOneToOne: false
+            referencedRelation: "flex_messages"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "step_messages_step_id_fkey"
             columns: ["step_id"]
@@ -371,6 +378,7 @@ export type Database = {
     }
     Enums: {
       message_kind: "incoming" | "outgoing"
+      step_message_type: "text" | "media" | "flex"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -499,6 +507,7 @@ export const Constants = {
   public: {
     Enums: {
       message_kind: ["incoming", "outgoing"],
+      step_message_type: ["text", "media", "flex"],
     },
   },
 } as const
