@@ -1,4 +1,4 @@
-import { Home, MessageSquare, Settings, FileImage, Webhook, User, Bot, Users, MessageCircle } from "lucide-react"
+import { Home, MessageSquare, Settings, FileImage, Webhook, User, Bot, Users, MessageCircle, ArrowRight } from "lucide-react"
 import { NavLink, useLocation } from "react-router-dom"
 import { useState, useEffect } from "react"
 import { supabase } from "@/integrations/supabase/client"
@@ -23,6 +23,7 @@ const menuItems = [
   { title: "ダッシュボード", url: "/", icon: Home },
   { title: "友達一覧", url: "/friends-list", icon: Users },
   { title: "チャット受信箱", url: "/chat-inbox", icon: MessageCircle },
+  { title: "ステップ配信", url: "/step-delivery", icon: ArrowRight },
   { title: "Flex メッセージデザイナー", url: "/flex-message-designer", icon: MessageSquare },
   { title: "メディアライブラリ", url: "/media-library", icon: FileImage },
 ]
