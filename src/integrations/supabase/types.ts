@@ -236,6 +236,7 @@ export type Database = {
         Row: {
           content: string
           created_at: string
+          flex_message_id: string | null
           id: string
           media_url: string | null
           message_order: number
@@ -246,6 +247,7 @@ export type Database = {
         Insert: {
           content: string
           created_at?: string
+          flex_message_id?: string | null
           id?: string
           media_url?: string | null
           message_order: number
@@ -256,6 +258,7 @@ export type Database = {
         Update: {
           content?: string
           created_at?: string
+          flex_message_id?: string | null
           id?: string
           media_url?: string | null
           message_order?: number
@@ -280,6 +283,7 @@ export type Database = {
           id: string
           is_active: boolean
           name: string
+          scenario_order: number | null
           updated_at: string
           user_id: string
         }
@@ -289,6 +293,7 @@ export type Database = {
           id?: string
           is_active?: boolean
           name: string
+          scenario_order?: number | null
           updated_at?: string
           user_id: string
         }
@@ -298,6 +303,7 @@ export type Database = {
           id?: string
           is_active?: boolean
           name?: string
+          scenario_order?: number | null
           updated_at?: string
           user_id?: string
         }

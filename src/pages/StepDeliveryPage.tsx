@@ -66,6 +66,7 @@ export default function StepDeliveryPage() {
     createScenario,
     updateScenario,
     deleteScenario,
+    reorderScenarios,
     createStep,
     updateStep,
     deleteStep,
@@ -217,15 +218,12 @@ export default function StepDeliveryPage() {
       const newIndex = scenarios.findIndex((item) => item.id === over.id)
       
       if (oldIndex !== -1 && newIndex !== -1) {
-        // Reorder scenarios locally for immediate UI feedback
+        // Reorder scenarios immediately in UI
         const newScenarios = arrayMove(scenarios, oldIndex, newIndex)
+        const newOrder = newScenarios.map(s => s.id)
         
-        // Note: For proper implementation, you'd want to add scenario order functionality to useStepScenarios
-        // and update the database with the new order
-        toast.success('シナリオの順序を変更しました')
-        
-        // Optional: Log for debugging
-        console.log('Scenario reorder:', { from: oldIndex, to: newIndex, scenarios: newScenarios.map(s => s.name) })
+        // Update the database order
+        reorderScenarios(newOrder)
       }
     }
   }
@@ -570,14 +568,14 @@ export default function StepDeliveryPage() {
                                )}
 
                                {message.message_type === 'flex' && (
-                                 <div>
-                                   <Label>Flexメッセージ選択</Label>
-                                   <FlexMessageSelector
-                                     onSelect={(flexMessageId) => handleUpdateMessage(message.id, { content: flexMessageId })}
-                                     selectedFlexMessageId={message.content}
-                                   />
-                                 </div>
-                               )}
+                                  <div>
+                                    <Label>Flexメッセージ選択</Label>
+                                    <FlexMessageSelector
+                                      onSelect={(flexMessageId) => handleUpdateMessage(message.id, { flex_message_id: flexMessageId })}
+                                      selectedFlexMessageId={message.flex_message_id}
+                                    />
+                                  </div>
+                                )}
                             </CardContent>
                           )}
                         </Card>

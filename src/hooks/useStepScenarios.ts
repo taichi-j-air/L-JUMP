@@ -8,6 +8,7 @@ export interface StepScenario {
   description: string
   user_id: string
   is_active: boolean
+  scenario_order: number
   created_at: string
   updated_at: string
 }
@@ -34,6 +35,7 @@ export interface StepMessage {
   message_type: 'text' | 'media' | 'flex'
   content: string
   media_url?: string
+  flex_message_id?: string
   created_at: string
   updated_at: string
 }
@@ -63,7 +65,7 @@ export const useStepScenarios = (userId: string | undefined) => {
         .from('step_scenarios')
         .select('*')
         .eq('user_id', userId)
-        .order('created_at', { ascending: true })
+        .order('scenario_order', { ascending: true })
 
       if (error) throw error
       setScenarios(data || [])
@@ -148,12 +150,14 @@ export const useStepScenarios = (userId: string | undefined) => {
     if (!userId) return null
 
     try {
+      const maxOrder = scenarios.length > 0 ? Math.max(...scenarios.map(s => s.scenario_order || 0)) : -1
       const { data, error } = await supabase
         .from('step_scenarios')
         .insert({
           user_id: userId,
           name,
-          description
+          description,
+          scenario_order: maxOrder + 1
         })
         .select()
         .single()
@@ -188,6 +192,29 @@ export const useStepScenarios = (userId: string | undefined) => {
       console.error('シナリオの更新に失敗しました:', error)
       toast.error('シナリオの更新に失敗しました')
       return null
+    }
+  }
+
+  // シナリオ順序更新
+  const reorderScenarios = async (newOrder: string[]) => {
+    try {
+      const updates = newOrder.map((scenarioId, index) => ({
+        id: scenarioId,
+        scenario_order: index
+      }))
+
+      for (const update of updates) {
+        await supabase
+          .from('step_scenarios')
+          .update({ scenario_order: update.scenario_order })
+          .eq('id', update.id)
+      }
+
+      await fetchScenarios()
+      toast.success('シナリオの順序を更新しました')
+    } catch (error) {
+      console.error('シナリオの順序更新に失敗しました:', error)
+      toast.error('シナリオの順序更新に失敗しました')
     }
   }
 
@@ -424,6 +451,7 @@ export const useStepScenarios = (userId: string | undefined) => {
     createScenario,
     updateScenario,
     deleteScenario,
+    reorderScenarios,
     createStep,
     updateStep,
     deleteStep,
