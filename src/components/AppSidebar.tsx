@@ -30,6 +30,7 @@ const menuItems = [
 
 const settingsItems = [
   { title: "LINE API設定", url: "/line-api-settings", icon: Bot },
+  { title: "LINE Login設定", url: "/line-login-settings", icon: Settings },
   { title: "Webhook設定", url: "/webhook-settings", icon: Webhook },
   { title: "プロファイル管理", url: "/profile-management", icon: User },
 ]

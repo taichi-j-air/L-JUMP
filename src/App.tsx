@@ -10,6 +10,7 @@ import { AppHeader } from "./components/AppHeader";
 import Index from "./pages/Index";
 import Auth from "./pages/Auth";
 import LineApiSettings from "./pages/LineApiSettings";
+import LineLoginSettings from "./pages/LineLoginSettings";
 import WebhookSettings from "./pages/WebhookSettings";
 import ProfileManagement from "./pages/ProfileManagement";
 import FlexMessageDesigner from "./pages/FlexMessageDesigner";
@@ -80,6 +81,7 @@ function AppContent() {
             <Routes>
               <Route path="/" element={<Index />} />
               <Route path="/line-api-settings" element={<LineApiSettings />} />
+              <Route path="/line-login-settings" element={<LineLoginSettings />} />
               <Route path="/webhook-settings" element={<WebhookSettings />} />
               <Route path="/profile-management" element={<ProfileManagement />} />
               <Route path="/flex-message-designer" element={<FlexMessageDesigner />} />
