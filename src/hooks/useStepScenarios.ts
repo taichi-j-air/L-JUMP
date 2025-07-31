@@ -21,6 +21,7 @@ export interface Step {
   delivery_days: number
   delivery_hours: number
   delivery_minutes: number
+  delivery_seconds: number
   specific_time?: string
   created_at: string
   updated_at: string
@@ -205,7 +206,8 @@ export const useStepScenarios = (userId: string | undefined) => {
           delivery_type: 'after_registration',
           delivery_days: 0,
           delivery_hours: 0,
-          delivery_minutes: 0
+          delivery_minutes: 0,
+          delivery_seconds: 0
         })
         .select()
         .single()
@@ -341,6 +343,78 @@ export const useStepScenarios = (userId: string | undefined) => {
     }
   }
 
+  // シナリオ削除
+  const deleteScenario = async (id: string) => {
+    try {
+      const { error } = await supabase
+        .from('step_scenarios')
+        .delete()
+        .eq('id', id)
+
+      if (error) throw error
+
+      setScenarios(prev => prev.filter(s => s.id !== id))
+      toast.success('シナリオを削除しました')
+    } catch (error) {
+      console.error('シナリオの削除に失敗しました:', error)
+      toast.error('シナリオの削除に失敗しました')
+    }
+  }
+
+  // ステップ削除
+  const deleteStep = async (id: string) => {
+    try {
+      const { error } = await supabase
+        .from('steps')
+        .delete()
+        .eq('id', id)
+
+      if (error) throw error
+
+      setSteps(prev => prev.filter(s => s.id !== id))
+      toast.success('ステップを削除しました')
+    } catch (error) {
+      console.error('ステップの削除に失敗しました:', error)
+      toast.error('ステップの削除に失敗しました')
+    }
+  }
+
+  // メッセージ削除
+  const deleteMessage = async (id: string) => {
+    try {
+      const { error } = await supabase
+        .from('step_messages')
+        .delete()
+        .eq('id', id)
+
+      if (error) throw error
+
+      setMessages(prev => prev.filter(m => m.id !== id))
+      toast.success('メッセージを削除しました')
+    } catch (error) {
+      console.error('メッセージの削除に失敗しました:', error)
+      toast.error('メッセージの削除に失敗しました')
+    }
+  }
+
+  // 移動設定削除
+  const deleteTransition = async (id: string) => {
+    try {
+      const { error } = await supabase
+        .from('scenario_transitions')
+        .delete()
+        .eq('id', id)
+
+      if (error) throw error
+
+      setTransitions(prev => prev.filter(t => t.id !== id))
+      toast.success('シナリオ移動を削除しました')
+    } catch (error) {
+      console.error('シナリオ移動の削除に失敗しました:', error)
+      toast.error('シナリオ移動の削除に失敗しました')
+    }
+  }
+
   return {
     scenarios,
     steps,
@@ -349,12 +423,16 @@ export const useStepScenarios = (userId: string | undefined) => {
     loading,
     createScenario,
     updateScenario,
+    deleteScenario,
     createStep,
     updateStep,
+    deleteStep,
     reorderSteps,
     createMessage,
     updateMessage,
+    deleteMessage,
     createTransition,
+    deleteTransition,
     refetch: () => {
       fetchScenarios()
       fetchSteps()
