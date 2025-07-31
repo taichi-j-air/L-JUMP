@@ -15,18 +15,24 @@ serve(async (req) => {
   try {
     console.log('Getting LINE quota information')
 
-    if (req.method !== 'GET' && req.method !== 'POST') {
-      return new Response('Method not allowed', { 
+    if (req.method !== 'POST') {
+      return new Response(JSON.stringify({ 
+        error: 'Method not allowed. Use POST.' 
+      }), { 
         status: 405, 
-        headers: corsHeaders 
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
       })
     }
 
-    const authHeader = req.headers.get('Authorization')
-    if (!authHeader) {
-      return new Response('Missing authorization header', { 
-        status: 401, 
-        headers: corsHeaders 
+    // Parse request body
+    const { channelId } = await req.json()
+    
+    if (!channelId) {
+      return new Response(JSON.stringify({ 
+        error: 'channelId is required in request body' 
+      }), { 
+        status: 400, 
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
       })
     }
 
@@ -36,89 +42,80 @@ serve(async (req) => {
     
     if (!supabaseServiceKey) {
       console.error('Missing Supabase service key')
-      return new Response('Server configuration error', { 
+      return new Response(JSON.stringify({ 
+        error: 'Server configuration error' 
+      }), { 
         status: 500, 
-        headers: corsHeaders 
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
       })
     }
 
-    const supabase = createClient(supabaseUrl, supabaseServiceKey, {
-      global: {
-        headers: {
-          Authorization: authHeader,
-        },
-      },
-    })
+    const supabase = createClient(supabaseUrl, supabaseServiceKey)
 
-    // Get user session
-    const { data: { user }, error: authError } = await supabase.auth.getUser()
-    if (authError || !user) {
-      console.error('Authentication error:', authError)
-      return new Response('Unauthorized', { 
-        status: 401, 
-        headers: corsHeaders 
-      })
-    }
-
-    // Get user's LINE access token
+    // Get LINE access token from profiles table using channelId
     const { data: profile, error: profileError } = await supabase
       .from('profiles')
       .select('line_channel_access_token')
-      .eq('user_id', user.id)
+      .eq('line_channel_id', channelId)
       .single()
 
     if (profileError || !profile?.line_channel_access_token) {
-      console.error('No LINE access token found:', profileError)
+      console.error('No LINE access token found for channelId:', channelId, profileError)
       return new Response(JSON.stringify({ 
-        error: 'LINE API not configured' 
+        error: 'LINE API not configured for this channel' 
       }), { 
-        status: 400, 
+        status: 200, 
         headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
       })
     }
 
-    // Get quota information from LINE API
-    const response = await fetch('https://api.line.me/v2/bot/message/quota', {
-      method: 'GET',
-      headers: {
-        'Authorization': `Bearer ${profile.line_channel_access_token}`
-      }
-    })
+    const headers = {
+      'Authorization': `Bearer ${profile.line_channel_access_token}`,
+      'Content-Type': 'application/json'
+    }
 
-    if (!response.ok) {
-      const errorText = await response.text()
-      console.error('LINE API error:', response.status, errorText)
+    // Parallel execution of LINE API calls
+    const [quotaResponse, consumptionResponse] = await Promise.all([
+      fetch('https://api.line.me/v2/bot/message/quota', { headers }),
+      fetch('https://api.line.me/v2/bot/message/quota/consumption', { headers })
+    ])
+
+    // Handle quota API response
+    let quotaData = null
+    if (!quotaResponse.ok) {
+      const errorText = await quotaResponse.text()
+      console.error('Quota API error:', quotaResponse.status, errorText)
       return new Response(JSON.stringify({ 
-        error: 'Failed to get quota information',
-        details: errorText
+        error: `Quota API error: ${quotaResponse.status} - ${errorText}` 
       }), { 
-        status: response.status, 
+        status: 200, 
         headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
       })
     }
-
-    const quotaData = await response.json()
+    quotaData = await quotaResponse.json()
     console.log('Quota data received:', quotaData)
 
-    // Get consumption information
-    const consumptionResponse = await fetch('https://api.line.me/v2/bot/message/quota/consumption', {
-      method: 'GET',
-      headers: {
-        'Authorization': `Bearer ${profile.line_channel_access_token}`
-      }
-    })
-
+    // Handle consumption API response
     let consumptionData = { totalUsage: 0 }
-    if (consumptionResponse.ok) {
-      consumptionData = await consumptionResponse.json()
-      console.log('Consumption data received:', consumptionData)
+    if (!consumptionResponse.ok) {
+      const errorText = await consumptionResponse.text()
+      console.error('Consumption API error:', consumptionResponse.status, errorText)
+      return new Response(JSON.stringify({ 
+        error: `Consumption API error: ${consumptionResponse.status} - ${errorText}` 
+      }), { 
+        status: 200, 
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+      })
     }
+    consumptionData = await consumptionResponse.json()
+    console.log('Consumption data received:', consumptionData)
 
-    // Format data according to GPT's suggestion
+    // Format response according to specification
     const result = {
       limit: quotaData.value || 200,
       used: consumptionData.totalUsage || 0,
-      remaining: (quotaData.value || 200) - (consumptionData.totalUsage || 0)
+      remain: (quotaData.value || 200) - (consumptionData.totalUsage || 0),
+      error: null
     }
 
     // Update profile with latest quota information
@@ -129,7 +126,7 @@ serve(async (req) => {
         monthly_message_used: result.used,
         quota_updated_at: new Date().toISOString()
       })
-      .eq('user_id', user.id)
+      .eq('line_channel_id', channelId)
 
     return new Response(JSON.stringify(result), { 
       status: 200, 
@@ -139,10 +136,9 @@ serve(async (req) => {
   } catch (error) {
     console.error('Function error:', error)
     return new Response(JSON.stringify({ 
-      error: 'Internal server error',
-      details: error.message
+      error: `Internal server error: ${error.message}` 
     }), { 
-      status: 500, 
+      status: 200, 
       headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
     })
   }

@@ -10,11 +10,11 @@ import { User } from "@supabase/supabase-js"
 
 interface Profile {
   line_channel_id?: string
-  delivery_limit: number
-  delivery_count: number
-  monthly_message_limit: number
-  monthly_message_used: number
-  friends_count: number
+  delivery_limit?: number
+  delivery_count?: number
+  monthly_message_limit?: number
+  monthly_message_used?: number
+  friends_count?: number
 }
 
 interface AppHeaderProps {
@@ -36,34 +36,59 @@ export function AppHeader({ user }: AppHeaderProps) {
 
   const loadProfile = async () => {
     try {
-      const { data, error } = await supabase
-        .from('profiles')
-        .select('line_channel_id, delivery_limit, delivery_count, monthly_message_limit, monthly_message_used, friends_count')
-        .eq('user_id', user.id)
-        .single()
+      // Parallel execution of profile and quota queries
+      const [profileResult, quotaResult] = await Promise.all([
+        // 1. Get profile with minimal columns
+        supabase
+          .from('profiles')
+          .select('line_channel_id, friends_count, monthly_message_limit, monthly_message_used')
+          .eq('user_id', user.id)
+          .single(),
+        
+        // 2. Get LINE quota information (will use channelId from first query)
+        (async () => {
+          try {
+            // First get the channel ID
+            const { data: tempProfile } = await supabase
+              .from('profiles')
+              .select('line_channel_id')
+              .eq('user_id', user.id)
+              .single()
+            
+            if (tempProfile?.line_channel_id) {
+              return await supabase.functions.invoke('get-line-quota', {
+                body: { channelId: tempProfile.line_channel_id }
+              })
+            }
+            return { data: null, error: 'No channel ID' }
+          } catch (error) {
+            return { data: null, error: error.message }
+          }
+        })()
+      ])
 
-      if (error) {
-        console.error('Error loading profile:', error)
+      if (profileResult.error) {
+        console.error('Error loading profile:', profileResult.error)
       } else {
-        setProfile(data)
+        setProfile(profileResult.data)
       }
 
-      // Get actual LINE quota information
-      try {
-        const { data: quotaData, error: quotaError } = await supabase.functions.invoke('get-line-quota')
-        
-        if (!quotaError && quotaData) {
-          console.log('Received quota data:', quotaData)
-          // Update with actual quota data
-          setProfile(prev => prev ? {
-            ...prev,
-            monthly_message_limit: quotaData.limit || prev.monthly_message_limit || 200,
-            monthly_message_used: quotaData.used || prev.monthly_message_used || 0
-          } : null)
-        }
-      } catch (quotaError) {
-        console.log('Could not fetch LINE quota:', quotaError)
-        // Fallback to profile data
+      // Update profile with quota data if successful
+      if (!quotaResult.error && quotaResult.data && !quotaResult.data.error) {
+        console.log('Received quota data:', quotaResult.data)
+        setProfile(prev => ({
+          ...(prev ?? {
+            line_channel_id: undefined,
+            delivery_limit: 1000,
+            delivery_count: 0,
+            friends_count: 0
+          }),
+          monthly_message_limit: quotaResult.data.limit,
+          monthly_message_used: quotaResult.data.used
+        }))
+      } else if (quotaResult.error || quotaResult.data?.error) {
+        console.log('Could not fetch LINE quota:', quotaResult.error || quotaResult.data?.error)
+        // Don't overwrite existing data on error
       }
     } catch (error) {
       console.error('Error:', error)
@@ -129,7 +154,12 @@ export function AppHeader({ user }: AppHeaderProps) {
         {/* 月間配信数 */}
         <div className="flex items-center gap-2 text-sm">
           <span className="text-muted-foreground">月間配信:</span>
-          <Badge variant="secondary">
+          <Badge variant={
+            profile && profile.monthly_message_limit ? 
+              ((profile.monthly_message_limit - (profile.monthly_message_used || 0)) / profile.monthly_message_limit) <= 0.1 ? 
+                "destructive" : "secondary"
+              : "secondary"
+          }>
             残り {((profile?.monthly_message_limit || 200) - (profile?.monthly_message_used || 0)).toLocaleString()} / {(profile?.monthly_message_limit || 200).toLocaleString()}
           </Badge>
         </div>
