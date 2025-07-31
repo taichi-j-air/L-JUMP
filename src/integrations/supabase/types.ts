@@ -190,6 +190,69 @@ export type Database = {
         }
         Relationships: []
       }
+      scenario_friend_logs: {
+        Row: {
+          added_at: string
+          friend_id: string | null
+          id: string
+          invite_code: string
+          line_user_id: string | null
+          scenario_id: string
+        }
+        Insert: {
+          added_at?: string
+          friend_id?: string | null
+          id?: string
+          invite_code: string
+          line_user_id?: string | null
+          scenario_id: string
+        }
+        Update: {
+          added_at?: string
+          friend_id?: string | null
+          id?: string
+          invite_code?: string
+          line_user_id?: string | null
+          scenario_id?: string
+        }
+        Relationships: []
+      }
+      scenario_invite_codes: {
+        Row: {
+          created_at: string
+          id: string
+          invite_code: string
+          is_active: boolean
+          max_usage: number | null
+          scenario_id: string
+          updated_at: string
+          usage_count: number
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          invite_code: string
+          is_active?: boolean
+          max_usage?: number | null
+          scenario_id: string
+          updated_at?: string
+          usage_count?: number
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          invite_code?: string
+          is_active?: boolean
+          max_usage?: number | null
+          scenario_id?: string
+          updated_at?: string
+          usage_count?: number
+          user_id?: string
+        }
+        Relationships: []
+      }
       scenario_transitions: {
         Row: {
           condition_type: string
@@ -374,7 +437,10 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      generate_invite_code: {
+        Args: Record<PropertyKey, never>
+        Returns: string
+      }
     }
     Enums: {
       message_kind: "incoming" | "outgoing"

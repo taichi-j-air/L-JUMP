@@ -49,11 +49,24 @@ export interface ScenarioTransition {
   updated_at: string
 }
 
+export interface ScenarioInviteCode {
+  id: string
+  scenario_id: string
+  user_id: string
+  invite_code: string
+  usage_count: number
+  max_usage?: number
+  is_active: boolean
+  created_at: string
+  updated_at: string
+}
+
 export const useStepScenarios = (userId: string | undefined) => {
   const [scenarios, setScenarios] = useState<StepScenario[]>([])
   const [steps, setSteps] = useState<Step[]>([])
   const [messages, setMessages] = useState<StepMessage[]>([])
   const [transitions, setTransitions] = useState<ScenarioTransition[]>([])
+  const [inviteCodes, setInviteCodes] = useState<ScenarioInviteCode[]>([])
   const [loading, setLoading] = useState(true)
 
   // シナリオ取得
@@ -129,6 +142,24 @@ export const useStepScenarios = (userId: string | undefined) => {
     }
   }
 
+  // 招待コード取得
+  const fetchInviteCodes = async () => {
+    if (!userId) return
+    
+    try {
+      const { data, error } = await supabase
+        .from('scenario_invite_codes')
+        .select('*')
+        .eq('user_id', userId)
+      
+      if (error) throw error
+      setInviteCodes(data || [])
+    } catch (error) {
+      console.error('招待コードの取得に失敗しました:', error)
+      toast.error('招待コードの取得に失敗しました')
+    }
+  }
+
   // 初期データ取得
   useEffect(() => {
     const fetchData = async () => {
@@ -137,7 +168,8 @@ export const useStepScenarios = (userId: string | undefined) => {
         fetchScenarios(),
         fetchSteps(),
         fetchMessages(),
-        fetchTransitions()
+        fetchTransitions(),
+        fetchInviteCodes()
       ])
       setLoading(false)
     }
@@ -431,9 +463,9 @@ export const useStepScenarios = (userId: string | undefined) => {
         .from('scenario_transitions')
         .delete()
         .eq('id', id)
-
+      
       if (error) throw error
-
+      
       setTransitions(prev => prev.filter(t => t.id !== id))
       toast.success('シナリオ移動を削除しました')
     } catch (error) {
@@ -442,11 +474,72 @@ export const useStepScenarios = (userId: string | undefined) => {
     }
   }
 
+  // 招待コードを生成
+  const generateInviteCode = async (scenarioId: string, maxUsage?: number) => {
+    if (!userId) return null
+    
+    try {
+      // 既存の招待コードをチェック
+      const existing = inviteCodes.find(code => code.scenario_id === scenarioId && code.is_active)
+      if (existing) {
+        return existing
+      }
+
+      // ランダムコードを生成
+      const inviteCode = Math.random().toString(36).substring(2, 10)
+      
+      const { data, error } = await supabase
+        .from('scenario_invite_codes')
+        .insert({
+          scenario_id: scenarioId,
+          user_id: userId,
+          invite_code: inviteCode,
+          max_usage: maxUsage,
+          usage_count: 0,
+          is_active: true
+        })
+        .select()
+        .single()
+      
+      if (error) throw error
+      
+      const newCode = data as ScenarioInviteCode
+      setInviteCodes(prev => [...prev, newCode])
+      toast.success('招待コードを生成しました')
+      return newCode
+    } catch (error) {
+      console.error('招待コード生成エラー:', error)
+      toast.error('招待コードの生成に失敗しました')
+      return null
+    }
+  }
+
+  // 招待コードを無効化
+  const deactivateInviteCode = async (codeId: string) => {
+    try {
+      const { error } = await supabase
+        .from('scenario_invite_codes')
+        .update({ is_active: false })
+        .eq('id', codeId)
+      
+      if (error) throw error
+      
+      setInviteCodes(prev => prev.map(code => 
+        code.id === codeId ? { ...code, is_active: false } : code
+      ))
+      toast.success('招待コードを無効化しました')
+    } catch (error) {
+      console.error('招待コード無効化エラー:', error)
+      toast.error('招待コードの無効化に失敗しました')
+    }
+  }
+
   return {
     scenarios,
     steps,
     messages,
     transitions,
+    inviteCodes,
     loading,
     createScenario,
     updateScenario,
@@ -461,11 +554,14 @@ export const useStepScenarios = (userId: string | undefined) => {
     deleteMessage,
     createTransition,
     deleteTransition,
+    generateInviteCode,
+    deactivateInviteCode,
     refetch: () => {
       fetchScenarios()
       fetchSteps()
       fetchMessages()
       fetchTransitions()
+      fetchInviteCodes()
     }
   }
 }

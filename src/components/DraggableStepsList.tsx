@@ -19,9 +19,10 @@ import {
 } from "@dnd-kit/sortable"
 import { CSS } from "@dnd-kit/utilities"
 import { Card, CardContent } from "@/components/ui/card"
-import { GripVertical, Trash2 } from "lucide-react"
+import { GripVertical, Trash2, Edit2 } from "lucide-react"
 import { Step } from "@/hooks/useStepScenarios"
 import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
 
 interface SortableStepCardProps {
   step: Step
@@ -29,10 +30,14 @@ interface SortableStepCardProps {
   isSelected: boolean
   onClick: () => void
   onDelete: () => void
+  onUpdateName: (stepId: string, name: string) => void
   allSteps: Step[]
 }
 
-function SortableStepCard({ step, index, isSelected, onClick, onDelete, allSteps }: SortableStepCardProps) {
+function SortableStepCard({ step, index, isSelected, onClick, onDelete, onUpdateName, allSteps }: SortableStepCardProps) {
+  const [isEditing, setIsEditing] = useState(false)
+  const [tempName, setTempName] = useState(step.name)
+
   const {
     attributes,
     listeners,
@@ -46,6 +51,22 @@ function SortableStepCard({ step, index, isSelected, onClick, onDelete, allSteps
     transform: CSS.Transform.toString(transform),
     transition,
     opacity: isDragging ? 0.5 : 1,
+  }
+
+  const handleNameSave = () => {
+    if (tempName.trim() && tempName !== step.name) {
+      onUpdateName(step.id, tempName.trim())
+    }
+    setIsEditing(false)
+  }
+
+  const handleKeyPress = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter') {
+      handleNameSave()
+    } else if (e.key === 'Escape') {
+      setTempName(step.name)
+      setIsEditing(false)
+    }
   }
 
   const getDeliveryTimeText = () => {
@@ -108,22 +129,48 @@ function SortableStepCard({ step, index, isSelected, onClick, onDelete, allSteps
             {index + 1}
           </div>
           <div className="flex-1 min-w-0">
-            <h4 className="font-medium">{step.name}</h4>
+            {isEditing ? (
+              <Input
+                value={tempName}
+                onChange={(e) => setTempName(e.target.value)}
+                onBlur={handleNameSave}
+                onKeyDown={handleKeyPress}
+                className="h-6 text-sm px-1"
+                autoFocus
+                onClick={(e) => e.stopPropagation()}
+              />
+            ) : (
+              <h4 className="font-medium">{step.name}</h4>
+            )}
             <p className="text-xs text-muted-foreground">
               {getDeliveryTimeText()}
             </p>
           </div>
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={(e) => {
-              e.stopPropagation()
-              onDelete()
-            }}
-            className="flex-shrink-0"
-          >
-            <Trash2 className="h-4 w-4 text-destructive" />
-          </Button>
+          <div className="flex gap-1">
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={(e) => {
+                e.stopPropagation()
+                setIsEditing(true)
+                setTempName(step.name)
+              }}
+              className="flex-shrink-0 h-6 w-6 p-0"
+            >
+              <Edit2 className="h-3 w-3" />
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={(e) => {
+                e.stopPropagation()
+                onDelete()
+              }}
+              className="flex-shrink-0 h-6 w-6 p-0"
+            >
+              <Trash2 className="h-3 w-3 text-destructive" />
+            </Button>
+          </div>
         </div>
       </CardContent>
     </Card>
@@ -136,6 +183,7 @@ interface DraggableStepsListProps {
   onStepSelect: (step: Step) => void
   onReorder: (newOrder: string[]) => void
   onStepDelete: (stepId: string) => void
+  onStepUpdate: (stepId: string, name: string) => void
 }
 
 export function DraggableStepsList({ 
@@ -143,7 +191,8 @@ export function DraggableStepsList({
   selectedStep, 
   onStepSelect, 
   onReorder,
-  onStepDelete
+  onStepDelete,
+  onStepUpdate
 }: DraggableStepsListProps) {
   const sensors = useSensors(
     useSensor(PointerSensor),
@@ -173,15 +222,16 @@ export function DraggableStepsList({
       <SortableContext items={steps.map(s => s.id)} strategy={verticalListSortingStrategy}>
         <div className="space-y-2">
           {steps.map((step, index) => (
-            <SortableStepCard
-              key={step.id}
-              step={step}
-              index={index}
-              isSelected={selectedStep?.id === step.id}
-              onClick={() => onStepSelect(step)}
-              onDelete={() => onStepDelete(step.id)}
-              allSteps={steps}
-            />
+              <SortableStepCard
+                key={step.id}
+                step={step}
+                index={index}
+                isSelected={selectedStep?.id === step.id}
+                onClick={() => onStepSelect(step)}
+                onDelete={() => onStepDelete(step.id)}
+                onUpdateName={onStepUpdate}
+                allSteps={steps}
+              />
           ))}
         </div>
       </SortableContext>
