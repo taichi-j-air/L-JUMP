@@ -190,6 +190,169 @@ export type Database = {
         }
         Relationships: []
       }
+      scenario_transitions: {
+        Row: {
+          condition_type: string
+          created_at: string
+          from_scenario_id: string
+          id: string
+          to_scenario_id: string
+          updated_at: string
+        }
+        Insert: {
+          condition_type?: string
+          created_at?: string
+          from_scenario_id: string
+          id?: string
+          to_scenario_id: string
+          updated_at?: string
+        }
+        Update: {
+          condition_type?: string
+          created_at?: string
+          from_scenario_id?: string
+          id?: string
+          to_scenario_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "scenario_transitions_from_scenario_id_fkey"
+            columns: ["from_scenario_id"]
+            isOneToOne: false
+            referencedRelation: "step_scenarios"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "scenario_transitions_to_scenario_id_fkey"
+            columns: ["to_scenario_id"]
+            isOneToOne: false
+            referencedRelation: "step_scenarios"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      step_messages: {
+        Row: {
+          content: string
+          created_at: string
+          id: string
+          media_url: string | null
+          message_order: number
+          message_type: string
+          step_id: string
+          updated_at: string
+        }
+        Insert: {
+          content: string
+          created_at?: string
+          id?: string
+          media_url?: string | null
+          message_order: number
+          message_type: string
+          step_id: string
+          updated_at?: string
+        }
+        Update: {
+          content?: string
+          created_at?: string
+          id?: string
+          media_url?: string | null
+          message_order?: number
+          message_type?: string
+          step_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "step_messages_step_id_fkey"
+            columns: ["step_id"]
+            isOneToOne: false
+            referencedRelation: "steps"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      step_scenarios: {
+        Row: {
+          created_at: string
+          description: string | null
+          id: string
+          is_active: boolean
+          name: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          description?: string | null
+          id?: string
+          is_active?: boolean
+          name: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          description?: string | null
+          id?: string
+          is_active?: boolean
+          name?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      steps: {
+        Row: {
+          created_at: string
+          delivery_days: number | null
+          delivery_hours: number | null
+          delivery_minutes: number | null
+          delivery_type: string
+          id: string
+          name: string
+          scenario_id: string
+          specific_time: string | null
+          step_order: number
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          delivery_days?: number | null
+          delivery_hours?: number | null
+          delivery_minutes?: number | null
+          delivery_type: string
+          id?: string
+          name: string
+          scenario_id: string
+          specific_time?: string | null
+          step_order: number
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          delivery_days?: number | null
+          delivery_hours?: number | null
+          delivery_minutes?: number | null
+          delivery_type?: string
+          id?: string
+          name?: string
+          scenario_id?: string
+          specific_time?: string | null
+          step_order?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "steps_scenario_id_fkey"
+            columns: ["scenario_id"]
+            isOneToOne: false
+            referencedRelation: "step_scenarios"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Views: {
       [_ in never]: never

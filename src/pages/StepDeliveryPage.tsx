@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react"
-import { Plus, Calendar, Clock, MessageSquare, Image } from "lucide-react"
+import { Plus, MessageSquare } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
@@ -11,40 +11,13 @@ import { supabase } from "@/integrations/supabase/client"
 import { User } from "@supabase/supabase-js"
 import { AppHeader } from "@/components/AppHeader"
 import { MediaSelector } from "@/components/MediaSelector"
+import { DraggableStepsList } from "@/components/DraggableStepsList"
+import { ScenarioTransitionCard } from "@/components/ScenarioTransitionCard"
+import { useStepScenarios, StepScenario, Step, StepMessage } from "@/hooks/useStepScenarios"
 import { toast } from "sonner"
-
-interface StepScenario {
-  id: string
-  name: string
-  description: string
-  steps: Step[]
-}
-
-interface Step {
-  id: string
-  name: string
-  deliveryTiming: DeliveryTiming
-  messages: Message[]
-}
-
-interface DeliveryTiming {
-  type: 'after_registration' | 'specific_time'
-  days?: number
-  hours?: number
-  minutes?: number
-  specificTime?: string
-}
-
-interface Message {
-  id: string
-  type: 'text' | 'media'
-  content: string
-  mediaUrl?: string
-}
 
 export default function StepDeliveryPage() {
   const [user, setUser] = useState<User | null>(null)
-  const [scenarios, setScenarios] = useState<StepScenario[]>([])
   const [selectedScenario, setSelectedScenario] = useState<StepScenario | null>(null)
   const [selectedStep, setSelectedStep] = useState<Step | null>(null)
   const [loading, setLoading] = useState(true)
@@ -57,128 +30,98 @@ export default function StepDeliveryPage() {
     })
   }, [])
 
-  const createNewScenario = () => {
-    const newScenario: StepScenario = {
-      id: crypto.randomUUID(),
-      name: `シナリオ ${scenarios.length + 1}`,
-      description: "",
-      steps: []
+  const {
+    scenarios,
+    steps,
+    messages,
+    transitions,
+    loading: dataLoading,
+    createScenario,
+    updateScenario,
+    createStep,
+    updateStep,
+    reorderSteps,
+    createMessage,
+    updateMessage,
+    createTransition
+  } = useStepScenarios(user?.id)
+
+  // シナリオに属するステップのみを取得
+  const selectedScenarioSteps = selectedScenario 
+    ? steps.filter(s => s.scenario_id === selectedScenario.id).sort((a, b) => a.step_order - b.step_order)
+    : []
+
+  // 選択されたステップのメッセージを取得
+  const selectedStepMessages = selectedStep 
+    ? messages.filter(m => m.step_id === selectedStep.id).sort((a, b) => a.message_order - b.message_order)
+    : []
+
+  const handleCreateNewScenario = async () => {
+    if (!user) return
+    
+    const scenario = await createScenario(`シナリオ ${scenarios.length + 1}`)
+    if (scenario) {
+      setSelectedScenario(scenario)
+      setSelectedStep(null)
     }
-    setScenarios([...scenarios, newScenario])
-    setSelectedScenario(newScenario)
-    setSelectedStep(null)
   }
 
-  const addStep = () => {
+  const handleAddStep = async () => {
     if (!selectedScenario) return
 
-    const newStep: Step = {
-      id: crypto.randomUUID(),
-      name: `ステップ ${selectedScenario.steps.length + 1}`,
-      deliveryTiming: {
-        type: 'after_registration',
-        days: 0,
-        hours: 0,
-        minutes: 0
-      },
-      messages: []
+    const step = await createStep(selectedScenario.id, `ステップ ${selectedScenarioSteps.length + 1}`)
+    if (step) {
+      setSelectedStep(step as Step)
     }
-
-    const updatedScenario = {
-      ...selectedScenario,
-      steps: [...selectedScenario.steps, newStep]
-    }
-
-    const updatedScenarios = scenarios.map(s => 
-      s.id === selectedScenario.id ? updatedScenario : s
-    )
-
-    setScenarios(updatedScenarios)
-    setSelectedScenario(updatedScenario)
-    setSelectedStep(newStep)
   }
 
-  const addMessage = () => {
-    if (!selectedStep || !selectedScenario) return
+  const handleAddMessage = async () => {
+    if (!selectedStep) return
 
-    const newMessage: Message = {
-      id: crypto.randomUUID(),
-      type: 'text',
-      content: ''
-    }
-
-    const updatedStep = {
-      ...selectedStep,
-      messages: [...selectedStep.messages, newMessage]
-    }
-
-    const updatedScenario = {
-      ...selectedScenario,
-      steps: selectedScenario.steps.map(s => 
-        s.id === selectedStep.id ? updatedStep : s
-      )
-    }
-
-    const updatedScenarios = scenarios.map(s => 
-      s.id === selectedScenario.id ? updatedScenario : s
-    )
-
-    setScenarios(updatedScenarios)
-    setSelectedScenario(updatedScenario)
-    setSelectedStep(updatedStep)
+    await createMessage(selectedStep.id)
   }
 
-  const updateStepTiming = (timing: Partial<DeliveryTiming>) => {
-    if (!selectedStep || !selectedScenario) return
+  const handleUpdateStepTiming = async (timing: Partial<Omit<Step, 'id' | 'scenario_id' | 'name' | 'step_order' | 'created_at' | 'updated_at'>>) => {
+    if (!selectedStep) return
 
-    const updatedStep = {
-      ...selectedStep,
-      deliveryTiming: { ...selectedStep.deliveryTiming, ...timing }
+    const updates: Partial<Step> = {}
+    
+    if (timing.delivery_type) updates.delivery_type = timing.delivery_type
+    if (timing.delivery_days !== undefined) updates.delivery_days = timing.delivery_days
+    if (timing.delivery_hours !== undefined) updates.delivery_hours = timing.delivery_hours
+    if (timing.delivery_minutes !== undefined) updates.delivery_minutes = timing.delivery_minutes
+    if (timing.specific_time !== undefined) updates.specific_time = timing.specific_time
+
+    const updatedStep = await updateStep(selectedStep.id, updates)
+    if (updatedStep) {
+      setSelectedStep(updatedStep as Step)
     }
-
-    const updatedScenario = {
-      ...selectedScenario,
-      steps: selectedScenario.steps.map(s => 
-        s.id === selectedStep.id ? updatedStep : s
-      )
-    }
-
-    const updatedScenarios = scenarios.map(s => 
-      s.id === selectedScenario.id ? updatedScenario : s
-    )
-
-    setScenarios(updatedScenarios)
-    setSelectedScenario(updatedScenario)
-    setSelectedStep(updatedStep)
   }
 
-  const updateMessage = (messageId: string, updates: Partial<Message>) => {
-    if (!selectedStep || !selectedScenario) return
-
-    const updatedStep = {
-      ...selectedStep,
-      messages: selectedStep.messages.map(m => 
-        m.id === messageId ? { ...m, ...updates } : m
-      )
-    }
-
-    const updatedScenario = {
-      ...selectedScenario,
-      steps: selectedScenario.steps.map(s => 
-        s.id === selectedStep.id ? updatedStep : s
-      )
-    }
-
-    const updatedScenarios = scenarios.map(s => 
-      s.id === selectedScenario.id ? updatedScenario : s
-    )
-
-    setScenarios(updatedScenarios)
-    setSelectedScenario(updatedScenario)
-    setSelectedStep(updatedStep)
+  const handleUpdateMessage = async (messageId: string, updates: Partial<StepMessage>) => {
+    await updateMessage(messageId, updates)
   }
 
-  if (loading || !user) {
+  const handleStepReorder = async (newOrder: string[]) => {
+    if (!selectedScenario) return
+    await reorderSteps(selectedScenario.id, newOrder)
+  }
+
+  const handleUpdateScenarioName = async (name: string) => {
+    if (!selectedScenario) return
+    
+    const updated = await updateScenario(selectedScenario.id, { name })
+    if (updated) {
+      setSelectedScenario(updated)
+    }
+  }
+
+  const handleCreateTransition = async (toScenarioId: string) => {
+    if (!selectedScenario) return
+    await createTransition(selectedScenario.id, toScenarioId)
+  }
+
+  if (loading || dataLoading || !user) {
     return <div className="flex items-center justify-center min-h-screen">読み込み中...</div>
   }
 
@@ -196,39 +139,42 @@ export default function StepDeliveryPage() {
           <div className="w-80 bg-card rounded-lg border p-4">
             <div className="flex items-center justify-between mb-4">
               <h2 className="text-lg font-semibold">シナリオ一覧</h2>
-              <Button onClick={createNewScenario} size="sm" className="gap-2">
+              <Button onClick={handleCreateNewScenario} size="sm" className="gap-2">
                 <Plus className="h-4 w-4" />
                 追加
               </Button>
             </div>
             
             <div className="space-y-2">
-              {scenarios.map((scenario) => (
-                <Card 
-                  key={scenario.id}
-                  className={`cursor-pointer transition-colors ${
-                    selectedScenario?.id === scenario.id ? 'bg-primary/10 border-primary' : 'hover:bg-muted/50'
-                  }`}
-                  onClick={() => {
-                    setSelectedScenario(scenario)
-                    setSelectedStep(null)
-                  }}
-                >
-                  <CardContent className="p-3">
-                    <h3 className="font-medium">{scenario.name}</h3>
-                    <p className="text-sm text-muted-foreground">{scenario.steps.length} ステップ</p>
-                  </CardContent>
-                </Card>
-              ))}
+              {scenarios.map((scenario) => {
+                const scenarioSteps = steps.filter(s => s.scenario_id === scenario.id)
+                return (
+                  <Card 
+                    key={scenario.id}
+                    className={`cursor-pointer transition-colors ${
+                      selectedScenario?.id === scenario.id ? 'bg-primary/10 border-primary' : 'hover:bg-muted/50'
+                    }`}
+                    onClick={() => {
+                      setSelectedScenario(scenario)
+                      setSelectedStep(null)
+                    }}
+                  >
+                    <CardContent className="p-3">
+                      <h3 className="font-medium">{scenario.name}</h3>
+                      <p className="text-sm text-muted-foreground">{scenarioSteps.length} ステップ</p>
+                    </CardContent>
+                  </Card>
+                )
+              })}
             </div>
           </div>
 
           {/* Steps Creation Tool */}
           {selectedScenario && (
-            <div className="w-80 bg-card rounded-lg border p-4">
+            <div className="w-80 bg-card rounded-lg border p-4 overflow-y-auto">
               <div className="flex items-center justify-between mb-4">
                 <h2 className="text-lg font-semibold">ステップ作成</h2>
-                <Button onClick={addStep} size="sm" className="gap-2">
+                <Button onClick={handleAddStep} size="sm" className="gap-2">
                   <Plus className="h-4 w-4" />
                   ステップ追加
                 </Button>
@@ -239,53 +185,41 @@ export default function StepDeliveryPage() {
                 <Input
                   id="scenario-name"
                   value={selectedScenario.name}
-                  onChange={(e) => {
-                    const updatedScenario = { ...selectedScenario, name: e.target.value }
-                    const updatedScenarios = scenarios.map(s => 
-                      s.id === selectedScenario.id ? updatedScenario : s
-                    )
-                    setScenarios(updatedScenarios)
-                    setSelectedScenario(updatedScenario)
-                  }}
+                  onChange={(e) => handleUpdateScenarioName(e.target.value)}
                 />
               </div>
 
               <Separator className="my-4" />
 
-              <div className="space-y-2">
-                {selectedScenario.steps.map((step, index) => (
-                  <Card 
-                    key={step.id}
-                    className={`cursor-pointer transition-colors ${
-                      selectedStep?.id === step.id ? 'bg-primary/10 border-primary' : 'hover:bg-muted/50'
-                    }`}
-                    onClick={() => setSelectedStep(step)}
-                  >
-                    <CardContent className="p-3">
-                      <div className="flex items-center gap-2">
-                        <div className="w-6 h-6 rounded-full bg-primary text-primary-foreground text-xs flex items-center justify-center">
-                          {index + 1}
-                        </div>
-                        <div className="flex-1">
-                          <h4 className="font-medium">{step.name}</h4>
-                          <p className="text-xs text-muted-foreground">
-                            {step.messages.length} メッセージ
-                          </p>
-                        </div>
-                      </div>
-                    </CardContent>
-                  </Card>
-                ))}
+              <div className="space-y-4">
+                <DraggableStepsList
+                  steps={selectedScenarioSteps}
+                  selectedStep={selectedStep}
+                  onStepSelect={setSelectedStep}
+                  onReorder={handleStepReorder}
+                />
+
+                {/* シナリオ移動設定 */}
+                <ScenarioTransitionCard
+                  currentScenario={selectedScenario}
+                  availableScenarios={scenarios}
+                  transitions={transitions}
+                  onAddTransition={handleCreateTransition}
+                  onRemoveTransition={(transitionId) => {
+                    // TODO: 削除機能を実装
+                    console.log('削除:', transitionId)
+                  }}
+                />
               </div>
             </div>
           )}
 
           {/* Message Creation Screen */}
           {selectedStep && (
-            <div className="flex-1 bg-card rounded-lg border p-4">
+            <div className="flex-1 bg-card rounded-lg border p-4 overflow-y-auto">
               <div className="flex items-center justify-between mb-4">
                 <h2 className="text-lg font-semibold">メッセージ作成 - {selectedStep.name}</h2>
-                <Button onClick={addMessage} size="sm" className="gap-2">
+                <Button onClick={handleAddMessage} size="sm" className="gap-2">
                   <Plus className="h-4 w-4" />
                   メッセージ追加
                 </Button>
@@ -300,9 +234,9 @@ export default function StepDeliveryPage() {
                   <div>
                     <Label>配信タイプ</Label>
                     <Select
-                      value={selectedStep.deliveryTiming.type}
+                      value={selectedStep.delivery_type}
                       onValueChange={(value: 'after_registration' | 'specific_time') => 
-                        updateStepTiming({ type: value })
+                        handleUpdateStepTiming({ delivery_type: value })
                       }
                     >
                       <SelectTrigger>
@@ -315,15 +249,15 @@ export default function StepDeliveryPage() {
                     </Select>
                   </div>
 
-                  {selectedStep.deliveryTiming.type === 'after_registration' && (
+                  {selectedStep.delivery_type === 'after_registration' && (
                     <div className="flex gap-2">
                       <div className="flex-1">
                         <Label>日</Label>
                         <Input
                           type="number"
                           min="0"
-                          value={selectedStep.deliveryTiming.days || 0}
-                          onChange={(e) => updateStepTiming({ days: parseInt(e.target.value) || 0 })}
+                          value={selectedStep.delivery_days || 0}
+                          onChange={(e) => handleUpdateStepTiming({ delivery_days: parseInt(e.target.value) || 0 })}
                         />
                       </div>
                       <div className="flex-1">
@@ -332,8 +266,8 @@ export default function StepDeliveryPage() {
                           type="number"
                           min="0"
                           max="23"
-                          value={selectedStep.deliveryTiming.hours || 0}
-                          onChange={(e) => updateStepTiming({ hours: parseInt(e.target.value) || 0 })}
+                          value={selectedStep.delivery_hours || 0}
+                          onChange={(e) => handleUpdateStepTiming({ delivery_hours: parseInt(e.target.value) || 0 })}
                         />
                       </div>
                       <div className="flex-1">
@@ -342,20 +276,20 @@ export default function StepDeliveryPage() {
                           type="number"
                           min="0"
                           max="59"
-                          value={selectedStep.deliveryTiming.minutes || 0}
-                          onChange={(e) => updateStepTiming({ minutes: parseInt(e.target.value) || 0 })}
+                          value={selectedStep.delivery_minutes || 0}
+                          onChange={(e) => handleUpdateStepTiming({ delivery_minutes: parseInt(e.target.value) || 0 })}
                         />
                       </div>
                     </div>
                   )}
 
-                  {selectedStep.deliveryTiming.type === 'specific_time' && (
+                  {selectedStep.delivery_type === 'specific_time' && (
                     <div>
                       <Label>指定時刻</Label>
                       <Input
                         type="datetime-local"
-                        value={selectedStep.deliveryTiming.specificTime || ''}
-                        onChange={(e) => updateStepTiming({ specificTime: e.target.value })}
+                        value={selectedStep.specific_time?.substring(0, 16) || ''}
+                        onChange={(e) => handleUpdateStepTiming({ specific_time: e.target.value ? new Date(e.target.value).toISOString() : undefined })}
                       />
                     </div>
                   )}
@@ -364,7 +298,7 @@ export default function StepDeliveryPage() {
 
               {/* Messages */}
               <div className="space-y-4">
-                {selectedStep.messages.map((message, index) => (
+                {selectedStepMessages.map((message, index) => (
                   <Card key={message.id}>
                     <CardHeader>
                       <CardTitle className="text-sm flex items-center gap-2">
@@ -376,9 +310,9 @@ export default function StepDeliveryPage() {
                       <div>
                         <Label>メッセージタイプ</Label>
                         <Select
-                          value={message.type}
+                          value={message.message_type}
                           onValueChange={(value: 'text' | 'media') => 
-                            updateMessage(message.id, { type: value })
+                            handleUpdateMessage(message.id, { message_type: value })
                           }
                         >
                           <SelectTrigger>
@@ -391,24 +325,24 @@ export default function StepDeliveryPage() {
                         </Select>
                       </div>
 
-                      {message.type === 'text' && (
+                      {message.message_type === 'text' && (
                         <div>
                           <Label>メッセージ内容</Label>
                           <Textarea
                             value={message.content}
-                            onChange={(e) => updateMessage(message.id, { content: e.target.value })}
+                            onChange={(e) => handleUpdateMessage(message.id, { content: e.target.value })}
                             placeholder="メッセージを入力してください..."
                             rows={3}
                           />
                         </div>
                       )}
 
-                      {message.type === 'media' && (
+                      {message.message_type === 'media' && (
                         <div>
                           <Label>メディア選択</Label>
                           <MediaSelector
-                            onSelect={(url) => updateMessage(message.id, { mediaUrl: url })}
-                            selectedUrl={message.mediaUrl}
+                            onSelect={(url) => handleUpdateMessage(message.id, { media_url: url })}
+                            selectedUrl={message.media_url || undefined}
                           />
                         </div>
                       )}
@@ -416,7 +350,7 @@ export default function StepDeliveryPage() {
                   </Card>
                 ))}
 
-                {selectedStep.messages.length === 0 && (
+                {selectedStepMessages.length === 0 && (
                   <div className="text-center py-8 text-muted-foreground">
                     <MessageSquare className="h-12 w-12 mx-auto mb-4 opacity-50" />
                     <p>メッセージを追加してください</p>
