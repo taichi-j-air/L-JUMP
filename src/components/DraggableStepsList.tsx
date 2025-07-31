@@ -50,14 +50,39 @@ function SortableStepCard({ step, index, isSelected, onClick, onDelete, allSteps
 
   const getDeliveryTimeText = () => {
     if (index === 0) {
-      return "登録後"
-    } else {
+      const days = step.delivery_days || 0
+      const hours = step.delivery_hours || 0
+      const minutes = step.delivery_minutes || 0
+      const seconds = step.delivery_seconds || 0
+      
+      if (days === 0 && hours === 0 && minutes === 0 && seconds === 0) {
+        return "登録後：即時配信"
+      }
+      
       const parts = []
-      if (step.delivery_days > 0) parts.push(`${step.delivery_days}日後`)
-      if (step.delivery_hours > 0) parts.push(`${step.delivery_hours}時間後`)
-      if (step.delivery_minutes > 0) parts.push(`${step.delivery_minutes}分後`)
-      if (step.delivery_seconds > 0) parts.push(`${step.delivery_seconds}秒後`)
-      return parts.length > 0 ? parts.join(' ') : "即時"
+      if (days > 0) parts.push(`${days}日`)
+      if (hours > 0) parts.push(`${hours}時間`)
+      if (minutes > 0) parts.push(`${minutes}分`)
+      if (seconds > 0) parts.push(`${seconds}秒`)
+      
+      return `登録後：${parts.join('')}後`
+    } else {
+      const days = step.delivery_days || 0
+      const hours = step.delivery_hours || 0
+      const minutes = step.delivery_minutes || 0
+      const seconds = step.delivery_seconds || 0
+      
+      if (days === 0 && hours === 0 && minutes === 0 && seconds === 0) {
+        return "前ステップから：即時配信"
+      }
+      
+      const parts = []
+      if (days > 0) parts.push(`${days}日`)
+      if (hours > 0) parts.push(`${hours}時間`)
+      if (minutes > 0) parts.push(`${minutes}分`)
+      if (seconds > 0) parts.push(`${seconds}秒`)
+      
+      return `前ステップから：${parts.join('')}後`
     }
   }
 
@@ -95,7 +120,7 @@ function SortableStepCard({ step, index, isSelected, onClick, onDelete, allSteps
               e.stopPropagation()
               onDelete()
             }}
-            className="opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0"
+            className="flex-shrink-0"
           >
             <Trash2 className="h-4 w-4 text-destructive" />
           </Button>

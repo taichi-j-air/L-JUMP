@@ -40,9 +40,28 @@ export function MessagePreview({ messages }: MessagePreviewProps) {
                     ) : (
                       <div className="space-y-2">
                         {message.media_url ? (
-                          <div className="bg-background rounded border p-2">
-                            <p className="text-xs text-muted-foreground">メディア</p>
-                            <p className="text-xs truncate">{message.media_url.split('/').pop()}</p>
+                          <div className="bg-background rounded border p-2 space-y-2">
+                            {/* Check if it's an image */}
+                            {message.media_url.match(/\.(jpg|jpeg|png|gif|webp)$/i) ? (
+                              <img 
+                                src={message.media_url} 
+                                alt="Preview" 
+                                className="max-w-full h-auto rounded"
+                                style={{ maxHeight: '120px' }}
+                              />
+                            ) : message.media_url.match(/\.(mp4|webm|ogg)$/i) ? (
+                              <video 
+                                src={message.media_url} 
+                                className="max-w-full h-auto rounded"
+                                style={{ maxHeight: '120px' }}
+                                controls
+                              />
+                            ) : (
+                              <div className="text-center p-4 bg-muted rounded">
+                                <p className="text-xs text-muted-foreground">メディアファイル</p>
+                                <p className="text-xs font-mono">{message.media_url.split('/').pop()}</p>
+                              </div>
+                            )}
                           </div>
                         ) : (
                           <div className="bg-background rounded border p-2">

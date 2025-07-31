@@ -102,4 +102,23 @@ All colors MUST be HSL.
   body {
     @apply bg-background text-foreground;
   }
+  
+  /* Japanese text input optimization */
+  .ime-enabled {
+    ime-mode: active;
+    font-feature-settings: "palt" 1;
+    text-rendering: optimizeLegibility;
+  }
+  
+  input[type="text"],
+  textarea {
+    ime-mode: auto;
+    font-feature-settings: "palt" 1;
+  }
+  
+  /* Ensure proper Japanese font rendering */
+  * {
+    font-variant-numeric: normal;
+    text-rendering: optimizeLegibility;
+  }
 }

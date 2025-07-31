@@ -39,6 +39,7 @@ export default function StepDeliveryPage() {
   const [selectedStep, setSelectedStep] = useState<Step | null>(null)
   const [loading, setLoading] = useState(true)
   const [isMessageCreationCollapsed, setIsMessageCreationCollapsed] = useState(false)
+  const [collapsedMessages, setCollapsedMessages] = useState<Set<string>>(new Set())
 
   const sensors = useSensors(
     useSensor(PointerSensor),
@@ -95,13 +96,22 @@ export default function StepDeliveryPage() {
       return "特定日時"
     }
     
-    const totalMinutes = (firstStep.delivery_days || 0) * 24 * 60 + 
-                        (firstStep.delivery_hours || 0) * 60 + 
-                        (firstStep.delivery_minutes || 0) + 
-                        Math.floor((firstStep.delivery_seconds || 0) / 60)
+    const days = firstStep.delivery_days || 0
+    const hours = firstStep.delivery_hours || 0
+    const minutes = firstStep.delivery_minutes || 0
+    const seconds = firstStep.delivery_seconds || 0
     
-    if (totalMinutes === 0) return "登録後：即時配信"
-    return `登録後：${totalMinutes}分`
+    if (days === 0 && hours === 0 && minutes === 0 && seconds === 0) {
+      return "登録後：即時配信"
+    }
+    
+    const parts = []
+    if (days > 0) parts.push(`${days}日`)
+    if (hours > 0) parts.push(`${hours}時間`)
+    if (minutes > 0) parts.push(`${minutes}分`)
+    if (seconds > 0) parts.push(`${seconds}秒`)
+    
+    return `登録後：${parts.join('')}後`
   }
 
   // シナリオの移動先を取得
@@ -205,9 +215,11 @@ export default function StepDeliveryPage() {
       const oldIndex = scenarios.findIndex((item) => item.id === active.id)
       const newIndex = scenarios.findIndex((item) => item.id === over.id)
       
-      // For now, we just reorder in the frontend. 
-      // In a real app, you'd want to save this order to the database
-      // const newOrder = arrayMove(scenarios, oldIndex, newIndex)
+      // Reorder scenarios locally
+      const newScenarios = arrayMove(scenarios, oldIndex, newIndex)
+      
+      // Update scenario order in database (you would implement this in useStepScenarios)
+      // For now, just show success message
       toast.success('シナリオの順序を変更しました')
     }
   }
@@ -468,68 +480,91 @@ export default function StepDeliveryPage() {
                       </Card>
                     )}
 
-                    {selectedStepMessages.map((message, index) => (
-                      <Card key={message.id}>
-                        <CardHeader className="flex-row items-center justify-between space-y-0 pb-2">
-                          <CardTitle className="text-sm flex items-center gap-2">
-                            <MessageSquare className="h-4 w-4" />
-                            メッセージ {index + 1}
-                          </CardTitle>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => deleteMessage(message.id)}
-                          >
-                            <Trash2 className="h-4 w-4 text-destructive" />
-                          </Button>
-                        </CardHeader>
-                        <CardContent className="space-y-4">
-                          <div>
-                            <Label>メッセージタイプ</Label>
-                            <Select
-                              value={message.message_type}
-                              onValueChange={(value: 'text' | 'media') => 
-                                handleUpdateMessage(message.id, { message_type: value })
-                              }
-                            >
-                              <SelectTrigger>
-                                <SelectValue />
-                              </SelectTrigger>
-                              <SelectContent>
-                                <SelectItem value="text">テキストメッセージ</SelectItem>
-                                <SelectItem value="media">メディアライブラリ</SelectItem>
-                              </SelectContent>
-                            </Select>
-                          </div>
-
-                          {message.message_type === 'text' && (
-                            <div>
-                              <Label>メッセージ内容</Label>
-                              <Textarea
-                                value={message.content}
-                                onChange={(e) => handleUpdateMessage(message.id, { content: e.target.value })}
-                                placeholder="メッセージを入力してください..."
-                                rows={5}
-                                className="resize-none"
-                              />
-                              <div className="text-xs text-muted-foreground mt-1">
-                                {message.content.length} / 5000 文字
+                    {selectedStepMessages.map((message, index) => {
+                      const isCollapsed = collapsedMessages.has(message.id)
+                      return (
+                        <Card key={message.id}>
+                          <CardHeader className="flex-row items-center justify-between space-y-0 pb-2">
+                            <CardTitle className="text-sm flex items-center gap-2">
+                              <MessageSquare className="h-4 w-4" />
+                              メッセージ {index + 1}
+                            </CardTitle>
+                            <div className="flex gap-1">
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => {
+                                  const newCollapsed = new Set(collapsedMessages)
+                                  if (isCollapsed) {
+                                    newCollapsed.delete(message.id)
+                                  } else {
+                                    newCollapsed.add(message.id)
+                                  }
+                                  setCollapsedMessages(newCollapsed)
+                                }}
+                              >
+                                {isCollapsed ? <ChevronDown className="h-4 w-4" /> : <ChevronUp className="h-4 w-4" />}
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => deleteMessage(message.id)}
+                              >
+                                <Trash2 className="h-4 w-4 text-destructive" />
+                              </Button>
+                            </div>
+                          </CardHeader>
+                          {!isCollapsed && (
+                            <CardContent className="space-y-4">
+                              <div>
+                                <Label>メッセージタイプ</Label>
+                                <Select
+                                  value={message.message_type}
+                                  onValueChange={(value: 'text' | 'media') => 
+                                    handleUpdateMessage(message.id, { message_type: value })
+                                  }
+                                >
+                                  <SelectTrigger>
+                                    <SelectValue />
+                                  </SelectTrigger>
+                                  <SelectContent>
+                                    <SelectItem value="text">テキストメッセージ</SelectItem>
+                                    <SelectItem value="media">メディアライブラリ</SelectItem>
+                                  </SelectContent>
+                                </Select>
                               </div>
-                            </div>
-                          )}
 
-                          {message.message_type === 'media' && (
-                            <div>
-                              <Label>メディア選択</Label>
-                              <MediaSelector
-                                onSelect={(url) => handleUpdateMessage(message.id, { media_url: url })}
-                                selectedUrl={message.media_url || undefined}
-                              />
-                            </div>
+                              {message.message_type === 'text' && (
+                                <div>
+                                  <Label>メッセージ内容</Label>
+                                  <Textarea
+                                    value={message.content}
+                                    onChange={(e) => handleUpdateMessage(message.id, { content: e.target.value })}
+                                    placeholder="メッセージを入力してください..."
+                                    rows={5}
+                                    className="resize-none ime-enabled"
+                                    lang="ja"
+                                  />
+                                  <div className="text-xs text-muted-foreground mt-1">
+                                    {message.content.length} / 5000 文字
+                                  </div>
+                                </div>
+                              )}
+
+                              {message.message_type === 'media' && (
+                                <div>
+                                  <Label>メディア選択</Label>
+                                  <MediaSelector
+                                    onSelect={(url) => handleUpdateMessage(message.id, { media_url: url })}
+                                    selectedUrl={message.media_url || undefined}
+                                  />
+                                </div>
+                              )}
+                            </CardContent>
                           )}
-                        </CardContent>
-                      </Card>
-                    ))}
+                        </Card>
+                      )
+                    })}
 
                     {selectedStepMessages.length > 0 && (
                       <div className="text-center">

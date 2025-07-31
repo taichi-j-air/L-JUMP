@@ -77,17 +77,31 @@ export function ScenarioTransitionCard({
 
         {/* ABテスト設定 */}
         <div className="space-y-3 border-t pt-4">
-          <div className="flex items-center gap-2">
-            <Switch
-              id="ab-test"
-              checked={abTestEnabled}
-              onCheckedChange={setAbTestEnabled}
-            />
-            <Label htmlFor="ab-test" className="flex items-center gap-2 text-sm">
-              <TestTube className="h-4 w-4" />
-              ABテスト
-            </Label>
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <Switch
+                id="ab-test"
+                checked={abTestEnabled}
+                onCheckedChange={setAbTestEnabled}
+              />
+              <Label htmlFor="ab-test" className="flex items-center gap-2 text-sm">
+                <TestTube className="h-4 w-4" />
+                ABテスト
+              </Label>
+            </div>
+            {abTestEnabled && (
+              <div className="text-xs text-muted-foreground">
+                移行率は設定数に応じて均等分配
+              </div>
+            )}
           </div>
+          {abTestEnabled && (
+            <div className="text-xs text-muted-foreground bg-muted/50 p-2 rounded">
+              <strong>ABテストについて：</strong><br />
+              設定したシナリオ遷移の数に応じて、ユーザーの移行率が均等に分配されます。<br />
+              例：2つのシナリオ → 各50%、3つのシナリオ → 各33.3%
+            </div>
+          )}
         </div>
 
         {/* 新しい移動設定追加 */}
