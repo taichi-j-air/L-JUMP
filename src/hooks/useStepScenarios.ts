@@ -486,7 +486,9 @@ export const useStepScenarios = (userId: string | undefined) => {
       // 既存の招待コードをチェック
       const existing = inviteCodes.find(code => code.scenario_id === scenarioId && code.is_active)
       if (existing) {
-        return existing
+        // 既存のコードにURLを追加して返す
+        const inviteUrl = `https://rtjxurmuaawyzjcdkqxt.supabase.co/functions/v1/scenario-invite?code=${existing.invite_code}`
+        return { ...existing, inviteUrl }
       }
 
       // ランダムコードを生成
@@ -498,7 +500,7 @@ export const useStepScenarios = (userId: string | undefined) => {
           scenario_id: scenarioId,
           user_id: userId,
           invite_code: inviteCode,
-          max_usage: null,
+          max_usage: maxUsage || null,
           usage_count: 0,
           is_active: true
         })
@@ -509,8 +511,12 @@ export const useStepScenarios = (userId: string | undefined) => {
       
       const newCode = data as ScenarioInviteCode
       setInviteCodes(prev => [...prev, newCode])
+      
+      // Generate the complete URL for the scenario-invite function
+      const inviteUrl = `https://rtjxurmuaawyzjcdkqxt.supabase.co/functions/v1/scenario-invite?code=${inviteCode}`
+      
       toast.success('招待コードを生成しました')
-      return newCode
+      return { ...newCode, inviteUrl }
     } catch (error) {
       console.error('招待コード生成エラー:', error)
       toast.error('招待コードの生成に失敗しました')

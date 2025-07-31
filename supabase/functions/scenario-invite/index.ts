@@ -33,6 +33,30 @@ serve(async (req) => {
 
     console.log('Supabaseクライアント初期化完了')
 
+    // クリックログを記録（IP、User-Agent、Refererを取得）
+    const clientIP = req.headers.get('x-forwarded-for') || 
+                     req.headers.get('x-real-ip') || 
+                     'unknown'
+    const userAgent = req.headers.get('user-agent') || 'unknown'
+    const referer = req.headers.get('referer') || null
+
+    console.log('クリック情報:', { clientIP, userAgent, referer })
+
+    // クリックログを挿入
+    const { error: clickError } = await supabase
+      .from('invite_clicks')
+      .insert({
+        invite_code: inviteCode,
+        ip: clientIP,
+        user_agent: userAgent,
+        referer: referer
+      })
+
+    if (clickError) {
+      console.error('クリックログ挿入エラー:', clickError)
+      // エラーでも処理を続行
+    }
+
     // 招待コードを検索
     const { data: inviteData, error: inviteError } = await supabase
       .from('scenario_invite_codes')
@@ -43,7 +67,8 @@ serve(async (req) => {
           user_id,
           profiles!step_scenarios_user_id_fkey (
             line_channel_id,
-            line_api_status
+            line_api_status,
+            add_friend_url
           )
         )
       `)
@@ -75,7 +100,8 @@ serve(async (req) => {
     const profile = inviteData.step_scenarios?.profiles
     console.log('プロファイル情報:', { 
       channelId: profile?.line_channel_id, 
-      apiStatus: profile?.line_api_status 
+      apiStatus: profile?.line_api_status,
+      addFriendUrl: profile?.add_friend_url
     })
 
     if (!profile?.line_channel_id || profile.line_api_status !== 'active') {
@@ -89,33 +115,57 @@ serve(async (req) => {
       })
     }
 
-    // LINE友達追加URLを生成
-    const lineAddFriendUrl = `https://line.me/R/ti/p/@${profile.line_channel_id}`
-    console.log('LINE友達追加URL生成:', lineAddFriendUrl)
+    // 友達追加URLを決定（プロファイルに設定があればそれを使用、なければデフォルト）
+    const addFriendUrl = profile.add_friend_url || 
+                        `https://line.me/R/ti/p/@${profile.line_channel_id}`
+    
+    console.log('友達追加URL:', addFriendUrl)
 
-    // 使用回数をインクリメント
-    await supabase
-      .from('scenario_invite_codes')
-      .update({ usage_count: inviteData.usage_count + 1 })
-      .eq('id', inviteData.id)
+    // モバイル対応：一部のモバイルブラウザで302リダイレクトがブロックされる場合
+    const userAgentLower = userAgent.toLowerCase()
+    const isMobile = userAgentLower.includes('mobile') || 
+                     userAgentLower.includes('android') || 
+                     userAgentLower.includes('iphone')
 
-    // ログを記録
-    await supabase
-      .from('scenario_friend_logs')
-      .insert({
-        scenario_id: inviteData.scenario_id,
-        invite_code: inviteCode,
-        added_at: new Date().toISOString()
+    if (isMobile) {
+      // モバイルの場合はHTMLページでメタリフレッシュを使用
+      const htmlResponse = `
+        <!DOCTYPE html>
+        <html>
+        <head>
+          <meta charset="utf-8">
+          <meta http-equiv="refresh" content="0;url=${addFriendUrl}">
+          <meta name="viewport" content="width=device-width, initial-scale=1">
+          <title>LINE友達追加</title>
+        </head>
+        <body>
+          <p>LINE友達追加ページに移動しています...</p>
+          <p>自動で移動しない場合は<a href="${addFriendUrl}">こちら</a>をクリックしてください。</p>
+          <script>
+            setTimeout(function() {
+              window.location.href = '${addFriendUrl}';
+            }, 100);
+          </script>
+        </body>
+        </html>
+      `
+      
+      return new Response(htmlResponse, {
+        headers: { 
+          ...corsHeaders, 
+          'Content-Type': 'text/html; charset=utf-8' 
+        }
       })
-
-    // LINE友達追加ページにリダイレクト
-    return new Response(null, {
-      status: 302,
-      headers: {
-        ...corsHeaders,
-        'Location': lineAddFriendUrl
-      }
-    })
+    } else {
+      // デスクトップの場合は302リダイレクト
+      return new Response(null, {
+        status: 302,
+        headers: {
+          ...corsHeaders,
+          'Location': addFriendUrl
+        }
+      })
+    }
 
   } catch (error) {
     console.error('エラー:', error)

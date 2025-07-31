@@ -96,11 +96,11 @@ serve(async (req) => {
       console.log('Processing event:', event.type)
       
       if (event.type === 'message' && event.message) {
-        await handleMessage(event, supabase)
+        await handleMessage(event, supabase, req)
       } else if (event.type === 'follow') {
-        await handleFollow(event, supabase)
+        await handleFollow(event, supabase, req)
       } else if (event.type === 'unfollow') {
-        await handleUnfollow(event, supabase)
+        await handleUnfollow(event, supabase, req)
       } else {
         console.log('Unhandled event type:', event.type)
       }
@@ -120,7 +120,7 @@ serve(async (req) => {
   }
 })
 
-async function handleMessage(event: LineEvent, supabase: any) {
+async function handleMessage(event: LineEvent, supabase: any, req: Request) {
   try {
     const { message, replyToken, source } = event
     
@@ -246,10 +246,18 @@ async function sendReplyMessage(replyToken: string, text: string, supabase: any)
   }
 }
 
-async function handleFollow(event: LineEvent, supabase: any) {
+async function handleFollow(event: LineEvent, supabase: any, req: Request) {
   try {
     const { source } = event
     console.log(`User ${source.userId} followed the bot`)
+
+    // Extract invite code from URL state parameter if present
+    // In real LINE webhook, we need to detect this from the webhook URL or context
+    // For now, we'll log this and check if there's any context available
+    const url = new URL(req.url)
+    const inviteCode = url.searchParams.get('state')
+    
+    console.log('Invite code from follow event:', inviteCode)
 
     // Get user profile using LINE Messaging API
     const userProfile = await getLineUserProfile(source.userId, supabase)
@@ -270,7 +278,7 @@ async function handleFollow(event: LineEvent, supabase: any) {
       const profile = profiles[0]
 
       // Insert friend data
-      const { error: insertError } = await supabase
+      const { data: friendData, error: insertError } = await supabase
         .from('line_friends')
         .insert({
           user_id: profile.user_id,
@@ -279,23 +287,74 @@ async function handleFollow(event: LineEvent, supabase: any) {
           picture_url: userProfile.pictureUrl,
           added_at: new Date().toISOString()
         })
+        .select()
+        .single()
 
       if (insertError) {
         console.error('Error inserting friend:', insertError)
-      } else {
-        // Update friends count
-        const { error: updateError } = await supabase
-          .from('profiles')
-          .update({ 
-            friends_count: (profile.friends_count || 0) + 1 
-          })
-          .eq('user_id', profile.user_id)
+        return
+      }
 
-        if (updateError) {
-          console.error('Error updating friends count:', updateError)
+      // Update friends count
+      const { error: updateError } = await supabase
+        .from('profiles')
+        .update({ 
+          friends_count: (profile.friends_count || 0) + 1 
+        })
+        .eq('user_id', profile.user_id)
+
+      if (updateError) {
+        console.error('Error updating friends count:', updateError)
+      }
+
+      console.log('Friend added successfully:', userProfile.displayName)
+
+      // If there's an invite code, record the friend acquisition
+      if (inviteCode) {
+        console.log('Processing invite code for new friend:', inviteCode)
+        
+        // Find the scenario associated with this invite code
+        const { data: inviteData, error: inviteError } = await supabase
+          .from('scenario_invite_codes')
+          .select('scenario_id, usage_count')
+          .eq('invite_code', inviteCode)
+          .eq('is_active', true)
+          .single()
+
+        if (inviteData && !inviteError) {
+          // Record the friend acquisition in scenario_friend_logs
+          const { error: logError } = await supabase
+            .from('scenario_friend_logs')
+            .insert({
+              scenario_id: inviteData.scenario_id,
+              invite_code: inviteCode,
+              line_user_id: source.userId,
+              friend_id: friendData.id,
+              added_at: new Date().toISOString()
+            })
+
+          if (logError) {
+            console.error('Error recording friend acquisition:', logError)
+          } else {
+            console.log('Friend acquisition recorded for invite code:', inviteCode)
+          }
+
+          // Increment usage count for the invite code
+          const { error: incrementError } = await supabase
+            .from('scenario_invite_codes')
+            .update({ 
+              usage_count: inviteData.usage_count + 1 
+            })
+            .eq('invite_code', inviteCode)
+
+          if (incrementError) {
+            console.error('Error incrementing invite code usage:', incrementError)
+          } else {
+            console.log('Invite code usage count incremented')
+          }
+        } else {
+          console.error('Invalid or inactive invite code:', inviteCode, inviteError)
         }
-
-        console.log('Friend added successfully:', userProfile.displayName)
       }
     }
 
@@ -304,7 +363,7 @@ async function handleFollow(event: LineEvent, supabase: any) {
   }
 }
 
-async function handleUnfollow(event: LineEvent, supabase: any) {
+async function handleUnfollow(event: LineEvent, supabase: any, req: Request) {
   try {
     const { source } = event
     console.log(`User ${source.userId} unfollowed the bot`)
