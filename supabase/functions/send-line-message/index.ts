@@ -73,7 +73,7 @@ serve(async (req) => {
     // Get user's LINE access token and delivery count
     const { data: profile, error: profileError } = await supabase
       .from('profiles')
-      .select('line_channel_access_token, delivery_count')
+      .select('line_channel_access_token, delivery_count, monthly_message_used')
       .eq('user_id', user.id)
       .single()
 
@@ -116,11 +116,12 @@ serve(async (req) => {
 
     console.log('Message sent successfully to:', to)
 
-    // Update delivery count
+    // Update delivery count and monthly message used
     const { error: updateError } = await supabase
       .from('profiles')
       .update({ 
-        delivery_count: (profile.delivery_count || 0) + 1 
+        delivery_count: (profile.delivery_count || 0) + 1,
+        monthly_message_used: (profile.monthly_message_used || 0) + 1
       })
       .eq('user_id', user.id)
 

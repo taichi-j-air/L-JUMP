@@ -9,10 +9,12 @@ import { Separator } from "@/components/ui/separator";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { ArrowLeft, User, Settings, Shield, CheckCircle, XCircle, AlertCircle } from "lucide-react";
+import { MessageQuotaDisplay } from "@/components/MessageQuotaDisplay";
 
 const ProfileManagement = () => {
   const [loading, setLoading] = useState(false);
   const [initialLoading, setInitialLoading] = useState(true);
+  const [currentUser, setCurrentUser] = useState(null);
   const [profile, setProfile] = useState({
     display_name: "",
     user_role: "user",
@@ -41,6 +43,7 @@ const ProfileManagement = () => {
       }
 
       setUserEmail(user.email || "");
+      setCurrentUser(user);
 
       const { data: profileData, error } = await supabase
         .from('profiles')
@@ -281,6 +284,11 @@ const ProfileManagement = () => {
               </div>
             </CardContent>
           </Card>
+
+          {/* 配信数管理カード */}
+          {currentUser && (
+            <MessageQuotaDisplay user={currentUser} />
+          )}
 
           {/* API設定詳細カード */}
           <Card>
