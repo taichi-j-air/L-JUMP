@@ -7,6 +7,7 @@ import { Input } from "./ui/input"
 import { Avatar, AvatarFallback, AvatarImage } from "./ui/avatar"
 import { supabase } from "@/integrations/supabase/client"
 import { useToast } from "./ui/use-toast"
+import { MessageQuotaDisplay } from "./MessageQuotaDisplay"
 
 interface Friend {
   id: string
@@ -48,6 +49,28 @@ export function ChatWindow({ user, friend, onClose }: ChatWindowProps) {
     loadMessages()
   }, [friend.id])
 
+  // リアルタイム購読の追加
+  useEffect(() => {
+    const channel = supabase
+      .channel(`chat-${friend.id}`)
+      .on('postgres_changes', {
+        event: 'INSERT',
+        schema: 'public',
+        table: 'chat_messages',
+        filter: `friend_id=eq.${friend.id}`
+      }, (payload) => {
+        const newMessage = payload.new as ChatMessage;
+        if (newMessage.message_type === 'incoming') {
+          setMessages(prev => [...prev, newMessage]);
+        }
+      })
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [friend.id])
+
   const loadMessages = async () => {
     try {
       const { data, error } = await supabase
@@ -73,6 +96,22 @@ export function ChatWindow({ user, friend, onClose }: ChatWindowProps) {
 
     setSending(true)
     try {
+      // 配信数チェック
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('monthly_message_used, monthly_message_limit')
+        .eq('user_id', user.id)
+        .single()
+
+      if (profile && profile.monthly_message_used >= profile.monthly_message_limit) {
+        toast({
+          title: "送信制限に達しました",
+          description: "今月の配信上限に達しているため送信できません",
+          variant: "destructive"
+        })
+        setSending(false)
+        return
+      }
       // Save message to database first
       const { data: savedMessage, error: saveError } = await supabase
         .from('chat_messages')
@@ -133,7 +172,7 @@ export function ChatWindow({ user, friend, onClose }: ChatWindowProps) {
     }
   }
 
-  const handleKeyPress = (e: React.KeyboardEvent) => {
+  const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault()
       sendMessage()
@@ -141,21 +180,22 @@ export function ChatWindow({ user, friend, onClose }: ChatWindowProps) {
   }
 
   return (
-    <Card className="h-[600px] flex flex-col">
-      <CardHeader className="flex-row items-center space-y-0 pb-2">
-        <Avatar className="h-8 w-8 mr-3">
-          <AvatarImage src={friend.picture_url || ""} alt={friend.display_name || ""} />
-          <AvatarFallback>
-            {friend.display_name?.charAt(0) || "?"}
-          </AvatarFallback>
-        </Avatar>
-        <CardTitle className="flex-1 text-lg">
-          {friend.display_name || "名前未設定"}
-        </CardTitle>
-        <Button variant="ghost" size="sm" onClick={onClose}>
-          ×
-        </Button>
-      </CardHeader>
+    <div className="flex gap-4">
+      <Card className="h-[600px] flex flex-col flex-1">
+        <CardHeader className="flex-row items-center space-y-0 pb-2">
+          <Avatar className="h-8 w-8 mr-3">
+            <AvatarImage src={friend.picture_url || ""} alt={friend.display_name || ""} />
+            <AvatarFallback>
+              {friend.display_name?.charAt(0) || "?"}
+            </AvatarFallback>
+          </Avatar>
+          <CardTitle className="flex-1 text-lg">
+            {friend.display_name || "名前未設定"}
+          </CardTitle>
+          <Button variant="ghost" size="sm" onClick={onClose}>
+            ×
+          </Button>
+        </CardHeader>
       
       <CardContent className="flex-1 flex flex-col p-4">
         <div className="flex-1 overflow-y-auto space-y-4 mb-4">
@@ -200,7 +240,7 @@ export function ChatWindow({ user, friend, onClose }: ChatWindowProps) {
           <Input
             value={newMessage}
             onChange={(e) => setNewMessage(e.target.value)}
-            onKeyPress={handleKeyPress}
+            onKeyDown={handleKeyDown}
             placeholder="メッセージを入力..."
             disabled={sending}
             className="flex-1"
@@ -219,5 +259,9 @@ export function ChatWindow({ user, friend, onClose }: ChatWindowProps) {
         </div>
       </CardContent>
     </Card>
+    <div className="w-80">
+      <MessageQuotaDisplay user={user} />
+    </div>
+  </div>
   )
 }
