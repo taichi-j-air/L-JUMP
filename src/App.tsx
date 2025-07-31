@@ -18,6 +18,7 @@ import FriendsListPage from "./pages/FriendsListPage";
 import NotFound from "./pages/NotFound";
 import ResetPassword from "./pages/ResetPassword";
 import EmailVerify from "./pages/EmailVerify";
+import IndividualChatPage from "./pages/IndividualChatPage";
 import { supabase } from "@/integrations/supabase/client";
 import { User } from "@supabase/supabase-js";
 
@@ -71,7 +72,7 @@ function AppContent() {
     <SidebarProvider>
       <div className="flex min-h-screen w-full">
         {user && <AppHeader user={user} />}
-        <AppSidebar />
+        {user && <AppSidebar user={user} />}
         <div className="flex-1 flex flex-col pt-14">
           <main className="flex-1 p-4">
             <Routes>
@@ -82,6 +83,7 @@ function AppContent() {
               <Route path="/flex-message-designer" element={<FlexMessageDesigner />} />
               <Route path="/media-library" element={<MediaLibrary />} />
               <Route path="/friends-list" element={<FriendsListPage />} />
+              <Route path="/chat/:friendId" element={<IndividualChatPage />} />
               <Route path="*" element={<NotFound />} />
             </Routes>
           </main>

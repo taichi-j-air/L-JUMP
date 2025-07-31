@@ -262,20 +262,28 @@ async function ensureFriendExists(userId: string, supabase: any) {
     const userProfile = await getLineUserProfile(userId, supabase)
     
     if (userProfile) {
+      console.log('Got user profile:', userProfile)
+      
       // Insert friend data
+      const insertData = {
+        user_id: profile.user_id,
+        line_user_id: userId,
+        display_name: userProfile.displayName,
+        picture_url: userProfile.pictureUrl,
+        added_at: new Date().toISOString()
+      }
+      
+      console.log('Inserting friend data:', insertData)
+      
       const { error: insertError } = await supabase
         .from('line_friends')
-        .insert({
-          user_id: profile.user_id,
-          line_user_id: userId,
-          display_name: userProfile.displayName,
-          picture_url: userProfile.pictureUrl,
-          added_at: new Date().toISOString()
-        })
+        .insert(insertData)
 
       if (insertError) {
         console.error('Error inserting friend:', insertError)
       } else {
+        console.log('Friend inserted successfully')
+        
         // Update friends count
         const { error: updateError } = await supabase
           .from('profiles')
@@ -286,10 +294,14 @@ async function ensureFriendExists(userId: string, supabase: any) {
 
         if (updateError) {
           console.error('Error updating friends count:', updateError)
+        } else {
+          console.log('Friends count updated successfully')
         }
 
         console.log('Friend added successfully:', userProfile.displayName)
       }
+    } else {
+      console.error('Could not get user profile from LINE API')
     }
 
   } catch (error) {
