@@ -22,6 +22,7 @@ export type Database = {
           line_message_id: string | null
           message_text: string
           message_type: Database["public"]["Enums"]["message_kind"]
+          read_at: string | null
           sent_at: string
           updated_at: string
           user_id: string
@@ -33,6 +34,7 @@ export type Database = {
           line_message_id?: string | null
           message_text: string
           message_type?: Database["public"]["Enums"]["message_kind"]
+          read_at?: string | null
           sent_at?: string
           updated_at?: string
           user_id: string
@@ -44,6 +46,7 @@ export type Database = {
           line_message_id?: string | null
           message_text?: string
           message_type?: Database["public"]["Enums"]["message_kind"]
+          read_at?: string | null
           sent_at?: string
           updated_at?: string
           user_id?: string
