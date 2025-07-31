@@ -61,9 +61,11 @@ export function FlexMessagePreview({ flexMessageId }: FlexMessagePreviewProps) {
     )
   }
 
-  // FlexMessageDesignerと同じプレビューロジックを使用
   const renderFlexPreview = () => {
-    if (!flexMessage.content?.body?.contents) {
+    // データ構造を確認: content.contents.body.contents
+    const flexContents = flexMessage.content?.contents?.body?.contents;
+    
+    if (!flexContents || !Array.isArray(flexContents)) {
       return (
         <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3 max-w-[200px]">
           <div className="text-center">
@@ -74,7 +76,7 @@ export function FlexMessagePreview({ flexMessageId }: FlexMessagePreviewProps) {
       )
     }
 
-    const elements = flexMessage.content.body.contents
+    const elements = flexContents
 
     return (
       <div className="bg-white rounded-lg shadow-sm border max-w-[200px]">
@@ -96,56 +98,54 @@ export function FlexMessagePreview({ flexMessageId }: FlexMessagePreviewProps) {
                   <div 
                     className="flex-1"
                     style={{
-                      color: element.properties?.color || '#000000',
-                      backgroundColor: element.properties?.backgroundColor !== '#ffffff' ? element.properties?.backgroundColor : undefined,
-                      fontSize: element.properties?.size === 'xs' ? '10px' : 
-                               element.properties?.size === 'sm' ? '12px' :
-                               element.properties?.size === 'lg' ? '16px' :
-                               element.properties?.size === 'xl' ? '18px' : '14px',
-                      fontWeight: element.properties?.weight === 'bold' ? 'bold' : 'normal',
-                      textAlign: element.properties?.align as any || 'left',
-                      padding: element.properties?.backgroundColor !== '#ffffff' ? '3px 6px' : undefined,
-                      borderRadius: element.properties?.backgroundColor !== '#ffffff' ? '3px' : undefined,
-                      whiteSpace: 'pre-wrap'
+                      color: element.color || '#000000',
+                      fontSize: element.size === 'xs' ? '10px' : 
+                               element.size === 'sm' ? '12px' :
+                               element.size === 'lg' ? '16px' :
+                               element.size === 'xl' ? '18px' : '14px',
+                      fontWeight: element.weight === 'bold' ? 'bold' : 'normal',
+                      textAlign: element.align as any || 'left',
+                      whiteSpace: 'pre-wrap',
+                      margin: element.margin || '0px'
                     }}
                   >
-                    {element.properties?.text || 'テキスト'}
+                    {element.text || 'テキスト'}
                   </div>
                 )}
-                {element.type === 'image' && element.properties?.url && (
-                  <div className="flex-1">
+                {element.type === 'image' && element.url && (
+                  <div className="flex-1" style={{ margin: element.margin || '0px' }}>
                     <img 
-                      src={element.properties.url} 
+                      src={element.url} 
                       alt="プレビュー画像" 
                       className="w-full h-auto rounded"
                       style={{
-                        aspectRatio: element.properties.aspectRatio?.replace(':', '/') || '20/13',
+                        aspectRatio: element.aspectRatio?.replace(':', '/') || '20/13',
                         maxHeight: '100px'
                       }}
                     />
                   </div>
                 )}
                 {element.type === 'button' && (
-                  <div className="flex-1">
+                  <div className="flex-1" style={{ margin: element.margin || '0px' }}>
                     <button 
                       className="w-full rounded text-xs font-medium"
                       style={{
-                        backgroundColor: element.properties?.color || (
-                          element.properties?.style === 'primary' ? '#0066cc' : 
-                          element.properties?.style === 'secondary' ? '#f0f0f0' : 'transparent'
+                        backgroundColor: element.color || (
+                          element.style === 'primary' ? '#0066cc' : 
+                          element.style === 'secondary' ? '#f0f0f0' : 'transparent'
                         ),
-                        color: element.properties?.color ? 
-                          (element.properties.color === '#ffffff' || element.properties.color === '#f0f0f0' ? '#333' : 'white') :
-                          (element.properties?.style === 'primary' ? 'white' : 
-                           element.properties?.style === 'secondary' ? '#333' : '#0066cc'),
-                        border: element.properties?.style === 'secondary' ? 'none' : 
-                                element.properties?.style === 'link' ? 
-                                  `1px solid ${element.properties?.color || '#0066cc'}` : 'none',
-                        padding: element.properties?.height === 'sm' ? '6px 12px' : 
-                                 element.properties?.height === 'lg' ? '12px 12px' : '8px 12px'
+                        color: element.color ? 
+                          (element.color === '#ffffff' || element.color === '#f0f0f0' ? '#333' : 'white') :
+                          (element.style === 'primary' ? 'white' : 
+                           element.style === 'secondary' ? '#333' : '#0066cc'),
+                        border: element.style === 'secondary' ? 'none' : 
+                                element.style === 'link' ? 
+                                  `1px solid ${element.color || '#0066cc'}` : 'none',
+                        padding: element.height === 'sm' ? '6px 12px' : 
+                                 element.height === 'lg' ? '12px 12px' : '8px 12px'
                       }}
                     >
-                      {element.properties?.action?.label || 'ボタン'}
+                      {element.action?.label || 'ボタン'}
                     </button>
                   </div>
                 )}
