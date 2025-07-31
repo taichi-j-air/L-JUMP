@@ -16,7 +16,10 @@ serve(async (req) => {
     const url = new URL(req.url)
     const inviteCode = url.searchParams.get('code')
 
+    console.log('招待コード処理開始:', { inviteCode, url: req.url })
+
     if (!inviteCode) {
+      console.error('招待コードが提供されていません')
       return new Response('招待コードが見つかりません', { 
         status: 400,
         headers: { ...corsHeaders, 'Content-Type': 'text/html; charset=utf-8' }
@@ -28,15 +31,17 @@ serve(async (req) => {
     const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
     const supabase = createClient(supabaseUrl, supabaseKey)
 
+    console.log('Supabaseクライアント初期化完了')
+
     // 招待コードを検索
     const { data: inviteData, error: inviteError } = await supabase
       .from('scenario_invite_codes')
       .select(`
         *,
-        step_scenarios:scenario_id (
+        step_scenarios!scenario_invite_codes_scenario_id_fkey (
           name,
           user_id,
-          profiles:user_id (
+          profiles!step_scenarios_user_id_fkey (
             line_channel_id,
             line_api_status
           )
@@ -47,12 +52,17 @@ serve(async (req) => {
       .single()
 
     if (inviteError || !inviteData) {
-      console.error('招待コード検索エラー:', inviteError)
+      console.error('招待コード検索エラー:', { inviteError, inviteCode })
       return new Response('無効な招待コードです', { 
         status: 404,
         headers: { ...corsHeaders, 'Content-Type': 'text/html; charset=utf-8' }
       })
     }
+
+    console.log('招待コードデータ取得成功:', { 
+      scenarioName: inviteData.step_scenarios?.name, 
+      profileExists: !!inviteData.step_scenarios?.profiles 
+    })
 
     // 使用制限チェック
     if (inviteData.max_usage && inviteData.usage_count >= inviteData.max_usage) {
@@ -63,7 +73,16 @@ serve(async (req) => {
     }
 
     const profile = inviteData.step_scenarios?.profiles
+    console.log('プロファイル情報:', { 
+      channelId: profile?.line_channel_id, 
+      apiStatus: profile?.line_api_status 
+    })
+
     if (!profile?.line_channel_id || profile.line_api_status !== 'active') {
+      console.error('BOT利用不可:', { 
+        hasChannelId: !!profile?.line_channel_id, 
+        apiStatus: profile?.line_api_status 
+      })
       return new Response('このBOTは現在利用できません', { 
         status: 503,
         headers: { ...corsHeaders, 'Content-Type': 'text/html; charset=utf-8' }
@@ -72,6 +91,7 @@ serve(async (req) => {
 
     // LINE友達追加URLを生成
     const lineAddFriendUrl = `https://line.me/R/ti/p/@${profile.line_channel_id}`
+    console.log('LINE友達追加URL生成:', lineAddFriendUrl)
 
     // 使用回数をインクリメント
     await supabase

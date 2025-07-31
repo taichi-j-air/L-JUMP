@@ -20,21 +20,15 @@ export function ScenarioInviteCard({
   onGenerateCode, 
   onDeactivateCode 
 }: ScenarioInviteCardProps) {
-  const [maxUsage, setMaxUsage] = useState<string>("")
+  const [showCode, setShowCode] = useState(false)
 
   const scenarioInviteCodes = inviteCodes.filter(code => 
     code.scenario_id === scenario.id && code.is_active
   )
 
   const handleGenerateCode = async () => {
-    const usage = maxUsage ? parseInt(maxUsage) : undefined
-    if (usage && (usage < 1 || usage > 10000)) {
-      toast.error("使用回数は1〜10000の範囲で入力してください")
-      return
-    }
-    
-    await onGenerateCode(scenario.id, usage)
-    setMaxUsage("")
+    await onGenerateCode(scenario.id)
+    setShowCode(true)
   }
 
   const copyToClipboard = (text: string) => {
@@ -53,28 +47,43 @@ export function ScenarioInviteCard({
         <CardTitle className="text-sm">友達追加URL・QRコード</CardTitle>
       </CardHeader>
       <CardContent className="space-y-3 pb-3">
-        {scenarioInviteCodes.length === 0 ? (
-          <p className="text-xs text-muted-foreground">
-            まだ招待コードが生成されていません
-          </p>
+        {scenarioInviteCodes.length === 0 && !showCode ? (
+          <>
+            <p className="text-xs text-muted-foreground">
+              友達追加用のコードを生成してください
+            </p>
+            <Button
+              onClick={handleGenerateCode}
+              size="sm"
+              className="w-full h-7 text-xs gap-1"
+            >
+              <Plus className="h-3 w-3" />
+              コード表示
+            </Button>
+          </>
         ) : (
           <div className="space-y-2">
             {scenarioInviteCodes.map((code) => {
               const inviteUrl = `https://rtjxurmuaawyzjcdkqxt.supabase.co/functions/v1/scenario-invite?code=${code.invite_code}`
+              const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(inviteUrl)}`
               
               return (
                 <div key={code.id} className="space-y-2 p-2 border rounded">
                   <div className="flex items-center justify-between text-xs">
                     <span>コード: {code.invite_code}</span>
-                    <span>使用: {code.usage_count}{code.max_usage ? `/${code.max_usage}` : ''}</span>
+                    <span>使用: {code.usage_count}回</span>
                   </div>
                   
-                  <div className="space-y-1">
-                    <Input
-                      value={inviteUrl}
-                      readOnly
-                      className="h-8 text-xs"
-                    />
+                  <div className="space-y-2">
+                    <div>
+                      <Label className="text-xs">友達追加URL</Label>
+                      <Input
+                        value={inviteUrl}
+                        readOnly
+                        className="h-8 text-xs"
+                      />
+                    </div>
+                    
                     <div className="flex gap-1">
                       <Button
                         variant="outline"
@@ -88,20 +97,35 @@ export function ScenarioInviteCard({
                       <Button
                         variant="outline"
                         size="sm"
-                        onClick={() => generateQRCode(code.invite_code)}
-                        className="flex-1 h-7 text-xs"
-                      >
-                        <QrCode className="h-3 w-3 mr-1" />
-                        QR表示
-                      </Button>
-                      <Button
-                        variant="outline"
-                        size="sm"
                         onClick={() => onDeactivateCode(code.id)}
                         className="h-7 text-xs"
                       >
                         <Trash2 className="h-3 w-3 text-destructive" />
                       </Button>
+                    </div>
+                    
+                    <div>
+                      <Label className="text-xs">QRコード</Label>
+                      <div className="flex items-center gap-2">
+                        <img 
+                          src={qrUrl} 
+                          alt="QRコード" 
+                          className="w-16 h-16 border rounded"
+                        />
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => {
+                            const link = document.createElement('a')
+                            link.href = qrUrl
+                            link.download = `qr-${code.invite_code}.png`
+                            link.click()
+                          }}
+                          className="text-xs"
+                        >
+                          ダウンロード
+                        </Button>
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -109,37 +133,6 @@ export function ScenarioInviteCard({
             })}
           </div>
         )}
-
-        <div className="space-y-2 border-t pt-2">
-          <div>
-            <Label className="text-xs">使用上限回数（オプション）</Label>
-            <Input
-              type="number"
-              min="1"
-              max="10000"
-              value={maxUsage}
-              onChange={(e) => setMaxUsage(e.target.value)}
-              placeholder="制限なし"
-              className="h-8"
-            />
-          </div>
-          
-          <Button
-            onClick={handleGenerateCode}
-            size="sm"
-            className="w-full h-7 text-xs gap-1"
-            disabled={scenarioInviteCodes.length > 0}
-          >
-            <Plus className="h-3 w-3" />
-            招待コード生成
-          </Button>
-          
-          {scenarioInviteCodes.length > 0 && (
-            <p className="text-xs text-muted-foreground">
-              ※ 1シナリオにつき1つの招待コードのみ有効です
-            </p>
-          )}
-        </div>
       </CardContent>
     </Card>
   )

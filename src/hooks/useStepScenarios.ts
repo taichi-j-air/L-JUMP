@@ -494,7 +494,7 @@ export const useStepScenarios = (userId: string | undefined) => {
           scenario_id: scenarioId,
           user_id: userId,
           invite_code: inviteCode,
-          max_usage: maxUsage,
+          max_usage: null,
           usage_count: 0,
           is_active: true
         })

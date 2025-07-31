@@ -15,6 +15,8 @@ import { FlexMessageSelector } from "@/components/FlexMessageSelector"
 import { DraggableStepsList } from "@/components/DraggableStepsList"
 import { ScenarioTransitionCard } from "@/components/ScenarioTransitionCard"
 import { ScenarioInviteCard } from "@/components/ScenarioInviteCard"
+import { ScenarioAnalytics } from "@/components/ScenarioAnalytics"
+import { StepDeliveryStatus } from "@/components/StepDeliveryStatus"
 import { MessagePreview } from "@/components/MessagePreview"
 import { SortableScenarioItem } from "@/components/SortableScenarioItem"
 import { useStepScenarios, StepScenario, Step, StepMessage } from "@/hooks/useStepScenarios"
@@ -256,7 +258,7 @@ export default function StepDeliveryPage() {
 
         <div className="flex gap-4 h-[calc(100vh-200px)]">
           {/* Scenarios List */}
-          <div className="w-64 bg-card rounded-lg border p-3 flex-shrink-0">
+          <div className="w-80 bg-card rounded-lg border p-4 flex-shrink-0">
             <div className="flex items-center justify-between mb-4">
               <h2 className="text-lg font-semibold">シナリオ一覧</h2>
               <Button onClick={handleCreateNewScenario} size="sm" className="gap-2">
@@ -301,7 +303,7 @@ export default function StepDeliveryPage() {
 
           {/* Steps Creation Tool */}
           {selectedScenario && (
-            <div className="w-64 bg-card rounded-lg border p-3 overflow-y-auto flex-shrink-0">
+            <div className="w-80 bg-card rounded-lg border p-4 overflow-y-auto flex-shrink-0">
               <div className="flex items-center justify-between mb-4">
                 <h2 className="text-lg font-semibold">ステップ作成</h2>
                 <Button onClick={handleAddStep} size="sm" className="gap-2">
@@ -347,13 +349,16 @@ export default function StepDeliveryPage() {
                   onGenerateCode={generateInviteCode}
                   onDeactivateCode={deactivateInviteCode}
                 />
+
+                {/* 流入分析 */}
+                <ScenarioAnalytics scenario={selectedScenario} />
               </div>
             </div>
           )}
 
           {/* Message Creation Screen */}
           {selectedStep && (
-            <div className="flex-1 bg-card rounded-lg border p-3 overflow-y-auto min-w-0">
+            <div className="flex-1 bg-card rounded-lg border p-4 overflow-y-auto min-w-0">
               <div className="flex items-center justify-between mb-4">
                 <h2 className="text-lg font-semibold">メッセージ作成 - {selectedStep.name}</h2>
                 <div className="flex gap-2">
@@ -458,10 +463,13 @@ export default function StepDeliveryPage() {
                           />
                         </div>
                       )}
-                    </CardContent>
-                  </Card>
+                     </CardContent>
+                   </Card>
 
-                  {/* Messages */}
+                   {/* ステップ配信状況 */}
+                   <StepDeliveryStatus step={selectedStep} />
+
+                   {/* Messages */}
                   <div className="space-y-4">
                     {selectedStepMessages.length === 0 && (
                       <Card>
