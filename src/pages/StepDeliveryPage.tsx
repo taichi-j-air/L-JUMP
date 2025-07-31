@@ -628,7 +628,7 @@ export default function StepDeliveryPage() {
 
           {/* Message Preview Panel */}
           {selectedStep && (
-            <div className="w-80 flex-shrink-0">
+            <div className="w-80 border-l border-border pl-4 flex-shrink-0">
               <MessagePreview messages={selectedStepMessages} />
             </div>
           )}

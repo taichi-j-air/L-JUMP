@@ -24,15 +24,27 @@ export function StepDeliveryStatus({ step }: StepDeliveryStatusProps) {
   const loadStats = async () => {
     setLoading(true)
     try {
-      // 実際の配信統計を取得する処理
-      // 現在はダミーデータ
-      setStats({
-        waiting: Math.floor(Math.random() * 10),
-        delivered: Math.floor(Math.random() * 50),
-        exited: Math.floor(Math.random() * 5)
-      })
+      // 実際の配信統計を取得
+      const { data: deliveryData, error } = await supabase
+        .from('step_delivery_tracking')
+        .select('status')
+        .eq('step_id', step.id)
+
+      if (error) {
+        console.error('配信統計取得失敗:', error)
+        setStats({ waiting: 0, delivered: 0, exited: 0 })
+        return
+      }
+
+      const statsCount = deliveryData?.reduce((acc, item) => {
+        acc[item.status as keyof DeliveryStats] = (acc[item.status as keyof DeliveryStats] || 0) + 1
+        return acc
+      }, { waiting: 0, delivered: 0, exited: 0 } as DeliveryStats) || { waiting: 0, delivered: 0, exited: 0 }
+
+      setStats(statsCount)
     } catch (error) {
       console.error('配信統計取得失敗:', error)
+      setStats({ waiting: 0, delivered: 0, exited: 0 })
     } finally {
       setLoading(false)
     }

@@ -197,6 +197,10 @@ export const useStepScenarios = (userId: string | undefined) => {
       if (error) throw error
       
       setScenarios(prev => [...prev, data])
+      
+      // シナリオ作成後、自動的に招待コードを生成
+      await generateInviteCode(data.id)
+      
       toast.success('シナリオを作成しました')
       return data
     } catch (error) {

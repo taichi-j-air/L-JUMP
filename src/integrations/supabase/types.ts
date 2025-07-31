@@ -295,6 +295,39 @@ export type Database = {
           },
         ]
       }
+      step_delivery_tracking: {
+        Row: {
+          created_at: string
+          delivered_at: string | null
+          friend_id: string
+          id: string
+          scenario_id: string
+          status: string
+          step_id: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          delivered_at?: string | null
+          friend_id: string
+          id?: string
+          scenario_id: string
+          status?: string
+          step_id: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          delivered_at?: string | null
+          friend_id?: string
+          id?: string
+          scenario_id?: string
+          status?: string
+          step_id?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       step_messages: {
         Row: {
           content: string
