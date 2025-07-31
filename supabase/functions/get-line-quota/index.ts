@@ -108,16 +108,30 @@ serve(async (req) => {
       }
     })
 
-    let consumptionData = null
+    let consumptionData = { totalUsage: 0 }
     if (consumptionResponse.ok) {
       consumptionData = await consumptionResponse.json()
       console.log('Consumption data received:', consumptionData)
     }
 
-    return new Response(JSON.stringify({
-      quota: quotaData,
-      consumption: consumptionData
-    }), { 
+    // Format data according to GPT's suggestion
+    const result = {
+      limit: quotaData.value || 200,
+      used: consumptionData.totalUsage || 0,
+      remaining: (quotaData.value || 200) - (consumptionData.totalUsage || 0)
+    }
+
+    // Update profile with latest quota information
+    await supabase
+      .from('profiles')
+      .update({
+        monthly_message_limit: result.limit,
+        monthly_message_used: result.used,
+        quota_updated_at: new Date().toISOString()
+      })
+      .eq('user_id', user.id)
+
+    return new Response(JSON.stringify(result), { 
       status: 200, 
       headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
     })

@@ -50,11 +50,10 @@ export function AppHeader({ user }: AppHeaderProps) {
 
       // Get actual LINE quota information
       try {
-        const { data: quotaData, error: quotaError } = await supabase.functions.invoke('get-line-quota', {
-          body: { user_id: user.id }
-        })
+        const { data: quotaData, error: quotaError } = await supabase.functions.invoke('get-line-quota')
         
         if (!quotaError && quotaData) {
+          console.log('Received quota data:', quotaData)
           // Update with actual quota data
           setProfile(prev => prev ? {
             ...prev,
@@ -131,7 +130,7 @@ export function AppHeader({ user }: AppHeaderProps) {
         <div className="flex items-center gap-2 text-sm">
           <span className="text-muted-foreground">月間配信:</span>
           <Badge variant="secondary">
-            {profile?.monthly_message_used || 0} / {profile?.monthly_message_limit || 200}
+            残り {((profile?.monthly_message_limit || 200) - (profile?.monthly_message_used || 0)).toLocaleString()} / {(profile?.monthly_message_limit || 200).toLocaleString()}
           </Badge>
         </div>
 
