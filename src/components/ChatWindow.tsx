@@ -15,11 +15,11 @@ interface Friend {
   picture_url: string | null
 }
 
-interface Message {
+interface ChatMessage {
   id: string
-  text: string
-  sender: 'user' | 'friend'
-  timestamp: Date
+  message_text: string
+  message_type: 'outgoing' | 'incoming'
+  sent_at: string
 }
 
 interface ChatWindowProps {
@@ -29,9 +29,10 @@ interface ChatWindowProps {
 }
 
 export function ChatWindow({ user, friend, onClose }: ChatWindowProps) {
-  const [messages, setMessages] = useState<Message[]>([])
+  const [messages, setMessages] = useState<ChatMessage[]>([])
   const [newMessage, setNewMessage] = useState("")
   const [sending, setSending] = useState(false)
+  const [loading, setLoading] = useState(true)
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const { toast } = useToast()
 
@@ -43,37 +44,75 @@ export function ChatWindow({ user, friend, onClose }: ChatWindowProps) {
     scrollToBottom()
   }, [messages])
 
+  useEffect(() => {
+    loadMessages()
+  }, [friend.id])
+
+  const loadMessages = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('chat_messages')
+        .select('id, message_text, message_type, sent_at')
+        .eq('friend_id', friend.id)
+        .order('sent_at', { ascending: true })
+
+      if (error) {
+        console.error('Error loading messages:', error)
+      } else {
+        setMessages((data || []) as ChatMessage[])
+      }
+    } catch (error) {
+      console.error('Error:', error)
+    } finally {
+      setLoading(false)
+    }
+  }
+
   const sendMessage = async () => {
     if (!newMessage.trim() || sending) return
 
     setSending(true)
     try {
-      // Add message to local state immediately
-      const userMessage: Message = {
-        id: Date.now().toString(),
-        text: newMessage,
-        sender: 'user',
-        timestamp: new Date()
+      // Save message to database first
+      const { data: savedMessage, error: saveError } = await supabase
+        .from('chat_messages')
+        .insert({
+          user_id: user.id,
+          friend_id: friend.id,
+          message_text: newMessage,
+          message_type: 'outgoing'
+        })
+        .select('id, message_text, message_type, sent_at')
+        .single()
+
+      if (saveError) {
+        console.error('Error saving message:', saveError)
+        toast({
+          title: "メッセージの保存に失敗しました",
+          description: "もう一度お試しください",
+          variant: "destructive"
+        })
+        return
       }
-      setMessages(prev => [...prev, userMessage])
+
+      // Add message to local state
+      setMessages(prev => [...prev, savedMessage as ChatMessage])
 
       // Send message via LINE API
-      const { data, error } = await supabase.functions.invoke('send-line-message', {
+      const { error: sendError } = await supabase.functions.invoke('send-line-message', {
         body: {
           to: friend.line_user_id,
           message: newMessage
         }
       })
 
-      if (error) {
-        console.error('Error sending message:', error)
+      if (sendError) {
+        console.error('Error sending message:', sendError)
         toast({
           title: "メッセージの送信に失敗しました",
-          description: "もう一度お試しください",
+          description: "データベースには保存されましたが、LINE送信に失敗しました",
           variant: "destructive"
         })
-        // Remove the message from local state if sending failed
-        setMessages(prev => prev.filter(msg => msg.id !== userMessage.id))
       } else {
         toast({
           title: "メッセージを送信しました",
@@ -120,7 +159,12 @@ export function ChatWindow({ user, friend, onClose }: ChatWindowProps) {
       
       <CardContent className="flex-1 flex flex-col p-4">
         <div className="flex-1 overflow-y-auto space-y-4 mb-4">
-          {messages.length === 0 ? (
+          {loading ? (
+            <div className="text-center text-muted-foreground py-8">
+              <Loader2 className="h-6 w-6 animate-spin mx-auto mb-2" />
+              <p>メッセージを読み込み中...</p>
+            </div>
+          ) : messages.length === 0 ? (
             <div className="text-center text-muted-foreground py-8">
               <p>メッセージはまだありません</p>
               <p className="text-sm">最初のメッセージを送信してみましょう</p>
@@ -129,18 +173,18 @@ export function ChatWindow({ user, friend, onClose }: ChatWindowProps) {
             messages.map((message) => (
               <div
                 key={message.id}
-                className={`flex ${message.sender === 'user' ? 'justify-end' : 'justify-start'}`}
+                className={`flex ${message.message_type === 'outgoing' ? 'justify-end' : 'justify-start'}`}
               >
                 <div
                   className={`max-w-[80%] rounded-lg px-3 py-2 ${
-                    message.sender === 'user'
+                    message.message_type === 'outgoing'
                       ? 'bg-primary text-primary-foreground'
                       : 'bg-muted'
                   }`}
                 >
-                  <p className="text-sm">{message.text}</p>
+                  <p className="text-sm">{message.message_text}</p>
                   <p className="text-xs opacity-70 mt-1">
-                    {message.timestamp.toLocaleTimeString('ja-JP', {
+                    {new Date(message.sent_at).toLocaleTimeString('ja-JP', {
                       hour: '2-digit',
                       minute: '2-digit'
                     })}

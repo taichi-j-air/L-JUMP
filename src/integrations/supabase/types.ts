@@ -14,6 +14,50 @@ export type Database = {
   }
   public: {
     Tables: {
+      chat_messages: {
+        Row: {
+          created_at: string
+          friend_id: string
+          id: string
+          line_message_id: string | null
+          message_text: string
+          message_type: string
+          sent_at: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          friend_id: string
+          id?: string
+          line_message_id?: string | null
+          message_text: string
+          message_type?: string
+          sent_at?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          friend_id?: string
+          id?: string
+          line_message_id?: string | null
+          message_text?: string
+          message_type?: string
+          sent_at?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "chat_messages_friend_id_fkey"
+            columns: ["friend_id"]
+            isOneToOne: false
+            referencedRelation: "line_friends"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       flex_messages: {
         Row: {
           content: Json
