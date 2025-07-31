@@ -1,4 +1,4 @@
-import { Home, MessageSquare, Settings, FileImage, Webhook, User, Bot, Users, MessageCircle, Plus } from "lucide-react"
+import { Home, MessageSquare, Settings, FileImage, Webhook, User, Bot, Users, MessageCircle } from "lucide-react"
 import { NavLink, useLocation } from "react-router-dom"
 import { useState, useEffect } from "react"
 import { supabase } from "@/integrations/supabase/client"
@@ -77,27 +77,6 @@ export function AppSidebar({ user }: AppSidebarProps) {
     }
   }
 
-  const addTestFriend = async () => {
-    try {
-      const { error } = await supabase
-        .from('line_friends')
-        .insert({
-          user_id: user.id,
-          line_user_id: 'test_user_' + Date.now(),
-          display_name: 'テストユーザー' + Date.now(),
-          picture_url: null,
-          added_at: new Date().toISOString()
-        })
-
-      if (error) {
-        console.error('Error adding test friend:', error)
-      } else {
-        loadFriends()
-      }
-    } catch (error) {
-      console.error('Error:', error)
-    }
-  }
 
   const isActive = (path: string) => currentPath === path
   const getNavClass = ({ isActive }: { isActive: boolean }) =>
@@ -128,19 +107,8 @@ export function AppSidebar({ user }: AppSidebarProps) {
 
         {/* 友達リストと個別チャット */}
         <SidebarGroup>
-          <SidebarGroupLabel className="text-sm font-semibold flex items-center justify-between">
+          <SidebarGroupLabel className="text-sm font-semibold">
             {!collapsed && "友達とチャット"}
-            {!collapsed && (
-              <Button
-                size="sm"
-                variant="ghost"
-                onClick={addTestFriend}
-                className="h-5 w-5 p-0"
-                title="テスト友達を追加"
-              >
-                <Plus className="h-3 w-3" />
-              </Button>
-            )}
           </SidebarGroupLabel>
           <SidebarGroupContent>
             <SidebarMenu>
@@ -151,19 +119,11 @@ export function AppSidebar({ user }: AppSidebarProps) {
               ) : friends.length === 0 ? (
                 <SidebarMenuItem>
                   {!collapsed && (
-                    <div className="text-xs text-muted-foreground p-2 space-y-2">
+                    <div className="text-xs text-muted-foreground p-2">
                       <div>友達がいません</div>
-                      <div className="text-xs">
-                        LINEから友達追加するか：
+                      <div className="text-xs mt-1">
+                        LINEの公式アカウントから友達追加してください
                       </div>
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={addTestFriend}
-                        className="text-xs h-6 w-full"
-                      >
-                        テスト友達を追加
-                      </Button>
                     </div>
                   )}
                 </SidebarMenuItem>
