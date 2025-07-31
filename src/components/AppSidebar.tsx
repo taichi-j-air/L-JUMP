@@ -69,8 +69,16 @@ export function AppSidebar({ user }: AppSidebarProps) {
       )
       .subscribe()
 
+    // カスタムイベントで未読数更新を監視
+    const handleRefreshUnread = () => {
+      loadUnreadCount()
+    }
+    
+    window.addEventListener('refreshUnreadCount', handleRefreshUnread)
+
     return () => {
       supabase.removeChannel(messageSubscription)
+      window.removeEventListener('refreshUnreadCount', handleRefreshUnread)
     }
   }, [user.id])
 

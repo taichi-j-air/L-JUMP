@@ -147,6 +147,9 @@ export default function ChatInboxPage() {
     
     // 友達リストを再読み込みして未読数を更新
     loadFriendsWithLastMessage()
+    
+    // サイドバーの未読数を更新するためのカスタムイベントを発火
+    window.dispatchEvent(new CustomEvent('refreshUnreadCount'))
   }
 
   if (loading) {
