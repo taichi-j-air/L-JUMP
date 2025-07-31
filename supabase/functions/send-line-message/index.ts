@@ -85,6 +85,15 @@ serve(async (req) => {
       })
     }
 
+    // Validate LINE User ID format
+    if (!to || typeof to !== 'string' || to.startsWith('test_')) {
+      console.error('Invalid LINE User ID:', to)
+      return new Response('Invalid LINE User ID. Cannot send message to test users.', { 
+        status: 400, 
+        headers: corsHeaders 
+      })
+    }
+
     // Send message via LINE API
     const lineApiData = {
       to: to,
@@ -95,6 +104,8 @@ serve(async (req) => {
         }
       ]
     }
+
+    console.log('Sending LINE message:', lineApiData)
 
     const response = await fetch('https://api.line.me/v2/bot/message/push', {
       method: 'POST',

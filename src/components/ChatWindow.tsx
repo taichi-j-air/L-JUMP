@@ -134,6 +134,32 @@ export function ChatWindow({ user, friend, onClose }: ChatWindowProps) {
         return
       }
 
+      // Check if this is a test friend
+      if (friend.line_user_id.startsWith('test_')) {
+        // Add message to local state for test friends
+        setMessages(prev => [...prev, savedMessage as ChatMessage])
+        
+        // Simulate a test reply after 1 second
+        setTimeout(() => {
+          const testReply: ChatMessage = {
+            id: `test_reply_${Date.now()}`,
+            message_text: `これはテスト友達からの自動返信です: ${newMessage}`,
+            message_type: 'incoming',
+            sent_at: new Date().toISOString()
+          }
+          setMessages(prev => [...prev, testReply])
+        }, 1000)
+
+        toast({
+          title: "テストメッセージを送信しました",
+          description: "これはテスト友達なのでLINEには送信されません",
+        })
+        
+        setNewMessage("")
+        setSending(false)
+        return
+      }
+
       // Add message to local state
       setMessages(prev => [...prev, savedMessage as ChatMessage])
 

@@ -126,16 +126,17 @@ export function AppSidebar({ user }: AppSidebarProps) {
           </SidebarGroupContent>
         </SidebarGroup>
 
-        {/* 友達リストセクション */}
+        {/* 友達リストと個別チャット */}
         <SidebarGroup>
           <SidebarGroupLabel className="text-sm font-semibold flex items-center justify-between">
-            {!collapsed && "個別チャット"}
+            {!collapsed && "友達とチャット"}
             {!collapsed && (
               <Button
                 size="sm"
                 variant="ghost"
                 onClick={addTestFriend}
                 className="h-5 w-5 p-0"
+                title="テスト友達を追加"
               >
                 <Plus className="h-3 w-3" />
               </Button>
@@ -150,16 +151,18 @@ export function AppSidebar({ user }: AppSidebarProps) {
               ) : friends.length === 0 ? (
                 <SidebarMenuItem>
                   {!collapsed && (
-                    <div className="text-xs text-muted-foreground p-2">
-                      友達がいません
-                      <br />
+                    <div className="text-xs text-muted-foreground p-2 space-y-2">
+                      <div>友達がいません</div>
+                      <div className="text-xs">
+                        LINEから友達追加するか：
+                      </div>
                       <Button
                         size="sm"
                         variant="outline"
                         onClick={addTestFriend}
-                        className="mt-1 text-xs h-6"
+                        className="text-xs h-6 w-full"
                       >
-                        テスト追加
+                        テスト友達を追加
                       </Button>
                     </div>
                   )}
@@ -170,17 +173,19 @@ export function AppSidebar({ user }: AppSidebarProps) {
                     <SidebarMenuButton asChild>
                       <NavLink 
                         to={`/chat/${friend.id}`} 
-                        className={getNavClass}
+                        className={({ isActive }: { isActive: boolean }) =>
+                          isActive ? "bg-primary/10 text-primary font-medium" : "hover:bg-muted/50"
+                        }
                       >
-                        <div className="flex items-center gap-2 w-full">
-                          <Avatar className="h-4 w-4">
+                        <div className="flex items-center gap-2 w-full min-w-0">
+                          <Avatar className="h-5 w-5 flex-shrink-0">
                             <AvatarImage src={friend.picture_url || ""} />
                             <AvatarFallback className="text-xs">
                               {friend.display_name?.charAt(0) || "?"}
                             </AvatarFallback>
                           </Avatar>
                           {!collapsed && (
-                            <span className="text-xs truncate">
+                            <span className="text-sm truncate">
                               {friend.display_name || "名前未設定"}
                             </span>
                           )}

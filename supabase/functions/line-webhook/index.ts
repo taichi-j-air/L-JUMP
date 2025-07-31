@@ -82,6 +82,10 @@ serve(async (req) => {
         await handleMessage(event, supabase)
       } else if (event.type === 'follow') {
         await handleFollow(event, supabase)
+      } else if (event.type === 'unfollow') {
+        await handleUnfollow(event, supabase)
+      } else {
+        console.log('Unhandled event type:', event.type)
       }
     }
 
@@ -113,11 +117,65 @@ async function handleMessage(event: LineEvent, supabase: any) {
     // Check if this user is already a friend, if not add them
     await ensureFriendExists(source.userId, supabase)
 
+    // Save incoming message to database
+    await saveIncomingMessage(source.userId, message.text, supabase)
+
     // Example: Auto-reply with a simple text message
     await sendReplyMessage(replyToken, `受信しました: ${message.text}`, supabase)
 
   } catch (error) {
     console.error('Error handling message:', error)
+  }
+}
+
+async function saveIncomingMessage(userId: string, messageText: string, supabase: any) {
+  try {
+    // Find the profile that owns this LINE bot
+    const { data: profiles, error: profileError } = await supabase
+      .from('profiles')
+      .select('user_id')
+      .not('line_channel_access_token', 'is', null)
+      .limit(1)
+
+    if (profileError || !profiles || profiles.length === 0) {
+      console.error('No profile found for saving message:', profileError)
+      return
+    }
+
+    const profile = profiles[0]
+
+    // Get the friend record
+    const { data: friend, error: friendError } = await supabase
+      .from('line_friends')
+      .select('id')
+      .eq('user_id', profile.user_id)
+      .eq('line_user_id', userId)
+      .single()
+
+    if (friendError || !friend) {
+      console.error('Friend not found for message saving:', friendError)
+      return
+    }
+
+    // Save the message
+    const { error: messageError } = await supabase
+      .from('chat_messages')
+      .insert({
+        user_id: profile.user_id,
+        friend_id: friend.id,
+        message_text: messageText,
+        message_type: 'incoming',
+        sent_at: new Date().toISOString()
+      })
+
+    if (messageError) {
+      console.error('Error saving incoming message:', messageError)
+    } else {
+      console.log('Incoming message saved successfully')
+    }
+
+  } catch (error) {
+    console.error('Error in saveIncomingMessage:', error)
   }
 }
 
@@ -226,6 +284,55 @@ async function handleFollow(event: LineEvent, supabase: any) {
 
   } catch (error) {
     console.error('Error handling follow:', error)
+  }
+}
+
+async function handleUnfollow(event: LineEvent, supabase: any) {
+  try {
+    const { source } = event
+    console.log(`User ${source.userId} unfollowed the bot`)
+
+    // Find the profile that owns this LINE bot
+    const { data: profiles, error } = await supabase
+      .from('profiles')
+      .select('user_id, friends_count')
+      .not('line_channel_access_token', 'is', null)
+      .limit(1)
+
+    if (error || !profiles || profiles.length === 0) {
+      console.error('No profile found for this LINE bot:', error)
+      return
+    }
+
+    const profile = profiles[0]
+
+    // Remove friend from database
+    const { error: deleteError } = await supabase
+      .from('line_friends')
+      .delete()
+      .eq('user_id', profile.user_id)
+      .eq('line_user_id', source.userId)
+
+    if (deleteError) {
+      console.error('Error removing friend:', deleteError)
+    } else {
+      // Update friends count
+      const { error: updateError } = await supabase
+        .from('profiles')
+        .update({ 
+          friends_count: Math.max(0, (profile.friends_count || 1) - 1) 
+        })
+        .eq('user_id', profile.user_id)
+
+      if (updateError) {
+        console.error('Error updating friends count:', updateError)
+      }
+
+      console.log('Friend removed successfully:', source.userId)
+    }
+
+  } catch (error) {
+    console.error('Error handling unfollow:', error)
   }
 }
 
