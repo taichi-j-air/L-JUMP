@@ -88,6 +88,33 @@ export type Database = {
         }
         Relationships: []
       }
+      invite_clicks: {
+        Row: {
+          clicked_at: string | null
+          id: string
+          invite_code: string
+          ip: string | null
+          referer: string | null
+          user_agent: string | null
+        }
+        Insert: {
+          clicked_at?: string | null
+          id?: string
+          invite_code: string
+          ip?: string | null
+          referer?: string | null
+          user_agent?: string | null
+        }
+        Update: {
+          clicked_at?: string | null
+          id?: string
+          invite_code?: string
+          ip?: string | null
+          referer?: string | null
+          user_agent?: string | null
+        }
+        Relationships: []
+      }
       line_friends: {
         Row: {
           added_at: string
@@ -123,6 +150,7 @@ export type Database = {
       }
       profiles: {
         Row: {
+          add_friend_url: string | null
           created_at: string
           current_month: number | null
           current_year: number | null
@@ -145,6 +173,7 @@ export type Database = {
           webhook_url: string | null
         }
         Insert: {
+          add_friend_url?: string | null
           created_at?: string
           current_month?: number | null
           current_year?: number | null
@@ -167,6 +196,7 @@ export type Database = {
           webhook_url?: string | null
         }
         Update: {
+          add_friend_url?: string | null
           created_at?: string
           current_month?: number | null
           current_year?: number | null
@@ -467,7 +497,16 @@ export type Database = {
       }
     }
     Views: {
-      [_ in never]: never
+      scenario_invite_stats: {
+        Row: {
+          clicks: number | null
+          friends: number | null
+          invite_code: string | null
+          scenario_id: string | null
+          total_added: number | null
+        }
+        Relationships: []
+      }
     }
     Functions: {
       generate_invite_code: {
