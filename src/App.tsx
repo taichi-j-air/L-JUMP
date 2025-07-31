@@ -75,7 +75,7 @@ function AppContent() {
       <div className="flex min-h-screen w-full">
         {user && <AppHeader user={user} />}
         {user && <AppSidebar user={user} />}
-        <div className="flex-1 flex flex-col pt-14">
+        <div className="flex-1 flex flex-col pt-14 border-l border-border">
           <main className="flex-1 p-4">
             <Routes>
               <Route path="/" element={<Index />} />

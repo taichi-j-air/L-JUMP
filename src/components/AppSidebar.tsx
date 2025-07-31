@@ -128,7 +128,7 @@ export function AppSidebar({ user }: AppSidebarProps) {
     isActive ? "bg-primary/10 text-primary font-medium" : "hover:bg-muted/50"
 
   return (
-    <Sidebar className={collapsed ? "w-14" : "w-64"} collapsible="icon">
+    <Sidebar className={collapsed ? "w-14" : "w-64 border-r-0"} collapsible="icon">
       <SidebarTrigger className="m-2 self-end" />
       
       <SidebarContent className="px-2">

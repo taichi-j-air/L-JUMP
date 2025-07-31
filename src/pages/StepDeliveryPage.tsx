@@ -358,7 +358,7 @@ export default function StepDeliveryPage() {
 
           {/* Message Creation Screen */}
           {selectedStep && (
-            <div className="flex-1 bg-card rounded-lg border p-4 overflow-y-auto min-w-0">
+            <div className="flex-1 bg-card rounded-lg p-4 overflow-y-auto min-w-0 w-96 flex-shrink-0">
               <div className="flex items-center justify-between mb-4">
                 <h2 className="text-lg font-semibold">メッセージ作成 - {selectedStep.name}</h2>
                 <div className="flex gap-2">

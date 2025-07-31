@@ -884,7 +884,7 @@ const FlexMessageDesigner = () => {
       <main className="container mx-auto px-4 py-8 max-w-7xl">
         <div className="grid lg:grid-cols-2 gap-8">
           {/* 左側：デザイナー */}
-          <div className="space-y-6">
+          <div className="space-y-6 w-96 flex-shrink-0">
             <Card>
               <CardHeader>
                 <div className="flex items-center justify-between">
