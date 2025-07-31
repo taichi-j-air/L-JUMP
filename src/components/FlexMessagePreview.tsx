@@ -54,100 +54,96 @@ export function FlexMessagePreview({ flexMessageId }: FlexMessagePreviewProps) {
     )
   }
 
-  // Flexメッセージの基本的なプレビューを表示
-  const renderFlexContent = () => {
-    const content = flexMessage.content
-
-    // Bubble型の処理
-    if (content.type === 'bubble') {
+  // FlexMessageDesignerと同じプレビューロジックを使用
+  const renderFlexPreview = () => {
+    if (!flexMessage.content || !flexMessage.content.body || !flexMessage.content.body.contents) {
       return (
-        <div className="border rounded-lg overflow-hidden bg-white text-black max-w-[200px]">
-          {/* Hero画像 */}
-          {content.hero?.url && (
-            <div className="w-full h-20 bg-cover bg-center" 
-                 style={{ backgroundImage: `url(${content.hero.url})` }} />
-          )}
-          
-          {/* Body部分 */}
-          {content.body && (
-            <div className="p-3 space-y-2">
-              {content.body.contents?.map((item: any, index: number) => {
-                if (item.type === 'text') {
-                  return (
-                    <div key={index} className={`text-${item.size || 'sm'} ${item.weight === 'bold' ? 'font-bold' : ''}`}>
-                      {item.text}
-                    </div>
-                  )
-                } else if (item.type === 'box') {
-                  return (
-                    <div key={index} className="space-y-1">
-                      {item.contents?.map((subItem: any, subIndex: number) => (
-                        <div key={subIndex} className="text-xs text-gray-600">
-                          {subItem.text}
-                        </div>
-                      ))}
-                    </div>
-                  )
-                }
-                return null
-              })}
-            </div>
-          )}
-          
-          {/* Footer部分 */}
-          {content.footer && (
-            <div className="p-2 border-t">
-              {content.footer.contents?.map((item: any, index: number) => {
-                if (item.type === 'button') {
-                  return (
-                    <div key={index} className="bg-blue-500 text-white text-center py-1 px-2 rounded text-xs">
-                      {item.action?.label || 'ボタン'}
-                    </div>
-                  )
-                }
-                return null
-              })}
-            </div>
-          )}
+        <div className="bg-white rounded-lg shadow-sm border max-w-[200px] p-3">
+          <div className="text-center text-muted-foreground">
+            <p className="text-xs">Flexメッセージ: {flexMessage.name}</p>
+          </div>
         </div>
       )
     }
 
-    // Carousel型の処理
-    if (content.type === 'carousel') {
-      return (
-        <div className="flex gap-2 overflow-x-auto max-w-[200px]">
-          {content.contents?.slice(0, 2).map((bubble: any, index: number) => (
-            <div key={index} className="border rounded-lg overflow-hidden bg-white text-black min-w-[120px]">
-              {bubble.hero?.url && (
-                <div className="w-full h-16 bg-cover bg-center" 
-                     style={{ backgroundImage: `url(${bubble.hero.url})` }} />
-              )}
-              <div className="p-2 space-y-1">
-                {bubble.body?.contents?.slice(0, 2).map((item: any, itemIndex: number) => (
-                  <div key={itemIndex} className="text-xs">
-                    {item.text}
-                  </div>
-                ))}
-              </div>
-            </div>
-          ))}
-          {content.contents?.length > 2 && (
-            <div className="flex items-center text-xs text-muted-foreground">
-              +{content.contents.length - 2}
-            </div>
-          )}
-        </div>
-      )
-    }
+    const elements = flexMessage.content.body.contents
 
-    // その他の型の場合
     return (
-      <div className="bg-gradient-to-r from-blue-50 to-purple-50 border rounded-lg p-3 max-w-[200px]">
-        <div className="text-xs font-medium text-blue-800 mb-1">Flexメッセージ</div>
-        <div className="text-xs text-gray-600">{flexMessage.name}</div>
-        <div className="text-xs text-muted-foreground mt-1">
-          型: {content.type || 'unknown'}
+      <div className="bg-white rounded-lg shadow-sm border max-w-[200px]">
+        <div className="p-3">
+          {elements.map((element: any, index: number) => {
+            const isFirst = index === 0;
+            const isLast = index === elements.length - 1;
+            
+            return (
+              <div 
+                key={element.id || index} 
+                className="flex"
+                style={{
+                  marginTop: !isFirst ? '10px' : undefined,
+                  marginBottom: !isLast ? '10px' : undefined
+                }}
+              >
+                {element.type === 'text' && (
+                  <div 
+                    className="flex-1"
+                    style={{
+                      color: element.properties?.color || '#000000',
+                      backgroundColor: element.properties?.backgroundColor !== '#ffffff' ? element.properties?.backgroundColor : undefined,
+                      fontSize: element.properties?.size === 'xs' ? '10px' : 
+                               element.properties?.size === 'sm' ? '12px' :
+                               element.properties?.size === 'lg' ? '16px' :
+                               element.properties?.size === 'xl' ? '18px' : '14px',
+                      fontWeight: element.properties?.weight === 'bold' ? 'bold' : 'normal',
+                      textAlign: element.properties?.align as any || 'left',
+                      padding: element.properties?.backgroundColor !== '#ffffff' ? '3px 6px' : undefined,
+                      borderRadius: element.properties?.backgroundColor !== '#ffffff' ? '3px' : undefined,
+                      whiteSpace: 'pre-wrap'
+                    }}
+                  >
+                    {element.properties?.text || 'テキスト'}
+                  </div>
+                )}
+                {element.type === 'image' && element.properties?.url && (
+                  <div className="flex-1">
+                    <img 
+                      src={element.properties.url} 
+                      alt="プレビュー画像" 
+                      className="w-full h-auto rounded"
+                      style={{
+                        aspectRatio: element.properties.aspectRatio?.replace(':', '/') || '20/13',
+                        maxHeight: '100px'
+                      }}
+                    />
+                  </div>
+                )}
+                {element.type === 'button' && (
+                  <div className="flex-1">
+                    <button 
+                      className="w-full rounded text-xs font-medium"
+                      style={{
+                        backgroundColor: element.properties?.color || (
+                          element.properties?.style === 'primary' ? '#0066cc' : 
+                          element.properties?.style === 'secondary' ? '#f0f0f0' : 'transparent'
+                        ),
+                        color: element.properties?.color ? 
+                          (element.properties.color === '#ffffff' || element.properties.color === '#f0f0f0' ? '#333' : 'white') :
+                          (element.properties?.style === 'primary' ? 'white' : 
+                           element.properties?.style === 'secondary' ? '#333' : '#0066cc'),
+                        border: element.properties?.style === 'secondary' ? 'none' : 
+                                element.properties?.style === 'link' ? 
+                                  `1px solid ${element.properties?.color || '#0066cc'}` : 'none',
+                        padding: element.properties?.height === 'sm' ? '6px 12px' : 
+                                 element.properties?.height === 'lg' ? '12px 12px' : '8px 12px'
+                      }}
+                    >
+                      {element.properties?.action?.label || 'ボタン'}
+                    </button>
+                  </div>
+                )}
+              </div>
+            );
+          })}
         </div>
       </div>
     )
@@ -155,9 +151,9 @@ export function FlexMessagePreview({ flexMessageId }: FlexMessagePreviewProps) {
 
   return (
     <div className="space-y-1">
-      {renderFlexContent()}
-      <div className="text-xs text-muted-foreground">
-        Flexメッセージ: {flexMessage.name}
+      {renderFlexPreview()}
+      <div className="text-xs text-muted-foreground text-center">
+        {flexMessage.name}
       </div>
     </div>
   )

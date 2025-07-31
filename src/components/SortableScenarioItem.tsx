@@ -10,7 +10,7 @@ interface SortableScenarioItemProps {
   isSelected: boolean
   scenarioSteps: number
   deliveryTime: string
-  transitionDestination?: string
+  transitionDestinations: string[]
   onSelect: () => void
   onDelete: () => void
 }
@@ -20,7 +20,7 @@ export function SortableScenarioItem({
   isSelected,
   scenarioSteps,
   deliveryTime,
-  transitionDestination,
+  transitionDestinations,
   onSelect,
   onDelete
 }: SortableScenarioItemProps) {
@@ -64,10 +64,25 @@ export function SortableScenarioItem({
             <p className="text-xs text-muted-foreground">
               配信: {deliveryTime}
             </p>
-            {transitionDestination && (
-              <p className="text-xs text-blue-600">
-                → {transitionDestination}
-              </p>
+            {transitionDestinations.length > 0 && (
+              <div className="space-y-1">
+                {transitionDestinations.length === 1 ? (
+                  <p className="text-xs text-blue-600">
+                    → {transitionDestinations[0]}
+                  </p>
+                ) : (
+                  <>
+                    <p className="text-xs text-orange-600 font-medium">
+                      ABテスト設定
+                    </p>
+                    {transitionDestinations.map((dest, index) => (
+                      <p key={index} className="text-xs text-blue-600">
+                        → {dest}
+                      </p>
+                    ))}
+                  </>
+                )}
+              </div>
             )}
           </div>
           

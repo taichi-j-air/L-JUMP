@@ -116,11 +116,13 @@ export default function StepDeliveryPage() {
     return `登録後：${parts.join('')}後`
   }
 
-  // シナリオの移動先を取得
-  const getTransitionDestination = (scenarioId: string) => {
-    const transition = transitions.find(t => t.from_scenario_id === scenarioId)
-    if (!transition) return null
-    return scenarios.find(s => s.id === transition.to_scenario_id)
+  // シナリオの移動先を取得（複数の移動先に対応）
+  const getTransitionDestinations = (scenarioId: string) => {
+    const scenarioTransitions = transitions.filter(t => t.from_scenario_id === scenarioId)
+    return scenarioTransitions.map(t => {
+      const destination = scenarios.find(s => s.id === t.to_scenario_id)
+      return destination ? destination.name : '不明なシナリオ'
+    }).filter(name => name !== '不明なシナリオ')
   }
 
   const handleCreateNewScenario = async () => {
@@ -264,7 +266,7 @@ export default function StepDeliveryPage() {
                 <div className="space-y-2">
                   {scenarios.map((scenario) => {
                     const scenarioSteps = steps.filter(s => s.scenario_id === scenario.id)
-                    const transitionDestination = getTransitionDestination(scenario.id)
+                    const transitionDestinations = getTransitionDestinations(scenario.id)
                     return (
                       <SortableScenarioItem
                         key={scenario.id}
@@ -272,7 +274,7 @@ export default function StepDeliveryPage() {
                         isSelected={selectedScenario?.id === scenario.id}
                         scenarioSteps={scenarioSteps.length}
                         deliveryTime={getFirstMessageDeliveryTime(scenario)}
-                        transitionDestination={transitionDestination?.name}
+                        transitionDestinations={transitionDestinations}
                         onSelect={() => {
                           setSelectedScenario(scenario)
                           setSelectedStep(null)
