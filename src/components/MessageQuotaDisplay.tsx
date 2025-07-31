@@ -30,8 +30,19 @@ export function MessageQuotaDisplay({ user }: MessageQuotaDisplayProps) {
 
   const loadQuota = async () => {
     try {
+      // まずユーザーのチャンネルIDを取得
+      const { data: profileData, error: profileError } = await supabase
+        .from('profiles')
+        .select('line_channel_id')
+        .eq('user_id', user.id)
+        .single()
+
+      if (profileError || !profileData?.line_channel_id) {
+        throw new Error('LINE設定が見つかりません')
+      }
+
       const { data, error } = await supabase.functions.invoke('get-line-quota', {
-        body: { user_id: user.id }
+        body: { channelId: profileData.line_channel_id }
       })
 
       if (error) throw error

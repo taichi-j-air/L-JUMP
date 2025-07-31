@@ -161,7 +161,7 @@ export default function ChatInboxPage() {
     <div className="min-h-screen bg-background">
       <AppHeader user={user} />
       
-      <main className="container mx-auto px-4 py-6 pt-16">
+      <main className="container mx-auto px-4 py-8 pt-20">
         <div className="flex items-center justify-between mb-6">
           <h1 className="text-2xl font-bold">チャット受信箱</h1>
         </div>
