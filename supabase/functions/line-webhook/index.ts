@@ -32,13 +32,18 @@ interface LineWebhookBody {
 serve(async (req) => {
   // Handle CORS preflight requests
   if (req.method === 'OPTIONS') {
+    console.log('CORS preflight request received')
     return new Response(null, { headers: corsHeaders })
   }
 
   try {
-    console.log('LINE Webhook received:', req.method)
+    console.log('=== LINE Webhook Request Start ===')
+    console.log('Method:', req.method)
+    console.log('URL:', req.url)
+    console.log('Headers:', Object.fromEntries(req.headers.entries()))
 
     if (req.method !== 'POST') {
+      console.log('Method not allowed:', req.method)
       return new Response('Method not allowed', { 
         status: 405, 
         headers: corsHeaders 
@@ -46,7 +51,8 @@ serve(async (req) => {
     }
 
     const body = await req.text()
-    console.log('Webhook body:', body)
+    console.log('Raw body received:', body)
+    console.log('Body length:', body.length)
 
     const webhookData: LineWebhookBody = JSON.parse(body)
     
