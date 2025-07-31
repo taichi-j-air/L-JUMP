@@ -65,22 +65,24 @@ export function SortableScenarioItem({
               配信: {deliveryTime}
             </p>
             {transitionDestinations.length > 0 && (
-              <div className="space-y-1">
+              <div className="mt-1">
                 {transitionDestinations.length === 1 ? (
                   <p className="text-xs text-blue-600">
                     → {transitionDestinations[0]}
                   </p>
                 ) : (
-                  <>
+                  <div className="space-y-1">
                     <p className="text-xs text-orange-600 font-medium">
                       ABテスト設定
                     </p>
-                    {transitionDestinations.map((dest, index) => (
-                      <p key={index} className="text-xs text-blue-600">
-                        → {dest}
-                      </p>
-                    ))}
-                  </>
+                    <div className="flex flex-wrap gap-2">
+                      {transitionDestinations.map((dest, index) => (
+                        <span key={index} className="text-xs text-blue-600 bg-blue-50 px-2 py-1 rounded">
+                          → {dest}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
                 )}
               </div>
             )}

@@ -79,24 +79,19 @@ export function FlexMessagePreview({ flexMessageId }: FlexMessagePreviewProps) {
     const elements = flexContents
 
     return (
-      <div className="bg-white rounded-lg shadow-sm border max-w-[200px]">
-        <div className="p-3">
+      <div className="bg-white rounded-lg shadow-sm border max-w-[200px] overflow-hidden">
+        <div className="p-3 space-y-2">
           {elements.map((element: any, index: number) => {
-            const isFirst = index === 0;
-            const isLast = index === elements.length - 1;
-            
             return (
               <div 
-                key={element.id || index} 
-                className="flex"
+                key={element.id || index}
                 style={{
-                  marginTop: !isFirst ? '10px' : undefined,
-                  marginBottom: !isLast ? '10px' : undefined
+                  margin: element.margin || '0px',
+                  flex: element.flex || 'none'
                 }}
               >
                 {element.type === 'text' && (
                   <div 
-                    className="flex-1"
                     style={{
                       color: element.color || '#000000',
                       fontSize: element.size === 'xs' ? '10px' : 
@@ -106,18 +101,18 @@ export function FlexMessagePreview({ flexMessageId }: FlexMessagePreviewProps) {
                       fontWeight: element.weight === 'bold' ? 'bold' : 'normal',
                       textAlign: element.align as any || 'left',
                       whiteSpace: 'pre-wrap',
-                      margin: element.margin || '0px'
+                      lineHeight: '1.2'
                     }}
                   >
                     {element.text || 'テキスト'}
                   </div>
                 )}
                 {element.type === 'image' && element.url && (
-                  <div className="flex-1" style={{ margin: element.margin || '0px' }}>
+                  <div className="w-full">
                     <img 
                       src={element.url} 
                       alt="プレビュー画像" 
-                      className="w-full h-auto rounded"
+                      className="w-full h-auto rounded object-cover"
                       style={{
                         aspectRatio: element.aspectRatio?.replace(':', '/') || '20/13',
                         maxHeight: '100px'
@@ -126,9 +121,9 @@ export function FlexMessagePreview({ flexMessageId }: FlexMessagePreviewProps) {
                   </div>
                 )}
                 {element.type === 'button' && (
-                  <div className="flex-1" style={{ margin: element.margin || '0px' }}>
+                  <div className="w-full">
                     <button 
-                      className="w-full rounded text-xs font-medium"
+                      className="w-full rounded text-xs font-medium transition-colors"
                       style={{
                         backgroundColor: element.color || (
                           element.style === 'primary' ? '#0066cc' : 
@@ -142,7 +137,9 @@ export function FlexMessagePreview({ flexMessageId }: FlexMessagePreviewProps) {
                                 element.style === 'link' ? 
                                   `1px solid ${element.color || '#0066cc'}` : 'none',
                         padding: element.height === 'sm' ? '6px 12px' : 
-                                 element.height === 'lg' ? '12px 12px' : '8px 12px'
+                                 element.height === 'lg' ? '12px 12px' : '8px 12px',
+                        minHeight: element.height === 'sm' ? '32px' : 
+                                   element.height === 'lg' ? '48px' : '40px'
                       }}
                     >
                       {element.action?.label || 'ボタン'}
