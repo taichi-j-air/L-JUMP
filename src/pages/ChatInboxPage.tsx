@@ -137,7 +137,10 @@ export default function ChatInboxPage() {
     // メッセージを既読にする
     await supabase
       .from('chat_messages')
-      .update({ read_at: new Date().toISOString() })
+      .update({ 
+        read_at: new Date().toISOString(),
+        updated_at: new Date().toISOString()
+      } as any)
       .eq('friend_id', friend.id)
       .eq('message_type', 'incoming')
       .is('read_at', null)
