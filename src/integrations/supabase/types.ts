@@ -21,7 +21,7 @@ export type Database = {
           id: string
           line_message_id: string | null
           message_text: string
-          message_type: string
+          message_type: Database["public"]["Enums"]["message_kind"]
           sent_at: string
           updated_at: string
           user_id: string
@@ -32,7 +32,7 @@ export type Database = {
           id?: string
           line_message_id?: string | null
           message_text: string
-          message_type?: string
+          message_type?: Database["public"]["Enums"]["message_kind"]
           sent_at?: string
           updated_at?: string
           user_id: string
@@ -43,7 +43,7 @@ export type Database = {
           id?: string
           line_message_id?: string | null
           message_text?: string
-          message_type?: string
+          message_type?: Database["public"]["Enums"]["message_kind"]
           sent_at?: string
           updated_at?: string
           user_id?: string
@@ -121,6 +121,8 @@ export type Database = {
       profiles: {
         Row: {
           created_at: string
+          current_month: number | null
+          current_year: number | null
           delivery_count: number | null
           delivery_limit: number | null
           display_name: string | null
@@ -131,6 +133,9 @@ export type Database = {
           line_channel_access_token: string | null
           line_channel_id: string | null
           line_channel_secret: string | null
+          monthly_message_limit: number | null
+          monthly_message_used: number | null
+          quota_updated_at: string | null
           updated_at: string
           user_id: string
           user_role: string | null
@@ -138,6 +143,8 @@ export type Database = {
         }
         Insert: {
           created_at?: string
+          current_month?: number | null
+          current_year?: number | null
           delivery_count?: number | null
           delivery_limit?: number | null
           display_name?: string | null
@@ -148,6 +155,9 @@ export type Database = {
           line_channel_access_token?: string | null
           line_channel_id?: string | null
           line_channel_secret?: string | null
+          monthly_message_limit?: number | null
+          monthly_message_used?: number | null
+          quota_updated_at?: string | null
           updated_at?: string
           user_id: string
           user_role?: string | null
@@ -155,6 +165,8 @@ export type Database = {
         }
         Update: {
           created_at?: string
+          current_month?: number | null
+          current_year?: number | null
           delivery_count?: number | null
           delivery_limit?: number | null
           display_name?: string | null
@@ -165,6 +177,9 @@ export type Database = {
           line_channel_access_token?: string | null
           line_channel_id?: string | null
           line_channel_secret?: string | null
+          monthly_message_limit?: number | null
+          monthly_message_used?: number | null
+          quota_updated_at?: string | null
           updated_at?: string
           user_id?: string
           user_role?: string | null
@@ -180,7 +195,7 @@ export type Database = {
       [_ in never]: never
     }
     Enums: {
-      [_ in never]: never
+      message_kind: "incoming" | "outgoing"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -307,6 +322,8 @@ export type CompositeTypes<
 
 export const Constants = {
   public: {
-    Enums: {},
+    Enums: {
+      message_kind: ["incoming", "outgoing"],
+    },
   },
 } as const
