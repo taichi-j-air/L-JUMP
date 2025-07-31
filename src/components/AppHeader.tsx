@@ -41,6 +41,22 @@ export function AppHeader({ user }: AppHeaderProps) {
       } else {
         setProfile(data)
       }
+
+      // Get actual LINE quota information
+      try {
+        const { data: quotaData, error: quotaError } = await supabase.functions.invoke('get-line-quota')
+        
+        if (!quotaError && quotaData?.quota) {
+          // Update delivery limit with actual quota
+          setProfile(prev => prev ? {
+            ...prev,
+            delivery_limit: quotaData.quota.value || prev.delivery_limit
+          } : null)
+        }
+      } catch (quotaError) {
+        console.log('Could not fetch LINE quota:', quotaError)
+        // Fallback to profile data
+      }
     } catch (error) {
       console.error('Error:', error)
     } finally {

@@ -110,9 +110,8 @@ async function handleMessage(event: LineEvent, supabase: any) {
 
     console.log(`Message from ${source.userId}: ${message.text}`)
 
-    // Find user profile that might handle this LINE user
-    // For now, we'll just log the message
-    // Later this will be enhanced with actual flex message responses
+    // Check if this user is already a friend, if not add them
+    await ensureFriendExists(source.userId, supabase)
 
     // Example: Auto-reply with a simple text message
     await sendReplyMessage(replyToken, `受信しました: ${message.text}`, supabase)
@@ -227,6 +226,74 @@ async function handleFollow(event: LineEvent, supabase: any) {
 
   } catch (error) {
     console.error('Error handling follow:', error)
+  }
+}
+
+async function ensureFriendExists(userId: string, supabase: any) {
+  try {
+    // Find the profile that owns this LINE bot
+    const { data: profiles, error } = await supabase
+      .from('profiles')
+      .select('user_id, line_channel_access_token, friends_count')
+      .not('line_channel_access_token', 'is', null)
+      .limit(1)
+
+    if (error || !profiles || profiles.length === 0) {
+      console.error('No profile found for this LINE bot:', error)
+      return
+    }
+
+    const profile = profiles[0]
+
+    // Check if friend already exists
+    const { data: existingFriend, error: friendError } = await supabase
+      .from('line_friends')
+      .select('id')
+      .eq('user_id', profile.user_id)
+      .eq('line_user_id', userId)
+      .single()
+
+    if (existingFriend) {
+      console.log('Friend already exists:', userId)
+      return
+    }
+
+    // Get user profile from LINE API
+    const userProfile = await getLineUserProfile(userId, supabase)
+    
+    if (userProfile) {
+      // Insert friend data
+      const { error: insertError } = await supabase
+        .from('line_friends')
+        .insert({
+          user_id: profile.user_id,
+          line_user_id: userId,
+          display_name: userProfile.displayName,
+          picture_url: userProfile.pictureUrl,
+          added_at: new Date().toISOString()
+        })
+
+      if (insertError) {
+        console.error('Error inserting friend:', insertError)
+      } else {
+        // Update friends count
+        const { error: updateError } = await supabase
+          .from('profiles')
+          .update({ 
+            friends_count: (profile.friends_count || 0) + 1 
+          })
+          .eq('user_id', profile.user_id)
+
+        if (updateError) {
+          console.error('Error updating friends count:', updateError)
+        }
+
+        console.log('Friend added successfully:', userProfile.displayName)
+      }
+    }
+
+  } catch (error) {
+    console.error('Error ensuring friend exists:', error)
   }
 }
 

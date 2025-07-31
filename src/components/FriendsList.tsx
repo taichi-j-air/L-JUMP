@@ -4,8 +4,11 @@ import { User } from "@supabase/supabase-js"
 import { Avatar, AvatarFallback, AvatarImage } from "./ui/avatar"
 import { Card, CardContent, CardHeader, CardTitle } from "./ui/card"
 import { Badge } from "./ui/badge"
+import { Button } from "./ui/button"
+import { MessageCircle } from "lucide-react"
 import { formatDistanceToNow } from "date-fns"
 import { ja } from "date-fns/locale"
+import { ChatWindow } from "./ChatWindow"
 
 interface Friend {
   id: string
@@ -22,6 +25,7 @@ interface FriendsListProps {
 export function FriendsList({ user }: FriendsListProps) {
   const [friends, setFriends] = useState<Friend[]>([])
   const [loading, setLoading] = useState(true)
+  const [selectedFriend, setSelectedFriend] = useState<Friend | null>(null)
 
   useEffect(() => {
     loadFriends()
@@ -59,10 +63,20 @@ export function FriendsList({ user }: FriendsListProps) {
     )
   }
 
+  if (selectedFriend) {
+    return (
+      <ChatWindow 
+        user={user} 
+        friend={selectedFriend} 
+        onClose={() => setSelectedFriend(null)} 
+      />
+    )
+  }
+
   return (
     <div className="space-y-4">
       {friends.map((friend) => (
-        <Card key={friend.id} className="cursor-pointer hover:bg-muted/50 transition-colors">
+        <Card key={friend.id} className="hover:bg-muted/50 transition-colors">
           <CardContent className="p-4">
             <div className="flex items-center gap-3">
               <Avatar className="h-10 w-10">
@@ -88,6 +102,16 @@ export function FriendsList({ user }: FriendsListProps) {
                   ID: {friend.line_user_id}
                 </p>
               </div>
+              
+              <Button 
+                size="sm" 
+                variant="outline"
+                onClick={() => setSelectedFriend(friend)}
+                className="flex items-center gap-2"
+              >
+                <MessageCircle className="h-4 w-4" />
+                チャット
+              </Button>
             </div>
           </CardContent>
         </Card>

@@ -14,6 +14,7 @@ import {
 } from "@/components/ui/sidebar"
 
 const menuItems = [
+  { title: "友達一覧", url: "/friends-list", icon: Users },
   { title: "ダッシュボード", url: "/", icon: Home },
   { title: "Flex メッセージデザイナー", url: "/flex-message-designer", icon: MessageSquare },
   { title: "メディアライブラリ", url: "/media-library", icon: FileImage },
@@ -23,7 +24,6 @@ const settingsItems = [
   { title: "LINE API設定", url: "/line-api-settings", icon: Bot },
   { title: "Webhook設定", url: "/webhook-settings", icon: Webhook },
   { title: "プロファイル管理", url: "/profile-management", icon: User },
-  { title: "友達一覧", url: "/friends-list", icon: Users },
 ]
 
 export function AppSidebar() {
