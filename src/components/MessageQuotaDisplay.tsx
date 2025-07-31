@@ -30,7 +30,7 @@ export function MessageQuotaDisplay({ user }: MessageQuotaDisplayProps) {
 
   const loadQuota = async () => {
     try {
-      const { data, error } = await supabase.functions.invoke('get-message-quota', {
+      const { data, error } = await supabase.functions.invoke('get-line-quota', {
         body: { user_id: user.id }
       })
 

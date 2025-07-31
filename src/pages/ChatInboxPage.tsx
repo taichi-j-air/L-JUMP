@@ -6,6 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { AppHeader } from "@/components/AppHeader"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { ChatWindow } from "@/components/ChatWindow"
+import { Badge } from "@/components/ui/badge"
 
 interface Friend {
   id: string
@@ -13,6 +14,7 @@ interface Friend {
   display_name: string | null
   picture_url: string | null
   last_message_at?: string
+  unread_count?: number
 }
 
 interface ChatMessage {
@@ -91,7 +93,7 @@ export default function ChatInboxPage() {
         return
       }
 
-      // 各友達の最新メッセージ時刻を取得
+      // 各友達の最新メッセージ時刻と未読数を取得
       const friendsWithLastMessage = await Promise.all(
         (friendsData || []).map(async (friend) => {
           const { data: lastMessage } = await supabase
@@ -101,9 +103,18 @@ export default function ChatInboxPage() {
             .order('sent_at', { ascending: false })
             .limit(1)
 
+          // 未読メッセージ数を取得
+          const { count: unreadCount } = await supabase
+            .from('chat_messages')
+            .select('*', { count: 'exact', head: true })
+            .eq('friend_id', friend.id)
+            .eq('message_type', 'incoming')
+            .is('read_at', null)
+
           return {
             ...friend,
-            last_message_at: lastMessage?.[0]?.sent_at || friend.added_at
+            last_message_at: lastMessage?.[0]?.sent_at || friend.added_at,
+            unread_count: unreadCount || 0
           }
         })
       )
@@ -119,9 +130,20 @@ export default function ChatInboxPage() {
     }
   }
 
-  const handleFriendSelect = (friend: Friend) => {
+  const handleFriendSelect = async (friend: Friend) => {
     setSelectedFriend(friend)
     setSearchParams({ friend: friend.id })
+    
+    // メッセージを既読にする
+    await supabase
+      .from('chat_messages')
+      .update({ read_at: new Date().toISOString() })
+      .eq('friend_id', friend.id)
+      .eq('message_type', 'incoming')
+      .is('read_at', null)
+    
+    // 友達リストを再読み込みして未読数を更新
+    loadFriendsWithLastMessage()
   }
 
   if (loading) {
@@ -136,19 +158,19 @@ export default function ChatInboxPage() {
     <div className="min-h-screen bg-background">
       <AppHeader user={user} />
       
-      <main className="container mx-auto px-4 py-8 pt-20">
+      <main className="container mx-auto px-4 py-6 pt-16">
         <div className="flex items-center justify-between mb-6">
           <h1 className="text-2xl font-bold">チャット受信箱</h1>
         </div>
         
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 h-[calc(100vh-200px)]">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 h-[calc(100vh-160px)]">
           {/* 左側: チャット送信者一覧 */}
           <Card className="lg:col-span-1">
             <CardHeader>
               <CardTitle>チャット一覧</CardTitle>
             </CardHeader>
             <CardContent className="p-0">
-              <div className="max-h-[calc(100vh-300px)] overflow-y-auto">
+              <div className="max-h-[calc(100vh-260px)] overflow-y-auto">
                 {friends.length === 0 ? (
                   <div className="text-center text-muted-foreground p-4">
                     <div>チャットがありません</div>
@@ -186,8 +208,16 @@ export default function ChatInboxPage() {
                           }
                         </div>
                       </div>
-                    </div>
-                  ))
+                      {friend.unread_count && friend.unread_count > 0 && (
+                        <Badge 
+                          variant="destructive" 
+                          className="h-5 w-5 flex items-center justify-center p-0 text-xs bg-red-500 text-white rounded-full"
+                        >
+                          {friend.unread_count}
+                        </Badge>
+                       )}
+                     </div>
+                   ))
                 )}
               </div>
             </CardContent>

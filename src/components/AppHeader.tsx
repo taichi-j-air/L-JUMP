@@ -50,7 +50,7 @@ export function AppHeader({ user }: AppHeaderProps) {
 
       // Get actual LINE quota information
       try {
-        const { data: quotaData, error: quotaError } = await supabase.functions.invoke('get-message-quota', {
+        const { data: quotaData, error: quotaError } = await supabase.functions.invoke('get-line-quota', {
           body: { user_id: user.id }
         })
         

@@ -97,12 +97,13 @@ export function AppSidebar({ user }: AppSidebarProps) {
 
   const loadUnreadCount = async () => {
     try {
-      // 受信メッセージ（incoming）の数をカウント
+      // 未読メッセージ（read_at が null の受信メッセージ）の数をカウント
       const { count, error } = await supabase
         .from('chat_messages')
         .select('*', { count: 'exact', head: true })
         .eq('user_id', user.id)
         .eq('message_type', 'incoming')
+        .is('read_at', null)
 
       if (!error && count !== null) {
         setUnreadCount(count)
