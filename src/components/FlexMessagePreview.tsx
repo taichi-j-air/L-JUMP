@@ -17,6 +17,7 @@ export function FlexMessagePreview({ flexMessageId }: FlexMessagePreviewProps) {
 
   useEffect(() => {
     const fetchFlexMessage = async () => {
+      setLoading(true)
       if (!flexMessageId) return
 
       try {
@@ -27,9 +28,15 @@ export function FlexMessagePreview({ flexMessageId }: FlexMessagePreviewProps) {
           .single()
 
         if (error) throw error
-        setFlexMessage(data)
+        
+        // JSON文字列の場合はパース
+        const content = typeof data.content === 'string' 
+          ? JSON.parse(data.content) 
+          : data.content
+          
+        setFlexMessage({...data, content})
       } catch (error) {
-        console.error('Flexメッセージの取得に失敗しました:', error)
+        console.error('Flexメッセージの取得またはパースに失敗:', error)
       } finally {
         setLoading(false)
       }
@@ -56,11 +63,12 @@ export function FlexMessagePreview({ flexMessageId }: FlexMessagePreviewProps) {
 
   // FlexMessageDesignerと同じプレビューロジックを使用
   const renderFlexPreview = () => {
-    if (!flexMessage.content || !flexMessage.content.body || !flexMessage.content.body.contents) {
+    if (!flexMessage.content?.body?.contents) {
       return (
-        <div className="bg-white rounded-lg shadow-sm border max-w-[200px] p-3">
-          <div className="text-center text-muted-foreground">
-            <p className="text-xs">Flexメッセージ: {flexMessage.name}</p>
+        <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3 max-w-[200px]">
+          <div className="text-center">
+            <p className="text-sm text-yellow-800">⚠️ Flexメッセージの構造が不正です</p>
+            <p className="text-xs text-yellow-600 mt-1">デザイナーで再作成することをお勧めします</p>
           </div>
         </div>
       )
