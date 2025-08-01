@@ -20,6 +20,7 @@ import StepDeliveryPage from "./pages/StepDeliveryPage";
 import NotFound from "./pages/NotFound";
 import ResetPassword from "./pages/ResetPassword";
 import EmailVerify from "./pages/EmailVerify";
+import ErrorPage from "./pages/ErrorPage";
 import IndividualChatPage from "./pages/IndividualChatPage";
 import ChatInboxPage from "./pages/ChatInboxPage";
 import { supabase } from "@/integrations/supabase/client";
@@ -64,6 +65,7 @@ function AppContent() {
           <Route path="/auth" element={<Auth />} />
           <Route path="/verify" element={<EmailVerify />} />
           <Route path="/reset-password" element={<ResetPassword />} />
+          <Route path="/error" element={<ErrorPage />} />
           <Route path="*" element={<Auth />} />
         </Routes>
       </div>

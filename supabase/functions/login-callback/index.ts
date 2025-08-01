@@ -29,18 +29,26 @@ serve(async (req) => {
     const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
     const supabase = createClient(supabaseUrl, supabaseKey)
 
-    // stateからuser_idを取得（実際の実装では適切な方法で取得）
-    // 今回は最初に設定されたLINE設定を使用
+    // 修正: 正しいカラム名を使用
     const { data: lineSettings, error: settingsError } = await supabase
       .from('profiles')
-      .select('line_channel_id, line_channel_secret')
+      .select('line_channel_id, line_channel_secret, user_id')
       .not('line_channel_id', 'is', null)
       .not('line_channel_secret', 'is', null)
       .limit(1)
       .single()
 
     if (settingsError || !lineSettings) {
-      throw new Error('LINE設定が見つかりません。先にLINE Login設定を完了してください。')
+      console.error('LINE設定エラー:', settingsError)
+      const referer = req.headers.get('referer') || req.headers.get('Referer') || ''
+      const siteUrl = referer ? new URL(referer).origin : 'https://74048ab5-8d5a-425a-ab29-bd5cc50dc2fe.lovableproject.com'
+      return new Response(null, {
+        status: 302,
+        headers: { 
+          ...corsHeaders,
+          'Location': `${siteUrl}/error?type=no_line_settings` 
+        }
+      })
     }
 
     console.log('LINE設定を取得しました:', { 
@@ -75,7 +83,15 @@ serve(async (req) => {
     if (!tokenResponse.ok) {
       const errorText = await tokenResponse.text()
       console.error('LINEトークン取得エラー:', errorText)
-      throw new Error(`LINEトークン取得に失敗しました: ${errorText}`)
+      const referer = req.headers.get('referer') || req.headers.get('Referer') || ''
+      const siteUrl = referer ? new URL(referer).origin : 'https://74048ab5-8d5a-425a-ab29-bd5cc50dc2fe.lovableproject.com'
+      return new Response(null, {
+        status: 302,
+        headers: { 
+          ...corsHeaders,
+          'Location': `${siteUrl}/error?type=token_error&message=${encodeURIComponent(errorText)}` 
+        }
+      })
     }
 
     const tokenData = await tokenResponse.json()
@@ -90,56 +106,47 @@ serve(async (req) => {
     })
 
     if (!profileResponse.ok) {
-      throw new Error('LINEプロファイル取得に失敗しました')
+      console.error('LINEプロファイル取得エラー')
+      const referer = req.headers.get('referer') || req.headers.get('Referer') || ''
+      const siteUrl = referer ? new URL(referer).origin : 'https://74048ab5-8d5a-425a-ab29-bd5cc50dc2fe.lovableproject.com'
+      return new Response(null, {
+        status: 302,
+        headers: { 
+          ...corsHeaders,
+          'Location': `${siteUrl}/error?type=profile_error` 
+        }
+      })
     }
 
     const profile = await profileResponse.json()
+    console.log('Profile received:', { userId: profile.userId, displayName: profile.displayName })
+
+    // 修正: line_friendsテーブルに友だち情報を保存
+    const { error: friendError } = await supabase
+      .from('line_friends')
+      .upsert({
+        user_id: lineSettings.user_id,
+        line_user_id: profile.userId,
+        display_name: profile.displayName,
+        picture_url: profile.pictureUrl || null,
+        updated_at: new Date().toISOString(),
+      }, {
+        onConflict: 'line_user_id,user_id'
+      })
+
+    if (friendError) {
+      console.error('友だち情報保存エラー:', friendError)
+    }
 
     // リファラーからサイトURLを取得
     const referer = req.headers.get('referer') || req.headers.get('Referer') || ''
     const siteUrl = referer ? new URL(referer).origin : 'https://74048ab5-8d5a-425a-ab29-bd5cc50dc2fe.lovableproject.com'
 
-    // LINEユーザーIDで既存プロファイルを検索
-    const { data: existingProfile, error: profileSearchError } = await supabase
-      .from('profiles')
-      .select('user_id')
-      .eq('line_user_id', profile.userId)
-      .single()
-
-    let userId;
-    
-    if (existingProfile && !profileSearchError) {
-      // 既存ユーザーの場合
-      userId = existingProfile.user_id;
-      console.log('既存ユーザーが見つかりました:', userId);
-    } else {
-      // 新規ユーザーの場合、一時的なアクセストークンを生成してリダイレクト
-      // 実際のユーザー認証は別途実装が必要
-      console.log('新規ユーザーです:', profile.userId);
-      
-      // プロファイル情報を作成/更新
-      const { error: profileError } = await supabase
-        .from('profiles')
-        .upsert({
-          display_name: profile.displayName,
-          line_user_id: profile.userId,
-          updated_at: new Date().toISOString(),
-        }, {
-          onConflict: 'line_user_id'
-        })
-
-      if (profileError) {
-        console.error('プロファイル更新エラー:', profileError)
-      }
-    }
-
-    // LINEユーザー情報をクエリパラメータに含めてリダイレクト
+    // 成功ページにリダイレクト
     const redirectUrl = new URL(`${siteUrl}/`)
-    redirectUrl.searchParams.set('line_user_id', profile.userId)
-    redirectUrl.searchParams.set('display_name', profile.displayName)
     redirectUrl.searchParams.set('line_login', 'success')
+    redirectUrl.searchParams.set('user_name', profile.displayName)
 
-    // ダッシュボードにリダイレクト
     return new Response(null, {
       status: 302,
       headers: {
@@ -150,12 +157,14 @@ serve(async (req) => {
 
   } catch (error) {
     console.error('ログインコールバックエラー:', error)
-    return new Response(
-      JSON.stringify({ error: error.message }),
-      {
-        status: 500,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+    const referer = req.headers.get('referer') || req.headers.get('Referer') || ''
+    const siteUrl = referer ? new URL(referer).origin : 'https://74048ab5-8d5a-425a-ab29-bd5cc50dc2fe.lovableproject.com'
+    return new Response(null, {
+      status: 302,
+      headers: { 
+        ...corsHeaders,
+        'Location': `${siteUrl}/error?type=server_error&message=${encodeURIComponent(error.message)}` 
       }
-    )
+    })
   }
 })
