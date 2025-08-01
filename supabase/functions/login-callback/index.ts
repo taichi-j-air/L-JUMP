@@ -12,11 +12,15 @@ serve(async (req) => {
   }
 
   try {
+    console.log('=== LOGIN CALLBACK START ===')
     const url = new URL(req.url)
     const code = url.searchParams.get('code')
     const state = url.searchParams.get('state')
     
+    console.log('Received params:', { code: code?.substring(0, 10) + '...', state })
+    
     if (!code) {
+      console.error('認証コードが見つかりません')
       throw new Error('認証コードが見つかりません')
     }
 
@@ -39,26 +43,43 @@ serve(async (req) => {
       throw new Error('LINE設定が見つかりません。先にLINE Login設定を完了してください。')
     }
 
+    console.log('LINE設定を取得しました:', { 
+      channelId: lineSettings.line_channel_id,
+      hasSecret: !!lineSettings.line_channel_secret 
+    })
+
     // LINEからアクセストークンを取得
+    const tokenParams = {
+      grant_type: 'authorization_code',
+      code: code,
+      redirect_uri: `${supabaseUrl}/functions/v1/login-callback`,
+      client_id: lineSettings.line_channel_id,
+      client_secret: lineSettings.line_channel_secret,
+    }
+    
+    console.log('Requesting token with params:', {
+      ...tokenParams,
+      client_secret: '***'
+    })
+
     const tokenResponse = await fetch('https://api.line.me/oauth2/v2.1/token', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/x-www-form-urlencoded',
       },
-      body: new URLSearchParams({
-        grant_type: 'authorization_code',
-        code: code,
-        redirect_uri: `${supabaseUrl}/functions/v1/login-callback`,
-        client_id: lineSettings.line_channel_id,
-        client_secret: lineSettings.line_channel_secret,
-      }),
+      body: new URLSearchParams(tokenParams),
     })
 
+    console.log('Token response status:', tokenResponse.status)
+
     if (!tokenResponse.ok) {
-      throw new Error('LINEトークン取得に失敗しました')
+      const errorText = await tokenResponse.text()
+      console.error('LINEトークン取得エラー:', errorText)
+      throw new Error(`LINEトークン取得に失敗しました: ${errorText}`)
     }
 
     const tokenData = await tokenResponse.json()
+    console.log('Token data received:', { hasAccessToken: !!tokenData.access_token })
     const accessToken = tokenData.access_token
 
     // LINEプロファイル情報を取得
