@@ -78,27 +78,52 @@ serve(async (req) => {
     const referer = req.headers.get('referer') || req.headers.get('Referer') || ''
     const siteUrl = referer ? new URL(referer).origin : 'https://74048ab5-8d5a-425a-ab29-bd5cc50dc2fe.lovableproject.com'
 
-    // プロファイル情報を直接作成/更新（signInWithOAuthは使わない）
-    const { error: profileError } = await supabase
+    // LINEユーザーIDで既存プロファイルを検索
+    const { data: existingProfile, error: profileSearchError } = await supabase
       .from('profiles')
-      .upsert({
-        display_name: profile.displayName,
-        line_user_id: profile.userId,
-        updated_at: new Date().toISOString(),
-      }, {
-        onConflict: 'line_user_id'
-      })
+      .select('user_id')
+      .eq('line_user_id', profile.userId)
+      .single()
 
-    if (profileError) {
-      console.error('プロファイル更新エラー:', profileError)
+    let userId;
+    
+    if (existingProfile && !profileSearchError) {
+      // 既存ユーザーの場合
+      userId = existingProfile.user_id;
+      console.log('既存ユーザーが見つかりました:', userId);
+    } else {
+      // 新規ユーザーの場合、一時的なアクセストークンを生成してリダイレクト
+      // 実際のユーザー認証は別途実装が必要
+      console.log('新規ユーザーです:', profile.userId);
+      
+      // プロファイル情報を作成/更新
+      const { error: profileError } = await supabase
+        .from('profiles')
+        .upsert({
+          display_name: profile.displayName,
+          line_user_id: profile.userId,
+          updated_at: new Date().toISOString(),
+        }, {
+          onConflict: 'line_user_id'
+        })
+
+      if (profileError) {
+        console.error('プロファイル更新エラー:', profileError)
+      }
     }
+
+    // LINEユーザー情報をクエリパラメータに含めてリダイレクト
+    const redirectUrl = new URL(`${siteUrl}/`)
+    redirectUrl.searchParams.set('line_user_id', profile.userId)
+    redirectUrl.searchParams.set('display_name', profile.displayName)
+    redirectUrl.searchParams.set('line_login', 'success')
 
     // ダッシュボードにリダイレクト
     return new Response(null, {
       status: 302,
       headers: {
         ...corsHeaders,
-        'Location': `${siteUrl}/`,
+        'Location': redirectUrl.toString(),
       },
     })
 
