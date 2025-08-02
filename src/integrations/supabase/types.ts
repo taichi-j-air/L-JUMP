@@ -284,7 +284,15 @@ export type Database = {
           usage_count?: number
           user_id?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "scenario_invite_codes_scenario_id_fkey"
+            columns: ["scenario_id"]
+            isOneToOne: false
+            referencedRelation: "step_scenarios"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       scenario_transitions: {
         Row: {
@@ -512,13 +520,30 @@ export type Database = {
           usage_count: number | null
           user_id: string | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "scenario_invite_codes_scenario_id_fkey"
+            columns: ["scenario_id"]
+            isOneToOne: false
+            referencedRelation: "step_scenarios"
+            referencedColumns: ["id"]
+          },
+        ]
       }
     }
     Functions: {
       generate_invite_code: {
         Args: Record<PropertyKey, never>
         Returns: string
+      }
+      register_friend_to_scenario: {
+        Args: {
+          p_line_user_id: string
+          p_invite_code: string
+          p_display_name?: string
+          p_picture_url?: string
+        }
+        Returns: Json
       }
     }
     Enums: {

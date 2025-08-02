@@ -115,11 +115,15 @@ serve(async (req) => {
       })
     }
 
-    // 友達追加URLを決定（プロファイルに設定があればそれを使用、なければデフォルト）
-    const addFriendUrl = profile.add_friend_url || 
-                        `https://line.me/R/ti/p/@${profile.line_channel_id}`
+    // 友達追加URLを決定し、招待コードを含むパラメータを追加
+    let baseUrl = profile.add_friend_url || `https://line.me/R/ti/p/@${profile.line_channel_id}`
     
-    console.log('友達追加URL:', addFriendUrl)
+    // URLに招待コードパラメータを追加
+    const url = new URL(baseUrl)
+    url.searchParams.set('state', inviteCode)
+    const addFriendUrl = url.toString()
+    
+    console.log('招待コード付き友達追加URL:', addFriendUrl)
 
     // モバイル対応：一部のモバイルブラウザで302リダイレクトがブロックされる場合
     const userAgentLower = userAgent.toLowerCase()

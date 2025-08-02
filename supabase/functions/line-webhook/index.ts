@@ -251,11 +251,14 @@ async function handleFollow(event: LineEvent, supabase: any, req: Request) {
     const { source } = event
     console.log(`User ${source.userId} followed the bot`)
 
-    // Extract invite code from URL state parameter if present
-    // In real LINE webhook, we need to detect this from the webhook URL or context
-    // For now, we'll log this and check if there's any context available
+    // Extract invite code from various sources
     const url = new URL(req.url)
-    const inviteCode = url.searchParams.get('state')
+    let inviteCode = url.searchParams.get('state') || url.searchParams.get('invite')
+    
+    // Also check headers and URL path for invite code
+    if (!inviteCode) {
+      inviteCode = req.headers.get('x-invite-code')
+    }
     
     console.log('Invite code from follow event:', inviteCode)
 
@@ -263,103 +266,347 @@ async function handleFollow(event: LineEvent, supabase: any, req: Request) {
     const userProfile = await getLineUserProfile(source.userId, supabase)
     
     if (userProfile) {
-      // Find the profile that owns this LINE bot
-      const { data: profiles, error } = await supabase
-        .from('profiles')
-        .select('user_id, friends_count')
-        .not('line_channel_access_token', 'is', null)
-        .limit(1)
-
-      if (error || !profiles || profiles.length === 0) {
-        console.error('No profile found for this LINE bot:', error)
-        return
-      }
-
-      const profile = profiles[0]
-
-      // Insert friend data
-      const { data: friendData, error: insertError } = await supabase
-        .from('line_friends')
-        .insert({
-          user_id: profile.user_id,
-          line_user_id: source.userId,
-          display_name: userProfile.displayName,
-          picture_url: userProfile.pictureUrl,
-          added_at: new Date().toISOString()
-        })
-        .select()
-        .single()
-
-      if (insertError) {
-        console.error('Error inserting friend:', insertError)
-        return
-      }
-
-      // Update friends count
-      const { error: updateError } = await supabase
-        .from('profiles')
-        .update({ 
-          friends_count: (profile.friends_count || 0) + 1 
-        })
-        .eq('user_id', profile.user_id)
-
-      if (updateError) {
-        console.error('Error updating friends count:', updateError)
-      }
-
-      console.log('Friend added successfully:', userProfile.displayName)
-
-      // If there's an invite code, record the friend acquisition
+      console.log('Processing friend addition for user:', userProfile.displayName)
+      
+      // Check if invite code is provided - use scenario registration function
       if (inviteCode) {
-        console.log('Processing invite code for new friend:', inviteCode)
+        console.log('友達追加を招待コード経由で処理します:', inviteCode)
         
-        // Find the scenario associated with this invite code
-        const { data: inviteData, error: inviteError } = await supabase
-          .from('scenario_invite_codes')
-          .select('scenario_id, usage_count')
-          .eq('invite_code', inviteCode)
-          .eq('is_active', true)
+        try {
+          // Use the new scenario registration function
+          const { data: registrationResult, error: registrationError } = await supabase
+            .rpc('register_friend_to_scenario', {
+              p_line_user_id: source.userId,
+              p_invite_code: inviteCode,
+              p_display_name: userProfile.displayName,
+              p_picture_url: userProfile.pictureUrl
+            })
+          
+          if (registrationError) {
+            console.error('シナリオ登録エラー:', registrationError)
+          } else {
+            console.log('シナリオ登録結果:', registrationResult)
+            
+            if (registrationResult && registrationResult.success) {
+              console.log('友達をシナリオに正常に登録しました')
+              
+              // Start step delivery process in background
+              EdgeRuntime.waitUntil(
+                startStepDelivery(supabase, registrationResult.scenario_id, registrationResult.friend_id)
+              )
+            } else {
+              console.error('シナリオ登録に失敗:', registrationResult?.error)
+            }
+          }
+        } catch (error) {
+          console.error('招待コード処理中にエラー:', error)
+        }
+      } else {
+        // Regular friend addition without invite code
+        console.log('通常の友達追加を処理します（招待コードなし）')
+        
+        // Find the profile that owns this LINE bot
+        const { data: profiles, error } = await supabase
+          .from('profiles')
+          .select('user_id, friends_count')
+          .not('line_channel_access_token', 'is', null)
+          .limit(1)
+
+        if (error || !profiles || profiles.length === 0) {
+          console.error('No profile found for this LINE bot:', error)
+          return
+        }
+
+        const profile = profiles[0]
+
+        // Insert friend data
+        const { data: friendData, error: insertError } = await supabase
+          .from('line_friends')
+          .insert({
+            user_id: profile.user_id,
+            line_user_id: source.userId,
+            display_name: userProfile.displayName,
+            picture_url: userProfile.pictureUrl,
+            added_at: new Date().toISOString()
+          })
+          .select()
           .single()
 
-        if (inviteData && !inviteError) {
-          // Record the friend acquisition in scenario_friend_logs
-          const { error: logError } = await supabase
-            .from('scenario_friend_logs')
-            .insert({
-              scenario_id: inviteData.scenario_id,
-              invite_code: inviteCode,
-              line_user_id: source.userId,
-              friend_id: friendData.id,
-              added_at: new Date().toISOString()
-            })
-
-          if (logError) {
-            console.error('Error recording friend acquisition:', logError)
-          } else {
-            console.log('Friend acquisition recorded for invite code:', inviteCode)
-          }
-
-          // Increment usage count for the invite code
-          const { error: incrementError } = await supabase
-            .from('scenario_invite_codes')
-            .update({ 
-              usage_count: inviteData.usage_count + 1 
-            })
-            .eq('invite_code', inviteCode)
-
-          if (incrementError) {
-            console.error('Error incrementing invite code usage:', incrementError)
-          } else {
-            console.log('Invite code usage count incremented')
-          }
-        } else {
-          console.error('Invalid or inactive invite code:', inviteCode, inviteError)
+        if (insertError) {
+          console.error('Error inserting friend:', insertError)
+          return
         }
+
+        // Update friends count
+        const { error: updateError } = await supabase
+          .from('profiles')
+          .update({ 
+            friends_count: (profile.friends_count || 0) + 1 
+          })
+          .eq('user_id', profile.user_id)
+
+        if (updateError) {
+          console.error('Error updating friends count:', updateError)
+        }
+
+        console.log('通常の友達追加が完了しました:', userProfile.displayName)
       }
+    } else {
+      console.error('LINE APIからユーザープロファイルを取得できませんでした')
     }
 
   } catch (error) {
     console.error('Error handling follow:', error)
+  }
+}
+
+// Step delivery process for scenario-based friend additions
+async function startStepDelivery(supabase: any, scenarioId: string, friendId: string) {
+  try {
+    console.log('ステップ配信プロセスを開始:', { scenarioId, friendId })
+    
+    // Get the first step that should be delivered (status = 'ready')
+    const { data: readySteps, error: stepsError } = await supabase
+      .from('step_delivery_tracking')
+      .select(`
+        *,
+        steps!inner (
+          id, step_order, delivery_type, delivery_seconds, delivery_minutes, delivery_hours, delivery_days,
+          step_messages (
+            id, content, message_type, media_url, message_order,
+            flex_messages (content)
+          )
+        )
+      `)
+      .eq('scenario_id', scenarioId)
+      .eq('friend_id', friendId)
+      .eq('status', 'ready')
+      .order('steps.step_order')
+      .limit(1)
+    
+    if (stepsError) {
+      console.error('配信準備完了ステップの取得エラー:', stepsError)
+      return
+    }
+    
+    if (!readySteps || readySteps.length === 0) {
+      console.log('配信準備完了のステップが見つかりません')
+      return
+    }
+    
+    const firstStep = readySteps[0]
+    console.log('最初のステップを配信します:', firstStep.steps.step_order)
+    
+    // Deliver the first step immediately if it's set for immediate delivery
+    if (firstStep.steps.delivery_type === 'immediately' || 
+        (firstStep.steps.delivery_days === 0 && 
+         firstStep.steps.delivery_hours === 0 && 
+         firstStep.steps.delivery_minutes === 0 &&
+         firstStep.steps.delivery_seconds === 0)) {
+      
+      await deliverStepMessages(supabase, firstStep)
+    } else {
+      console.log('遅延配信ステップのため、スケジュール処理が必要です')
+      // For delayed delivery, you would implement scheduling logic here
+    }
+    
+  } catch (error) {
+    console.error('ステップ配信プロセスエラー:', error)
+  }
+}
+
+// Deliver messages for a specific step
+async function deliverStepMessages(supabase: any, stepTracking: any) {
+  try {
+    console.log('ステップメッセージを配信中:', stepTracking.step_id)
+    
+    const messages = stepTracking.steps.step_messages || []
+    if (messages.length === 0) {
+      console.log('配信するメッセージがありません')
+      
+      // Mark as delivered even without messages
+      await markStepAsDelivered(supabase, stepTracking.id, stepTracking.scenario_id, stepTracking.friend_id, stepTracking.steps.step_order)
+      return
+    }
+    
+    // Sort messages by order
+    const sortedMessages = messages.sort((a: any, b: any) => a.message_order - b.message_order)
+    
+    // Get LINE user ID and access token for sending
+    const { data: friendInfo, error: friendError } = await supabase
+      .from('line_friends')
+      .select('line_user_id, profiles!inner(line_channel_access_token)')
+      .eq('id', stepTracking.friend_id)
+      .single()
+    
+    if (friendError || !friendInfo) {
+      console.error('友達情報の取得に失敗:', friendError)
+      return
+    }
+    
+    const lineUserId = friendInfo.line_user_id
+    const accessToken = friendInfo.profiles.line_channel_access_token
+    
+    if (!accessToken) {
+      console.error('LINE アクセストークンが見つかりません')
+      return
+    }
+    
+    // Send each message
+    for (const message of sortedMessages) {
+      try {
+        await sendLineMessage(accessToken, lineUserId, message)
+        console.log('メッセージ送信完了:', message.id)
+        
+        // Add small delay between messages to avoid rate limiting
+        await new Promise(resolve => setTimeout(resolve, 500))
+      } catch (error) {
+        console.error('メッセージ送信エラー:', message.id, error)
+      }
+    }
+    
+    // Mark step as delivered and prepare next step
+    await markStepAsDelivered(supabase, stepTracking.id, stepTracking.scenario_id, stepTracking.friend_id, stepTracking.steps.step_order)
+    
+  } catch (error) {
+    console.error('ステップメッセージ配信エラー:', error)
+  }
+}
+
+// Send a single message via LINE API
+async function sendLineMessage(accessToken: string, userId: string, message: any) {
+  try {
+    let lineMessage: any
+    
+    switch (message.message_type) {
+      case 'text':
+        lineMessage = {
+          type: 'text',
+          text: message.content
+        }
+        break
+        
+      case 'media':
+        // Handle media messages
+        if (message.media_url) {
+          // For images
+          if (message.media_url.match(/\.(jpg|jpeg|png|gif)$/i)) {
+            lineMessage = {
+              type: 'image',
+              originalContentUrl: message.media_url,
+              previewImageUrl: message.media_url
+            }
+          } else {
+            // For other media, send as text with URL
+            lineMessage = {
+              type: 'text',
+              text: `メディア: ${message.media_url}`
+            }
+          }
+        } else {
+          lineMessage = {
+            type: 'text',
+            text: message.content
+          }
+        }
+        break
+        
+      case 'flex':
+        lineMessage = {
+          type: 'flex',
+          altText: 'フレックスメッセージ',
+          contents: message.flex_messages?.content || JSON.parse(message.content || '{}')
+        }
+        break
+        
+      default:
+        lineMessage = {
+          type: 'text',
+          text: message.content
+        }
+    }
+    
+    const response = await fetch('https://api.line.me/v2/bot/message/push', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${accessToken}`
+      },
+      body: JSON.stringify({
+        to: userId,
+        messages: [lineMessage]
+      })
+    })
+    
+    if (!response.ok) {
+      const errorText = await response.text()
+      console.error('LINE API エラー:', response.status, errorText)
+      throw new Error(`LINE API error: ${response.status}`)
+    }
+    
+    console.log('LINE メッセージ送信成功')
+    
+  } catch (error) {
+    console.error('LINE メッセージ送信エラー:', error)
+    throw error
+  }
+}
+
+// Mark step as delivered and prepare the next step
+async function markStepAsDelivered(supabase: any, trackingId: string, scenarioId: string, friendId: string, currentStepOrder: number) {
+  try {
+    // Mark current step as delivered
+    const { error: updateError } = await supabase
+      .from('step_delivery_tracking')
+      .update({
+        status: 'delivered',
+        delivered_at: new Date().toISOString()
+      })
+      .eq('id', trackingId)
+    
+    if (updateError) {
+      console.error('配信ステータス更新エラー:', updateError)
+      return
+    }
+    
+    console.log('ステップを配信完了としてマーク:', currentStepOrder)
+    
+    // Find and prepare the next step
+    const { data: nextSteps, error: nextError } = await supabase
+      .from('step_delivery_tracking')
+      .select('id, steps!inner(step_order)')
+      .eq('scenario_id', scenarioId)
+      .eq('friend_id', friendId)
+      .eq('status', 'waiting')
+      .gt('steps.step_order', currentStepOrder)
+      .order('steps.step_order')
+      .limit(1)
+    
+    if (nextError) {
+      console.error('次ステップ検索エラー:', nextError)
+      return
+    }
+    
+    if (nextSteps && nextSteps.length > 0) {
+      const nextStep = nextSteps[0]
+      
+      // Mark next step as ready
+      const { error: readyError } = await supabase
+        .from('step_delivery_tracking')
+        .update({ status: 'ready' })
+        .eq('id', nextStep.id)
+      
+      if (readyError) {
+        console.error('次ステップ準備エラー:', readyError)
+      } else {
+        console.log('次のステップを準備しました:', nextStep.steps.step_order)
+      }
+    } else {
+      console.log('すべてのステップが完了しました')
+    }
+    
+  } catch (error) {
+    console.error('ステップ完了処理エラー:', error)
   }
 }
 
