@@ -10,6 +10,7 @@ import { AppHeader } from "./components/AppHeader";
 import Index from "./pages/Index";
 import Auth from "./pages/Auth";
 import InvitePage from "./pages/InvitePage";
+import LiffHandler from "./pages/LiffHandler";
 import LineApiSettings from "./pages/LineApiSettings";
 import LineLoginSettings from "./pages/LineLoginSettings";
 import WebhookSettings from "./pages/WebhookSettings";
@@ -66,6 +67,7 @@ function AppContent() {
     return (
       <div className="min-h-screen">
         <Routes>
+          <Route path="/liff-handler" element={<LiffHandler />} />
           <Route path="/invite/:inviteCode" element={<InvitePage />} />
           <Route path="/auth" element={<Auth />} />
           <Route path="/verify" element={<EmailVerify />} />
@@ -105,6 +107,7 @@ function AppContent() {
           <main className="flex-1 p-2">
             <Routes>
               <Route path="/" element={<Index />} />
+              <Route path="/liff-handler" element={<LiffHandler />} />
               <Route path="/invite/:inviteCode" element={<InvitePage />} />
               <Route path="/line-api-settings" element={<LineApiSettings />} />
               <Route path="/line-login-settings" element={<LineLoginSettings />} />
