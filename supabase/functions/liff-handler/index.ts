@@ -46,9 +46,9 @@ serve(async (req) => {
       }
 
       // LIFFページを生成して返す
-      const liffPageHtml = generateLiffPage(liffIdParam, code);
+      const loginPageHtml = generateLoginPage(liffIdParam, code);
       
-      return new Response(liffPageHtml, {
+      return new Response(loginPageHtml, {
         status: 200,
         headers: { ...corsHeaders, "Content-Type": "text/html; charset=utf-8" }
       });
@@ -152,7 +152,7 @@ serve(async (req) => {
   }
 });
 
-function generateLiffPage(liffId: string, code: string) {
+function generateLoginPage(liffId: string, code: string) {
   return `
 <!DOCTYPE html>
 <html lang="ja">
@@ -160,7 +160,6 @@ function generateLiffPage(liffId: string, code: string) {
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>LINE友だち追加</title>
-    <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
     <style>
         body {
             font-family: -apple-system, BlinkMacSystemFont, sans-serif;
@@ -205,20 +204,6 @@ function generateLiffPage(liffId: string, code: string) {
             font-size: 16px;
             margin-bottom: 20px;
         }
-        .error {
-            color: #d32f2f;
-            background: #ffebee;
-            padding: 15px;
-            border-radius: 8px;
-            margin-top: 15px;
-        }
-        .success {
-            color: #2e7d32;
-            background: #e8f5e8;
-            padding: 15px;
-            border-radius: 8px;
-            margin-top: 15px;
-        }
         .debug {
             font-size: 12px;
             color: #999;
@@ -233,86 +218,37 @@ function generateLiffPage(liffId: string, code: string) {
     <div class="container">
         <div class="spinner" id="spinner"></div>
         <div class="title">LINE友だち追加</div>
-        <div class="message" id="message">認証中...</div>
-        <div id="status"></div>
-        <div id="error" class="error" style="display: none;"></div>
-        <div id="success" class="success" style="display: none;"></div>
+        <div class="message" id="message">LINE認証画面に移動中...</div>
         <div class="debug">
-            LIFF ID: ${liffId}<br>
+            Channel ID: ${liffId}<br>
             Code: ${code}
         </div>
     </div>
 
     <script>
-        const liffId = "${liffId}";
+        const channelId = "${liffId}";
         const code = "${code}";
-        const messageEl = document.getElementById('message');
-        const statusEl = document.getElementById('status');
-        const errorEl = document.getElementById('error');
-        const successEl = document.getElementById('success');
-        const spinnerEl = document.getElementById('spinner');
-
-        function hideSpinner() {
-            spinnerEl.style.display = 'none';
-        }
-
-        function showError(message) {
-            hideSpinner();
-            errorEl.textContent = message;
-            errorEl.style.display = 'block';
-            messageEl.textContent = 'エラーが発生しました';
-        }
-
-        function showSuccess(message) {
-            hideSpinner();
-            successEl.textContent = message;
-            successEl.style.display = 'block';
-            messageEl.textContent = '処理完了';
-        }
-
-        function updateMessage(message) {
-            messageEl.textContent = message;
-        }
-
-        async function initLiff() {
-            try {
-                updateMessage('LIFF初期化中...');
-                console.log('Initializing LIFF with ID:', liffId);
-                
-                await liff.init({ liffId: liffId });
-                console.log('LIFF initialized successfully');
-                
-                updateMessage('ログイン状態確認中...');
-                
-                if (!liff.isLoggedIn()) {
-                    updateMessage('LINE認証画面へ移動中...');
-                    console.log('User not logged in, redirecting to login');
-                    liff.login({
-                        redirectUri: 'https://rtjxurmuaawyzjcdkqxt.supabase.co/functions/v1/login-callback',
-                        state: code,
-                        botPrompt: 'normal'  // 友だち追加オプションを表示
-                    });
-                } else {
-                    updateMessage('認証完了 - 友だち追加処理中...');
-                    console.log('User already logged in, redirecting to callback');
-                    window.location.href = \`https://rtjxurmuaawyzjcdkqxt.supabase.co/functions/v1/login-callback?state=\${code}\`;
-                }
-            } catch (error) {
-                console.error('LIFF Error:', error);
-                showError(\`LIFF初期化エラー: \${error.message}\`);
-            }
-        }
-
-        // LIFF SDK読み込み完了後に実行
-        window.addEventListener('load', () => {
-            setTimeout(() => {
-                if (typeof liff !== 'undefined') {
-                    initLiff();
-                } else {
-                    showError('LIFF SDKの読み込みに失敗しました');
-                }
-            }, 500);
-        });
+        
+        // 標準的なLINEログインフローにリダイレクト
+        const redirectUri = 'https://rtjxurmuaawyzjcdkqxt.supabase.co/functions/v1/login-callback';
+        const scope = 'profile%20openid';
+        const state = code;
+        const botPrompt = 'normal';  // 友だち追加オプション表示
+        
+        const authUrl = 'https://access.line.me/oauth2/v2.1/authorize?' +
+          'response_type=code&' +
+          'client_id=' + channelId + '&' +
+          'redirect_uri=' + encodeURIComponent(redirectUri) + '&' +
+          'state=' + state + '&' +
+          'scope=' + scope + '&' +
+          'bot_prompt=' + botPrompt;
+        
+        console.log('Redirecting to LINE login:', authUrl);
+        
+        // すぐにリダイレクト
+        setTimeout(() => {
+            window.location.href = authUrl;
+        }, 1000);
     </script>
 </body>
 </html>

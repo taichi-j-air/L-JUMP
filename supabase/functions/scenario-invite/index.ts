@@ -41,7 +41,7 @@ serve(async (req) => {
         step_scenarios!inner (
           user_id,
           profiles!inner (
-            liff_id
+            line_login_channel_id
           )
         )
       `)
@@ -56,10 +56,10 @@ serve(async (req) => {
       );
     }
 
-    const liffId = inviteData.step_scenarios?.profiles?.liff_id;
-    if (!liffId) {
+    const channelId = inviteData.step_scenarios?.profiles?.line_login_channel_id;
+    if (!channelId) {
       return new Response(
-        JSON.stringify({ error: "LIFF ID not configured" }),
+        JSON.stringify({ error: "LINE Login Channel ID not configured" }),
         { status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" } },
       );
     }
@@ -81,7 +81,7 @@ serve(async (req) => {
 
     /* ---------- ⑤ リダイレクト URL ---------- */
     const redirectUrl = isMobile
-      ? `https://rtjxurmuaawyzjcdkqxt.supabase.co/functions/v1/liff-handler?code=${inviteCode}&liffId=${liffId}` // LiffHandler Edge Functionに直接
+      ? `https://rtjxurmuaawyzjcdkqxt.supabase.co/functions/v1/liff-handler?code=${inviteCode}&liffId=${channelId}` // LINE Login Handlerに直接
       : `${frontendOrigin}/invite/${inviteCode}`;           // PC は QR ページ
 
     return new Response(null, {
