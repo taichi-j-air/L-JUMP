@@ -120,7 +120,7 @@ serve(async (req) => {
 
     console.log('LINE Loginリダイレクト:', {
       redirectUri,
-      channelId: profileData.line_login_channel_id.substring(0, 10),
+      channelId: profileData.line_login_channel_id.substring(0, 10) + '...',
       state: inviteCode
     })
 

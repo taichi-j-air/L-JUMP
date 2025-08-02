@@ -18,7 +18,11 @@ serve(async (req) => {
     const state = url.searchParams.get('state')
     const error = url.searchParams.get('error')
     
-    console.log('Received params:', { code: code?.substring(0, 10), state, error })
+    console.log('Received params:', { 
+      code: code?.substring(0, 10) + '...', 
+      state, 
+      error 
+    })
 
     if (error) {
       console.error('LINE認証エラー:', error)
@@ -41,32 +45,17 @@ serve(async (req) => {
       })
     }
 
-    const supabaseUrl = Deno.env.get('SUPABASE_URL')
-    const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')
-    
-    if (!supabaseUrl || !supabaseKey) {
-      console.error('Missing environment variables')
-      return new Response(null, {
-        status: 302,
-        headers: { 
-          ...corsHeaders,
-          'Location': 'https://74048ab5-8d5a-425a-ab29-bd5cc50dc2fe.lovableproject.com/?error=config_error'
-        }
-      })
-    }
+    const supabaseUrl = Deno.env.get('SUPABASE_URL')!
+    const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
     const supabase = createClient(supabaseUrl, supabaseKey)
 
-    // O3修正: stateから招待コードを取得してuser_idを特定
+    // stateから招待コードを取得してuser_idを特定
     let scenarioUserId = null
     if (state) {
+      // O4修正: .select()の引数を正しい文字列形式に
       const { data: inviteData } = await supabase
         .from('scenario_invite_codes')
-        .select(`
-          scenario_id,
-          step_scenarios!inner (
-            user_id
-          )
-        `)
+        .select('scenario_id, step_scenarios!inner(user_id)')
         .eq('invite_code', state)
         .eq('is_active', true)
         .single()
@@ -75,7 +64,7 @@ serve(async (req) => {
       console.log('Scenario user_id from invite:', scenarioUserId)
     }
 
-    // O3修正: 特定のuser_idのLINE設定を取得
+    // 特定のuser_idのLINE設定を取得
     let lineSettings = null
     if (scenarioUserId) {
       const { data: settings } = await supabase
@@ -95,7 +84,6 @@ serve(async (req) => {
         .not('line_login_channel_secret', 'is', null)
         .limit(1)
         .single()
-      
       lineSettings = fallbackSettings
     }
 
@@ -109,9 +97,22 @@ serve(async (req) => {
       })
     }
 
-    // O3修正: redirect_uriを環境変数から厳密に取得
+    // O4修正: redirect_uriの定義をテンプレートリテラルに
     const redirectUri = Deno.env.get('LINE_LOGIN_REDIRECT_URI') || 
                         `${supabaseUrl}/functions/v1/login-callback`
+
+    // O3+O4修正: LINE設定の詳細確認ログ
+    console.log('=== LINE設定詳細確認 ===')
+    console.log('Channel ID:', lineSettings?.line_login_channel_id?.substring(0, 10) + '...')
+    console.log('Channel Secret存在:', !!lineSettings?.line_login_channel_secret)
+    console.log('Channel Secret長さ:', lineSettings?.line_login_channel_secret?.length)
+    console.log('User ID:', lineSettings?.user_id)
+    console.log('redirect_uri:', redirectUri)
+    console.log('Environment vars:', {
+      hasSupabaseUrl: !!Deno.env.get('SUPABASE_URL'),
+      hasServiceRole: !!Deno.env.get('SUPABASE_SERVICE_ROLE_KEY'),
+      hasRedirectUri: !!Deno.env.get('LINE_LOGIN_REDIRECT_URI')
+    })
 
     const tokenParams = {
       grant_type: 'authorization_code',
@@ -123,7 +124,7 @@ serve(async (req) => {
     
     console.log('Token request:', {
       redirect_uri: redirectUri,
-      client_id: lineSettings.line_login_channel_id.substring(0, 10)
+      client_id: lineSettings.line_login_channel_id?.substring(0, 10) + '...'
     })
 
     const tokenResponse = await fetch('https://api.line.me/oauth2/v2.1/token', {
@@ -134,19 +135,36 @@ serve(async (req) => {
       body: new URLSearchParams(tokenParams),
     })
 
+    // O3修正: トークン取得エラーの詳細取得
     if (!tokenResponse.ok) {
       const errorText = await tokenResponse.text()
-      console.error('Token取得エラー:', errorText)
+      let errorDetails = 'token_failed'
+      
+      try {
+        const errorJson = JSON.parse(errorText)
+        errorDetails = errorJson.error_description || errorJson.error || 'token_failed'
+        console.error('Token取得エラー詳細:', {
+          status: tokenResponse.status,
+          error: errorJson.error,
+          error_description: errorJson.error_description,
+          fullResponse: errorText
+        })
+      } catch {
+        console.error('Token取得エラー:', errorText)
+      }
+      
       return new Response(null, {
         status: 302,
         headers: { 
           ...corsHeaders,
-          'Location': 'https://74048ab5-8d5a-425a-ab29-bd5cc50dc2fe.lovableproject.com/?error=token_failed'
+          'Location': `https://74048ab5-8d5a-425a-ab29-bd5cc50dc2fe.lovableproject.com/?error=${encodeURIComponent(errorDetails)}`
         }
       })
     }
 
     const tokenData = await tokenResponse.json()
+    
+    // O4修正: Authorizationヘッダーをテンプレートリテラルに
     const profileResponse = await fetch('https://api.line.me/v2/profile', {
       headers: {
         'Authorization': `Bearer ${tokenData.access_token}`,
@@ -154,6 +172,8 @@ serve(async (req) => {
     })
 
     if (!profileResponse.ok) {
+      const profileErrorText = await profileResponse.text()
+      console.error('Profile取得エラー:', profileErrorText)
       return new Response(null, {
         status: 302,
         headers: { 
@@ -201,6 +221,7 @@ serve(async (req) => {
         successUrl.searchParams.set('scenario_registered', 'true')
         successUrl.searchParams.set('user_name', profile.displayName)
       } else {
+        console.error('シナリオ登録失敗:', registrationError)
         successUrl.searchParams.set('line_login', 'error')
         successUrl.searchParams.set('error', 'scenario_failed')
       }
