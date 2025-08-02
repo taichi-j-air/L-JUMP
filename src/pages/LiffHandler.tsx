@@ -13,11 +13,20 @@ export default function LiffHandler() {
 
   useEffect(() => {
     (async () => {
-      if (!code) return;
+      console.log("=== LiffHandler START ===");
+      console.log("Current URL:", window.location.href);
+      console.log("Code from URL:", code);
+      
+      if (!code) {
+        console.error("No code parameter found");
+        return;
+      }
 
       try {
+        console.log("Fetching channel info from database...");
+        
         // Channel IDを取得
-        const { data } = await supabase
+        const { data, error } = await supabase
           .from("scenario_invite_codes")
           .select(`
             step_scenarios!inner (
@@ -31,12 +40,21 @@ export default function LiffHandler() {
           .eq("is_active", true)
           .single();
 
+        console.log("Database query result:", { data, error });
+
         const liffId = data?.step_scenarios?.profiles?.liff_id;
         const fetchedChannelId = data?.step_scenarios?.profiles?.line_login_channel_id;
         
-        if (!liffId || !fetchedChannelId) return;
+        console.log("Extracted IDs:", { liffId, fetchedChannelId });
+        
+        if (!liffId || !fetchedChannelId) {
+          console.error("Missing LIFF ID or Channel ID");
+          return;
+        }
         setChannelId(fetchedChannelId);
 
+        console.log("Loading LIFF SDK...");
+        
         // LIFF SDK ロード
         if (!window.liff) {
           await new Promise((ok) => {
@@ -47,7 +65,9 @@ export default function LiffHandler() {
           });
         }
 
+        console.log("Initializing LIFF...");
         await window.liff.init({ liffId });
+        console.log("LIFF initialized successfully");
 
         // LIFF内でLINEログイン認証（友だち追加オプション付き）を実行
         const redirectUri = "https://rtjxurmuaawyzjcdkqxt.supabase.co/functions/v1/login-callback";
@@ -63,13 +83,16 @@ export default function LiffHandler() {
           `scope=${scope}&` +
           `bot_prompt=${botPrompt}`;
 
+        console.log("Redirecting to LINE auth:", authUrl);
+        
         // LINEログイン認証画面にリダイレクト
         window.location.href = authUrl;
       } catch (error) {
-        console.error("LIFF Handler Error:", error);
+        console.error("=== LIFF Handler ERROR ===");
+        console.error("Error:", error);
       }
     })();
-  }, []);
+  }, [code]);
 
   return (
     <div style={{ display: "grid", placeItems: "center", height: "100vh" }}>
