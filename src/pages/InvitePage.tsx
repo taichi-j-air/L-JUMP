@@ -47,7 +47,8 @@ export default function InvitePage() {
 
   const loadScenarioData = async (deviceIsMobile) => {
     try {
-      console.log('Loading scenario data for invite code:', inviteCode)
+      console.log('=== Loading scenario data for invite code:', inviteCode)
+      console.log('=== Device is mobile:', deviceIsMobile)
       
       // Step 1: 招待コードの存在確認
       const { data: inviteData, error: inviteError } = await supabase

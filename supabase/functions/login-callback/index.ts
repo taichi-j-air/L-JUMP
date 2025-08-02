@@ -226,8 +226,9 @@ serve(async (req) => {
 
     let redirectUrl = new URL(frontendUrl)
     
-    if (state) {
-      // 修正: stateパラメータのデコード処理
+    
+    if (state && state !== 'login') {
+      // 修正: stateパラメータのデコード処理（"login"以外の場合のみ）
       const decodedState = decodeURIComponent(state)
       console.log('招待コードでシナリオ登録開始:', decodedState)
       
@@ -255,7 +256,7 @@ serve(async (req) => {
         console.error('シナリオ登録失敗:', registrationResult)
         redirectUrl.searchParams.set('line_login', 'error')
         redirectUrl.searchParams.set('error_type', 'registration_failed')
-        redirectUrl.searchParams.set('error_details', registrationResult?.error || 'unknown_error')
+        redirectUrl.searchParams.set('error_details', registrationResult?.error || 'Invalid invite code')
       }
     } else {
       // 通常のLINEログイン（招待コードなし）
