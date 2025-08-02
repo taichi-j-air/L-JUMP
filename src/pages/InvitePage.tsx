@@ -69,8 +69,16 @@ export default function InvitePage() {
     try {
       console.log('=== Loading scenario data for invite code:', inviteCode)
       console.log('=== Device is mobile:', deviceIsMobile)
+      console.log('=== Current user session:', await supabase.auth.getSession())
       
-      // Step 1: 招待コードの存在確認
+      // Step 1: まずすべての招待コードを確認（デバッグ用）
+      const { data: allInvites, error: allInvitesError } = await supabase
+        .from('scenario_invite_codes')
+        .select('*')
+      
+      console.log('=== All invite codes (debug):', { allInvites, allInvitesError })
+      
+      // Step 2: 特定の招待コードの存在確認
       const { data: inviteData, error: inviteError } = await supabase
         .from('scenario_invite_codes')
         .select('*')
@@ -78,10 +86,21 @@ export default function InvitePage() {
         .eq('is_active', true)
         .single()
 
-      console.log('Invite data result:', { inviteData, inviteError })
+      console.log('=== Specific invite data result:', { inviteData, inviteError })
+      console.log('=== Query details:', { 
+        searchCode: inviteCode, 
+        codeType: typeof inviteCode,
+        codeLength: inviteCode?.length 
+      })
 
       if (inviteError || !inviteData) {
-        console.error('Invite code not found:', inviteError)
+        console.error('=== Invite code not found:', inviteError)
+        console.error('=== Error details:', {
+          code: inviteError?.code,
+          message: inviteError?.message,
+          details: inviteError?.details,
+          hint: inviteError?.hint
+        })
         throw new Error('無効な招待コードです')
       }
 
