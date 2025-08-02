@@ -116,8 +116,9 @@ serve(async (req) => {
     loginUrl.searchParams.set('redirect_uri', redirectUri)
     loginUrl.searchParams.set('state', inviteCode)
     loginUrl.searchParams.set('scope', 'profile openid')
-    loginUrl.searchParams.set('bot_prompt', 'normal')
+    loginUrl.searchParams.set('bot_prompt', 'aggressive')
 
+    console.log('=== 友だち追加設定 ===', loginUrl.toString())
     console.log('LINE Loginリダイレクト:', {
       redirectUri,
       channelId: profileData.line_login_channel_id.substring(0, 10) + '...',
