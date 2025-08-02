@@ -17,124 +17,86 @@ serve(async (req) => {
 
     console.log('=== SCENARIO INVITE START ===')
     console.log('招待コード:', inviteCode)
-    console.log('User-Agent:', req.headers.get('user-agent')?.substring(0, 100))
 
     if (!inviteCode) {
-      return new Response('Invite code not found', { 
-        status: 400,
-        headers: { ...corsHeaders, 'Content-Type': 'text/plain' }
-      })
+      return new Response('Invite code not found', { status: 400 })
     }
 
-    const supabaseUrl = Deno.env.get('SUPABASE_URL')
-    const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')
-    
-    if (!supabaseUrl || !supabaseKey) {
-      console.error('Missing environment variables')
-      return new Response('Configuration error', { 
-        status: 500,
-        headers: { ...corsHeaders, 'Content-Type': 'text/plain' }
-      })
-    }
+    const supabaseUrl = Deno.env.get('SUPABASE_URL')!
+    const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
     const supabase = createClient(supabaseUrl, supabaseKey)
 
-    // Step 1: 招待コード検証
-    const { data: inviteData, error: inviteError } = await supabase
+    // 招待コード検証とプロファイル取得
+    const { data: inviteData } = await supabase
       .from('scenario_invite_codes')
-      .select('*')
+      .select(`
+        scenario_id,
+        step_scenarios!inner (
+          user_id,
+          profiles!inner (
+            add_friend_url,
+            line_login_channel_id
+          )
+        )
+      `)
       .eq('invite_code', inviteCode)
       .eq('is_active', true)
       .single()
 
-    if (inviteError || !inviteData) {
-      console.error('招待コード検索エラー:', inviteError)
-      return new Response('Invalid invite code', { 
-        status: 404,
-        headers: { ...corsHeaders, 'Content-Type': 'text/plain' }
-      })
+    if (!inviteData) {
+      return new Response('Invalid invite code', { status: 404 })
     }
 
-    // Step 2: シナリオのuser_id取得
-    const { data: scenarioData, error: scenarioError } = await supabase
-      .from('step_scenarios')
-      .select('user_id')
-      .eq('id', inviteData.scenario_id)
-      .single()
-
-    if (scenarioError || !scenarioData) {
-      return new Response('Invalid scenario', { 
-        status: 404,
-        headers: { ...corsHeaders, 'Content-Type': 'text/plain' }
-      })
-    }
-
-    // Step 3: そのユーザーのLINE設定取得（add_friend_url追加）
-    const { data: profileData, error: profileError } = await supabase
-      .from('profiles')
-      .select('line_login_channel_id, line_api_status, add_friend_url, user_id')
-      .eq('user_id', scenarioData.user_id)
-      .single()
-
-    if (profileError || !profileData) {
-      console.error('プロファイル検索エラー:', profileError)
-      return new Response('Bot configuration not found', { 
-        status: 404,
-        headers: { ...corsHeaders, 'Content-Type': 'text/plain' }
-      })
-    }
-
-    if (!profileData.line_login_channel_id || !['active', 'configured'].includes(profileData.line_api_status)) {
-      return new Response('Bot is currently unavailable', { 
-        status: 503,
-        headers: { ...corsHeaders, 'Content-Type': 'text/plain' }
-      })
-    }
-
-    // Step 4: クリックログ記録（デバイス判定付き）
+    const profileData = inviteData.step_scenarios.profiles
+    
+    // クリックログ記録
     const userAgent = req.headers.get('user-agent') || ''
     const isMobile = /mobile|android|iphone|ipad|ipod/i.test(userAgent)
     
-    try {
-      await supabase.from('invite_clicks').insert({
-        invite_code: inviteCode,
-        ip: req.headers.get('x-forwarded-for') || 'unknown',
-        user_agent: userAgent,
-        referer: req.headers.get('referer') || null,
-        device_type: isMobile ? 'mobile' : 'desktop'
-      })
-      console.log('クリックログ記録成功')
-    } catch (clickError) {
-      console.warn('クリックログ記録失敗（処理続行）:', clickError)
+    await supabase.from('invite_clicks').insert({
+      invite_code: inviteCode,
+      ip: req.headers.get('x-forwarded-for') || 'unknown',
+      user_agent: userAgent,
+      device_type: isMobile ? 'mobile' : 'desktop'
+    })
+
+    // 重要：LINEアプリで直接開くURLに修正
+    let redirectUrl
+
+    if (profileData.add_friend_url) {
+      // lin.ee URL方式（LINEアプリが直接起動）
+      redirectUrl = `${profileData.add_friend_url}?inv=${inviteCode}`
+      console.log('[scenario-invite] LINEアプリ直起動 (lin.ee):', redirectUrl)
+    } else {
+      // LINEログイン方式だがアプリ起動を強制
+      const redirectUri = `${supabaseUrl}/functions/v1/login-callback`
+      const loginUrl = new URL('https://access.line.me/oauth2/v2.1/authorize')
+      
+      loginUrl.searchParams.set('response_type', 'code')
+      loginUrl.searchParams.set('client_id', profileData.line_login_channel_id)
+      loginUrl.searchParams.set('redirect_uri', redirectUri)
+      loginUrl.searchParams.set('state', inviteCode)
+      loginUrl.searchParams.set('scope', 'profile openid')
+      loginUrl.searchParams.set('bot_prompt', 'aggressive')
+      
+      // 重要：LINEアプリ強制起動パラメータ
+      if (isMobile) {
+        loginUrl.searchParams.set('initial_amr_display', 'lineapp')
+        loginUrl.searchParams.set('ui_locales', 'ja')
+      }
+      
+      redirectUrl = loginUrl.toString()
+      console.log('[scenario-invite] LINEアプリ強制起動 (OAuth):', redirectUrl)
     }
-
-    // Step 5: LINEログインOAuthフローにリダイレクト
-    if (!profileData.line_login_channel_id) {
-      return new Response('LINE Login Channel not configured', { 
-        status: 503,
-        headers: { ...corsHeaders, 'Content-Type': 'text/plain' }
-      })
-    }
-
-    // LINEログインのOAuth認証URLを構築
-    const redirectUri = 'https://rtjxurmuaawyzjcdkqxt.supabase.co/functions/v1/login-callback'
-    const loginUrl = `https://access.line.me/oauth2/v2.1/authorize?response_type=code&client_id=${profileData.line_login_channel_id}&redirect_uri=${encodeURIComponent(redirectUri)}&state=${inviteCode}&scope=profile%20openid`
-
-    console.log('[scenario-invite] LINEログイン認証開始 →', loginUrl)
 
     return new Response(null, {
       status: 302,
-      headers: { ...corsHeaders, Location: loginUrl }
+      headers: { ...corsHeaders, 'Location': redirectUrl }
     })
 
   } catch (error) {
-    console.error('=== CRITICAL ERROR ===')
-    console.error('Error:', error.message)
-    console.error('Stack:', error.stack)
-    
-    return new Response(JSON.stringify({ 
-      error: 'Server error', 
-      details: error.message 
-    }), { 
+    console.error('Error:', error)
+    return new Response(JSON.stringify({ error: error.message }), { 
       status: 500,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' }
     })
