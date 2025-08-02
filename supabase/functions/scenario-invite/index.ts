@@ -57,12 +57,12 @@ serve(async (req) => {
       // エラーでも処理を続行
     }
 
-    // 招待コードを検索
+    // 招待コードを検索（JOINを明示的に記述）
     const { data: inviteData, error: inviteError } = await supabase
       .from('scenario_invite_codes')
       .select(`
         *,
-        step_scenarios!scenario_invite_codes_scenario_id_fkey (
+        step_scenarios (
           name,
           user_id,
           profiles!step_scenarios_user_id_fkey (
