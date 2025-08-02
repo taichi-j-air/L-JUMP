@@ -78,20 +78,28 @@ export default function InvitePage() {
       
       console.log('=== All invite codes (debug):', { allInvites, allInvitesError })
       
-      // Step 2: 特定の招待コードの存在確認
+      // Step 2: 招待コードから必要なデータを一括取得（JOINを使用）
       const { data: inviteData, error: inviteError } = await supabase
         .from('scenario_invite_codes')
-        .select('*')
+        .select(`
+          *,
+          step_scenarios (
+            id,
+            name,
+            description,
+            user_id,
+            profiles (
+              display_name,
+              line_login_channel_id,
+              line_channel_id
+            )
+          )
+        `)
         .eq('invite_code', inviteCode)
         .eq('is_active', true)
         .single()
 
-      console.log('=== Specific invite data result:', { inviteData, inviteError })
-      console.log('=== Query details:', { 
-        searchCode: inviteCode, 
-        codeType: typeof inviteCode,
-        codeLength: inviteCode?.length 
-      })
+      console.log('=== Combined invite and scenario data result:', { inviteData, inviteError })
 
       if (inviteError || !inviteData) {
         console.error('=== Invite code not found:', inviteError)
@@ -104,48 +112,9 @@ export default function InvitePage() {
         throw new Error('無効な招待コードです')
       }
 
-      // Step 2: シナリオ情報取得
-      const { data: scenarioData, error: scenarioError } = await supabase
-        .from('step_scenarios')
-        .select('*')
-        .eq('id', inviteData.scenario_id)
-        .single()
-
-      console.log('Scenario data result:', { scenarioData, scenarioError })
-
-      if (scenarioError || !scenarioData) {
-        console.error('Scenario not found:', scenarioError)
-        throw new Error('シナリオが見つかりません')
-      }
-
-      // Step 3: プロファイル情報取得
-      const { data: profileData, error: profileError } = await supabase
-        .from('profiles')
-        .select('display_name, line_login_channel_id, line_channel_id')
-        .eq('user_id', scenarioData.user_id)
-        .single()
-
-      console.log('Profile data result:', { profileData, profileError })
-
-      if (profileError || !profileData) {
-        console.error('Profile not found:', profileError)
-        // プロファイルがなくても基本機能は動作させる
-      }
-
-      // 最終的なデータ構造を構築
-      const finalData = {
-        ...inviteData,
-        step_scenarios: {
-          ...scenarioData,
-          profiles: profileData || {
-            display_name: 'LINE公式アカウント',
-            line_login_channel_id: null
-          }
-        }
-      }
-
-      console.log('Final scenario data:', finalData)
-      setScenarioData(finalData)
+      // データ構造の確認
+      console.log('Final scenario data:', inviteData)
+      setScenarioData(inviteData)
       
       // ページビュー記録（統計用）
       await recordPageView(deviceIsMobile)
