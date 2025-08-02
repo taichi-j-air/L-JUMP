@@ -67,7 +67,14 @@ export default function InvitePage() {
       // シナリオ情報取得
       const { data: scenarioCheck, error: scenarioCheckError } = await supabase
         .from('step_scenarios')
-        .select('*, profiles!inner(*)')
+        .select(`
+          *,
+          profiles!inner (
+            display_name,
+            line_login_channel_id,
+            line_channel_id
+          )
+        `)
         .eq('id', inviteCheck.scenario_id)
         .single()
 
