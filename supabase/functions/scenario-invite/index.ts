@@ -81,7 +81,7 @@ serve(async (req) => {
 
     /* ---------- ⑤ リダイレクト URL ---------- */
     const redirectUrl = isMobile
-      ? `https://liff.line.me/${liffId}?code=${inviteCode}` // LINE アプリ直起動
+      ? `${frontendOrigin}/liff-handler?code=${inviteCode}&liffId=${liffId}` // LiffHandlerページに必要な情報を渡す
       : `${frontendOrigin}/invite/${inviteCode}`;           // PC は QR ページ
 
     return new Response(null, {
