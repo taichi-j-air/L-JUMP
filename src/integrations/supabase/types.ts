@@ -164,6 +164,7 @@ export type Database = {
           line_channel_access_token: string | null
           line_channel_id: string | null
           line_channel_secret: string | null
+          line_user_id: string | null
           monthly_message_limit: number | null
           monthly_message_used: number | null
           quota_updated_at: string | null
@@ -187,6 +188,7 @@ export type Database = {
           line_channel_access_token?: string | null
           line_channel_id?: string | null
           line_channel_secret?: string | null
+          line_user_id?: string | null
           monthly_message_limit?: number | null
           monthly_message_used?: number | null
           quota_updated_at?: string | null
@@ -210,6 +212,7 @@ export type Database = {
           line_channel_access_token?: string | null
           line_channel_id?: string | null
           line_channel_secret?: string | null
+          line_user_id?: string | null
           monthly_message_limit?: number | null
           monthly_message_used?: number | null
           quota_updated_at?: string | null
