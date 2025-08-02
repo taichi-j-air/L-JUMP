@@ -47,18 +47,20 @@ export default function LineLoginSettings() {
     try {
       const { data: profile } = await supabase
         .from('profiles')
-        .select('line_channel_id, line_channel_secret')
+        .select('line_login_channel_id, line_login_channel_secret, line_channel_id, line_channel_secret')
         .eq('user_id', userId)
         .single()
 
       if (profile) {
         const baseUrl = window.location.origin
         const callbackUrl = `https://rtjxurmuaawyzjcdkqxt.supabase.co/functions/v1/login-callback`
-        const loginUrl = generateLoginUrl(profile.line_channel_id)
+        const channelId = profile.line_login_channel_id || profile.line_channel_id || ''
+        const channelSecret = profile.line_login_channel_secret || profile.line_channel_secret || ''
+        const loginUrl = generateLoginUrl(channelId)
         
         setSettings({
-          channelId: profile.line_channel_id || '',
-          channelSecret: profile.line_channel_secret || '',
+          channelId,
+          channelSecret,
           callbackUrl,
           loginUrl
         })
@@ -90,8 +92,10 @@ export default function LineLoginSettings() {
       const { error } = await supabase
         .from('profiles')
         .update({
-          line_channel_id: settings.channelId,
-          line_channel_secret: settings.channelSecret,
+          line_login_channel_id: settings.channelId,
+          line_login_channel_secret: settings.channelSecret,
+          line_channel_id: settings.channelId, // 既存の互換性のため
+          line_channel_secret: settings.channelSecret, // 既存の互換性のため
           updated_at: new Date().toISOString()
         })
         .eq('user_id', user.id)
