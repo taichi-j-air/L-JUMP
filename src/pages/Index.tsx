@@ -14,15 +14,44 @@ const Index = () => {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
 
-  // デバッグメッセージを処理
+  // デバッグメッセージとLINEログイン成功を処理
   const debugType = searchParams.get('debug');
   const debugCode = searchParams.get('code');
   const debugState = searchParams.get('state');
   const debugError = searchParams.get('error');
   const debugMessage = searchParams.get('message');
   const debugUrl = searchParams.get('url');
+  
+  // LINEログイン成功の処理
+  const lineLogin = searchParams.get('line_login');
+  const scenarioRegistered = searchParams.get('scenario_registered');
+  const userName = searchParams.get('user_name');
 
   const getDebugMessage = () => {
+    // LINEログイン成功の場合
+    if (lineLogin === 'success') {
+      return {
+        type: 'success' as const,
+        icon: CheckCircle,
+        title: 'LINEログイン成功',
+        message: scenarioRegistered === 'true' 
+          ? `${userName ? decodeURIComponent(userName) : 'ユーザー'}さんがシナリオに登録されました！ステップ配信が開始されます。`
+          : `${userName ? decodeURIComponent(userName) : 'ユーザー'}さんのLINEログインが完了しました。`
+      };
+    }
+    
+    // LINEログインエラーの場合
+    if (lineLogin === 'error') {
+      const errorMsg = searchParams.get('error');
+      return {
+        type: 'error' as const,
+        icon: AlertTriangle,
+        title: 'LINEログインエラー',
+        message: errorMsg ? `エラー: ${errorMsg}` : 'LINEログイン中にエラーが発生しました。'
+      };
+    }
+    
+    // 既存のデバッグメッセージ処理
     switch (debugType) {
       case 'line_success':
         return {
@@ -93,6 +122,59 @@ const Index = () => {
         <div className="text-center">
           <p className="text-xl text-muted-foreground">読み込み中...</p>
         </div>
+      </div>
+    );
+  }
+
+  // LINEログイン成功の場合は、認証なしでも特別な画面を表示
+  if (!user && lineLogin === 'success') {
+    return (
+      <div className="min-h-screen bg-background">
+        <header className="border-b">
+          <div className="container mx-auto px-4 py-4">
+            <h1 className="text-2xl font-bold">FlexMaster</h1>
+          </div>
+        </header>
+        
+        <main className="container mx-auto px-4 py-8">
+          {debugInfo && (
+            <Alert className={`mb-6 border-green-500 bg-green-50`}>
+              <CheckCircle className="h-4 w-4 text-green-600" />
+              <AlertDescription>
+                <strong>{debugInfo.title}</strong><br />
+                {debugInfo.message}
+              </AlertDescription>
+            </Alert>
+          )}
+          
+          <div className="text-center">
+            <Card className="w-full max-w-md mx-auto">
+              <CardHeader>
+                <CardTitle className="text-2xl font-bold text-green-600">登録完了！</CardTitle>
+                <CardDescription className="text-lg">
+                  LINEでのシナリオ登録が完了しました
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="text-center">
+                  <CheckCircle className="h-16 w-16 text-green-600 mx-auto mb-4" />
+                  <p className="text-muted-foreground">
+                    {userName ? decodeURIComponent(userName) : 'あなた'}さん、ありがとうございます！<br />
+                    シナリオに登録されました。<br />
+                    LINEでメッセージの配信を開始します。
+                  </p>
+                </div>
+                <Button 
+                  onClick={() => window.close()} 
+                  className="w-full" 
+                  size="lg"
+                >
+                  このページを閉じる
+                </Button>
+              </CardContent>
+            </Card>
+          </div>
+        </main>
       </div>
     );
   }
