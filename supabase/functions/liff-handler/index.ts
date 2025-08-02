@@ -289,7 +289,8 @@ function generateLiffPage(liffId: string, code: string) {
                     console.log('User not logged in, redirecting to login');
                     liff.login({
                         redirectUri: 'https://rtjxurmuaawyzjcdkqxt.supabase.co/functions/v1/login-callback',
-                        state: code
+                        state: code,
+                        botPrompt: 'normal'  // 友だち追加オプションを表示
                     });
                 } else {
                     updateMessage('認証完了 - 友だち追加処理中...');

@@ -18,6 +18,9 @@ serve(async (req) => {
     const code = url.searchParams.get("code");
     const state = url.searchParams.get("state");     // ← 招待コードをそのまま入れる
     const error = url.searchParams.get("error");
+    const friendshipStatusChanged = url.searchParams.get("friendship_status_changed");
+
+    console.log("Callback parameters:", { code: !!code, state, error, friendshipStatusChanged });
 
     if (error) throw new Error("LINE error: " + error);
     if (!code) throw new Error("No auth code");
