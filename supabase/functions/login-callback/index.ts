@@ -167,10 +167,40 @@ serve(async (req) => {
 
     console.log('Friend data saved successfully')
 
-    // 成功ページにリダイレクト
-    const redirectUrl = new URL(`https://74048ab5-8d5a-425a-ab29-bd5cc50dc2fe.lovableproject.com/`)
-    redirectUrl.searchParams.set('line_login', 'success')
-    redirectUrl.searchParams.set('user_name', profile.displayName)
+    // stateパラメータから招待コードを取得してシナリオ登録
+    let redirectUrl = new URL(`https://74048ab5-8d5a-425a-ab29-bd5cc50dc2fe.lovableproject.com/`)
+    
+    if (state) {
+      console.log('招待コードでシナリオ登録開始:', state)
+      
+      // register_friend_to_scenario関数を呼び出し
+      const { data: registrationResult, error: registrationError } = await supabase
+        .rpc('register_friend_to_scenario', {
+          p_line_user_id: profile.userId,
+          p_invite_code: state,
+          p_display_name: profile.displayName,
+          p_picture_url: profile.pictureUrl || null
+        })
+      
+      if (registrationError) {
+        console.error('シナリオ登録エラー:', registrationError)
+        redirectUrl.searchParams.set('line_login', 'error')
+        redirectUrl.searchParams.set('error', 'scenario_registration_failed')
+      } else if (registrationResult?.success) {
+        console.log('シナリオ登録成功:', registrationResult)
+        redirectUrl.searchParams.set('line_login', 'success')
+        redirectUrl.searchParams.set('scenario_registered', 'true')
+        redirectUrl.searchParams.set('user_name', profile.displayName)
+      } else {
+        console.error('シナリオ登録失敗:', registrationResult)
+        redirectUrl.searchParams.set('line_login', 'error')
+        redirectUrl.searchParams.set('error', registrationResult?.error || 'unknown_error')
+      }
+    } else {
+      // 通常のLINEログイン（招待コードなし）
+      redirectUrl.searchParams.set('line_login', 'success')
+      redirectUrl.searchParams.set('user_name', profile.displayName)
+    }
 
     console.log('Redirecting to success page:', redirectUrl.toString())
 

@@ -111,15 +111,18 @@ serve(async (req) => {
       })
     }
 
-    // 友達追加URL生成
-    let baseUrl = profileData.add_friend_url || `https://line.me/R/ti/p/@${profileData.line_channel_id}`
+    // LINEログインURL生成（stateパラメータに招待コードを含める）
+    const baseUrl = Deno.env.get('SUPABASE_URL')!
+    const loginUrl = new URL('https://access.line.me/oauth2/v2.1/authorize')
+    loginUrl.searchParams.set('response_type', 'code')
+    loginUrl.searchParams.set('client_id', profileData.line_channel_id)
+    loginUrl.searchParams.set('redirect_uri', `${baseUrl}/functions/v1/login-callback`)
+    loginUrl.searchParams.set('state', inviteCode)
+    loginUrl.searchParams.set('scope', 'profile openid')
+    loginUrl.searchParams.set('bot_prompt', 'aggressive')
     
-    // シンプルにstateパラメータに招待コードだけを設定
-    const friendUrl = new URL(baseUrl)
-    friendUrl.searchParams.set('state', inviteCode)
-    const finalUrl = friendUrl.toString()
-
-    console.log('最終URL生成:', finalUrl)
+    const finalUrl = loginUrl.toString()
+    console.log('LINEログインURL生成:', finalUrl)
 
     // クリックログ記録（エラーが出てもスキップ）
     try {
