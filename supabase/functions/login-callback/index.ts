@@ -186,7 +186,8 @@ serve(async (req) => {
     // 成功リダイレクト
     const successUrl = new URL('https://74048ab5-8d5a-425a-ab29-bd5cc50dc2fe.lovableproject.com/')
     
-    if (state) {
+    // 招待コードがある場合のみシナリオ登録処理を実行
+    if (state && state !== 'login') {
       const { data: registrationResult, error: registrationError } = await supabase
         .rpc('register_friend_to_scenario', {
           p_line_user_id: profile.userId,
@@ -204,6 +205,7 @@ serve(async (req) => {
         successUrl.searchParams.set('error', 'scenario_failed')
       }
     } else {
+      // 通常のログインテストの場合
       successUrl.searchParams.set('line_login', 'success')
       successUrl.searchParams.set('user_name', profile.displayName)
     }
