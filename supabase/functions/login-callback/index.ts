@@ -51,11 +51,15 @@ serve(async (req) => {
     const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
     const supabase = createClient(supabaseUrl, supabaseKey)
 
-    // 招待コード+ユーザーID取得
-    const stateData = state?.split(':') || []
-    const inviteCode = stateData[0]
-    const targetUserId = stateData[1]
+    // 招待コード取得（OAuth経由またはlin.ee経由）
+    const inviteCode = 
+      url.searchParams.get('state')?.split(':')[0] ||  // OAuth経由
+      url.searchParams.get('inv')                      // lin.ee経由
+    
+    const targetUserId = url.searchParams.get('state')?.split(':')[1]
+    
     console.log('招待コード:', inviteCode, 'ターゲットユーザーID:', targetUserId)
+    console.log('パラメータ取得方法:', url.searchParams.get('state') ? 'OAuth' : 'lin.ee')
 
     // LINE設定取得（ターゲットユーザー優先）
     let lineSettings = null
