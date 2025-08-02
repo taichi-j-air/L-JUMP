@@ -123,30 +123,51 @@ serve(async (req) => {
       console.warn('⚠️ クリックログ記録失敗（処理続行）:', clickError)
     }
 
-    // Step 5: シナリオ別LINE OAuth URL生成（LINEアプリ確実起動版）
+    // Step 5: LINEアプリ直接起動版（モバイル最適化）
     const redirectUri = 'https://rtjxurmuaawyzjcdkqxt.supabase.co/functions/v1/login-callback'
     
-    const authUrl = new URL('https://access.line.me/oauth2/v2.1/authorize')
+    let finalOAuthUrl: string
     
-    // 基本OAuth設定
-    authUrl.searchParams.set('response_type', 'code')
-    authUrl.searchParams.set('client_id', profileData.line_login_channel_id)
-    authUrl.searchParams.set('redirect_uri', redirectUri)
-    authUrl.searchParams.set('state', `${inviteCode}:${scenarioData.user_id}`)  // 招待コード+ユーザーID
-    authUrl.searchParams.set('scope', 'profile openid')
-    
-    // LINEアプリ強制起動パラメータ（重要）
-    authUrl.searchParams.set('bot_prompt', 'aggressive')
-    authUrl.searchParams.set('prompt', 'consent')
-    
-    // モバイル専用：LINEアプリ確実起動
     if (isMobile) {
-      authUrl.searchParams.set('initial_amr_display', 'lineapp')
-      authUrl.searchParams.set('ui_locales', 'ja-JP')
-      authUrl.searchParams.set('nonce', Date.now().toString())  // キャッシュ回避
+      // モバイルでは確実にLINEアプリを起動
+      const lineAppUrl = new URL('line://au/q/')
+      
+      // LINEアプリ起動後にOAuth認証に移行するためのパラメータ
+      const oauthParams = new URLSearchParams({
+        response_type: 'code',
+        client_id: profileData.line_login_channel_id,
+        redirect_uri: redirectUri,
+        state: `${inviteCode}:${scenarioData.user_id}`,
+        scope: 'profile openid',
+        bot_prompt: 'aggressive',
+        prompt: 'consent',
+        initial_amr_display: 'lineapp',
+        ui_locales: 'ja-JP',
+        nonce: Date.now().toString()
+      })
+      
+      // LINEアプリ内でOAuth認証を実行
+      const oauthUrl = `https://access.line.me/oauth2/v2.1/authorize?${oauthParams.toString()}`
+      
+      // LINEアプリを起動し、OAuth認証に直接遷移
+      lineAppUrl.searchParams.set('url', encodeURIComponent(oauthUrl))
+      finalOAuthUrl = lineAppUrl.toString()
+      
+      console.log('🚀 LINEアプリ直接起動URL生成')
+      console.log('LINE App URL:', finalOAuthUrl)
+    } else {
+      // デスクトップではブラウザOAuth
+      const authUrl = new URL('https://access.line.me/oauth2/v2.1/authorize')
+      authUrl.searchParams.set('response_type', 'code')
+      authUrl.searchParams.set('client_id', profileData.line_login_channel_id)
+      authUrl.searchParams.set('redirect_uri', redirectUri)
+      authUrl.searchParams.set('state', `${inviteCode}:${scenarioData.user_id}`)
+      authUrl.searchParams.set('scope', 'profile openid')
+      authUrl.searchParams.set('bot_prompt', 'aggressive')
+      authUrl.searchParams.set('prompt', 'consent')
+      
+      finalOAuthUrl = authUrl.toString()
     }
-
-    const finalOAuthUrl = authUrl.toString()
     
     console.log('🚀 シナリオ別OAuth URL生成完了（LINEアプリ確実起動版）')
     console.log('招待コード:', inviteCode)
