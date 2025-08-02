@@ -213,40 +213,54 @@ serve(async (req) => {
     if (inviteCode && inviteCode !== 'login') {
       // 既存友だちかどうかをチェック
       if (existingFriend) {
-        // 既存友だちの場合は手動配信トリガーを実行
-        console.log('既存友だち - 手動配信トリガー実行')
+        // 既存友だちの場合：シナリオに登録してから自動配信を開始
+        console.log('既存友だち - シナリオ登録＋自動配信開始')
         
         try {
-          const triggerResponse = await fetch(
-            `${supabaseUrl}/functions/v1/trigger-scenario?line_user_id=${profile.userId}&invite_code=${inviteCode}`,
-            {
-              method: 'GET',
-              headers: {
-                'Authorization': `Bearer ${Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')}`,
-                'Content-Type': 'application/json'
-              }
+          // まずシナリオに登録
+          const { data: registrationResult, error: registrationError } = await supabase
+            .rpc('register_friend_to_scenario', {
+              p_line_user_id: profile.userId,
+              p_invite_code: inviteCode,
+              p_display_name: profile.displayName,
+              p_picture_url: profile.pictureUrl || null
+            })
+          
+          if (registrationResult?.success) {
+            // 登録成功後、即座に配信トリガーを実行
+            const triggerResponse = await supabase
+              .rpc('trigger_scenario_delivery_for_friend', {
+                p_line_user_id: profile.userId,
+                p_scenario_id: registrationResult.scenario_id
+              })
+            
+            if (triggerResponse.data?.success) {
+              successUrl.searchParams.set('line_login', 'success')
+              successUrl.searchParams.set('scenario_registered', 'true')
+              successUrl.searchParams.set('user_name', profile.displayName)
+              successUrl.searchParams.set('delivery_triggered', 'true')
+              successUrl.searchParams.set('steps_triggered', triggerResponse.data.steps_triggered.toString())
+            } else {
+              console.error('自動配信トリガー失敗:', triggerResponse.error)
+              successUrl.searchParams.set('line_login', 'success')
+              successUrl.searchParams.set('scenario_registered', 'true')
+              successUrl.searchParams.set('user_name', profile.displayName)
+              successUrl.searchParams.set('delivery_error', 'true')
             }
-          )
-          
-          const triggerResult = await triggerResponse.json()
-          
-          if (triggerResult.success) {
-            successUrl.searchParams.set('line_login', 'success')
-            successUrl.searchParams.set('scenario_registered', 'true')
-            successUrl.searchParams.set('user_name', profile.displayName)
-            successUrl.searchParams.set('delivery_triggered', 'true')
           } else {
-            console.error('手動配信トリガー失敗:', triggerResult.error)
+            console.error('既存友だちのシナリオ登録失敗:', registrationError)
             successUrl.searchParams.set('line_login', 'error')
-            successUrl.searchParams.set('error', 'delivery_trigger_failed')
+            successUrl.searchParams.set('error', 'scenario_registration_failed')
           }
-        } catch (triggerError) {
-          console.error('手動配信トリガー呼び出しエラー:', triggerError)
+        } catch (error) {
+          console.error('既存友だち処理エラー:', error)
           successUrl.searchParams.set('line_login', 'error')
-          successUrl.searchParams.set('error', 'delivery_trigger_error')
+          successUrl.searchParams.set('error', 'existing_friend_process_error')
         }
       } else {
-        // 新規友だちの場合は通常のシナリオ登録処理
+        // 新規友だちの場合：シナリオ登録のみ（配信は初回ステップが自動的にready状態になる）
+        console.log('新規友だち - シナリオ登録＋初回ステップready設定')
+        
         const { data: registrationResult, error: registrationError } = await supabase
           .rpc('register_friend_to_scenario', {
             p_line_user_id: profile.userId,
@@ -256,11 +270,29 @@ serve(async (req) => {
           })
         
         if (registrationResult?.success) {
-          successUrl.searchParams.set('line_login', 'success')
-          successUrl.searchParams.set('scenario_registered', 'true')
-          successUrl.searchParams.set('user_name', profile.displayName)
+          // 新規友だちの場合、初回ステップが自動的にready状態になるので即座に配信開始
+          const triggerResponse = await supabase
+            .rpc('trigger_scenario_delivery_for_friend', {
+              p_line_user_id: profile.userId,
+              p_scenario_id: registrationResult.scenario_id
+            })
+          
+          if (triggerResponse.data?.success) {
+            successUrl.searchParams.set('line_login', 'success')
+            successUrl.searchParams.set('scenario_registered', 'true')
+            successUrl.searchParams.set('user_name', profile.displayName)
+            successUrl.searchParams.set('delivery_triggered', 'true')
+            successUrl.searchParams.set('steps_triggered', triggerResponse.data.steps_triggered.toString())
+          } else {
+            // 登録は成功したが配信開始で問題があった場合
+            console.error('新規友だちの配信開始失敗:', triggerResponse.error)
+            successUrl.searchParams.set('line_login', 'success')
+            successUrl.searchParams.set('scenario_registered', 'true')
+            successUrl.searchParams.set('user_name', profile.displayName)
+            successUrl.searchParams.set('delivery_error', 'true')
+          }
         } else {
-          console.error('シナリオ登録失敗:', registrationError)
+          console.error('新規友だちのシナリオ登録失敗:', registrationError)
           successUrl.searchParams.set('line_login', 'error')
           successUrl.searchParams.set('error', 'scenario_failed')
         }

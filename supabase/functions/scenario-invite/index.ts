@@ -107,22 +107,23 @@ serve(async (req) => {
       console.warn('クリックログ記録失敗（処理続行）:', clickError)
     }
 
-    // Step 5: lin.ee URLを使ったLINEアプリ直起動
-    if (!profileData.add_friend_url) {
-      return new Response('LINE friend URL not configured', { 
+    // Step 5: LINEログインOAuthフローにリダイレクト
+    if (!profileData.line_login_channel_id) {
+      return new Response('LINE Login Channel not configured', { 
         status: 503,
         headers: { ...corsHeaders, 'Content-Type': 'text/plain' }
       })
     }
 
-    const addFriendUrl = profileData.add_friend_url
-    const deeplink = `${addFriendUrl}?inv=${inviteCode}`
+    // LINEログインのOAuth認証URLを構築
+    const redirectUri = 'https://rtjxurmuaawyzjcdkqxt.supabase.co/functions/v1/login-callback'
+    const loginUrl = `https://access.line.me/oauth2/v2.1/authorize?response_type=code&client_id=${profileData.line_login_channel_id}&redirect_uri=${encodeURIComponent(redirectUri)}&state=${inviteCode}&scope=profile%20openid`
 
-    console.log('[scenario-invite] LINE App Direct Launch →', deeplink)
+    console.log('[scenario-invite] LINEログイン認証開始 →', loginUrl)
 
     return new Response(null, {
       status: 302,
-      headers: { ...corsHeaders, Location: deeplink }
+      headers: { ...corsHeaders, Location: loginUrl }
     })
 
   } catch (error) {
