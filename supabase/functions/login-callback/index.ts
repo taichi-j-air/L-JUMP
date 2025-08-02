@@ -16,34 +16,58 @@ serve(async (req) => {
     const url = new URL(req.url)
     const code = url.searchParams.get('code')
     const state = url.searchParams.get('state')
+    const error = url.searchParams.get('error')
     
-    console.log('Received params:', { code: code?.substring(0, 10) + '...', state })
+    console.log('Received params:', { 
+      code: code?.substring(0, 10) + '...', 
+      state,
+      error 
+    })
+
+    // LINEログインエラーの場合
+    if (error) {
+      console.error('LINE認証エラー:', error)
+      const frontendUrl = Deno.env.get('FRONTEND_URL') || req.headers.get('referer') || 'https://lovable.dev'
+      return new Response(null, {
+        status: 302,
+        headers: { 
+          ...corsHeaders,
+          'Location': `${frontendUrl}/?line_login=error&line_error=${error}` 
+        }
+      })
+    }
     
     if (!code) {
       console.error('認証コードが見つかりません')
-      throw new Error('認証コードが見つかりません')
+      const frontendUrl = Deno.env.get('FRONTEND_URL') || req.headers.get('referer') || 'https://lovable.dev'
+      return new Response(null, {
+        status: 302,
+        headers: { 
+          ...corsHeaders,
+          'Location': `${frontendUrl}/?debug=no_code` 
+        }
+      })
     }
 
-    // Supabaseクライアントを初期化
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!
     const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
     const supabase = createClient(supabaseUrl, supabaseKey)
 
     console.log('Supabase client initialized')
 
-    // LINE設定を取得
+    // 修正: 正しいカラム名を使用
     const { data: lineSettings, error: settingsError } = await supabase
       .from('profiles')
-      .select('line_channel_id, line_channel_secret, user_id')
-      .not('line_channel_id', 'is', null)
-      .not('line_channel_secret', 'is', null)
+      .select('line_login_channel_id, line_login_channel_secret, user_id')
+      .not('line_login_channel_id', 'is', null)
+      .not('line_login_channel_secret', 'is', null)
       .limit(1)
       .single()
 
     console.log('LINE settings query result:', { 
       hasData: !!lineSettings, 
       error: settingsError?.message,
-      settingsCount: lineSettings ? 1 : 0
+      channelId: lineSettings?.line_login_channel_id
     })
 
     if (settingsError || !lineSettings) {
@@ -58,19 +82,16 @@ serve(async (req) => {
       })
     }
 
-    console.log('LINE設定を取得しました:', { 
-      channelId: lineSettings.line_channel_id,
-      hasSecret: !!lineSettings.line_channel_secret,
-      userId: lineSettings.user_id
-    })
+    // 修正: 動的なredirect_uri生成
+    const callbackUrl = Deno.env.get('LINE_LOGIN_CALLBACK_URL') || 
+                        `${supabaseUrl}/functions/v1/login-callback`
 
-    // LINEからアクセストークンを取得
     const tokenParams = {
       grant_type: 'authorization_code',
       code: code,
-      redirect_uri: `${supabaseUrl}/functions/v1/login-callback`,
-      client_id: lineSettings.line_channel_id,
-      client_secret: lineSettings.line_channel_secret,
+      redirect_uri: callbackUrl,
+      client_id: lineSettings.line_login_channel_id,
+      client_secret: lineSettings.line_login_channel_secret,
     }
     
     console.log('Requesting token with params:', {
@@ -144,33 +165,41 @@ serve(async (req) => {
     const profile = await profileResponse.json()
     console.log('Profile received:', { userId: profile.userId, displayName: profile.displayName })
 
-    // line_friendsテーブルに友だち情報を保存
+    // 修正: 重複制御を強化した友だち情報保存
     console.log('Saving friend data to database...')
-    const { error: friendError } = await supabase
+    const { data: existingFriend } = await supabase
       .from('line_friends')
-      .upsert({
-        user_id: lineSettings.user_id,
-        line_user_id: profile.userId,
-        display_name: profile.displayName,
-        picture_url: profile.pictureUrl || null,
-        updated_at: new Date().toISOString(),
-      }, {
-        onConflict: 'line_user_id,user_id'
-      })
+      .select('id')
+      .eq('line_user_id', profile.userId)
+      .eq('user_id', lineSettings.user_id)
+      .single()
 
-    if (friendError) {
-      console.error('友だち情報保存エラー:', friendError)
-      const frontendUrl = Deno.env.get('FRONTEND_URL') || req.headers.get('referer') || 'https://lovable.dev'
-      return new Response(null, {
-        status: 302,
-        headers: { 
-          ...corsHeaders,
-          'Location': `${frontendUrl}/?debug=db_save_error&error=${encodeURIComponent(friendError.message)}` 
-        }
-      })
+    if (!existingFriend) {
+      const { error: friendError } = await supabase
+        .from('line_friends')
+        .insert({
+          user_id: lineSettings.user_id,
+          line_user_id: profile.userId,
+          display_name: profile.displayName,
+          picture_url: profile.pictureUrl || null,
+        })
+        
+      if (friendError) {
+        console.error('友だち情報保存エラー:', friendError)
+        const frontendUrl = Deno.env.get('FRONTEND_URL') || req.headers.get('referer') || 'https://lovable.dev'
+        return new Response(null, {
+          status: 302,
+          headers: { 
+            ...corsHeaders,
+            'Location': `${frontendUrl}/?debug=db_save_error&error=${encodeURIComponent(friendError.message)}` 
+          }
+        })
+      } else {
+        console.log('新規友だち情報を保存しました')
+      }
+    } else {
+      console.log('既存の友だちです:', profile.userId)
     }
-
-    console.log('Friend data saved successfully')
 
     // stateパラメータから招待コードを取得してシナリオ登録
     // 動的にOriginを取得するか、環境変数を使用
