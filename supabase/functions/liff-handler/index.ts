@@ -19,15 +19,29 @@ serve(async (req) => {
     // GETリクエスト（ブラウザアクセス）の場合
     if (req.method === "GET") {
       const url = new URL(req.url);
-      const code = url.searchParams.get("code");
-      const liffIdParam = url.searchParams.get("liffId");
+      let code = url.searchParams.get("code");
+      let liffIdParam = url.searchParams.get("liffId");
       
-      console.log("GET Parameters:", { code, liffIdParam });
+      // Handle liff.state parameter (LINE redirects sometimes use this format)
+      const liffState = url.searchParams.get("liff.state");
+      if (liffState && !code) {
+        // Parse liff.state which might contain ?code=xxx
+        const stateUrl = new URL("http://dummy.com" + liffState);
+        code = stateUrl.searchParams.get("code");
+      }
+      
+      console.log("GET Parameters:", { code, liffIdParam, liffState });
       
       if (!code || !liffIdParam) {
         return new Response(
-          generateErrorPage("パラメータエラー", "必要なパラメータが不足しています"),
-          { status: 400, headers: { ...corsHeaders, "Content-Type": "text/html" } }
+          generateErrorPage("Parameter Error", "Required parameters are missing"),
+          { 
+            status: 400, 
+            headers: { 
+              ...corsHeaders, 
+              "Content-Type": "text/html; charset=utf-8" 
+            } 
+          }
         );
       }
 
@@ -36,7 +50,7 @@ serve(async (req) => {
       
       return new Response(liffPageHtml, {
         status: 200,
-        headers: { ...corsHeaders, "Content-Type": "text/html" }
+        headers: { ...corsHeaders, "Content-Type": "text/html; charset=utf-8" }
       });
     }
 
@@ -120,10 +134,10 @@ serve(async (req) => {
     console.error("LIFF handler error:", error);
     
     if (req.method === "GET") {
-      const errorPageHtml = generateErrorPage("エラー", `エラーが発生しました: ${error.message}`);
+      const errorPageHtml = generateErrorPage("Error", `An error occurred: ${error.message}`);
       return new Response(errorPageHtml, {
         status: 500,
-        headers: { ...corsHeaders, "Content-Type": "text/html" }
+        headers: { ...corsHeaders, "Content-Type": "text/html; charset=utf-8" }
       });
     }
     
