@@ -232,6 +232,7 @@ export default function InvitePage() {
   }
 
   // PC用画面（QRコード表示）
+  // O3修正: QRはscenario-invite Edge Functionを指すように変更
   const qrUrl = `https://rtjxurmuaawyzjcdkqxt.supabase.co/functions/v1/scenario-invite?code=${inviteCode}`
   
   return (
@@ -279,7 +280,7 @@ export default function InvitePage() {
                 </div>
                 
                 <p className="text-sm text-gray-600 mt-3">
-                  📷 カメラでQRコードを読み取ってください
+                  📷 LINEアプリのQRコードリーダーでスキャン
                 </p>
               </div>
 

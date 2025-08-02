@@ -17,6 +17,7 @@ serve(async (req) => {
 
     console.log('=== SCENARIO INVITE START ===')
     console.log('招待コード:', inviteCode)
+    console.log('User-Agent:', req.headers.get('user-agent')?.substring(0, 100))
 
     if (!inviteCode) {
       return new Response('Invite code not found', { 
@@ -29,7 +30,7 @@ serve(async (req) => {
     const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
     const supabase = createClient(supabaseUrl, supabaseKey)
 
-    // 招待コード検証
+    // Step 1: 招待コード検証
     const { data: inviteData, error: inviteError } = await supabase
       .from('scenario_invite_codes')
       .select('*')
@@ -45,7 +46,7 @@ serve(async (req) => {
       })
     }
 
-    // シナリオ情報取得
+    // Step 2: シナリオのuser_id取得
     const { data: scenarioData, error: scenarioError } = await supabase
       .from('step_scenarios')
       .select('user_id')
@@ -59,70 +60,80 @@ serve(async (req) => {
       })
     }
 
-    // プロファイル情報取得
+    // Step 3: そのユーザーのLINE設定取得（O3指摘：user_id指定が重要）
     const { data: profileData, error: profileError } = await supabase
       .from('profiles')
-      .select('line_login_channel_id, line_api_status')
+      .select('line_login_channel_id, line_api_status, add_friend_url, user_id')
       .eq('user_id', scenarioData.user_id)
       .single()
 
-    if (profileError || !profileData || !profileData.line_login_channel_id) {
+    if (profileError || !profileData) {
+      console.error('プロファイル検索エラー:', profileError)
       return new Response('Bot configuration not found', { 
         status: 404,
         headers: { ...corsHeaders, 'Content-Type': 'text/plain' }
       })
     }
 
-    // クリックログ記録
+    if (!profileData.line_login_channel_id || !['active', 'configured'].includes(profileData.line_api_status)) {
+      return new Response('Bot is currently unavailable', { 
+        status: 503,
+        headers: { ...corsHeaders, 'Content-Type': 'text/plain' }
+      })
+    }
+
+    // Step 4: クリックログ記録（デバイス判定付き）
+    const userAgent = req.headers.get('user-agent') || ''
+    const isMobile = /mobile|android|iphone|ipad|ipod/i.test(userAgent)
+    
     try {
       await supabase.from('invite_clicks').insert({
         invite_code: inviteCode,
         ip: req.headers.get('x-forwarded-for') || 'unknown',
-        user_agent: req.headers.get('user-agent') || 'unknown',
-        referer: req.headers.get('referer') || null
+        user_agent: userAgent,
+        referer: req.headers.get('referer') || null,
+        device_type: isMobile ? 'mobile' : 'desktop'
       })
+      console.log('クリックログ記録成功')
     } catch (clickError) {
-      console.warn('クリックログ記録失敗:', clickError)
+      console.warn('クリックログ記録失敗（処理続行）:', clickError)
     }
 
-    // デバイス判定
-    const userAgent = req.headers.get('user-agent') || ''
-    const isMobile = /mobile|android|iphone|ipad|ipod/i.test(userAgent)
+    // Step 5: LINE Login URLにリダイレクト
+    const redirectUri = Deno.env.get('LINE_LOGIN_REDIRECT_URI') || 
+                        `${supabaseUrl}/functions/v1/login-callback`
+    
+    const loginUrl = new URL('https://access.line.me/oauth2/v2.1/authorize')
+    loginUrl.searchParams.set('response_type', 'code')
+    loginUrl.searchParams.set('client_id', profileData.line_login_channel_id)
+    loginUrl.searchParams.set('redirect_uri', redirectUri)
+    loginUrl.searchParams.set('state', inviteCode)
+    loginUrl.searchParams.set('scope', 'profile openid')
+    loginUrl.searchParams.set('bot_prompt', 'normal')
 
-    console.log('デバイス判定:', { isMobile, userAgent: userAgent.substring(0, 50) })
+    console.log('LINE Loginリダイレクト:', {
+      redirectUri,
+      channelId: profileData.line_login_channel_id.substring(0, 10),
+      state: inviteCode
+    })
 
-    if (isMobile) {
-      // スマホ: 直接LINE Loginにリダイレクト
-      const callbackUrl = `${supabaseUrl}/functions/v1/login-callback`
-      const loginUrl = new URL('https://access.line.me/oauth2/v2.1/authorize')
-      
-      loginUrl.searchParams.set('response_type', 'code')
-      loginUrl.searchParams.set('client_id', profileData.line_login_channel_id)
-      loginUrl.searchParams.set('redirect_uri', callbackUrl)
-      loginUrl.searchParams.set('state', inviteCode)
-      loginUrl.searchParams.set('scope', 'profile openid')
-      loginUrl.searchParams.set('bot_prompt', 'normal')
-
-      console.log('スマホ: LINE Loginリダイレクト')
-      return new Response(null, {
-        status: 302,
-        headers: { ...corsHeaders, 'Location': loginUrl.toString() }
-      })
-    } else {
-      // PC: 独自QRページにリダイレクト
-      const frontendUrl = 'https://74048ab5-8d5a-425a-ab29-bd5cc50dc2fe.lovableproject.com'
-      const qrPageUrl = `${frontendUrl}/invite/${inviteCode}`
-
-      console.log('PC: QRページリダイレクト')
-      return new Response(null, {
-        status: 302,
-        headers: { ...corsHeaders, 'Location': qrPageUrl }
-      })
-    }
+    return new Response(null, {
+      status: 302,
+      headers: {
+        ...corsHeaders,
+        'Location': loginUrl.toString()
+      }
+    })
 
   } catch (error) {
-    console.error('Critical error:', error)
-    return new Response(JSON.stringify({ error: error.message }), { 
+    console.error('=== CRITICAL ERROR ===')
+    console.error('Error:', error.message)
+    console.error('Stack:', error.stack)
+    
+    return new Response(JSON.stringify({ 
+      error: 'Server error', 
+      details: error.message 
+    }), { 
       status: 500,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' }
     })

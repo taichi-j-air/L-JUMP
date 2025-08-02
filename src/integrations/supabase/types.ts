@@ -547,7 +547,6 @@ export type Database = {
           created_at: string | null
           friends: number | null
           invite_code: string | null
-          invite_code_id: string | null
           is_active: boolean | null
           scenario_id: string | null
           usage_count: number | null
