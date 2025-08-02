@@ -48,11 +48,12 @@ serve(async (req) => {
 
     if (settingsError || !lineSettings) {
       console.error('LINE設定エラー:', settingsError)
+      const frontendUrl = Deno.env.get('FRONTEND_URL') || req.headers.get('referer') || 'https://lovable.dev'
       return new Response(null, {
         status: 302,
         headers: { 
           ...corsHeaders,
-          'Location': `https://74048ab5-8d5a-425a-ab29-bd5cc50dc2fe.lovableproject.com/?debug=no_line_settings&error=${encodeURIComponent(settingsError?.message || 'no_data')}` 
+          'Location': `${frontendUrl}/?debug=no_line_settings&error=${encodeURIComponent(settingsError?.message || 'no_data')}` 
         }
       })
     }
@@ -91,11 +92,12 @@ serve(async (req) => {
     if (!tokenResponse.ok) {
       const errorText = await tokenResponse.text()
       console.error('LINEトークン取得エラー:', errorText)
+      const frontendUrl = Deno.env.get('FRONTEND_URL') || req.headers.get('referer') || 'https://lovable.dev'
       return new Response(null, {
         status: 302,
         headers: { 
           ...corsHeaders,
-          'Location': `https://74048ab5-8d5a-425a-ab29-bd5cc50dc2fe.lovableproject.com/?debug=token_error&status=${tokenResponse.status}&error=${encodeURIComponent(errorText)}` 
+          'Location': `${frontendUrl}/?debug=token_error&status=${tokenResponse.status}&error=${encodeURIComponent(errorText)}` 
         }
       })
     }
@@ -106,11 +108,12 @@ serve(async (req) => {
 
     if (!accessToken) {
       console.error('アクセストークンが空です')
+      const frontendUrl = Deno.env.get('FRONTEND_URL') || req.headers.get('referer') || 'https://lovable.dev'
       return new Response(null, {
         status: 302,
         headers: { 
           ...corsHeaders,
-          'Location': `https://74048ab5-8d5a-425a-ab29-bd5cc50dc2fe.lovableproject.com/?debug=empty_token` 
+          'Location': `${frontendUrl}/?debug=empty_token` 
         }
       })
     }
@@ -128,11 +131,12 @@ serve(async (req) => {
     if (!profileResponse.ok) {
       const profileErrorText = await profileResponse.text()
       console.error('LINEプロファイル取得エラー:', profileErrorText)
+      const frontendUrl = Deno.env.get('FRONTEND_URL') || req.headers.get('referer') || 'https://lovable.dev'
       return new Response(null, {
         status: 302,
         headers: { 
           ...corsHeaders,
-          'Location': `https://74048ab5-8d5a-425a-ab29-bd5cc50dc2fe.lovableproject.com/?debug=profile_error&status=${profileResponse.status}&error=${encodeURIComponent(profileErrorText)}` 
+          'Location': `${frontendUrl}/?debug=profile_error&status=${profileResponse.status}&error=${encodeURIComponent(profileErrorText)}` 
         }
       })
     }
@@ -156,11 +160,12 @@ serve(async (req) => {
 
     if (friendError) {
       console.error('友だち情報保存エラー:', friendError)
+      const frontendUrl = Deno.env.get('FRONTEND_URL') || req.headers.get('referer') || 'https://lovable.dev'
       return new Response(null, {
         status: 302,
         headers: { 
           ...corsHeaders,
-          'Location': `https://74048ab5-8d5a-425a-ab29-bd5cc50dc2fe.lovableproject.com/?debug=db_save_error&error=${encodeURIComponent(friendError.message)}` 
+          'Location': `${frontendUrl}/?debug=db_save_error&error=${encodeURIComponent(friendError.message)}` 
         }
       })
     }
@@ -168,7 +173,9 @@ serve(async (req) => {
     console.log('Friend data saved successfully')
 
     // stateパラメータから招待コードを取得してシナリオ登録
-    let redirectUrl = new URL(`https://74048ab5-8d5a-425a-ab29-bd5cc50dc2fe.lovableproject.com/`)
+    // 動的にOriginを取得するか、環境変数を使用
+    const frontendUrl = Deno.env.get('FRONTEND_URL') || req.headers.get('referer') || 'https://lovable.dev'
+    let redirectUrl = new URL(frontendUrl)
     
     if (state) {
       console.log('招待コードでシナリオ登録開始:', state)
@@ -215,11 +222,12 @@ serve(async (req) => {
   } catch (error) {
     console.error('ログインコールバックエラー:', error)
     console.error('Error stack:', error.stack)
+    const frontendUrl = Deno.env.get('FRONTEND_URL') || 'https://lovable.dev'
     return new Response(null, {
       status: 302,
       headers: { 
         ...corsHeaders,
-        'Location': `https://74048ab5-8d5a-425a-ab29-bd5cc50dc2fe.lovableproject.com/?debug=server_error&message=${encodeURIComponent(error.message)}` 
+        'Location': `${frontendUrl}/?debug=server_error&message=${encodeURIComponent(error.message)}` 
       }
     })
   }
