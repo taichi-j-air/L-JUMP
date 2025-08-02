@@ -40,10 +40,10 @@ verify_jwt = false
 [functions.scenario-invite]
 verify_jwt = false
 
-[functions.login-callback]
+[functions.scenario-invite]
 verify_jwt = false
 
-[functions.liff-scenario-invite]
+[functions.login-callback]
 verify_jwt = false
 
 [functions.liff-handler]

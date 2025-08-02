@@ -37,7 +37,7 @@ export function ScenarioInviteCard({
   }
 
   const generateInviteUrl = (inviteCode: string) => {
-    return `${window.location.origin}/invite/${inviteCode}`
+    return `https://liff.line.me/${import.meta.env.VITE_LIFF_ID}?code=${inviteCode}`
   }
 
   return (
