@@ -121,46 +121,38 @@ serve(async (req) => {
       console.warn('⚠️ クリックログ記録失敗（処理続行）:', clickError)
     }
 
-    // Step 5: OAuth URL生成
+    // Step 5: シナリオ別 OAuth URL生成
     const redirectUri = 'https://rtjxurmuaawyzjcdkqxt.supabase.co/functions/v1/login-callback'
     
     const authUrl = new URL('https://access.line.me/oauth2/v2.1/authorize')
     authUrl.searchParams.set('response_type', 'code')
     authUrl.searchParams.set('client_id', profileData.line_login_channel_id)
     authUrl.searchParams.set('redirect_uri', redirectUri)
-    authUrl.searchParams.set('state', inviteCode)
+    authUrl.searchParams.set('state', inviteCode)  // 重要：招待コードをstateパラメータで渡す
     authUrl.searchParams.set('scope', 'profile openid')
+    
+    // LINEアプリ優先起動のためのパラメータ
     authUrl.searchParams.set('bot_prompt', 'aggressive')
-
-    // モバイル用：LINEアプリ強制起動パラメータ
+    authUrl.searchParams.set('prompt', 'consent')
+    
     if (isMobile) {
       authUrl.searchParams.set('initial_amr_display', 'lineapp')
       authUrl.searchParams.set('ui_locales', 'ja')
     }
 
-    const oauthUrl = authUrl.toString()
+    const finalOAuthUrl = authUrl.toString()
     
-    // 最終的なリダイレクトURL決定
-    let finalUrl: string
-    
-    if (isMobile) {
-      // モバイル：LINE URLスキームでLINEアプリ内ブラウザを強制起動
-      finalUrl = `line://au/q/${encodeURIComponent(oauthUrl)}`
-      console.log('🚀 LINEアプリ内ブラウザで起動')
-    } else {
-      // デスクトップ：通常のOAuth URL
-      finalUrl = oauthUrl
-      console.log('🖥️ デスクトップブラウザで起動')
-    }
-
-    console.log('Device Type:', isMobile ? 'Mobile (LINEアプリ内ブラウザ)' : 'Desktop')
-    console.log('Final URL:', finalUrl.substring(0, 100) + '...')
+    console.log('🚀 シナリオ別OAuth URL生成完了')
+    console.log('招待コード:', inviteCode)
+    console.log('Channel ID:', profileData.line_login_channel_id)
+    console.log('Device Type:', isMobile ? 'Mobile' : 'Desktop')
+    console.log('OAuth URL:', finalOAuthUrl)
 
     return new Response(null, {
       status: 302,
       headers: {
         ...corsHeaders,
-        'Location': finalUrl
+        'Location': finalOAuthUrl
       }
     })
 
