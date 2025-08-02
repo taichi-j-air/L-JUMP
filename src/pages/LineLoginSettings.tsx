@@ -215,8 +215,11 @@ export default function LineLoginSettings() {
                   id="liffId"
                   value={settings.liffId}
                   onChange={(e) => setSettings(prev => ({ ...prev, liffId: e.target.value }))}
-                  placeholder="LIFF IDを入力 (例: 1234567890-abcdefgh)"
+                  placeholder="LIFF IDを入力 (例: 2007859465-L5VQg5q9)"
                 />
+                <p className="text-sm text-muted-foreground">
+                  LINE Developers コンソールから取得したLIFF IDを入力してください
+                </p>
               </div>
 
               <Button onClick={handleSave} disabled={saving || !settings.channelId || !settings.channelSecret}>
