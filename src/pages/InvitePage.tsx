@@ -142,9 +142,9 @@ export default function InvitePage() {
 
   const handleMobileRedirect = () => {
     setRedirecting(true)
-    // scenario-invite Edge Functionを経由してLINE Loginへ
-    const lineLoginUrl = `https://rtjxurmuaawyzjcdkqxt.supabase.co/functions/v1/scenario-invite?code=${inviteCode}`
-    window.location.href = lineLoginUrl
+    // LIFF フロー用: liff-scenario-invite Edge Functionを経由してLIFF起動
+    const liffInviteUrl = `https://rtjxurmuaawyzjcdkqxt.supabase.co/functions/v1/liff-scenario-invite?code=${inviteCode}`
+    window.location.href = liffInviteUrl
   }
 
   // ローディング画面
@@ -235,8 +235,8 @@ export default function InvitePage() {
   }
 
   // PC用画面（QRコード表示）
-  // O3修正: QRはscenario-invite Edge Functionを指すように変更
-  const qrUrl = `https://rtjxurmuaawyzjcdkqxt.supabase.co/functions/v1/scenario-invite?code=${inviteCode}`
+  // LIFF フロー用: liff-scenario-invite エンドポイントを直接指すQRコード
+  const qrUrl = `https://rtjxurmuaawyzjcdkqxt.supabase.co/functions/v1/liff-scenario-invite?code=${inviteCode}`
   
   return (
     <div className="min-h-screen bg-gradient-to-br from-green-50 to-blue-50">

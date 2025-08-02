@@ -37,7 +37,8 @@ export function ScenarioInviteCard({
   }
 
   const generateInviteUrl = (inviteCode: string) => {
-    return `${window.location.origin}/invite/${inviteCode}`
+    // LIFF フロー用: liff-scenario-invite エンドポイントを直接指すURL
+    return `https://rtjxurmuaawyzjcdkqxt.supabase.co/functions/v1/liff-scenario-invite?code=${inviteCode}`
   }
 
   return (
