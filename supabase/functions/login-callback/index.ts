@@ -51,14 +51,30 @@ serve(async (req) => {
     const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
     const supabase = createClient(supabaseUrl, supabaseKey)
 
-    // 招待コード取得
-    const inviteCode = state
-    console.log('招待コード:', inviteCode)
+    // 招待コード+ユーザーID取得
+    const stateData = state?.split(':') || []
+    const inviteCode = stateData[0]
+    const targetUserId = stateData[1]
+    console.log('招待コード:', inviteCode, 'ターゲットユーザーID:', targetUserId)
 
-    // LINE設定取得（確実版）
+    // LINE設定取得（ターゲットユーザー優先）
     let lineSettings = null
     
-    if (inviteCode) {
+    if (targetUserId) {
+      console.log('🔍 ターゲットユーザーから設定取得中...')
+      const { data: targetSettings } = await supabase
+        .from('profiles')
+        .select('line_login_channel_id, line_login_channel_secret, user_id, display_name, line_bot_id, add_friend_url')
+        .eq('user_id', targetUserId)
+        .single()
+      
+      if (targetSettings) {
+        lineSettings = targetSettings
+        console.log('✅ ターゲットユーザー設定取得成功')
+      }
+    }
+    
+    if (inviteCode && !lineSettings) {
       console.log('🔍 招待コードから設定取得中...')
       const { data: inviteData } = await supabase
         .from('scenario_invite_codes')
@@ -70,7 +86,9 @@ serve(async (req) => {
               line_login_channel_id,
               line_login_channel_secret,
               user_id,
-              display_name
+              display_name,
+              line_bot_id,
+              add_friend_url
             )
           )
         `)
@@ -191,7 +209,7 @@ serve(async (req) => {
       console.log('ℹ️ 既存友だち確認')
     }
 
-    // シナリオ登録処理
+    // シナリオ登録＋友達追加誘導処理
     const successUrl = new URL('https://74048ab5-8d5a-425a-ab29-bd5cc50dc2fe.lovableproject.com/')
     
     if (inviteCode && inviteCode !== 'login') {
@@ -208,10 +226,25 @@ serve(async (req) => {
         
         if (registrationResult?.success) {
           console.log('✅ シナリオ登録成功')
-          successUrl.searchParams.set('line_login', 'success')
-          successUrl.searchParams.set('scenario_registered', 'true')
-          successUrl.searchParams.set('user_name', profile.displayName)
-          successUrl.searchParams.set('invite_code', inviteCode)
+          
+          // 友達追加URLがある場合はそこにリダイレクト
+          if (lineSettings.add_friend_url || lineSettings.line_bot_id) {
+            const friendAddUrl = lineSettings.add_friend_url || 
+                                `https://lin.ee/${lineSettings.line_bot_id.replace('@', '')}`
+            
+            console.log('🤝 友達追加URLへリダイレクト:', friendAddUrl)
+            return new Response(null, {
+              status: 302,
+              headers: { ...corsHeaders, 'Location': friendAddUrl }
+            })
+          } else {
+            // 友達追加URLがない場合は成功画面へ
+            successUrl.searchParams.set('line_login', 'success')
+            successUrl.searchParams.set('scenario_registered', 'true')
+            successUrl.searchParams.set('user_name', profile.displayName)
+            successUrl.searchParams.set('invite_code', inviteCode)
+            successUrl.searchParams.set('message', 'シナリオ登録完了。友達追加設定が必要です。')
+          }
         } else {
           console.error('❌ シナリオ登録失敗:', registrationError)
           successUrl.searchParams.set('line_login', 'success')

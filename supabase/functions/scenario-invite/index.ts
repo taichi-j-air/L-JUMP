@@ -83,11 +83,11 @@ serve(async (req) => {
       })
     }
 
-    // Step 3: プロファイル情報取得
+    // Step 3: プロファイル情報取得（LINE Login + Bot設定）
     console.log('🔍 プロファイル情報取得中...')
     const { data: profileData, error: profileError } = await supabase
       .from('profiles')
-      .select('line_login_channel_id, line_login_channel_secret, display_name')
+      .select('line_login_channel_id, line_login_channel_secret, display_name, line_bot_id, add_friend_url')
       .eq('user_id', scenarioData.user_id)
       .single()
 
@@ -95,6 +95,8 @@ serve(async (req) => {
       found: !!profileData,
       hasChannelId: !!profileData?.line_login_channel_id,
       hasChannelSecret: !!profileData?.line_login_channel_secret,
+      hasBotId: !!profileData?.line_bot_id,
+      hasAddFriendUrl: !!profileData?.add_friend_url,
       error: profileError?.message 
     })
 
@@ -121,31 +123,38 @@ serve(async (req) => {
       console.warn('⚠️ クリックログ記録失敗（処理続行）:', clickError)
     }
 
-    // Step 5: シナリオ別 OAuth URL生成
+    // Step 5: シナリオ別LINE OAuth URL生成（LINEアプリ確実起動版）
     const redirectUri = 'https://rtjxurmuaawyzjcdkqxt.supabase.co/functions/v1/login-callback'
     
     const authUrl = new URL('https://access.line.me/oauth2/v2.1/authorize')
+    
+    // 基本OAuth設定
     authUrl.searchParams.set('response_type', 'code')
     authUrl.searchParams.set('client_id', profileData.line_login_channel_id)
     authUrl.searchParams.set('redirect_uri', redirectUri)
-    authUrl.searchParams.set('state', inviteCode)  // 重要：招待コードをstateパラメータで渡す
+    authUrl.searchParams.set('state', `${inviteCode}:${scenarioData.user_id}`)  // 招待コード+ユーザーID
     authUrl.searchParams.set('scope', 'profile openid')
     
-    // LINEアプリ優先起動のためのパラメータ
+    // LINEアプリ強制起動パラメータ（重要）
     authUrl.searchParams.set('bot_prompt', 'aggressive')
     authUrl.searchParams.set('prompt', 'consent')
     
+    // モバイル専用：LINEアプリ確実起動
     if (isMobile) {
       authUrl.searchParams.set('initial_amr_display', 'lineapp')
-      authUrl.searchParams.set('ui_locales', 'ja')
+      authUrl.searchParams.set('ui_locales', 'ja-JP')
+      authUrl.searchParams.set('nonce', Date.now().toString())  // キャッシュ回避
     }
 
     const finalOAuthUrl = authUrl.toString()
     
-    console.log('🚀 シナリオ別OAuth URL生成完了')
+    console.log('🚀 シナリオ別OAuth URL生成完了（LINEアプリ確実起動版）')
     console.log('招待コード:', inviteCode)
+    console.log('シナリオID:', inviteData.scenario_id)
+    console.log('ユーザーID:', scenarioData.user_id)
     console.log('Channel ID:', profileData.line_login_channel_id)
-    console.log('Device Type:', isMobile ? 'Mobile' : 'Desktop')
+    console.log('Bot ID:', profileData.line_bot_id)
+    console.log('Device Type:', isMobile ? 'Mobile (LINEアプリ強制起動)' : 'Desktop')
     console.log('OAuth URL:', finalOAuthUrl)
 
     return new Response(null, {
