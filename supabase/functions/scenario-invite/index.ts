@@ -15,7 +15,7 @@ serve(async (req) => {
     const url = new URL(req.url)
     const inviteCode = url.searchParams.get('code')
 
-    console.log('=== SCENARIO INVITE FUNCTION START ===')
+    console.log('=== PURE OAUTH SCENARIO INVITE (ブラウザ認証) ===')
     console.log('招待コード:', inviteCode)
     console.log('User-Agent:', req.headers.get('user-agent'))
 
@@ -142,12 +142,13 @@ serve(async (req) => {
 
     const finalOAuthUrl = authUrl.toString()
 
-    console.log('🔗 純粋OAuth URL生成')
+    console.log('🔗 純粋OAuth URL生成（ブラウザベース認証）')
+    console.log('⚠️  注意: LINEアプリは起動しません - ブラウザ内認証')
     console.log('Device:', isMobile ? 'Mobile' : 'Desktop')
     console.log('OAuth URL:', finalOAuthUrl)
     console.log('招待コード:', inviteCode)
     console.log('シナリオID:', inviteData.scenario_id)
-    console.log('期待動作: OAuth認証 → 友だち追加 → シナリオ登録')
+    console.log('期待動作: ブラウザOAuth認証 → 友だち追加 → シナリオ登録')
 
     return new Response(null, {
       status: 302,
