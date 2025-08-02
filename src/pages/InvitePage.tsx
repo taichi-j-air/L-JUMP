@@ -49,46 +49,59 @@ export default function InvitePage() {
     try {
       console.log('Loading scenario data for invite code:', inviteCode)
       
-      // まず招待コードの存在確認
-      const { data: inviteCheck, error: inviteCheckError } = await supabase
+      // Step 1: 招待コードの存在確認
+      const { data: inviteData, error: inviteError } = await supabase
         .from('scenario_invite_codes')
         .select('*')
         .eq('invite_code', inviteCode)
         .eq('is_active', true)
         .single()
 
-      console.log('Invite code check:', { inviteCheck, inviteCheckError })
+      console.log('Invite data result:', { inviteData, inviteError })
 
-      if (inviteCheckError || !inviteCheck) {
-        console.error('Invite code not found:', inviteCheckError)
-        throw new Error('招待コードが見つかりません')
+      if (inviteError || !inviteData) {
+        console.error('Invite code not found:', inviteError)
+        throw new Error('無効な招待コードです')
       }
 
-      // シナリオ情報取得
-      const { data: scenarioCheck, error: scenarioCheckError } = await supabase
+      // Step 2: シナリオ情報取得
+      const { data: scenarioData, error: scenarioError } = await supabase
         .from('step_scenarios')
-        .select(`
-          *,
-          profiles!inner (
-            display_name,
-            line_login_channel_id,
-            line_channel_id
-          )
-        `)
-        .eq('id', inviteCheck.scenario_id)
+        .select('*')
+        .eq('id', inviteData.scenario_id)
         .single()
 
-      console.log('Scenario check:', { scenarioCheck, scenarioCheckError })
+      console.log('Scenario data result:', { scenarioData, scenarioError })
 
-      if (scenarioCheckError || !scenarioCheck) {
-        console.error('Scenario not found:', scenarioCheckError)
+      if (scenarioError || !scenarioData) {
+        console.error('Scenario not found:', scenarioError)
         throw new Error('シナリオが見つかりません')
       }
 
-      // 最終的なデータ構造
+      // Step 3: プロファイル情報取得
+      const { data: profileData, error: profileError } = await supabase
+        .from('profiles')
+        .select('display_name, line_login_channel_id, line_channel_id')
+        .eq('user_id', scenarioData.user_id)
+        .single()
+
+      console.log('Profile data result:', { profileData, profileError })
+
+      if (profileError || !profileData) {
+        console.error('Profile not found:', profileError)
+        // プロファイルがなくても基本機能は動作させる
+      }
+
+      // 最終的なデータ構造を構築
       const finalData = {
-        ...inviteCheck,
-        step_scenarios: scenarioCheck
+        ...inviteData,
+        step_scenarios: {
+          ...scenarioData,
+          profiles: profileData || {
+            display_name: 'LINE公式アカウント',
+            line_login_channel_id: null
+          }
+        }
       }
 
       console.log('Final scenario data:', finalData)
@@ -99,6 +112,7 @@ export default function InvitePage() {
       
     } catch (error) {
       console.error('シナリオデータ取得エラー:', error)
+      setScenarioData(null) // エラー時はnullに設定
     } finally {
       setLoading(false)
     }

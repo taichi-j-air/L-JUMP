@@ -17,10 +17,8 @@ serve(async (req) => {
 
     console.log('=== SCENARIO INVITE START ===')
     console.log('招待コード:', inviteCode)
-    console.log('URL:', req.url)
 
     if (!inviteCode) {
-      console.error('招待コードが見つかりません')
       return new Response('Invite code not found', { 
         status: 400,
         headers: { ...corsHeaders, 'Content-Type': 'text/plain' }
@@ -30,8 +28,6 @@ serve(async (req) => {
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!
     const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
     const supabase = createClient(supabaseUrl, supabaseKey)
-
-    console.log('Supabase接続完了')
 
     // 招待コード検証
     const { data: inviteData, error: inviteError } = await supabase
@@ -49,15 +45,6 @@ serve(async (req) => {
       })
     }
 
-    // 使用制限チェック
-    if (inviteData.max_usage && inviteData.usage_count >= inviteData.max_usage) {
-      console.error('使用上限到達')
-      return new Response('Invite code usage limit reached', { 
-        status: 410,
-        headers: { ...corsHeaders, 'Content-Type': 'text/plain' }
-      })
-    }
-
     // シナリオ情報取得
     const { data: scenarioData, error: scenarioError } = await supabase
       .from('step_scenarios')
@@ -66,7 +53,6 @@ serve(async (req) => {
       .single()
 
     if (scenarioError || !scenarioData) {
-      console.error('シナリオ検索エラー:', scenarioError)
       return new Response('Invalid scenario', { 
         status: 404,
         headers: { ...corsHeaders, 'Content-Type': 'text/plain' }
@@ -80,48 +66,33 @@ serve(async (req) => {
       .eq('user_id', scenarioData.user_id)
       .single()
 
-    if (profileError || !profileData) {
-      console.error('プロファイル検索エラー:', profileError)
+    if (profileError || !profileData || !profileData.line_login_channel_id) {
       return new Response('Bot configuration not found', { 
         status: 404,
         headers: { ...corsHeaders, 'Content-Type': 'text/plain' }
       })
     }
 
-    if (!profileData.line_login_channel_id || !['active', 'configured'].includes(profileData.line_api_status)) {
-      console.error('BOT利用不可:', {
-        hasChannelId: !!profileData.line_login_channel_id,
-        apiStatus: profileData.line_api_status
-      })
-      return new Response('Bot is currently unavailable', { 
-        status: 503,
-        headers: { ...corsHeaders, 'Content-Type': 'text/plain' }
-      })
-    }
-
     // クリックログ記録
     try {
-      await supabase
-        .from('invite_clicks')
-        .insert({
-          invite_code: inviteCode,
-          ip: req.headers.get('x-forwarded-for') || 'unknown',
-          user_agent: req.headers.get('user-agent') || 'unknown',
-          referer: req.headers.get('referer') || null
-        })
-      console.log('クリックログ記録成功')
+      await supabase.from('invite_clicks').insert({
+        invite_code: inviteCode,
+        ip: req.headers.get('x-forwarded-for') || 'unknown',
+        user_agent: req.headers.get('user-agent') || 'unknown',
+        referer: req.headers.get('referer') || null
+      })
     } catch (clickError) {
-      console.warn('クリックログ記録失敗（処理続行）:', clickError)
+      console.warn('クリックログ記録失敗:', clickError)
     }
 
-    // デバイス判定：User-Agentからモバイルデバイスを検出
+    // デバイス判定
     const userAgent = req.headers.get('user-agent') || ''
     const isMobile = /mobile|android|iphone|ipad|ipod/i.test(userAgent)
 
-    console.log('デバイス判定:', { userAgent: userAgent.substring(0, 50), isMobile })
+    console.log('デバイス判定:', { isMobile, userAgent: userAgent.substring(0, 50) })
 
-    // スマホからのアクセスの場合は直接LINE Loginにリダイレクト
     if (isMobile) {
+      // スマホ: 直接LINE Loginにリダイレクト
       const callbackUrl = `${supabaseUrl}/functions/v1/login-callback`
       const loginUrl = new URL('https://access.line.me/oauth2/v2.1/authorize')
       
@@ -132,49 +103,28 @@ serve(async (req) => {
       loginUrl.searchParams.set('scope', 'profile openid')
       loginUrl.searchParams.set('bot_prompt', 'normal')
 
-      console.log('スマホ: LINE Loginにリダイレクト:', loginUrl.toString())
-
+      console.log('スマホ: LINE Loginリダイレクト')
       return new Response(null, {
         status: 302,
-        headers: {
-          ...corsHeaders,
-          'Location': loginUrl.toString()
-        }
+        headers: { ...corsHeaders, 'Location': loginUrl.toString() }
       })
     } else {
-      // PCの場合は独自QRページにリダイレクト
-      const frontendUrl = Deno.env.get('FRONTEND_URL') || 
-                          'https://74048ab5-8d5a-425a-ab29-bd5cc50dc2fe.lovableproject.com'
-      
+      // PC: 独自QRページにリダイレクト
+      const frontendUrl = 'https://74048ab5-8d5a-425a-ab29-bd5cc50dc2fe.lovableproject.com'
       const qrPageUrl = `${frontendUrl}/invite/${inviteCode}`
 
-      console.log('PC: QRページにリダイレクト:', qrPageUrl)
-
+      console.log('PC: QRページリダイレクト')
       return new Response(null, {
         status: 302,
-        headers: {
-          ...corsHeaders,
-          'Location': qrPageUrl
-        }
+        headers: { ...corsHeaders, 'Location': qrPageUrl }
       })
     }
 
   } catch (error) {
-    console.error('=== CRITICAL ERROR ===')
-    console.error('Error name:', error.name)
-    console.error('Error message:', error.message)
-    console.error('Error stack:', error.stack)
-    
-    return new Response(
-      JSON.stringify({ 
-        error: 'Server error', 
-        details: error.message,
-        type: error.name 
-      }), 
-      { 
-        status: 500,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-      }
-    )
+    console.error('Critical error:', error)
+    return new Response(JSON.stringify({ error: error.message }), { 
+      status: 500,
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+    })
   }
 })
