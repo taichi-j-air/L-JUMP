@@ -186,6 +186,7 @@ export type Database = {
           display_name: string | null
           friends_count: number | null
           id: string
+          liff_id: string | null
           line_api_status: string | null
           line_bot_id: string | null
           line_channel_access_token: string | null
@@ -212,6 +213,7 @@ export type Database = {
           display_name?: string | null
           friends_count?: number | null
           id?: string
+          liff_id?: string | null
           line_api_status?: string | null
           line_bot_id?: string | null
           line_channel_access_token?: string | null
@@ -238,6 +240,7 @@ export type Database = {
           display_name?: string | null
           friends_count?: number | null
           id?: string
+          liff_id?: string | null
           line_api_status?: string | null
           line_bot_id?: string | null
           line_channel_access_token?: string | null
