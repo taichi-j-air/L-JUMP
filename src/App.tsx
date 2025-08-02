@@ -58,8 +58,11 @@ function AppContent() {
                     window.location.pathname === '/verify' || 
                     window.location.pathname === '/reset-password'
 
-  // Show auth pages without sidebar/header
-  if (isAuthPage || !user) {
+  const isInvitePage = window.location.pathname.startsWith('/invite/')
+  const hasLineLoginSuccess = window.location.search.includes('line_login=success')
+
+  // Show auth pages without sidebar/header  
+  if (isAuthPage || (!user && !isInvitePage && !hasLineLoginSuccess)) {
     return (
       <div className="min-h-screen">
         <Routes>
@@ -70,6 +73,24 @@ function AppContent() {
           <Route path="/error" element={<ErrorPage />} />
           <Route path="*" element={<Auth />} />
         </Routes>
+      </div>
+    )
+  }
+
+  // LINEログイン成功時の処理
+  if (hasLineLoginSuccess && !user) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="text-center">
+          <h2 className="text-xl font-bold text-green-600 mb-4">✅ LINEログイン成功</h2>
+          <p className="text-gray-600 mb-4">ユーザー名: {decodeURIComponent(new URLSearchParams(window.location.search).get('user_name') || '')}</p>
+          <button 
+            onClick={() => window.location.href = '/auth'}
+            className="bg-blue-500 text-white px-4 py-2 rounded"
+          >
+            メインページに戻る
+          </button>
+        </div>
       </div>
     )
   }

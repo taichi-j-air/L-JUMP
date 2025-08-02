@@ -15,6 +15,10 @@ export default function InvitePage() {
   const [countdown, setCountdown] = useState(3)
 
   useEffect(() => {
+    console.log('=== InvitePage mounted ===')
+    console.log('inviteCode:', inviteCode)
+    console.log('current URL:', window.location.href)
+    
     // デバイス判定：User-Agentからモバイルデバイスを検出
     const checkDevice = () => {
       const userAgent = navigator.userAgent.toLowerCase()
@@ -23,6 +27,7 @@ export default function InvitePage() {
     }
     
     const deviceIsMobile = checkDevice()
+    console.log('Device detection:', { userAgent: navigator.userAgent.substring(0, 50), isMobile: deviceIsMobile })
     setIsMobile(deviceIsMobile)
     loadScenarioData(deviceIsMobile)
   }, [inviteCode])
