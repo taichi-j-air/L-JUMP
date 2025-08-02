@@ -1,98 +1,46 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
-const corsHeaders = {
+const cors = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers":
     "authorization, x-client-info, apikey, content-type",
 };
 
 serve(async (req) => {
-  if (req.method === "OPTIONS") {
-    return new Response(null, { headers: corsHeaders });
-  }
+  if (req.method === "OPTIONS") return new Response(null, { headers: cors });
 
-  try {
-    /* ---------- ① パラメータ取得 ---------- */
-    const url = new URL(req.url);
-    const inviteCode =
-      url.searchParams.get("code") ??
-      url.pathname.split("/").filter(Boolean).pop();
+  const inviteCode =
+    new URL(req.url).searchParams.get("code") ??
+    req.url.split("/").filter(Boolean).pop();
+  if (!inviteCode) return jsonErr(400, "invite code required");
 
-    if (!inviteCode) {
-      return new Response(
-        JSON.stringify({ error: "Invite code not found" }),
-        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } },
-      );
-    }
+  /* DB チェック – 無効コードは 404 */
+  const db = createClient(
+    Deno.env.get("SUPABASE_URL")!,
+    Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
+  );
+  const { data } = await db.from("scenario_invite_codes")
+    .select("id").eq("invite_code", inviteCode).eq("is_active", true).single();
+  if (!data) return jsonErr(404, "invalid / expired invite code");
 
-    /* ---------- ② DB 接続 ---------- */
-    const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
-    const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-    const frontendOrigin = "https://74048ab5-8d5a-425a-ab29-bd5cc50dc2fe.lovableproject.com";
+  /* UA で分岐 */
+  const isMobile = /mobile|android|iphone|ipad|ipod/i.test(
+    req.headers.get("user-agent") ?? "",
+  );
+  const liffId = Deno.env.get("LIFF_ID")!;
+  const fe = "https://74048ab5-8d5a-425a-ab29-bd5cc50dc2fe.lovableproject.com";
 
-    const supabase = createClient(supabaseUrl, serviceKey);
+  const redirect = isMobile
+    ? `https://liff.line.me/${liffId}?code=${inviteCode}` // LINE アプリ
+    : `${fe}/invite/${inviteCode}`;                      // PC QR
 
-    /* ---------- ③ 招待コード検証 & LIFF ID取得 ---------- */
-    const { data: inviteData, error: inviteError } = await supabase
-      .from("scenario_invite_codes")
-      .select(`
-        *,
-        step_scenarios!inner (
-          user_id,
-          profiles!inner (
-            line_login_channel_id
-          )
-        )
-      `)
-      .eq("invite_code", inviteCode)
-      .eq("is_active", true)
-      .single();
-
-    if (inviteError || !inviteData) {
-      return new Response(
-        JSON.stringify({ error: "Invalid or expired invite code" }),
-        { status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" } },
-      );
-    }
-
-    const channelId = inviteData.step_scenarios?.profiles?.line_login_channel_id;
-    if (!channelId) {
-      return new Response(
-        JSON.stringify({ error: "LINE Login Channel ID not configured" }),
-        { status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" } },
-      );
-    }
-
-    /* ---------- ④ UA 判定 & ログ ---------- */
-    const ua = req.headers.get("user-agent") ?? "";
-    const isMobile = /mobile|android|iphone|ipad|ipod/i.test(ua);
-
-    try {
-      await supabase.from("invite_clicks").insert({
-        invite_code: inviteCode,
-        ip: req.headers.get("x-forwarded-for") ?? "unknown",
-        user_agent: ua,
-        device_type: isMobile ? "mobile" : "desktop",
-      });
-    } catch (error) {
-      console.log("Click log error (continuing):", error);
-    }
-
-    /* ---------- ⑤ リダイレクト URL ---------- */
-    const redirectUrl = isMobile
-      ? `https://rtjxurmuaawyzjcdkqxt.supabase.co/functions/v1/liff-handler?code=${inviteCode}&liffId=${channelId}` // LINE Login Handlerに直接
-      : `${frontendOrigin}/invite/${inviteCode}`;           // PC は QR ページ
-
-    return new Response(null, {
-      status: 302,
-      headers: { ...corsHeaders, Location: redirectUrl },
-    });
-  } catch (e) {
-    console.error("scenario-invite error:", e);
-    return new Response(
-      JSON.stringify({ error: "Server error", details: e.message }),
-      { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } },
-    );
-  }
+  return new Response(null, { status: 302, headers: { ...cors, Location: redirect } });
 });
+
+function jsonErr(code: number, msg: string) {
+  return new Response(JSON.stringify({ error: msg }), {
+    status: code,
+    headers: { ...cors, "Content-Type": "application/json" },
+  });
+}
