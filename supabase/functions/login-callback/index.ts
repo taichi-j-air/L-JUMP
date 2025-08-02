@@ -51,8 +51,8 @@ serve(async (req) => {
     const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
     const supabase = createClient(supabaseUrl, supabaseKey)
 
-    // 招待コード取得（複数ソース対応）
-    const inviteCode = state || url.searchParams.get('inv')  // OAuth(state) または lin.ee URL(inv)
+    // 招待コード取得
+    const inviteCode = state
     console.log('招待コード:', inviteCode)
 
     // LINE設定取得（確実版）

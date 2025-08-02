@@ -87,7 +87,7 @@ serve(async (req) => {
     console.log('🔍 プロファイル情報取得中...')
     const { data: profileData, error: profileError } = await supabase
       .from('profiles')
-      .select('line_login_channel_id, line_login_channel_secret, display_name, add_friend_url')
+      .select('line_login_channel_id, line_login_channel_secret, display_name')
       .eq('user_id', scenarioData.user_id)
       .single()
 
@@ -95,12 +95,11 @@ serve(async (req) => {
       found: !!profileData,
       hasChannelId: !!profileData?.line_login_channel_id,
       hasChannelSecret: !!profileData?.line_login_channel_secret,
-      hasAddFriendUrl: !!profileData?.add_friend_url,
       error: profileError?.message 
     })
 
-    if (profileError || !profileData) {
-      return new Response('Profile not found', { 
+    if (profileError || !profileData || !profileData.line_login_channel_id) {
+      return new Response('LINE Login configuration not found', { 
         status: 404,
         headers: corsHeaders 
       })
@@ -122,49 +121,46 @@ serve(async (req) => {
       console.warn('⚠️ クリックログ記録失敗（処理続行）:', clickError)
     }
 
-    // Step 5: LINEアプリ直接起動URLの選択
-    let redirectUrl: string
+    // Step 5: OAuth URL生成
+    const redirectUri = 'https://rtjxurmuaawyzjcdkqxt.supabase.co/functions/v1/login-callback'
+    
+    const authUrl = new URL('https://access.line.me/oauth2/v2.1/authorize')
+    authUrl.searchParams.set('response_type', 'code')
+    authUrl.searchParams.set('client_id', profileData.line_login_channel_id)
+    authUrl.searchParams.set('redirect_uri', redirectUri)
+    authUrl.searchParams.set('state', inviteCode)
+    authUrl.searchParams.set('scope', 'profile openid')
+    authUrl.searchParams.set('bot_prompt', 'aggressive')
 
-    if (profileData.add_friend_url && isMobile) {
-      // lin.ee URL方式（LINEアプリが確実に起動）
-      redirectUrl = `${profileData.add_friend_url}?inv=${inviteCode}`
-      console.log('🚀 LINEアプリ直接起動 (lin.ee方式)')
-      console.log('Redirect URL:', redirectUrl)
-    } else {
-      // OAuth方式（フォールバック）
-      if (!profileData.line_login_channel_id) {
-        return new Response('LINE configuration not found', { 
-          status: 404,
-          headers: corsHeaders 
-        })
-      }
-
-      const redirectUri = 'https://rtjxurmuaawyzjcdkqxt.supabase.co/functions/v1/login-callback'
-      
-      const authUrl = new URL('https://access.line.me/oauth2/v2.1/authorize')
-      authUrl.searchParams.set('response_type', 'code')
-      authUrl.searchParams.set('client_id', profileData.line_login_channel_id)
-      authUrl.searchParams.set('redirect_uri', redirectUri)
-      authUrl.searchParams.set('state', inviteCode)
-      authUrl.searchParams.set('scope', 'profile openid')
-      authUrl.searchParams.set('bot_prompt', 'aggressive')
-
-      // モバイル用：LINEアプリ強制起動
-      if (isMobile) {
-        authUrl.searchParams.set('initial_amr_display', 'lineapp')
-        authUrl.searchParams.set('ui_locales', 'ja')
-      }
-
-      redirectUrl = authUrl.toString()
-      console.log('🔄 OAuth方式（フォールバック）')
-      console.log('Device Type:', isMobile ? 'Mobile' : 'Desktop')
+    // モバイル用：LINEアプリ強制起動パラメータ
+    if (isMobile) {
+      authUrl.searchParams.set('initial_amr_display', 'lineapp')
+      authUrl.searchParams.set('ui_locales', 'ja')
     }
+
+    const oauthUrl = authUrl.toString()
+    
+    // 最終的なリダイレクトURL決定
+    let finalUrl: string
+    
+    if (isMobile) {
+      // モバイル：LINE URLスキームでLINEアプリ内ブラウザを強制起動
+      finalUrl = `line://au/q/${encodeURIComponent(oauthUrl)}`
+      console.log('🚀 LINEアプリ内ブラウザで起動')
+    } else {
+      // デスクトップ：通常のOAuth URL
+      finalUrl = oauthUrl
+      console.log('🖥️ デスクトップブラウザで起動')
+    }
+
+    console.log('Device Type:', isMobile ? 'Mobile (LINEアプリ内ブラウザ)' : 'Desktop')
+    console.log('Final URL:', finalUrl.substring(0, 100) + '...')
 
     return new Response(null, {
       status: 302,
       headers: {
         ...corsHeaders,
-        'Location': redirectUrl
+        'Location': finalUrl
       }
     })
 
