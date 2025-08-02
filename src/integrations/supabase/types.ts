@@ -503,10 +503,14 @@ export type Database = {
       scenario_invite_stats: {
         Row: {
           clicks: number | null
+          created_at: string | null
           friends: number | null
           invite_code: string | null
+          invite_code_id: string | null
+          is_active: boolean | null
           scenario_id: string | null
-          total_added: number | null
+          usage_count: number | null
+          user_id: string | null
         }
         Relationships: []
       }
