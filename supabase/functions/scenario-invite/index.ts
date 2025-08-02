@@ -68,12 +68,16 @@ serve(async (req) => {
     const ua = req.headers.get("user-agent") ?? "";
     const isMobile = /mobile|android|iphone|ipad|ipod/i.test(ua);
 
-    await supabase.from("invite_clicks").insert({
-      invite_code: inviteCode,
-      ip: req.headers.get("x-forwarded-for") ?? "unknown",
-      user_agent: ua,
-      device_type: isMobile ? "mobile" : "desktop",
-    }).catch(() => {});
+    try {
+      await supabase.from("invite_clicks").insert({
+        invite_code: inviteCode,
+        ip: req.headers.get("x-forwarded-for") ?? "unknown",
+        user_agent: ua,
+        device_type: isMobile ? "mobile" : "desktop",
+      });
+    } catch (error) {
+      console.log("Click log error (continuing):", error);
+    }
 
     /* ---------- ⑤ リダイレクト URL ---------- */
     const redirectUrl = isMobile
