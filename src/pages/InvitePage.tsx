@@ -1,15 +1,41 @@
 import { useEffect, useState } from "react";
+import { supabase } from "@/integrations/supabase/client";
 
 export default function InvitePage() {
   const code = window.location.pathname.split("/").pop() ?? "";
   const isMobile = /mobile|android|iphone|ipad|ipod/i.test(navigator.userAgent);
-  const liffId = import.meta.env.VITE_LIFF_ID;
+  const [liffId, setLiffId] = useState<string>("");
 
   useEffect(() => {
-    if (isMobile && liffId && code) {
-      window.location.href = `https://liff.line.me/${liffId}?code=${code}`;
-    }
-  }, []);
+    // LIFF IDを取得
+    const fetchLiffId = async () => {
+      if (!code) return;
+      
+      const { data } = await supabase
+        .from("scenario_invite_codes")
+        .select(`
+          step_scenarios!inner (
+            profiles!inner (
+              liff_id
+            )
+          )
+        `)
+        .eq("invite_code", code)
+        .eq("is_active", true)
+        .single();
+      
+      const fetchedLiffId = data?.step_scenarios?.profiles?.liff_id;
+      if (fetchedLiffId) {
+        setLiffId(fetchedLiffId);
+        
+        if (isMobile) {
+          window.location.href = `https://liff.line.me/${fetchedLiffId}?code=${code}`;
+        }
+      }
+    };
+    
+    fetchLiffId();
+  }, [code, isMobile]);
 
   if (isMobile) return null; // リダイレクト済み
 

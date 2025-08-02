@@ -1,4 +1,5 @@
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
+import { supabase } from "@/integrations/supabase/client";
 
 declare global {
   interface Window {
@@ -7,12 +8,31 @@ declare global {
 }
 
 export default function LiffHandler() {
+  const [liffId, setLiffId] = useState<string>("");
+  
   useEffect(() => {
     (async () => {
-      const liffId = import.meta.env.VITE_LIFF_ID;
       const code = new URLSearchParams(window.location.search).get("code");
+      if (!code) return;
 
-      if (!liffId || !code) return;
+      // データベースからLIFF IDを取得
+      const { data } = await supabase
+        .from("scenario_invite_codes")
+        .select(`
+          step_scenarios!inner (
+            profiles!inner (
+              liff_id
+            )
+          )
+        `)
+        .eq("invite_code", code)
+        .eq("is_active", true)
+        .single();
+      
+      const fetchedLiffId = data?.step_scenarios?.profiles?.liff_id;
+      if (!fetchedLiffId) return;
+      
+      setLiffId(fetchedLiffId);
 
       // SDK 動的ロード
       if (!window.liff) {
@@ -24,7 +44,7 @@ export default function LiffHandler() {
         });
       }
 
-      await window.liff.init({ liffId });
+      await window.liff.init({ liffId: fetchedLiffId });
 
       if (!window.liff.isLoggedIn()) {
         window.liff.login({

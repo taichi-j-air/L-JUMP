@@ -29,15 +29,22 @@ serve(async (req) => {
     /* ---------- ② DB 接続 ---------- */
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-    const liffId = Deno.env.get("LIFF_ID")!;
     const frontendOrigin = "https://74048ab5-8d5a-425a-ab29-bd5cc50dc2fe.lovableproject.com";
 
     const supabase = createClient(supabaseUrl, serviceKey);
 
-    /* ---------- ③ 招待コード検証 ---------- */
+    /* ---------- ③ 招待コード検証 & LIFF ID取得 ---------- */
     const { data: inviteData, error: inviteError } = await supabase
       .from("scenario_invite_codes")
-      .select("*")
+      .select(`
+        *,
+        step_scenarios!inner (
+          user_id,
+          profiles!inner (
+            liff_id
+          )
+        )
+      `)
       .eq("invite_code", inviteCode)
       .eq("is_active", true)
       .single();
@@ -45,6 +52,14 @@ serve(async (req) => {
     if (inviteError || !inviteData) {
       return new Response(
         JSON.stringify({ error: "Invalid or expired invite code" }),
+        { status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+      );
+    }
+
+    const liffId = inviteData.step_scenarios?.profiles?.liff_id;
+    if (!liffId) {
+      return new Response(
+        JSON.stringify({ error: "LIFF ID not configured" }),
         { status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" } },
       );
     }

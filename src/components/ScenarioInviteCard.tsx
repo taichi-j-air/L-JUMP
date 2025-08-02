@@ -37,7 +37,8 @@ export function ScenarioInviteCard({
   }
 
   const generateInviteUrl = (inviteCode: string) => {
-    return `https://liff.line.me/${import.meta.env.VITE_LIFF_ID}?code=${inviteCode}`
+    // scenario-invite エンドポイント経由でデバイス判定とリダイレクト
+    return `https://rtjxurmuaawyzjcdkqxt.supabase.co/functions/v1/scenario-invite?code=${inviteCode}`
   }
 
   return (
