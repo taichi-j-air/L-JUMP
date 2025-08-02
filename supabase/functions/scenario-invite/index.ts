@@ -15,7 +15,7 @@ serve(async (req) => {
     req.url.split("/").filter(Boolean).pop();
   if (!inviteCode) return jsonErr(400, "invite code required");
 
-  /* DB チェック & LIFF ID取得 */
+  /* DB チェック & LINE Login Channel ID取得 */
   const db = createClient(
     Deno.env.get("SUPABASE_URL")!,
     Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
@@ -25,7 +25,7 @@ serve(async (req) => {
       id,
       step_scenarios!inner (
         profiles!inner (
-          liff_id
+          line_login_channel_id
         )
       )
     `)
@@ -35,8 +35,8 @@ serve(async (req) => {
   
   if (!data) return jsonErr(404, "invalid / expired invite code");
   
-  const liffId = data.step_scenarios?.profiles?.liff_id;
-  if (!liffId) return jsonErr(500, "LIFF ID not configured");
+  const channelId = data.step_scenarios?.profiles?.line_login_channel_id;
+  if (!channelId) return jsonErr(500, "LINE Login Channel ID not configured");
 
   /* UA で分岐 */
   const isMobile = /mobile|android|iphone|ipad|ipod/i.test(
@@ -45,11 +45,26 @@ serve(async (req) => {
   const fe = "https://74048ab5-8d5a-425a-ab29-bd5cc50dc2fe.lovableproject.com";
 
   const redirect = isMobile
-    ? `https://liff.line.me/${liffId}?code=${inviteCode}` // LINE アプリ
-    : `${fe}/invite/${inviteCode}`;                      // PC QR
+    ? buildLineLoginUrl(channelId, inviteCode) // 直接LINEログイン認可URL
+    : `${fe}/invite/${inviteCode}`;            // PC QR
 
   return new Response(null, { status: 302, headers: { ...cors, Location: redirect } });
 });
+
+function buildLineLoginUrl(channelId: string, inviteCode: string): string {
+  const redirectUri = "https://rtjxurmuaawyzjcdkqxt.supabase.co/functions/v1/login-callback";
+  const scope = "profile%20openid";
+  const state = inviteCode;
+  const botPrompt = "normal"; // 友だち追加オプション表示
+  
+  return `https://access.line.me/oauth2/v2.1/authorize?` +
+    `response_type=code&` +
+    `client_id=${channelId}&` +
+    `redirect_uri=${encodeURIComponent(redirectUri)}&` +
+    `state=${state}&` +
+    `scope=${scope}&` +
+    `bot_prompt=${botPrompt}`;
+}
 
 function jsonErr(code: number, msg: string) {
   return new Response(JSON.stringify({ error: msg }), {

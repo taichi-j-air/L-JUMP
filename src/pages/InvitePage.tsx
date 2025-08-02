@@ -4,11 +4,11 @@ import { supabase } from "@/integrations/supabase/client";
 export default function InvitePage() {
   const code = window.location.pathname.split("/").pop() ?? "";
   const isMobile = /mobile|android|iphone|ipad|ipod/i.test(navigator.userAgent);
-  const [liffId, setLiffId] = useState<string>("");
+  const [inviteUrl, setInviteUrl] = useState<string>("");
 
   useEffect(() => {
-    // LIFF IDを取得
-    const fetchLiffId = async () => {
+    // 招待URLを構築
+    const fetchInviteUrl = async () => {
       if (!code) return;
       
       const { data } = await supabase
@@ -16,7 +16,7 @@ export default function InvitePage() {
         .select(`
           step_scenarios!inner (
             profiles!inner (
-              liff_id
+              line_login_channel_id
             )
           )
         `)
@@ -24,24 +24,32 @@ export default function InvitePage() {
         .eq("is_active", true)
         .single();
       
-      const fetchedLiffId = data?.step_scenarios?.profiles?.liff_id;
-      if (fetchedLiffId) {
-        setLiffId(fetchedLiffId);
+      const channelId = data?.step_scenarios?.profiles?.line_login_channel_id;
+      if (channelId) {
+        const redirectUri = "https://rtjxurmuaawyzjcdkqxt.supabase.co/functions/v1/login-callback";
+        const scope = "profile%20openid";
+        const state = code;
+        const botPrompt = "normal";
         
-        if (isMobile) {
-          window.location.href = `https://liff.line.me/${fetchedLiffId}?code=${code}`;
-        }
+        const loginUrl = `https://access.line.me/oauth2/v2.1/authorize?` +
+          `response_type=code&` +
+          `client_id=${channelId}&` +
+          `redirect_uri=${encodeURIComponent(redirectUri)}&` +
+          `state=${state}&` +
+          `scope=${scope}&` +
+          `bot_prompt=${botPrompt}`;
+          
+        setInviteUrl(loginUrl);
       }
     };
     
-    fetchLiffId();
+    fetchInviteUrl();
   }, [code, isMobile]);
 
   if (isMobile) return null; // リダイレクト済み
 
   /* ---- PC 用 QR 表示 ---- */
-  const url = `https://liff.line.me/${liffId}?code=${code}`;
-  const qr = `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(url)}`;
+  const qr = `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(inviteUrl)}`;
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gray-50">
