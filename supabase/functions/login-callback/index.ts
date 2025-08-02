@@ -82,8 +82,8 @@ serve(async (req) => {
       })
     }
 
-    // 修正: 動的なredirect_uri生成
-    const callbackUrl = Deno.env.get('LINE_LOGIN_CALLBACK_URL') || 
+    // 修正: 環境変数で固定されたredirect_uri
+    const callbackUrl = Deno.env.get('LINE_LOGIN_CALLBACK_URL') ?? 
                         `${supabaseUrl}/functions/v1/login-callback`
 
     const tokenParams = {
@@ -165,7 +165,7 @@ serve(async (req) => {
     const profile = await profileResponse.json()
     console.log('Profile received:', { userId: profile.userId, displayName: profile.displayName })
 
-    // 修正: 重複制御を強化した友だち情報保存
+    // 修正: 衝突回避のための友だち情報保存
     console.log('Saving friend data to database...')
     const { data: existingFriend } = await supabase
       .from('line_friends')
@@ -227,12 +227,14 @@ serve(async (req) => {
     let redirectUrl = new URL(frontendUrl)
     
     if (state) {
-      console.log('招待コードでシナリオ登録開始:', state)
+      // 修正: stateパラメータのデコード処理
+      const decodedState = decodeURIComponent(state)
+      console.log('招待コードでシナリオ登録開始:', decodedState)
       
       const { data: registrationResult, error: registrationError } = await supabase
         .rpc('register_friend_to_scenario', {
           p_line_user_id: profile.userId,
-          p_invite_code: state,
+          p_invite_code: decodedState,
           p_display_name: profile.displayName,
           p_picture_url: profile.pictureUrl || null
         })
@@ -248,7 +250,7 @@ serve(async (req) => {
         redirectUrl.searchParams.set('scenario_registered', 'true')
         redirectUrl.searchParams.set('user_name', encodeURIComponent(profile.displayName))
         redirectUrl.searchParams.set('scenario_id', registrationResult.scenario_id)
-        redirectUrl.searchParams.set('invite_code', state)
+        redirectUrl.searchParams.set('invite_code', decodedState)
       } else {
         console.error('シナリオ登録失敗:', registrationResult)
         redirectUrl.searchParams.set('line_login', 'error')
