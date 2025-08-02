@@ -47,30 +47,45 @@ export default function InvitePage() {
 
   const loadScenarioData = async (deviceIsMobile) => {
     try {
-      // 招待コードからシナリオ情報を取得
-      const { data, error } = await supabase
+      console.log('Loading scenario data for invite code:', inviteCode)
+      
+      // まず招待コードの存在確認
+      const { data: inviteCheck, error: inviteCheckError } = await supabase
         .from('scenario_invite_codes')
-        .select(`
-          *,
-          step_scenarios!inner (
-            name,
-            description,
-            user_id,
-            profiles!inner (
-              display_name,
-              line_login_channel_id
-            )
-          )
-        `)
+        .select('*')
         .eq('invite_code', inviteCode)
         .eq('is_active', true)
         .single()
 
-      if (error || !data) {
-        throw new Error('無効な招待コードです')
+      console.log('Invite code check:', { inviteCheck, inviteCheckError })
+
+      if (inviteCheckError || !inviteCheck) {
+        console.error('Invite code not found:', inviteCheckError)
+        throw new Error('招待コードが見つかりません')
       }
 
-      setScenarioData(data)
+      // シナリオ情報取得
+      const { data: scenarioCheck, error: scenarioCheckError } = await supabase
+        .from('step_scenarios')
+        .select('*, profiles!inner(*)')
+        .eq('id', inviteCheck.scenario_id)
+        .single()
+
+      console.log('Scenario check:', { scenarioCheck, scenarioCheckError })
+
+      if (scenarioCheckError || !scenarioCheck) {
+        console.error('Scenario not found:', scenarioCheckError)
+        throw new Error('シナリオが見つかりません')
+      }
+
+      // 最終的なデータ構造
+      const finalData = {
+        ...inviteCheck,
+        step_scenarios: scenarioCheck
+      }
+
+      console.log('Final scenario data:', finalData)
+      setScenarioData(finalData)
       
       // ページビュー記録（統計用）
       await recordPageView(deviceIsMobile)
@@ -139,14 +154,14 @@ export default function InvitePage() {
               <Gift className="h-8 w-8" />
             </div>
             <CardTitle className="text-xl">
-              {scenarioData.step_scenarios.profiles.display_name}
+              {scenarioData.step_scenarios?.profiles?.display_name || 'LINE公式アカウント'}
             </CardTitle>
             <p className="text-green-100">LINE公式アカウント</p>
           </CardHeader>
           
           <CardContent className="p-6 text-center">
             <h2 className="text-lg font-bold mb-4 text-gray-800">
-              {scenarioData.step_scenarios.name}
+              {scenarioData.step_scenarios?.name || 'シナリオ'}
             </h2>
             
             {redirecting ? (
@@ -202,14 +217,14 @@ export default function InvitePage() {
                 <Gift className="h-8 w-8" />
               </div>
               <CardTitle className="text-xl">
-                {scenarioData.step_scenarios.profiles.display_name}
+                {scenarioData.step_scenarios?.profiles?.display_name || 'LINE公式アカウント'}
               </CardTitle>
               <p className="text-green-100">LINE公式アカウント</p>
             </CardHeader>
             
             <CardContent className="p-8 text-center">
               <h2 className="text-xl font-bold mb-6 text-gray-800">
-                {scenarioData.step_scenarios.name}
+                {scenarioData.step_scenarios?.name || 'シナリオ'}
               </h2>
               
               <div className="bg-yellow-50 border-l-4 border-yellow-400 rounded-lg p-4 mb-6">
@@ -246,7 +261,7 @@ export default function InvitePage() {
                   <UserPlus className="h-6 w-6 text-green-500 mx-auto mb-2" />
                   <p className="font-medium text-green-700 mb-1">友だち追加後の特典</p>
                   <p className="text-green-600 text-xs">
-                    {scenarioData.step_scenarios.description || '特別なメッセージシーケンスが自動配信されます'}
+                    {scenarioData.step_scenarios?.description || '特別なメッセージシーケンスが自動配信されます'}
                   </p>
                 </div>
                 
