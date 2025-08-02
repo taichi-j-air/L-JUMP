@@ -87,7 +87,7 @@ serve(async (req) => {
     console.log('🔍 プロファイル情報取得中...')
     const { data: profileData, error: profileError } = await supabase
       .from('profiles')
-      .select('line_login_channel_id, line_login_channel_secret, display_name, line_bot_id, add_friend_url')
+      .select('line_login_channel_id, line_login_channel_secret, display_name')
       .eq('user_id', scenarioData.user_id)
       .single()
 
@@ -123,42 +123,37 @@ serve(async (req) => {
       console.warn('⚠️ クリックログ記録失敗（処理続行）:', clickError)
     }
 
-    // Step 5: モバイルはlin.ee DeepLink、PCは従来OAuth
-    if (isMobile && profileData.add_friend_url) {
-      // モバイル：lin.ee DeepLinkでLINEアプリ直起動
-      const deeplink = `${profileData.add_friend_url}?inv=${inviteCode}`
-      
-      console.log('📱 モバイル：lin.ee DeepLink生成')
-      console.log('DeepLink URL:', deeplink)
-      console.log('招待コード:', inviteCode)
-      console.log('シナリオID:', inviteData.scenario_id)
-      console.log('ユーザーID:', scenarioData.user_id)
-      
-      return new Response(null, {
-        status: 302,
-        headers: {
-          ...corsHeaders,
-          'Location': deeplink
-        }
-      })
+    // Step 5: 純粋なOAuth認証URL生成（デバイス問わず）
+    const redirectUri = 'https://rtjxurmuaawyzjcdkqxt.supabase.co/functions/v1/login-callback'
+    
+    const authUrl = new URL('https://access.line.me/oauth2/v2.1/authorize')
+    authUrl.searchParams.set('response_type', 'code')
+    authUrl.searchParams.set('client_id', profileData.line_login_channel_id)
+    authUrl.searchParams.set('redirect_uri', redirectUri)
+    authUrl.searchParams.set('state', `${inviteCode}:${scenarioData.user_id}`)
+    authUrl.searchParams.set('scope', 'profile openid')
+    authUrl.searchParams.set('bot_prompt', 'aggressive')
+    
+    // モバイル用の最適化パラメータのみ
+    if (isMobile) {
+      authUrl.searchParams.set('initial_amr_display', 'lineapp')
+      authUrl.searchParams.set('ui_locales', 'ja')
     }
 
-    // PCまたはlin.ee未設定時：従来のOAuth
-    const redirectUri = 'https://rtjxurmuaawyzjcdkqxt.supabase.co/functions/v1/login-callback'
-    const oauth = `https://access.line.me/oauth2/v2.1/authorize?response_type=code&client_id=${profileData.line_login_channel_id}&redirect_uri=${encodeURIComponent(redirectUri)}&state=${inviteCode}:${scenarioData.user_id}&scope=profile%20openid&bot_prompt=aggressive`
-    
-    console.log('💻 PC/フォールバック：ブラウザOAuth')
-    console.log('OAuth URL:', oauth)
+    const finalOAuthUrl = authUrl.toString()
+
+    console.log('🔗 純粋OAuth URL生成')
+    console.log('Device:', isMobile ? 'Mobile' : 'Desktop')
+    console.log('OAuth URL:', finalOAuthUrl)
     console.log('招待コード:', inviteCode)
     console.log('シナリオID:', inviteData.scenario_id)
-    console.log('ユーザーID:', scenarioData.user_id)
-    console.log('Channel ID:', profileData.line_login_channel_id)
-    
+    console.log('期待動作: OAuth認証 → 友だち追加 → シナリオ登録')
+
     return new Response(null, {
       status: 302,
       headers: {
         ...corsHeaders,
-        'Location': oauth
+        'Location': finalOAuthUrl
       }
     })
 

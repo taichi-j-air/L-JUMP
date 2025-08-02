@@ -51,15 +51,13 @@ serve(async (req) => {
     const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
     const supabase = createClient(supabaseUrl, supabaseKey)
 
-    // 招待コード取得（OAuth経由またはlin.ee経由）
-    const inviteCode = 
-      url.searchParams.get('state')?.split(':')[0] ||  // OAuth経由
-      url.searchParams.get('inv')                      // lin.ee経由
+    // 招待コード取得（純粋OAuth方式のみ）
+    const stateParam = url.searchParams.get('state')
+    const inviteCode = stateParam?.split(':')[0] || null
+    const targetUserId = stateParam?.split(':')[1] || null
     
-    const targetUserId = url.searchParams.get('state')?.split(':')[1]
-    
-    console.log('招待コード:', inviteCode, 'ターゲットユーザーID:', targetUserId)
-    console.log('パラメータ取得方法:', url.searchParams.get('state') ? 'OAuth' : 'lin.ee')
+    console.log('OAuth方式で取得:', { inviteCode, targetUserId })
+    console.log('State パラメータ:', stateParam)
 
     // LINE設定取得（ターゲットユーザー優先）
     let lineSettings = null
@@ -68,7 +66,7 @@ serve(async (req) => {
       console.log('🔍 ターゲットユーザーから設定取得中...')
       const { data: targetSettings } = await supabase
         .from('profiles')
-        .select('line_login_channel_id, line_login_channel_secret, user_id, display_name, line_bot_id, add_friend_url')
+        .select('line_login_channel_id, line_login_channel_secret, user_id, display_name')
         .eq('user_id', targetUserId)
         .single()
       
@@ -90,9 +88,7 @@ serve(async (req) => {
               line_login_channel_id,
               line_login_channel_secret,
               user_id,
-              display_name,
-              line_bot_id,
-              add_friend_url
+              display_name
             )
           )
         `)
@@ -231,24 +227,12 @@ serve(async (req) => {
         if (registrationResult?.success) {
           console.log('✅ シナリオ登録成功')
           
-          // 友達追加URLがある場合はそこにリダイレクト
-          if (lineSettings.add_friend_url || lineSettings.line_bot_id) {
-            const friendAddUrl = lineSettings.add_friend_url || 
-                                `https://lin.ee/${lineSettings.line_bot_id.replace('@', '')}`
-            
-            console.log('🤝 友達追加URLへリダイレクト:', friendAddUrl)
-            return new Response(null, {
-              status: 302,
-              headers: { ...corsHeaders, 'Location': friendAddUrl }
-            })
-          } else {
-            // 友達追加URLがない場合は成功画面へ
-            successUrl.searchParams.set('line_login', 'success')
-            successUrl.searchParams.set('scenario_registered', 'true')
-            successUrl.searchParams.set('user_name', profile.displayName)
-            successUrl.searchParams.set('invite_code', inviteCode)
-            successUrl.searchParams.set('message', 'シナリオ登録完了。友達追加設定が必要です。')
-          }
+          // 成功画面へリダイレクト
+          successUrl.searchParams.set('line_login', 'success')
+          successUrl.searchParams.set('scenario_registered', 'true')
+          successUrl.searchParams.set('user_name', profile.displayName)
+          successUrl.searchParams.set('invite_code', inviteCode)
+          successUrl.searchParams.set('message', 'OAuth認証によるシナリオ登録完了')
         } else {
           console.error('❌ シナリオ登録失敗:', registrationError)
           successUrl.searchParams.set('line_login', 'success')
