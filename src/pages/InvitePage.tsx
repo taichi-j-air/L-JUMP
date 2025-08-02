@@ -134,7 +134,7 @@ export default function InvitePage() {
   const handleMobileRedirect = () => {
     setRedirecting(true)
     // scenario-invite Edge Functionを経由してLINE Loginへ
-    const lineLoginUrl = `${window.location.origin}/scenario-invite?code=${inviteCode}`
+    const lineLoginUrl = `https://rtjxurmuaawyzjcdkqxt.supabase.co/functions/v1/scenario-invite?code=${inviteCode}`
     window.location.href = lineLoginUrl
   }
 
@@ -226,7 +226,7 @@ export default function InvitePage() {
   }
 
   // PC用画面（QRコード表示）
-  const qrUrl = `${window.location.href}`
+  const qrUrl = `https://rtjxurmuaawyzjcdkqxt.supabase.co/functions/v1/scenario-invite?code=${inviteCode}`
   
   return (
     <div className="min-h-screen bg-gradient-to-br from-green-50 to-blue-50">
