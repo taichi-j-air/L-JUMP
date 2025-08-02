@@ -585,6 +585,10 @@ export type Database = {
         }
         Returns: Json
       }
+      trigger_scenario_delivery_for_friend: {
+        Args: { p_line_user_id: string; p_scenario_id: string }
+        Returns: Json
+      }
     }
     Enums: {
       message_kind: "incoming" | "outgoing"
