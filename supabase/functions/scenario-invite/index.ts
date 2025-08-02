@@ -26,8 +26,16 @@ serve(async (req) => {
       })
     }
 
-    const supabaseUrl = Deno.env.get('SUPABASE_URL')!
-    const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
+    const supabaseUrl = Deno.env.get('SUPABASE_URL')
+    const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')
+    
+    if (!supabaseUrl || !supabaseKey) {
+      console.error('Missing environment variables')
+      return new Response('Configuration error', { 
+        status: 500,
+        headers: { ...corsHeaders, 'Content-Type': 'text/plain' }
+      })
+    }
     const supabase = createClient(supabaseUrl, supabaseKey)
 
     // Step 1: 招待コード検証
@@ -91,8 +99,7 @@ serve(async (req) => {
         invite_code: inviteCode,
         ip: req.headers.get('x-forwarded-for') || 'unknown',
         user_agent: userAgent,
-        referer: req.headers.get('referer') || null,
-        device_type: isMobile ? 'mobile' : 'desktop'
+        referer: req.headers.get('referer') || null
       })
       console.log('クリックログ記録成功')
     } catch (clickError) {

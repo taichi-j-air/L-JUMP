@@ -41,8 +41,19 @@ serve(async (req) => {
       })
     }
 
-    const supabaseUrl = Deno.env.get('SUPABASE_URL')!
-    const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
+    const supabaseUrl = Deno.env.get('SUPABASE_URL')
+    const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')
+    
+    if (!supabaseUrl || !supabaseKey) {
+      console.error('Missing environment variables')
+      return new Response(null, {
+        status: 302,
+        headers: { 
+          ...corsHeaders,
+          'Location': 'https://74048ab5-8d5a-425a-ab29-bd5cc50dc2fe.lovableproject.com/?error=config_error'
+        }
+      })
+    }
     const supabase = createClient(supabaseUrl, supabaseKey)
 
     // O3修正: stateから招待コードを取得してuser_idを特定

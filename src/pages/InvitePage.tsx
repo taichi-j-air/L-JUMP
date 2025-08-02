@@ -7,12 +7,27 @@ import { QRCodeSVG } from "qrcode.react"
 import { Smartphone, Monitor, UserPlus, Gift, ArrowRight, Clock } from "lucide-react"
 
 export default function InvitePage() {
-  const { inviteCode } = useParams()
-  const [scenarioData, setScenarioData] = useState(null)
+  const { inviteCode } = useParams<{ inviteCode: string }>()
+  const [scenarioData, setScenarioData] = useState<any>(null)
   const [loading, setLoading] = useState(true)
   const [isMobile, setIsMobile] = useState(false)
   const [redirecting, setRedirecting] = useState(false)
   const [countdown, setCountdown] = useState(3)
+
+  // 安全にinviteCodeを使用
+  if (!inviteCode) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-red-50 to-orange-50 flex items-center justify-center p-4">
+        <Card className="max-w-md">
+          <CardContent className="text-center p-8">
+            <div className="text-6xl mb-4">⚠️</div>
+            <h2 className="text-xl font-bold text-red-600 mb-2">無効な招待リンク</h2>
+            <p className="text-red-500">招待コードが見つかりません。</p>
+          </CardContent>
+        </Card>
+      </div>
+    )
+  }
 
   useEffect(() => {
     console.log('=== InvitePage mounted ===')
@@ -295,7 +310,7 @@ export default function InvitePage() {
                 
                 <div className="grid grid-cols-2 gap-4 text-center">
                   <div className="bg-blue-50 p-3 rounded-lg">
-                    <div className="font-bold text-2xl text-blue-600">{scenarioData.usage_count || 0}</div>
+                    <div className="font-bold text-2xl text-blue-600">{scenarioData?.usage_count || 0}</div>
                     <div className="text-xs text-blue-700">参加者数</div>
                   </div>
                   <div className="bg-green-50 p-3 rounded-lg">

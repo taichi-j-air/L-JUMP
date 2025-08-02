@@ -1,4 +1,4 @@
-import { Home, MessageSquare, Settings, FileImage, Webhook, User, Bot, Users, MessageCircle, ArrowRight } from "lucide-react"
+import { Home, MessageSquare, Settings, FileImage, Webhook, User, Bot, Users, MessageCircle, ArrowRight, LogIn } from "lucide-react"
 import { NavLink, useLocation } from "react-router-dom"
 import { useState, useEffect } from "react"
 import { supabase } from "@/integrations/supabase/client"
@@ -30,7 +30,7 @@ const menuItems = [
 
 const settingsItems = [
   { title: "LINE API設定", url: "/line-api-settings", icon: Bot },
-  { title: "LINE Login設定", url: "/line-login-settings", icon: Settings },
+  { title: "LINEログイン設定", url: "/line-login-settings", icon: LogIn },
   { title: "Webhook設定", url: "/webhook-settings", icon: Webhook },
   { title: "プロファイル管理", url: "/profile-management", icon: User },
 ]
