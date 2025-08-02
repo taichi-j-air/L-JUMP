@@ -1,15 +1,63 @@
 import { useState, useEffect } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 import { supabase } from "@/integrations/supabase/client";
 import { User, Session } from "@supabase/supabase-js";
+import { CheckCircle, AlertTriangle, Info } from "lucide-react";
 
 const Index = () => {
   const [user, setUser] = useState<User | null>(null);
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
+  const [searchParams] = useSearchParams();
   const navigate = useNavigate();
+
+  // デバッグメッセージを処理
+  const debugType = searchParams.get('debug');
+  const debugCode = searchParams.get('code');
+  const debugState = searchParams.get('state');
+  const debugError = searchParams.get('error');
+  const debugMessage = searchParams.get('message');
+  const debugUrl = searchParams.get('url');
+
+  const getDebugMessage = () => {
+    switch (debugType) {
+      case 'line_success':
+        return {
+          type: 'success' as const,
+          icon: CheckCircle,
+          title: 'LINE Login コールバック成功',
+          message: `認証コード: ${debugCode}、State: ${debugState}`
+        };
+      case 'line_error':
+        return {
+          type: 'error' as const,
+          icon: AlertTriangle,
+          title: 'LINE認証エラー',
+          message: `エラー: ${debugError}${debugMessage ? ` - ${decodeURIComponent(debugMessage)}` : ''}`
+        };
+      case 'function_error':
+        return {
+          type: 'error' as const,
+          icon: AlertTriangle,
+          title: 'Edge Functionエラー',
+          message: `エラー: ${debugMessage ? decodeURIComponent(debugMessage) : '不明なエラー'}`
+        };
+      case 'no_params':
+        return {
+          type: 'warning' as const,
+          icon: Info,
+          title: 'パラメータなし',
+          message: `URL: ${debugUrl ? decodeURIComponent(debugUrl) : '不明'}`
+        };
+      default:
+        return null;
+    }
+  };
+
+  const debugInfo = getDebugMessage();
 
   useEffect(() => {
     // Set up auth state listener FIRST
@@ -90,6 +138,25 @@ const Index = () => {
       </header>
       
       <main className="container mx-auto px-4 py-8">
+        {/* デバッグ情報の表示 */}
+        {debugInfo && (
+          <Alert className={`mb-6 ${
+            debugInfo.type === 'success' ? 'border-green-500 bg-green-50' :
+            debugInfo.type === 'error' ? 'border-red-500 bg-red-50' :
+            'border-yellow-500 bg-yellow-50'
+          }`}>
+            <debugInfo.icon className={`h-4 w-4 ${
+              debugInfo.type === 'success' ? 'text-green-600' :
+              debugInfo.type === 'error' ? 'text-red-600' :
+              'text-yellow-600'
+            }`} />
+            <AlertDescription>
+              <strong>{debugInfo.title}</strong><br />
+              {debugInfo.message}
+            </AlertDescription>
+          </Alert>
+        )}
+        
         <div className="text-center mb-8">
           <h2 className="text-3xl font-bold mb-4">ダッシュボード</h2>
           <p className="text-xl text-muted-foreground">
