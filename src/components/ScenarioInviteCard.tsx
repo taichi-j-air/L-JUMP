@@ -36,9 +36,8 @@ export function ScenarioInviteCard({
     toast.success("URLをコピーしました")
   }
 
-  const generateQRCode = (inviteCode: string) => {
-    const url = `https://rtjxurmuaawyzjcdkqxt.supabase.co/functions/v1/scenario-invite?code=${inviteCode}`
-    window.open(`https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(url)}`, '_blank')
+  const generateInviteUrl = (inviteCode: string) => {
+    return `${window.location.origin}/invite/${inviteCode}`
   }
 
   return (
@@ -64,7 +63,7 @@ export function ScenarioInviteCard({
         ) : (
           <div className="space-y-2">
             {scenarioInviteCodes.map((code) => {
-              const inviteUrl = `https://rtjxurmuaawyzjcdkqxt.supabase.co/functions/v1/scenario-invite?code=${code.invite_code}`
+              const inviteUrl = generateInviteUrl(code.invite_code)
               const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(inviteUrl)}`
               
               return (

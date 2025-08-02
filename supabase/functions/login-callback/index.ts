@@ -201,15 +201,34 @@ serve(async (req) => {
       console.log('既存の友だちです:', profile.userId)
     }
 
+    // フロントエンドURL取得の確実な方法
+    const getFrontendUrl = () => {
+      // Lovableプロジェクトの固定URL（最も確実）
+      const lovableProject = '74048ab5-8d5a-425a-ab29-bd5cc50dc2fe.lovableproject.com'
+      
+      // 1. 環境変数チェック（lovable.devは除外）
+      const envUrl = Deno.env.get('FRONTEND_URL')
+      if (envUrl && envUrl !== 'https://lovable.dev' && !envUrl.includes('lovable.dev')) {
+        console.log('環境変数からURL取得:', envUrl)
+        return envUrl
+      }
+      
+      // 2. Lovableプロジェクト固定URL
+      const finalUrl = `https://${lovableProject}`
+      console.log('固定URLを使用:', finalUrl)
+      return finalUrl
+    }
+
     // stateパラメータから招待コードを取得してシナリオ登録
-    // 動的にOriginを取得するか、環境変数を使用
-    const frontendUrl = Deno.env.get('FRONTEND_URL') || req.headers.get('referer') || 'https://lovable.dev'
+    const frontendUrl = getFrontendUrl()
+    console.log('=== REDIRECT URL DEBUG ===')
+    console.log('Determined frontend URL:', frontendUrl)
+
     let redirectUrl = new URL(frontendUrl)
     
     if (state) {
       console.log('招待コードでシナリオ登録開始:', state)
       
-      // register_friend_to_scenario関数を呼び出し
       const { data: registrationResult, error: registrationError } = await supabase
         .rpc('register_friend_to_scenario', {
           p_line_user_id: profile.userId,
@@ -221,30 +240,36 @@ serve(async (req) => {
       if (registrationError) {
         console.error('シナリオ登録エラー:', registrationError)
         redirectUrl.searchParams.set('line_login', 'error')
-        redirectUrl.searchParams.set('error', 'scenario_registration_failed')
+        redirectUrl.searchParams.set('error_type', 'scenario_registration_failed')
+        redirectUrl.searchParams.set('error_details', registrationError.message)
       } else if (registrationResult?.success) {
         console.log('シナリオ登録成功:', registrationResult)
         redirectUrl.searchParams.set('line_login', 'success')
         redirectUrl.searchParams.set('scenario_registered', 'true')
-        redirectUrl.searchParams.set('user_name', profile.displayName)
+        redirectUrl.searchParams.set('user_name', encodeURIComponent(profile.displayName))
+        redirectUrl.searchParams.set('scenario_id', registrationResult.scenario_id)
+        redirectUrl.searchParams.set('invite_code', state)
       } else {
         console.error('シナリオ登録失敗:', registrationResult)
         redirectUrl.searchParams.set('line_login', 'error')
-        redirectUrl.searchParams.set('error', registrationResult?.error || 'unknown_error')
+        redirectUrl.searchParams.set('error_type', 'registration_failed')
+        redirectUrl.searchParams.set('error_details', registrationResult?.error || 'unknown_error')
       }
     } else {
       // 通常のLINEログイン（招待コードなし）
+      console.log('通常のLINEログイン完了')
       redirectUrl.searchParams.set('line_login', 'success')
-      redirectUrl.searchParams.set('user_name', profile.displayName)
+      redirectUrl.searchParams.set('user_name', encodeURIComponent(profile.displayName))
     }
 
-    console.log('Redirecting to success page:', redirectUrl.toString())
+    const finalRedirectUrl = redirectUrl.toString()
+    console.log('Final redirect URL:', finalRedirectUrl)
 
     return new Response(null, {
       status: 302,
       headers: {
         ...corsHeaders,
-        'Location': redirectUrl.toString(),
+        'Location': finalRedirectUrl,
       },
     })
 

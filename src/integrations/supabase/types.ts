@@ -115,6 +115,33 @@ export type Database = {
         }
         Relationships: []
       }
+      invite_page_views: {
+        Row: {
+          device_type: string | null
+          id: string
+          invite_code: string
+          referer: string | null
+          user_agent: string | null
+          viewed_at: string | null
+        }
+        Insert: {
+          device_type?: string | null
+          id?: string
+          invite_code: string
+          referer?: string | null
+          user_agent?: string | null
+          viewed_at?: string | null
+        }
+        Update: {
+          device_type?: string | null
+          id?: string
+          invite_code?: string
+          referer?: string | null
+          user_agent?: string | null
+          viewed_at?: string | null
+        }
+        Relationships: []
+      }
       line_friends: {
         Row: {
           added_at: string
