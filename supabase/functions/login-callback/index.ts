@@ -49,9 +49,9 @@ serve(async (req) => {
     const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
     const supabase = createClient(supabaseUrl, supabaseKey)
 
-    // stateまたはcodeから招待コードを取得してuser_idを特定
-    const inviteCode = url.searchParams.get('state')  // 従来
-      ?? url.searchParams.get('code')                 // lin.ee から戻った場合
+    // 招待コードを取得（複数ソース対応）
+    const inviteCode = url.searchParams.get('state')  // OAuth Login時
+      ?? url.searchParams.get('inv')                  // lin.ee直リンク時
     
     let scenarioUserId = null
     if (inviteCode) {
