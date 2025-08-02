@@ -21,9 +21,9 @@ serve(async (req) => {
 
     if (!inviteCode) {
       console.error('招待コードが見つかりません')
-      return new Response('招待コードが見つかりません', { 
+      return new Response('Invite code not found', { 
         status: 400,
-        headers: { ...corsHeaders, 'Content-Type': 'text/html; charset=utf-8' }
+        headers: { ...corsHeaders, 'Content-Type': 'text/plain; charset=utf-8' }
       })
     }
 
@@ -44,9 +44,9 @@ serve(async (req) => {
 
     if (inviteError || !inviteData) {
       console.error('招待コード検索エラー:', inviteError)
-      return new Response(`無効な招待コードです: ${inviteCode}`, { 
+      return new Response(`Invalid invite code: ${inviteCode}`, { 
         status: 404,
-        headers: { ...corsHeaders, 'Content-Type': 'text/html; charset=utf-8' }
+        headers: { ...corsHeaders, 'Content-Type': 'text/plain; charset=utf-8' }
       })
     }
 
@@ -62,9 +62,9 @@ serve(async (req) => {
 
     if (scenarioError || !scenarioData) {
       console.error('シナリオ検索エラー:', scenarioError)
-      return new Response('無効なシナリオです', { 
+      return new Response('Invalid scenario', { 
         status: 404,
-        headers: { ...corsHeaders, 'Content-Type': 'text/html; charset=utf-8' }
+        headers: { ...corsHeaders, 'Content-Type': 'text/plain; charset=utf-8' }
       })
     }
 
@@ -80,9 +80,9 @@ serve(async (req) => {
 
     if (profileError || !profileData) {
       console.error('プロファイル検索エラー:', profileError)
-      return new Response('BOT設定が見つかりません', { 
+      return new Response('BOT configuration not found', { 
         status: 404,
-        headers: { ...corsHeaders, 'Content-Type': 'text/html; charset=utf-8' }
+        headers: { ...corsHeaders, 'Content-Type': 'text/plain; charset=utf-8' }
       })
     }
 
@@ -94,20 +94,20 @@ serve(async (req) => {
     // 使用制限チェック
     if (inviteData.max_usage && inviteData.usage_count >= inviteData.max_usage) {
       console.error('使用上限到達')
-      return new Response('この招待コードは使用上限に達しています', { 
+      return new Response('Invite code usage limit reached', { 
         status: 410,
-        headers: { ...corsHeaders, 'Content-Type': 'text/html; charset=utf-8' }
+        headers: { ...corsHeaders, 'Content-Type': 'text/plain; charset=utf-8' }
       })
     }
 
-    if (!profileData.line_channel_id || profileData.line_api_status !== 'active') {
+    if (!profileData.line_channel_id || (profileData.line_api_status !== 'active' && profileData.line_api_status !== 'configured')) {
       console.error('BOT利用不可:', {
         hasChannelId: !!profileData.line_channel_id,
         apiStatus: profileData.line_api_status
       })
-      return new Response('このBOTは現在利用できません', { 
+      return new Response('This BOT is currently unavailable', { 
         status: 503,
-        headers: { ...corsHeaders, 'Content-Type': 'text/html; charset=utf-8' }
+        headers: { ...corsHeaders, 'Content-Type': 'text/plain; charset=utf-8' }
       })
     }
 
