@@ -81,7 +81,7 @@ serve(async (req) => {
 
     /* ---------- ⑤ リダイレクト URL ---------- */
     const redirectUrl = isMobile
-      ? `${frontendOrigin}/liff-handler?code=${inviteCode}&liffId=${liffId}` // LiffHandlerページに必要な情報を渡す
+      ? `https://rtjxurmuaawyzjcdkqxt.supabase.co/functions/v1/liff-handler?code=${inviteCode}&liffId=${liffId}` // LiffHandler Edge Functionに直接
       : `${frontendOrigin}/invite/${inviteCode}`;           // PC は QR ページ
 
     return new Response(null, {
