@@ -49,14 +49,17 @@ serve(async (req) => {
     const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
     const supabase = createClient(supabaseUrl, supabaseKey)
 
-    // stateから招待コードを取得してuser_idを特定
+    // stateまたはcodeから招待コードを取得してuser_idを特定
+    const inviteCode = url.searchParams.get('state')  // 従来
+      ?? url.searchParams.get('code')                 // lin.ee から戻った場合
+    
     let scenarioUserId = null
-    if (state) {
+    if (inviteCode) {
       // O4修正: .select()の引数を正しい文字列形式に
       const { data: inviteData } = await supabase
         .from('scenario_invite_codes')
         .select('scenario_id, step_scenarios!inner(user_id)')
-        .eq('invite_code', state)
+        .eq('invite_code', inviteCode)
         .eq('is_active', true)
         .single()
       
@@ -207,11 +210,11 @@ serve(async (req) => {
     const successUrl = new URL('https://74048ab5-8d5a-425a-ab29-bd5cc50dc2fe.lovableproject.com/')
     
     // 招待コードがある場合のみシナリオ登録処理を実行
-    if (state && state !== 'login') {
+    if (inviteCode && inviteCode !== 'login') {
       const { data: registrationResult, error: registrationError } = await supabase
         .rpc('register_friend_to_scenario', {
           p_line_user_id: profile.userId,
-          p_invite_code: state,
+          p_invite_code: inviteCode,
           p_display_name: profile.displayName,
           p_picture_url: profile.pictureUrl || null
         })

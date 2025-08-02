@@ -99,38 +99,30 @@ serve(async (req) => {
         invite_code: inviteCode,
         ip: req.headers.get('x-forwarded-for') || 'unknown',
         user_agent: userAgent,
-        referer: req.headers.get('referer') || null
+        referer: req.headers.get('referer') || null,
+        device_type: isMobile ? 'mobile' : 'desktop'
       })
       console.log('クリックログ記録成功')
     } catch (clickError) {
       console.warn('クリックログ記録失敗（処理続行）:', clickError)
     }
 
-    // Step 5: LINE Login URLにリダイレクト
-    const redirectUri = Deno.env.get('LINE_LOGIN_REDIRECT_URI') || 
-                        `${supabaseUrl}/functions/v1/login-callback`
-    
-    const loginUrl = new URL('https://access.line.me/oauth2/v2.1/authorize')
-    loginUrl.searchParams.set('response_type', 'code')
-    loginUrl.searchParams.set('client_id', profileData.line_login_channel_id)
-    loginUrl.searchParams.set('redirect_uri', redirectUri)
-    loginUrl.searchParams.set('state', inviteCode)
-    loginUrl.searchParams.set('scope', 'profile openid')
-    loginUrl.searchParams.set('bot_prompt', 'aggressive')
+    // Step 5: 友だち追加URLに直接リダイレクト
+    if (!profileData.add_friend_url) {
+      return new Response('Friend URL not configured', { 
+        status: 503,
+        headers: { ...corsHeaders, 'Content-Type': 'text/plain' }
+      })
+    }
 
-    console.log('=== 友だち追加設定 ===', loginUrl.toString())
-    console.log('LINE Loginリダイレクト:', {
-      redirectUri,
-      channelId: profileData.line_login_channel_id.substring(0, 10) + '...',
-      state: inviteCode
-    })
+    const addFriendURL = profileData.add_friend_url       // 例: https://lin.ee/AbC123
+    const deeplink = `${addFriendURL}?code=${inviteCode}` // 追跡パラメータ
+
+    console.log('[scenario-invite] Redirect →', deeplink)
 
     return new Response(null, {
       status: 302,
-      headers: {
-        ...corsHeaders,
-        'Location': loginUrl.toString()
-      }
+      headers: { ...corsHeaders, Location: deeplink }
     })
 
   } catch (error) {
