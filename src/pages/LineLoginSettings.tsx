@@ -18,8 +18,10 @@ export default function LineLoginSettings() {
   const [settings, setSettings] = useState({
     channelId: '',
     channelSecret: '',
+    liffId: '',
     callbackUrl: '',
-    loginUrl: ''
+    loginUrl: '',
+    liffEndpointUrl: ''
   })
 
   useEffect(() => {
@@ -47,7 +49,7 @@ export default function LineLoginSettings() {
     try {
       const { data: profile } = await supabase
         .from('profiles')
-        .select('line_login_channel_id, line_login_channel_secret, line_channel_id, line_channel_secret')
+        .select('line_login_channel_id, line_login_channel_secret, line_channel_id, line_channel_secret, liff_id')
         .eq('user_id', userId)
         .single()
 
@@ -56,18 +58,26 @@ export default function LineLoginSettings() {
         const callbackUrl = `https://rtjxurmuaawyzjcdkqxt.supabase.co/functions/v1/login-callback`
         const channelId = profile.line_login_channel_id || profile.line_channel_id || ''
         const channelSecret = profile.line_login_channel_secret || profile.line_channel_secret || ''
+        const liffId = profile.liff_id || ''
         const loginUrl = generateLoginUrl(channelId)
+        const liffEndpointUrl = generateLiffEndpointUrl()
         
         setSettings({
           channelId,
           channelSecret,
+          liffId,
           callbackUrl,
-          loginUrl
+          loginUrl,
+          liffEndpointUrl
         })
       }
     } catch (error) {
       console.error('設定読み込みエラー:', error)
     }
+  }
+
+  const generateLiffEndpointUrl = () => {
+    return `https://rtjxurmuaawyzjcdkqxt.supabase.co/functions/v1/liff-handler`
   }
 
   const generateLoginUrl = (channelId: string) => {
@@ -94,6 +104,7 @@ export default function LineLoginSettings() {
         .update({
           line_login_channel_id: settings.channelId,
           line_login_channel_secret: settings.channelSecret,
+          liff_id: settings.liffId,
           line_channel_id: settings.channelId, // 既存の互換性のため
           line_channel_secret: settings.channelSecret, // 既存の互換性のため
           updated_at: new Date().toISOString()
@@ -198,6 +209,16 @@ export default function LineLoginSettings() {
                 />
               </div>
 
+              <div className="space-y-2">
+                <Label htmlFor="liffId">LIFF ID</Label>
+                <Input
+                  id="liffId"
+                  value={settings.liffId}
+                  onChange={(e) => setSettings(prev => ({ ...prev, liffId: e.target.value }))}
+                  placeholder="LIFF IDを入力 (例: 1234567890-abcdefgh)"
+                />
+              </div>
+
               <Button onClick={handleSave} disabled={saving || !settings.channelId || !settings.channelSecret}>
                 {saving ? "保存中..." : "保存"}
               </Button>
@@ -265,6 +286,31 @@ export default function LineLoginSettings() {
             </Card>
           )}
 
+          {/* LIFFエンドポイントURL */}
+          <Card>
+            <CardHeader>
+              <CardTitle>LIFF エンドポイントURL</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-2">
+                <Label>LIFF アプリケーションのエンドポイントURL</Label>
+                <div className="flex items-center gap-2">
+                  <Input value={settings.liffEndpointUrl} readOnly className="font-mono text-sm" />
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => copyToClipboard(settings.liffEndpointUrl, "LIFFエンドポイントURL")}
+                  >
+                    <Copy className="h-4 w-4" />
+                  </Button>
+                </div>
+                <p className="text-sm text-muted-foreground">
+                  このURLをLINE Developers コンソールのLIFF設定で「エンドポイントURL」として設定してください
+                </p>
+              </div>
+            </CardContent>
+          </Card>
+
           {/* 設定手順 */}
           <Card>
             <CardHeader>
@@ -274,9 +320,11 @@ export default function LineLoginSettings() {
               <div className="space-y-2 text-sm">
                 <p><strong>1.</strong> LINE Developersコンソールにアクセス</p>
                 <p><strong>2.</strong> 新しいチャネルを作成（LINE Login）</p>
-                <p><strong>3.</strong> コールバックURLを設定</p>
-                <p><strong>4.</strong> チャネルIDとチャネルシークレットを取得</p>
-                <p><strong>5.</strong> 上記フォームに入力して保存</p>
+                <p><strong>3.</strong> LIFFアプリケーションを追加</p>
+                <p><strong>4.</strong> エンドポイントURLに上記URLを設定</p>
+                <p><strong>5.</strong> コールバックURLを設定</p>
+                <p><strong>6.</strong> チャネルID、チャネルシークレット、LIFF IDを取得</p>
+                <p><strong>7.</strong> 上記フォームに入力して保存</p>
               </div>
             </CardContent>
           </Card>
