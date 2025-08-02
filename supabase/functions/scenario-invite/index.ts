@@ -107,7 +107,7 @@ serve(async (req) => {
       console.warn('クリックログ記録失敗（処理続行）:', clickError)
     }
 
-    // Step 5: LINE Login URLにリダイレクト（友だち追加 + シナリオ登録）
+    // Step 5: LINE Loginをアプリで開くためのURL生成
     const redirectUri = Deno.env.get('LINE_LOGIN_REDIRECT_URI') || 
                         `${supabaseUrl}/functions/v1/login-callback`
     
@@ -118,8 +118,13 @@ serve(async (req) => {
     loginUrl.searchParams.set('state', inviteCode)
     loginUrl.searchParams.set('scope', 'profile openid')
     loginUrl.searchParams.set('bot_prompt', 'aggressive')
+    
+    // モバイルでLINEアプリを強制的に開く設定
+    if (isMobile) {
+      loginUrl.searchParams.set('initial_amr_display', 'lineapp')
+    }
 
-    console.log('[scenario-invite] LINE Login + Friend Add →', loginUrl.toString())
+    console.log('[scenario-invite] LINE App Login →', loginUrl.toString())
 
     return new Response(null, {
       status: 302,
