@@ -423,6 +423,39 @@ export type Database = {
           },
         ]
       }
+      security_audit_log: {
+        Row: {
+          action: string
+          created_at: string
+          details: Json | null
+          id: string
+          ip_address: string | null
+          success: boolean
+          user_agent: string | null
+          user_id: string | null
+        }
+        Insert: {
+          action: string
+          created_at?: string
+          details?: Json | null
+          id?: string
+          ip_address?: string | null
+          success?: boolean
+          user_agent?: string | null
+          user_id?: string | null
+        }
+        Update: {
+          action?: string
+          created_at?: string
+          details?: Json | null
+          id?: string
+          ip_address?: string | null
+          success?: boolean
+          user_agent?: string | null
+          user_id?: string | null
+        }
+        Relationships: []
+      }
       step_delivery_tracking: {
         Row: {
           created_at: string
@@ -626,6 +659,14 @@ export type Database = {
       }
     }
     Functions: {
+      check_rate_limit: {
+        Args: {
+          identifier: string
+          max_requests: number
+          time_window_seconds: number
+        }
+        Returns: boolean
+      }
       generate_invite_code: {
         Args: Record<PropertyKey, never>
         Returns: string
@@ -636,6 +677,26 @@ export type Database = {
           display_name: string
           user_role: string
         }[]
+      }
+      get_user_profile_secure: {
+        Args: { profile_user_id: string }
+        Returns: {
+          display_name: string
+          user_role: string
+          line_api_status: string
+          friends_count: number
+        }[]
+      }
+      log_security_event: {
+        Args: {
+          p_user_id?: string
+          p_action?: string
+          p_details?: Json
+          p_ip_address?: string
+          p_user_agent?: string
+          p_success?: boolean
+        }
+        Returns: undefined
       }
       register_friend_to_scenario: {
         Args: {
@@ -654,6 +715,10 @@ export type Database = {
         Args: { p_line_user_id: string; p_scenario_id: string }
         Returns: Json
       }
+      validate_and_sanitize_display_name: {
+        Args: { name: string }
+        Returns: string
+      }
       validate_display_name: {
         Args: { name: string }
         Returns: boolean
@@ -663,6 +728,10 @@ export type Database = {
         Returns: boolean
       }
       validate_line_user_id: {
+        Args: { line_user_id: string }
+        Returns: boolean
+      }
+      validate_line_user_id_enhanced: {
         Args: { line_user_id: string }
         Returns: boolean
       }
