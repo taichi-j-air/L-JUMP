@@ -20,7 +20,11 @@ serve(async (req) => {
       req.url.split("/").filter(Boolean).pop();
       
     console.log("Extracted invite code:", inviteCode);
-    if (!inviteCode) return jsonErr(400, "invite code required");
+    
+    // SECURITY: Validate invite code format
+    if (!inviteCode || !/^[a-zA-Z0-9]{8,32}$/.test(inviteCode)) {
+      return jsonErr(400, "Invalid invite code format");
+    }
 
     /* DB チェック & LIFF ID取得 */
     const db = createClient(

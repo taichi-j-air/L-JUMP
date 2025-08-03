@@ -646,6 +646,10 @@ export type Database = {
         }
         Returns: Json
       }
+      sanitize_text_input: {
+        Args: { input_text: string }
+        Returns: string
+      }
       trigger_scenario_delivery_for_friend: {
         Args: { p_line_user_id: string; p_scenario_id: string }
         Returns: Json
@@ -656,6 +660,10 @@ export type Database = {
       }
       validate_invite_code: {
         Args: { code: string }
+        Returns: boolean
+      }
+      validate_line_user_id: {
+        Args: { line_user_id: string }
         Returns: boolean
       }
     }

@@ -22,8 +22,21 @@ serve(async (req) => {
 
     console.log("Callback parameters:", { code: !!code, state, error, friendshipStatusChanged });
 
-    if (error) throw new Error("LINE error: " + error);
-    if (!code) throw new Error("No auth code");
+    // SECURITY: Enhanced input validation
+    if (error) {
+      console.log("LINE OAuth error received:", error);
+      throw new Error("LINE authentication failed: " + error);
+    }
+    
+    if (!code || !/^[a-zA-Z0-9._-]+$/.test(code)) {
+      console.log("Invalid or missing authorization code");
+      throw new Error("Invalid authorization code format");
+    }
+    
+    if (!state || !/^[a-zA-Z0-9]{8,32}$/.test(state)) {
+      console.log("Invalid or missing invite code in state parameter");
+      throw new Error("Invalid invite code format");
+    }
 
     /* ---------- Supabase ---------- */
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
@@ -79,11 +92,27 @@ serve(async (req) => {
     });
     const lineProfile = await profRes.json();
 
+    // SECURITY: Validate and sanitize LINE profile data
+    if (!lineProfile.userId || !/^U[0-9a-fA-F]{32}$/.test(lineProfile.userId)) {
+      console.log("Invalid LINE user ID format:", lineProfile.userId);
+      throw new Error("Invalid LINE user ID format");
+    }
+
+    // Sanitize display name to prevent XSS
+    const sanitizedDisplayName = lineProfile.displayName ? 
+      lineProfile.displayName
+        .replace(/<[^>]*>/g, '') // Remove HTML tags
+        .replace(/javascript:/gi, '') // Remove javascript: URLs
+        .replace(/data:/gi, '') // Remove data: URLs
+        .trim()
+        .substring(0, 100) : // Limit length
+      null;
+
     /* ---------- line_friends upsert ---------- */
     await supabase.from("line_friends").upsert({
       user_id: profileCfg.user_id,
       line_user_id: lineProfile.userId,
-      display_name: lineProfile.displayName,
+      display_name: sanitizedDisplayName,
       picture_url: lineProfile.pictureUrl ?? null,
     });
 
@@ -91,7 +120,7 @@ serve(async (req) => {
     const { data: reg } = await supabase.rpc("register_friend_to_scenario", {
       p_line_user_id: lineProfile.userId,
       p_invite_code: state,
-      p_display_name: lineProfile.displayName,
+      p_display_name: sanitizedDisplayName,
       p_picture_url: lineProfile.pictureUrl ?? null,
     });
 
