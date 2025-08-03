@@ -1,31 +1,48 @@
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
+import { supabase } from "@/integrations/supabase/client";
 
 export default function InvitePage() {
   const code = window.location.pathname.split("/").pop() ?? "";
   const isMobile = /mobile|android|iphone|ipad|ipod/i.test(navigator.userAgent);
+  const [liffId, setLiffId] = useState<string>("");
 
   useEffect(() => {
-    // モバイルアクセス時は scenario-invite にリダイレクト（OAuth認証）
-    if (isMobile && code) {
-      console.log("Mobile access detected, redirecting to OAuth flow");
-      window.location.href = `https://rtjxurmuaawyzjcdkqxt.supabase.co/functions/v1/scenario-invite?code=${code}`;
-      return;
-    }
-  }, [code, isMobile]);
+    // LIFF IDを取得
+    const fetchLiffId = async () => {
+      if (!code) return;
+      
+      const { data, error } = await supabase
+        .from("scenario_invite_codes")
+        .select(`
+          step_scenarios!inner (
+            profiles!inner (
+              liff_id
+            )
+          )
+        `)
+        .eq("invite_code", code)
+        .eq("is_active", true)
+        .maybeSingle();
+      
+      if (error) {
+        console.error("Error fetching LIFF ID:", error);
+        return;
+      }
+      
+      const fetchedLiffId = data?.step_scenarios?.profiles?.liff_id;
+      if (fetchedLiffId) {
+        setLiffId(fetchedLiffId);
+      }
+    };
+    
+    fetchLiffId();
+  }, [code]);
 
-  if (isMobile) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50">
-        <div className="text-center">
-          <p>リダイレクト中...</p>
-        </div>
-      </div>
-    );
-  }
+  if (isMobile) return null; // リダイレクト済み
 
   /* ---- PC 用 QR 表示 ---- */
-  const inviteUrl = `https://rtjxurmuaawyzjcdkqxt.supabase.co/functions/v1/scenario-invite?code=${code}`;
-  const qr = `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(inviteUrl)}`;
+  const url = `https://liff.line.me/${liffId}?code=${code}`;
+  const qr = `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(url)}`;
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gray-50">

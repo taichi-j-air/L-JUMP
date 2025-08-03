@@ -81,35 +81,16 @@ function AppContent() {
 
   // LINEログイン成功時の処理
   if (hasLineLoginSuccess && !user) {
-    const params = new URLSearchParams(window.location.search);
-    const userName = decodeURIComponent(params.get('user_name') || 'LINEユーザー');
-    const scenarioRegistered = params.get('scenario_registered') === 'true';
-    
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-green-50 to-blue-50">
-        <div className="text-center bg-white p-8 rounded-xl shadow-lg max-w-md">
-          <div className="mb-6">
-            <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
-              <span className="text-3xl">✅</span>
-            </div>
-            <h2 className="text-2xl font-bold text-green-600 mb-2">友達追加完了！</h2>
-            <p className="text-gray-600 mb-4">
-              {userName}さん、LINEでのログインが完了しました。
-            </p>
-            {scenarioRegistered && (
-              <div className="bg-blue-50 p-4 rounded-lg mb-4">
-                <p className="text-sm text-blue-700">
-                  🎉 シナリオへの登録も完了しました！<br/>
-                  LINEでメッセージが届くのをお待ちください。
-                </p>
-              </div>
-            )}
-          </div>
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="text-center">
+          <h2 className="text-xl font-bold text-green-600 mb-4">✅ LINEログイン成功</h2>
+          <p className="text-gray-600 mb-4">ユーザー名: {decodeURIComponent(new URLSearchParams(window.location.search).get('user_name') || '')}</p>
           <button 
-            onClick={() => window.close()}
-            className="bg-green-500 hover:bg-green-600 text-white px-6 py-3 rounded-lg font-medium w-full transition-colors"
+            onClick={() => window.location.href = '/auth'}
+            className="bg-blue-500 text-white px-4 py-2 rounded"
           >
-            このページを閉じる
+            メインページに戻る
           </button>
         </div>
       </div>

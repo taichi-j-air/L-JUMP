@@ -127,17 +127,12 @@ serve(async (req) => {
     if (!reg?.success) throw new Error("register_friend_to_scenario failed");
 
     /* ---------- 完了画面へ ---------- */
-    // LINEユーザーには友達追加完了画面を表示
-    const completionUrl = new URL(`https://74048ab5-8d5a-425a-ab29-bd5cc50dc2fe.lovableproject.com/`);
-    completionUrl.searchParams.set('line_login', 'success');
-    completionUrl.searchParams.set('user_name', encodeURIComponent(sanitizedDisplayName || 'LINEユーザー'));
-    completionUrl.searchParams.set('scenario_registered', 'true');
-    
     return new Response(null, {
       status: 302,
       headers: {
         ...corsHeaders,
-        Location: completionUrl.toString(),
+        Location:
+          `https://74048ab5-8d5a-425a-ab29-bd5cc50dc2fe.lovableproject.com/?ok=1`,
       },
     });
   } catch (e) {
