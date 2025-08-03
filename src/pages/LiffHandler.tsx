@@ -1,102 +1,61 @@
-import { useEffect, useState } from "react";
-import { supabase } from "@/integrations/supabase/client";
-
-declare global {
-  interface Window {
-    liff: any;
-  }
-}
+import { useEffect } from 'react'
+import liff from '@line/liff'
+import { supabase } from '@/integrations/supabase/client'
 
 export default function LiffHandler() {
-  const code = new URLSearchParams(location.search).get("code");
-  const [channelId, setChannelId] = useState<string>("");
+  // ✅ 正しいクエリ名
+  const inviteCode = new URLSearchParams(location.search).get('inviteCode')
 
   useEffect(() => {
     (async () => {
-      console.log("=== LiffHandler START ===");
-      console.log("Current URL:", window.location.href);
-      console.log("Code from URL:", code);
-      
-      if (!code) {
-        console.error("No code parameter found");
-        return;
-      }
+      console.log('=== LiffHandler START ===')
+      console.log('inviteCode:', inviteCode)
+      if (!inviteCode) return console.error('inviteCode param missing')
 
-      try {
-        console.log("Fetching channel info from database...");
-        
-        // Channel IDを取得
-        const { data, error } = await supabase
-          .from("scenario_invite_codes")
-          .select(`
-            step_scenarios!inner (
-              profiles!inner (
-                line_login_channel_id,
-                liff_id
-              )
+      /* ① DB から liffId と channelId を取得 */
+      const { data, error } = await supabase
+        .from('scenario_invite_codes')
+        .select(`
+          step_scenarios!inner (
+            profiles!inner (
+              liff_id,
+              line_login_channel_id
             )
-          `)
-          .eq("invite_code", code)
-          .eq("is_active", true)
-          .single();
+          )
+        `)
+        .eq('invite_code', inviteCode)
+        .eq('is_active', true)
+        .single()
 
-        console.log("Database query result:", { data, error });
+      if (error || !data?.step_scenarios?.profiles)
+        return console.error('DB fetch error:', error)
 
-        const liffId = data?.step_scenarios?.profiles?.liff_id;
-        const fetchedChannelId = data?.step_scenarios?.profiles?.line_login_channel_id;
-        
-        console.log("Extracted IDs:", { liffId, fetchedChannelId });
-        
-        if (!liffId || !fetchedChannelId) {
-          console.error("Missing LIFF ID or Channel ID");
-          return;
-        }
-        setChannelId(fetchedChannelId);
+      const { liff_id: liffId } = data.step_scenarios.profiles
 
-        console.log("Loading LIFF SDK...");
-        
-        // LIFF SDK ロード
-        if (!window.liff) {
-          await new Promise((ok) => {
-            const s = document.createElement("script");
-            s.src = "https://static.line-scdn.net/liff/edge/2/sdk.js";
-            s.onload = ok;
-            document.head.appendChild(s);
-          });
-        }
+      /* ② LIFF 初期化 */
+      await liff.init({ liffId })
+      console.log('liff.init OK')
 
-        console.log("Initializing LIFF...");
-        await window.liff.init({ liffId });
-        console.log("LIFF initialized successfully");
-
-        // LIFF内でLINEログイン認証（友だち追加オプション付き）を実行
-        const redirectUri = "https://rtjxurmuaawyzjcdkqxt.supabase.co/functions/v1/login-callback";
-        const scope = "profile%20openid";
-        const state = code;
-        const botPrompt = "normal"; // 友だち追加オプション表示
-
-        const authUrl = `https://access.line.me/oauth2/v2.1/authorize?` +
-          `response_type=code&` +
-          `client_id=${fetchedChannelId}&` +
-          `redirect_uri=${encodeURIComponent(redirectUri)}&` +
-          `state=${state}&` +
-          `scope=${scope}&` +
-          `bot_prompt=${botPrompt}`;
-
-        console.log("Redirecting to LINE auth:", authUrl);
-        
-        // LINEログイン認証画面にリダイレクト
-        window.location.href = authUrl;
-      } catch (error) {
-        console.error("=== LIFF Handler ERROR ===");
-        console.error("Error:", error);
+      /* ③ 未ログインなら LINE Login へ */
+      if (!liff.isLoggedIn()) {
+        liff.login({
+          redirectUri:
+            'https://rtjxurmuaawyzjcdkqxt.supabase.co/functions/v1/login-callback',
+          state: inviteCode,          // ← callback でシナリオ判定
+          scope: 'profile openid',
+          botPrompt: 'aggressive',    // ← 友だち追加＋ログインを１画面で
+        })
+        return
       }
-    })();
-  }, [code]);
+
+      /* ④ ログイン完了後の処理 */
+      window.location.replace('/#/complete') // ← 好みで遷移先を変更
+    })()
+  }, [inviteCode])
 
   return (
-    <div style={{ display: "grid", placeItems: "center", height: "100vh" }}>
-      <div className="animate-spin h-10 w-10 border-b-2 border-green-500 rounded-full" />
+    <div className="grid h-screen place-items-center">
+      <div className="h-10 w-10 animate-spin rounded-full border-b-2 border-green-500" />
     </div>
-  );
+  )
 }
