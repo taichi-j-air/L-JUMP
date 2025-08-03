@@ -1,10 +1,17 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
+import { 
+  validateLineUserId, 
+  validateInviteCode, 
+  sanitizeTextInput,
+  rateLimiter,
+  createSecureHeaders,
+  createErrorResponse
+} from '../_shared/security.ts'
 
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-line-signature',
-}
+const corsHeaders = createSecureHeaders({
+  'x-line-signature': 'x-line-signature'
+})
 
 interface LineMessage {
   id: string
@@ -33,12 +40,20 @@ serve(async (req) => {
   console.log('=== LINE Webhook Function Called ===')
   console.log('Method:', req.method)
   console.log('URL:', req.url)
-  console.log('User-Agent:', req.headers.get('user-agent'))
   
   // Handle CORS preflight requests
   if (req.method === 'OPTIONS') {
     console.log('CORS preflight request received')
     return new Response(null, { headers: corsHeaders })
+  }
+
+  // Rate limiting check
+  const clientIP = req.headers.get('x-forwarded-for') || req.headers.get('x-real-ip') || 'unknown';
+  const rateAllowed = await rateLimiter.isAllowed(`webhook:${clientIP}`, 100, 60000); // 100 requests per minute
+  
+  if (!rateAllowed) {
+    console.warn('Rate limit exceeded for IP:', clientIP);
+    return createErrorResponse('Rate limit exceeded', 429);
   }
 
   // LINEの検証リクエストに対する簡単なレスポンス
@@ -50,22 +65,40 @@ serve(async (req) => {
     })
   }
 
+  // Validate request method
+  if (req.method !== 'POST') {
+    return createErrorResponse('Method not allowed', 405);
+  }
+
   try {
     console.log('Processing POST request from LINE')
     
-    if (req.method !== 'POST') {
-      console.log('Method not allowed:', req.method)
-      return new Response('Method not allowed', { 
-        status: 405, 
-        headers: corsHeaders 
-      })
+    // Validate content type
+    const contentType = req.headers.get('content-type');
+    if (!contentType || !contentType.includes('application/json')) {
+      return createErrorResponse('Invalid content type', 400);
     }
 
     const body = await req.text()
     console.log('Raw body received:', body)
     console.log('Body length:', body.length)
 
-    const webhookData: LineWebhookBody = JSON.parse(body)
+    if (!body || body.length === 0) {
+      return createErrorResponse('Empty request body', 400);
+    }
+
+    let webhookData: LineWebhookBody;
+    try {
+      webhookData = JSON.parse(body);
+    } catch (parseError) {
+      console.error('JSON parse error:', parseError);
+      return createErrorResponse('Invalid JSON format', 400);
+    }
+
+    // Validate webhook payload structure
+    if (!webhookData || !Array.isArray(webhookData.events)) {
+      return createErrorResponse('Invalid webhook payload structure', 400);
+    }
     
     // Verify LINE signature (basic validation)
     const signature = req.headers.get('x-line-signature')
@@ -91,9 +124,21 @@ serve(async (req) => {
 
     const supabase = createClient(supabaseUrl, supabaseServiceKey)
 
-    // Process each event
+    // Process each event with validation
     for (const event of webhookData.events) {
       console.log('Processing event:', event.type)
+      
+      // Validate event structure
+      if (!event || !event.type || !event.source?.userId) {
+        console.warn('Invalid event structure, skipping:', event);
+        continue;
+      }
+
+      // Validate LINE user ID format
+      if (!validateLineUserId(event.source.userId)) {
+        console.warn('Invalid LINE user ID format:', event.source.userId);
+        continue;
+      }
       
       if (event.type === 'message' && event.message) {
         await handleMessage(event, supabase, req)
@@ -129,16 +174,23 @@ async function handleMessage(event: LineEvent, supabase: any, req: Request) {
       return
     }
 
-    console.log(`Message from ${source.userId}: ${message.text}`)
+    // Sanitize message text to prevent XSS
+    const sanitizedText = sanitizeTextInput(message.text);
+    if (!sanitizedText) {
+      console.warn('Message text failed sanitization, skipping');
+      return;
+    }
+
+    console.log(`Message from ${source.userId}: ${sanitizedText}`)
 
     // Check if this user is already a friend, if not add them
     await ensureFriendExists(source.userId, supabase)
 
-    // Save incoming message to database
-    await saveIncomingMessage(source.userId, message.text, supabase)
+    // Save incoming message to database with sanitized text
+    await saveIncomingMessage(source.userId, sanitizedText, supabase)
 
     // Example: Auto-reply with a simple text message
-    await sendReplyMessage(replyToken, `受信しました: ${message.text}`, supabase)
+    await sendReplyMessage(replyToken, `受信しました: ${sanitizedText}`, supabase)
 
   } catch (error) {
     console.error('Error handling message:', error)

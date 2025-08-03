@@ -1,12 +1,16 @@
 // deno-lint-ignore-file no-explicit-any
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { 
+  validateInviteCode, 
+  sanitizeTextInput,
+  rateLimiter,
+  createSecureHeaders,
+  createErrorResponse,
+  validateRequiredParams
+} from '../_shared/security.ts'
 
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers":
-    "authorization, x-client-info, apikey, content-type",
-};
+const corsHeaders = createSecureHeaders();
 
 /* ────────────────────────────── */
 /*  Main entry (Edge Function)    */
@@ -14,6 +18,15 @@ const corsHeaders = {
 serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
+  }
+
+  // Rate limiting check
+  const clientIP = req.headers.get('x-forwarded-for') || req.headers.get('x-real-ip') || 'unknown';
+  const rateAllowed = await rateLimiter.isAllowed(`login:${clientIP}`, 10, 60000); // 10 requests per minute
+  
+  if (!rateAllowed) {
+    console.warn('Rate limit exceeded for login callback, IP:', clientIP);
+    return createErrorResponse('Rate limit exceeded', 429);
   }
 
   try {
@@ -27,9 +40,17 @@ serve(async (req) => {
 
     console.log("Callback parameters:", { code: !!code, state, err });
 
-    if (err)      throw new Error("LINE authentication error: " + err);
-    if (!code)    throw new Error("Missing authorization code");
-    if (!state)   throw new Error("Missing state parameter");
+    if (err) {
+      const sanitizedError = sanitizeTextInput(err);
+      throw new Error("LINE authentication error: " + sanitizedError);
+    }
+    
+    validateRequiredParams({ code, state }, ['code', 'state']);
+    
+    // Validate invite code format if not login
+    if (state !== "login" && !validateInviteCode(state)) {
+      throw new Error("Invalid invite code format");
+    }
 
     /* ── 2. Supabase 初期化 ── */
     const supabase = createClient(
