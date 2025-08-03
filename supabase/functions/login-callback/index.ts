@@ -42,6 +42,7 @@ serve(async (req) => {
 
     /* ── 3. 一般ログインかシナリオ招待かを判定 ── */
     if (state === "login") {
+      console.log("Processing general login test");
       // 一般ログインの場合は、認証済みユーザーのプロファイルを取得
       // TODO: 実際の実装では、認証されたユーザーのIDを使用する必要があります
       // 現在は最初のプロファイルを使用（テスト用）
@@ -52,12 +53,16 @@ serve(async (req) => {
         .not("line_login_channel_secret", "is", null)
         .limit(1);
 
+      console.log("Profile query result:", { profiles, profileErr });
+
       if (profileErr || !profiles || profiles.length === 0) {
-        throw new Error("No valid LINE login configuration found");
+        throw new Error("No valid LINE login configuration found. Please configure LINE login settings first.");
       }
       profile = profiles[0];
       isGeneralLogin = true;
+      console.log("Using profile for general login:", profile.display_name);
     } else {
+      console.log("Processing scenario invite with code:", state);
       // 招待コード由来の設定取得
       const { data: cfg, error: cfgErr } = await supabase
         .from("scenario_invite_codes")
