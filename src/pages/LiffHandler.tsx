@@ -40,7 +40,10 @@ export default function LiffHandler() {
       if (!liff.isLoggedIn()) {
         liff.login({
           redirectUri:
-            'https://rtjxurmuaawyzjcdkqxt.supabase.co/functions/v1/login-callback'
+            'https://rtjxurmuaawyzjcdkqxt.supabase.co/functions/v1/login-callback',
+          state: inviteCode,          // ⭐ callback でシナリオ判定
+          scope: 'profile openid',    // ⭐ ID トークン取得
+          botPrompt: 'aggressive',    // ⭐ 友だち追加画面を強制表示
         })
         return
       }
