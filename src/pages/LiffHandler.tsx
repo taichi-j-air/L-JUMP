@@ -32,21 +32,10 @@ export default function LiffHandler() {
 
       const { liff_id: liffId } = data.step_scenarios.profiles
 
-      /* ② LIFF 初期化 */
-      await liff.init({ liffId })
-      console.log('liff.init OK')
-
-      /* ③ 未ログインなら LINE Login へ */
-      if (!liff.isLoggedIn()) {
-        liff.login({
-          redirectUri:
-            'https://rtjxurmuaawyzjcdkqxt.supabase.co/functions/v1/login-callback',
-          state: inviteCode,          // ⭐ callback でシナリオ判定
-          scope: 'profile openid',    // ⭐ ID トークン取得
-          botPrompt: 'aggressive',    // ⭐ 友だち追加画面を強制表示
-        })
-        return
-      }
+      /* ② Redirect to liff-handler for proper OAuth flow */
+      const liffHandlerUrl = `https://rtjxurmuaawyzjcdkqxt.supabase.co/functions/v1/liff-handler?code=${inviteCode}`
+      window.location.replace(liffHandlerUrl)
+      return
 
       /* ④ ログイン完了後の処理 */
       window.location.replace('/#/complete') // ← 好みで遷移先を変更
