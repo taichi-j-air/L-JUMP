@@ -11,7 +11,7 @@ export default function InvitePage() {
     const fetchLiffId = async () => {
       if (!code) return;
       
-      const { data } = await supabase
+      const { data, error } = await supabase
         .from("scenario_invite_codes")
         .select(`
           step_scenarios!inner (
@@ -22,7 +22,12 @@ export default function InvitePage() {
         `)
         .eq("invite_code", code)
         .eq("is_active", true)
-        .single();
+        .maybeSingle();
+      
+      if (error) {
+        console.error("Error fetching LIFF ID:", error);
+        return;
+      }
       
       const fetchedLiffId = data?.step_scenarios?.profiles?.liff_id;
       if (fetchedLiffId) {
