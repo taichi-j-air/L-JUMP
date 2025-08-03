@@ -36,11 +36,12 @@ serve(async (req) => {
     let isInviteCodeFlow = false;
     if (state === 'login') {
       console.log("Detected general login flow (state='login')");
+      isInviteCodeFlow = false;
     } else if (state && /^[a-zA-Z0-9]{8,32}$/.test(state)) { // 招待コードの正規表現 [6]
       console.log("Detected invite code login flow");
       isInviteCodeFlow = true;
     } else {
-      console.log("Invalid or missing state parameter. Expected 'login' or valid invite code format.");
+      console.log("Invalid or missing state parameter. Expected 'login' or valid invite code format. Received:", state);
       throw new Error("Invalid state parameter format");
     }
 
