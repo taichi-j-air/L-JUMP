@@ -142,6 +142,54 @@ export type Database = {
         }
         Relationships: []
       }
+      line_api_credentials: {
+        Row: {
+          created_at: string | null
+          encrypted_at: string | null
+          id: string
+          liff_id: string | null
+          liff_url: string | null
+          line_bot_id: string | null
+          line_channel_access_token: string | null
+          line_channel_id: string | null
+          line_channel_secret: string | null
+          line_login_channel_id: string | null
+          line_login_channel_secret: string | null
+          updated_at: string | null
+          user_id: string
+        }
+        Insert: {
+          created_at?: string | null
+          encrypted_at?: string | null
+          id?: string
+          liff_id?: string | null
+          liff_url?: string | null
+          line_bot_id?: string | null
+          line_channel_access_token?: string | null
+          line_channel_id?: string | null
+          line_channel_secret?: string | null
+          line_login_channel_id?: string | null
+          line_login_channel_secret?: string | null
+          updated_at?: string | null
+          user_id: string
+        }
+        Update: {
+          created_at?: string | null
+          encrypted_at?: string | null
+          id?: string
+          liff_id?: string | null
+          liff_url?: string | null
+          line_bot_id?: string | null
+          line_channel_access_token?: string | null
+          line_channel_id?: string | null
+          line_channel_secret?: string | null
+          line_login_channel_id?: string | null
+          line_login_channel_secret?: string | null
+          updated_at?: string | null
+          user_id?: string
+        }
+        Relationships: []
+      }
       line_friends: {
         Row: {
           added_at: string
@@ -582,6 +630,13 @@ export type Database = {
         Args: Record<PropertyKey, never>
         Returns: string
       }
+      get_public_profile_info: {
+        Args: { profile_user_id: string }
+        Returns: {
+          display_name: string
+          user_role: string
+        }[]
+      }
       register_friend_to_scenario: {
         Args: {
           p_line_user_id: string
@@ -594,6 +649,14 @@ export type Database = {
       trigger_scenario_delivery_for_friend: {
         Args: { p_line_user_id: string; p_scenario_id: string }
         Returns: Json
+      }
+      validate_display_name: {
+        Args: { name: string }
+        Returns: boolean
+      }
+      validate_invite_code: {
+        Args: { code: string }
+        Returns: boolean
       }
     }
     Enums: {
