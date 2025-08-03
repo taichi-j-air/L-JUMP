@@ -60,9 +60,10 @@ serve(async (req) => {
     }
 
     /* UA で分岐: モバイルは直接LINE OAuth、PCはQR表示 */
-    const isMobile = /mobile|android|iphone|ipad|ipod/i.test(
-      req.headers.get("user-agent") ?? "",
-    );
+    const userAgent = req.headers.get("user-agent") ?? "";
+    const isMobile = /mobile|android|iphone|ipad|ipod|line/i.test(userAgent);
+    console.log("🔍 [DEBUG] User Agent:", userAgent);
+    console.log("🔍 [DEBUG] Is Mobile/LINE detected:", isMobile);
     const fe = "https://74048ab5-8d5a-425a-ab29-bd5cc50dc2fe.lovableproject.com";
 
     let redirect: string;
@@ -79,7 +80,9 @@ serve(async (req) => {
         `&scope=profile%20openid` +
         `&bot_prompt=aggressive`;
       
-      console.log("Generated AUTH URL:", authUrl);
+      console.log("🔍 [DEBUG] Generated AUTH URL:", authUrl);
+      console.log("🔍 [DEBUG] Channel ID:", channelId);
+      console.log("🔍 [DEBUG] Redirect URI:", redirectUri);
       redirect = authUrl;
     } else {
       // PC: QR表示ページへ
