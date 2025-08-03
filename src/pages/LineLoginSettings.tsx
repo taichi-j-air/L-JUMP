@@ -87,7 +87,9 @@ export default function LineLoginSettings() {
   }
 
   const generateLiffEndpointUrl = () => {
-    return `https://rtjxurmuaawyzjcdkqxt.supabase.co/functions/v1/liff-handler`
+    // LIFFエンドポイントURLはReactアプリのURL（フロントエンド）を使用
+    // Supabase Edge Function URLではない
+    return `${window.location.origin}/invite`
   }
 
   const generateLoginUrl = (channelId: string) => {
