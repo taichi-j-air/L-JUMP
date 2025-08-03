@@ -1,40 +1,40 @@
-import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2"
 
 const cors = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers":
-    "authorization, x-client-info, apikey, content-type",
-};
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+}
 
 serve(async (req) => {
-  if (req.method === "OPTIONS") return new Response(null, { headers: cors });
+  // 1) CORS preflight
+  if (req.method === "OPTIONS") return new Response(null, { headers: cors })
+
+  // 2) パラメータなしアクセス (LIFF プリフェッチ) は静的ページを返す
+  const url = new URL(req.url)
+  const inviteCode = url.searchParams.get("code")
+  if (!inviteCode) {
+    // public/index.html はあなたの React ビルドのルート
+    const html = await Deno.readTextFile("public/index.html")
+    return new Response(html, {
+      status: 200,
+      headers: { ...cors, "Content-Type": "text/html" },
+    })
+  }
 
   try {
-    console.log("=== scenario-invite START ===");
-    console.log("Request URL:", req.url);
-    console.log("User-Agent:", req.headers.get("user-agent"));
+    console.log("=== scenario-invite START ===")
+    console.log("Invite code:", inviteCode)
 
-    const inviteCode =
-      new URL(req.url).searchParams.get("code") ??
-      req.url.split("/").filter(Boolean).pop();
-      
-    console.log("Extracted invite code:", inviteCode);
-    
-    // SECURITY: Validate invite code format
-    if (!inviteCode || !/^[a-zA-Z0-9]{8,32}$/.test(inviteCode)) {
-      return jsonErr(400, "Invalid invite code format");
-    }
-
-    /* DB チェック & LIFF ID取得 */
-    const db = createClient(
+    // 3) DB からシナリオ＆LIFF設定を取得
+    const supabase = createClient(
       Deno.env.get("SUPABASE_URL")!,
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
-    );
-    console.log("Querying database for invite code:", inviteCode);
-    const { data, error } = await db.from("scenario_invite_codes")
+    )
+    const { data, error } = await supabase
+      .from("scenario_invite_codes")
       .select(`
-        id,
+        scenario_id,
         step_scenarios!inner (
           profiles!inner (
             line_login_channel_id,
@@ -44,66 +44,52 @@ serve(async (req) => {
       `)
       .eq("invite_code", inviteCode)
       .eq("is_active", true)
-      .single();
-    
-    console.log("Database query result:", { data, error });
-    
-    if (!data) {
-      console.log("No data found for invite code:", inviteCode);
-      return jsonErr(404, "invalid / expired invite code");
-    }
-    
-    const channelId = data.step_scenarios?.profiles?.line_login_channel_id;
-    const liffId = data.step_scenarios?.profiles?.liff_id;
-    console.log("Extracted Channel ID:", channelId);
-    console.log("Extracted LIFF ID:", liffId);
-    
-    if (!channelId) {
-      console.log("LINE Login Channel ID not found in profile");
-      return jsonErr(500, "LINE Login Channel ID not configured");
+      .single()
+
+    if (error || !data) {
+      console.warn("Invalid or expired invite code:", inviteCode)
+      return new Response("Invalid invite code", { status: 404, headers: cors })
     }
 
-    /* UA で分岐: モバイルは直接LINE OAuth、PCはQR表示 */
-    const isMobile = /mobile|android|iphone|ipad|ipod/i.test(
-      req.headers.get("user-agent") ?? "",
-    );
-    const fe = "https://74048ab5-8d5a-425a-ab29-bd5cc50dc2fe.lovableproject.com";
+    const { liff_id: liffId, line_login_channel_id: channelId } =
+      data.step_scenarios.profiles!
 
-    let redirect: string;
-    
+    if (!liffId || !channelId) {
+      console.error("LIFF configuration missing for invite code:", inviteCode)
+      return new Response("LIFF not configured", { status: 500, headers: cors })
+    }
+
+    // 4) UA でモバイル判定
+    const ua = req.headers.get("user-agent") || ""
+    const isMobile = /mobile|android|iphone|ipad|ipod/i.test(ua)
+
+    // 5) モバイル → LIFF URL にリダイレクト
     if (isMobile) {
-      // モバイル: 直接LINE OAuth認証URLにリダイレクト（LINEのアドバイス通り）
-      const redirectUri = "https://rtjxurmuaawyzjcdkqxt.supabase.co/functions/v1/login-callback";
-      const authUrl = 
-        `https://access.line.me/oauth2/v2.1/authorize` +
-        `?response_type=code` +
-        `&client_id=${channelId}` +
-        `&redirect_uri=${encodeURIComponent(redirectUri)}` +
-        `&state=${inviteCode}` +
-        `&scope=profile%20openid` +
-        `&bot_prompt=aggressive`;
-      
-      console.log("Generated AUTH URL:", authUrl);
-      redirect = authUrl;
-    } else {
-      // PC: QR表示ページへ
-      redirect = `${fe}/invite/${inviteCode}`;
+      const liffUrl =
+        `https://liff.line.me/${liffId}` +
+        `?inviteCode=${inviteCode}` +
+        `&scenarioId=${data.scenario_id}`
+
+      console.log("Redirect to LIFF:", liffUrl)
+      return new Response(null, {
+        status: 302,
+        headers: { ...cors, Location: liffUrl },
+      })
     }
 
-    console.log("Redirecting to:", redirect);
-    console.log("Is mobile:", isMobile);
+    // 6) PC → 管理画面のQR表示ルートに返す (React Router で /invite/:code を表示)
+    console.log("PC browser, serving invite page")
+    const html = await Deno.readTextFile("public/index.html")
+    return new Response(html, {
+      status: 200,
+      headers: { ...cors, "Content-Type": "text/html" },
+    })
 
-    return new Response(null, { status: 302, headers: { ...cors, Location: redirect } });
-  } catch (error) {
-    console.error("=== scenario-invite ERROR ===");
-    console.error("Error:", error);
-    return jsonErr(500, `Server error: ${error.message}`);
+  } catch (e: any) {
+    console.error("scenario-invite ERROR:", e)
+    return new Response(JSON.stringify({ error: e.message }), {
+      status: 500,
+      headers: { ...cors, "Content-Type": "application/json" },
+    })
   }
-});
-
-function jsonErr(code: number, msg: string) {
-  return new Response(JSON.stringify({ error: msg }), {
-    status: code,
-    headers: { ...cors, "Content-Type": "application/json" },
-  });
-}
+})
