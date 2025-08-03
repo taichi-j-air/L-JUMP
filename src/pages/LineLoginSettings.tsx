@@ -66,6 +66,8 @@ export default function LineLoginSettings() {
         const loginUrl = generateLoginUrl(channelId)
         const liffId = profile.liff_id || ''
         const liffUrl = profile.liff_url || ''
+        
+        // 修正ポイント：liffIdを使ってエンドポイントURL生成
         const liffEndpointUrl = liffId ? `https://liff.line.me/${liffId}` : ''
         
         setSettings({
@@ -85,11 +87,6 @@ export default function LineLoginSettings() {
       console.error('設定読み込みエラー:', error)
     }
   }
-
- const generateLiffEndpointUrl = (liffId: string) => {
-  return liffId ? `https://liff.line.me/${liffId}` : ''
-}
-
 
   const generateLoginUrl = (channelId: string) => {
     if (!channelId) return ''
@@ -158,6 +155,10 @@ export default function LineLoginSettings() {
         .eq('user_id', user.id)
 
       if (error) throw error
+
+      // LIFF設定保存後、エンドポイントURLを更新
+      const liffEndpointUrl = liffSettings.liffId ? `https://liff.line.me/${liffSettings.liffId}` : ''
+      setLiffSettings(prev => ({ ...prev, liffEndpointUrl }))
 
       toast({
         title: "LIFF設定保存完了",
@@ -277,7 +278,14 @@ export default function LineLoginSettings() {
                 <Input
                   id="liffId"
                   value={liffSettings.liffId}
-                  onChange={(e) => setLiffSettings(prev => ({ ...prev, liffId: e.target.value }))}
+                  onChange={(e) => {
+                    const newLiffId = e.target.value
+                    setLiffSettings(prev => ({ 
+                      ...prev, 
+                      liffId: newLiffId,
+                      liffEndpointUrl: newLiffId ? `https://liff.line.me/${newLiffId}` : ''
+                    }))
+                  }}
                   placeholder="LIFF IDを入力 (例: 2007859465-L5VQg5q9)"
                 />
                 <p className="text-sm text-muted-foreground">
@@ -299,19 +307,21 @@ export default function LineLoginSettings() {
               </div>
 
               <div className="space-y-2">
-                <Label>LIFFエンドポイントURL（読み取り専用）</Label>
+                <Label>LIFFエンドポイントURL（自動生成）</Label>
                 <div className="flex items-center gap-2">
                   <Input value={liffSettings.liffEndpointUrl} readOnly className="font-mono text-sm" />
                   <Button
                     variant="outline"
                     size="sm"
                     onClick={() => copyToClipboard(liffSettings.liffEndpointUrl, "LIFFエンドポイントURL")}
+                    disabled={!liffSettings.liffEndpointUrl}
                   >
                     <Copy className="h-4 w-4" />
                   </Button>
                 </div>
                 <p className="text-sm text-muted-foreground">
-                  このURLをLINE Developers コンソールのLIFF設定で「エンドポイントURL」として設定してください
+                  これがユーザーに配布するURLです。LINE Developers コンソールのLIFF設定では「エンドポイントURL」として設定してください。
+                  ユーザーはこのURLからLIFFアプリにアクセスします。
                 </p>
               </div>
 
@@ -392,10 +402,11 @@ export default function LineLoginSettings() {
                 <p><strong>1.</strong> LINE Developersコンソールにアクセス</p>
                 <p><strong>2.</strong> 新しいチャネルを作成（LINE Login）</p>
                 <p><strong>3.</strong> LIFFアプリケーションを追加</p>
-                <p><strong>4.</strong> LIFFエンドポイントURLに上記URLを設定</p>
-                <p><strong>5.</strong> コールバックURLを設定</p>
+                <p><strong>4.</strong> LIFFのエンドポイントURLには上記「LIFFエンドポイントURL」をそのまま設定</p>
+                <p><strong>5.</strong> コールバックURLを設定（LINE Login用）</p>
                 <p><strong>6.</strong> チャネルID、チャネルシークレット、LIFF ID、LIFF URLを取得</p>
                 <p><strong>7.</strong> 上記フォームに入力してそれぞれ保存</p>
+                <p><strong>8.</strong> 「LIFFエンドポイントURL」をユーザーに配布してアクセスしてもらう</p>
               </div>
             </CardContent>
           </Card>
