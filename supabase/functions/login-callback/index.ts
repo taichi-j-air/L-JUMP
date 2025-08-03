@@ -22,14 +22,14 @@ serve(async (req) => {
     /* ── 1. パラメータ取得 & バリデーション ── */
     const url = new URL(req.url);
     const code  = url.searchParams.get("code");
-    const state = url.searchParams.get("state");   // ← 招待コード
+    const state = url.searchParams.get("state");   // ← 招待コードまたは"login"
     const err   = url.searchParams.get("error");
 
     console.log("Callback parameters:", { code: !!code, state, err });
 
     if (err)      throw new Error("LINE authentication error: " + err);
     if (!code)    throw new Error("Missing authorization code");
-    if (!state)   throw new Error("Missing invite code (state)");
+    if (!state)   throw new Error("Missing state parameter");
 
     /* ── 2. Supabase 初期化 ── */
     const supabase = createClient(
@@ -37,27 +37,49 @@ serve(async (req) => {
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
     );
 
-    /* ── 3. 招待コード由来の設定取得 ── */
-    const { data: cfg, error: cfgErr } = await supabase
-      .from("scenario_invite_codes")
-      .select(`
-        step_scenarios!inner (
-          user_id,
-          profiles!inner (
-            line_login_channel_id,
-            line_login_channel_secret,
-            display_name
-          )
-        )
-      `)
-      .eq("invite_code", state)
-      .eq("is_active", true)
-      .single();
+    let profile: any;
+    let isGeneralLogin = false;
 
-    if (cfgErr || !cfg?.step_scenarios?.profiles) {
-      throw new Error("Profile not found for invite code " + state);
+    /* ── 3. 一般ログインかシナリオ招待かを判定 ── */
+    if (state === "login") {
+      // 一般ログインの場合は、認証済みユーザーのプロファイルを取得
+      // TODO: 実際の実装では、認証されたユーザーのIDを使用する必要があります
+      // 現在は最初のプロファイルを使用（テスト用）
+      const { data: profiles, error: profileErr } = await supabase
+        .from("profiles")
+        .select("line_login_channel_id, line_login_channel_secret, display_name, user_id")
+        .not("line_login_channel_id", "is", null)
+        .not("line_login_channel_secret", "is", null)
+        .limit(1);
+
+      if (profileErr || !profiles || profiles.length === 0) {
+        throw new Error("No valid LINE login configuration found");
+      }
+      profile = profiles[0];
+      isGeneralLogin = true;
+    } else {
+      // 招待コード由来の設定取得
+      const { data: cfg, error: cfgErr } = await supabase
+        .from("scenario_invite_codes")
+        .select(`
+          step_scenarios!inner (
+            user_id,
+            profiles!inner (
+              line_login_channel_id,
+              line_login_channel_secret,
+              display_name
+            )
+          )
+        `)
+        .eq("invite_code", state)
+        .eq("is_active", true)
+        .single();
+
+      if (cfgErr || !cfg?.step_scenarios?.profiles) {
+        throw new Error("Profile not found for invite code " + state);
+      }
+      profile = cfg.step_scenarios.profiles;
     }
-    const profile = cfg.step_scenarios.profiles;
 
     /* ── 4. LINE /token でアクセストークン取得 ── */
     const redirectUri =
@@ -105,7 +127,18 @@ serve(async (req) => {
       .trim()
       .slice(0, 100);
 
-    /* ── 7. line_friends upsert ── */
+    /* ── 7. 一般ログインの場合はプロフィール記録のみ ── */
+    if (isGeneralLogin) {
+      console.log("General login successful for user:", lineProfile.userId);
+      
+      /* ── 9. 完了ページへリダイレクト ── */
+      return Response.redirect(
+        "https://74048ab5-8d5a-425a-ab29-bd5cc50dc2fe.lovableproject.com/?login_success=1",
+        302,
+      );
+    }
+
+    /* ── 8. シナリオ招待の場合：友達とシナリオ登録 ── */
     await supabase.from("line_friends").upsert({
       user_id: profile.user_id,
       line_user_id: lineProfile.userId,
@@ -113,7 +146,7 @@ serve(async (req) => {
       picture_url : lineProfile.pictureUrl ?? null,
     });
 
-    /* ── 8. シナリオ登録 RPC ── */
+    /* ── 9. シナリオ登録 RPC ── */
     const { data: reg, error: regErr } = await supabase.rpc(
       "register_friend_to_scenario",
       {
@@ -128,7 +161,7 @@ serve(async (req) => {
       throw new Error("register_friend_to_scenario failed");
     }
 
-    /* ── 9. 完了ページへリダイレクト ── */
+    /* ── 10. 完了ページへリダイレクト ── */
     return Response.redirect(
       "https://74048ab5-8d5a-425a-ab29-bd5cc50dc2fe.lovableproject.com/?ok=1",
       302,
