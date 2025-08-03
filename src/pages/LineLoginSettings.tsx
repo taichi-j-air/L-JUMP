@@ -64,9 +64,9 @@ export default function LineLoginSettings() {
         const channelId = profile.line_login_channel_id || profile.line_channel_id || ''
         const channelSecret = profile.line_login_channel_secret || profile.line_channel_secret || ''
         const loginUrl = generateLoginUrl(channelId)
-        const liffEndpointUrl = liffId ? `https://liff.line.me/${liffId}` : ''
         const liffId = profile.liff_id || ''
         const liffUrl = profile.liff_url || ''
+        const liffEndpointUrl = liffId ? `https://liff.line.me/${liffId}` : ''
         
         setSettings({
           channelId,
