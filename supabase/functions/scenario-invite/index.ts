@@ -33,6 +33,7 @@ serve(async (req) => {
         id,
         step_scenarios!inner (
           profiles!inner (
+            line_login_channel_id,
             liff_id
           )
         )
@@ -48,23 +49,42 @@ serve(async (req) => {
       return jsonErr(404, "invalid / expired invite code");
     }
     
+    const channelId = data.step_scenarios?.profiles?.line_login_channel_id;
     const liffId = data.step_scenarios?.profiles?.liff_id;
+    console.log("Extracted Channel ID:", channelId);
     console.log("Extracted LIFF ID:", liffId);
     
-    if (!liffId) {
-      console.log("LIFF ID not found in profile");
-      return jsonErr(500, "LIFF ID not configured");
+    if (!channelId) {
+      console.log("LINE Login Channel ID not found in profile");
+      return jsonErr(500, "LINE Login Channel ID not configured");
     }
 
-    /* UA で分岐 */
+    /* UA で分岐: モバイルは直接LINE OAuth、PCはQR表示 */
     const isMobile = /mobile|android|iphone|ipad|ipod/i.test(
       req.headers.get("user-agent") ?? "",
     );
     const fe = "https://74048ab5-8d5a-425a-ab29-bd5cc50dc2fe.lovableproject.com";
 
-    const redirect = isMobile
-      ? `https://liff.line.me/${liffId}?code=${inviteCode}` // LINEアプリを開く
-      : `${fe}/invite/${inviteCode}`;                       // PC QR
+    let redirect: string;
+    
+    if (isMobile) {
+      // モバイル: 直接LINE OAuth認証URLにリダイレクト（LINEのアドバイス通り）
+      const redirectUri = "https://rtjxurmuaawyzjcdkqxt.supabase.co/functions/v1/login-callback";
+      const authUrl = 
+        `https://access.line.me/oauth2/v2.1/authorize` +
+        `?response_type=code` +
+        `&client_id=${channelId}` +
+        `&redirect_uri=${encodeURIComponent(redirectUri)}` +
+        `&state=${inviteCode}` +
+        `&scope=profile%20openid` +
+        `&bot_prompt=aggressive`;
+      
+      console.log("Generated AUTH URL:", authUrl);
+      redirect = authUrl;
+    } else {
+      // PC: QR表示ページへ
+      redirect = `${fe}/invite/${inviteCode}`;
+    }
 
     console.log("Redirecting to:", redirect);
     console.log("Is mobile:", isMobile);
