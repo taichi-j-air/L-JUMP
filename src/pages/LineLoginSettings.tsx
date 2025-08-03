@@ -67,8 +67,8 @@ export default function LineLoginSettings() {
         const liffId = profile.liff_id || ''
         const liffUrl = profile.liff_url || ''
         
-        // 修正ポイント：liffIdを使ってエンドポイントURL生成
-        const liffEndpointUrl = liffId ? `https://liff.line.me/${liffId}` : ''
+        // LIFF認証専用ページのエンドポイントURL生成
+        const liffEndpointUrl = liffId ? `${window.location.origin}/liff` : ''
         
         setSettings({
           channelId,
@@ -157,7 +157,7 @@ export default function LineLoginSettings() {
       if (error) throw error
 
       // LIFF設定保存後、エンドポイントURLを更新
-      const liffEndpointUrl = liffSettings.liffId ? `https://liff.line.me/${liffSettings.liffId}` : ''
+      const liffEndpointUrl = liffSettings.liffId ? `${window.location.origin}/liff` : ''
       setLiffSettings(prev => ({ ...prev, liffEndpointUrl }))
 
       toast({
@@ -283,7 +283,7 @@ export default function LineLoginSettings() {
                     setLiffSettings(prev => ({ 
                       ...prev, 
                       liffId: newLiffId,
-                      liffEndpointUrl: newLiffId ? `https://liff.line.me/${newLiffId}` : ''
+                      liffEndpointUrl: newLiffId ? `${window.location.origin}/liff` : ''
                     }))
                   }}
                   placeholder="LIFF IDを入力 (例: 2007859465-L5VQg5q9)"
@@ -320,8 +320,8 @@ export default function LineLoginSettings() {
                   </Button>
                 </div>
                 <p className="text-sm text-muted-foreground">
-                  これがユーザーに配布するURLです。LINE Developers コンソールのLIFF設定では「エンドポイントURL」として設定してください。
-                  ユーザーはこのURLからLIFFアプリにアクセスします。
+                  LINE Developers コンソールのLIFF設定で「エンドポイントURL」として設定してください。
+                  ユーザーは「https://liff.line.me/{"{LIFF_ID}"}」からLIFF認証にアクセスできます。
                 </p>
               </div>
 

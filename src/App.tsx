@@ -25,6 +25,7 @@ import EmailVerify from "./pages/EmailVerify";
 import ErrorPage from "./pages/ErrorPage";
 import IndividualChatPage from "./pages/IndividualChatPage";
 import ChatInboxPage from "./pages/ChatInboxPage";
+import LiffAuth from "./pages/LiffAuth";
 import { supabase } from "@/integrations/supabase/client";
 import { User } from "@supabase/supabase-js";
 
@@ -67,6 +68,7 @@ function AppContent() {
     return (
       <div className="min-h-screen">
         <Routes>
+          <Route path="/liff" element={<LiffAuth />} />
           <Route path="/liff-handler" element={<LiffHandler />} />
           <Route path="/invite/:inviteCode" element={<InvitePage />} />
           <Route path="/auth" element={<Auth />} />
@@ -107,6 +109,7 @@ function AppContent() {
           <main className="flex-1 p-2">
             <Routes>
               <Route path="/" element={<Index />} />
+              <Route path="/liff" element={<LiffAuth />} />
               <Route path="/liff-handler" element={<LiffHandler />} />
               <Route path="/invite/:inviteCode" element={<InvitePage />} />
               <Route path="/line-api-settings" element={<LineApiSettings />} />
