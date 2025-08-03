@@ -64,7 +64,7 @@ export default function LineLoginSettings() {
         const channelId = profile.line_login_channel_id || profile.line_channel_id || ''
         const channelSecret = profile.line_login_channel_secret || profile.line_channel_secret || ''
         const loginUrl = generateLoginUrl(channelId)
-        const liffEndpointUrl = generateLiffEndpointUrl()
+        const liffEndpointUrl = liffId ? `https://liff.line.me/${liffId}` : ''
         const liffId = profile.liff_id || ''
         const liffUrl = profile.liff_url || ''
         
@@ -86,11 +86,10 @@ export default function LineLoginSettings() {
     }
   }
 
-  const generateLiffEndpointUrl = () => {
-    // LIFFエンドポイントURLはReactアプリのURL（フロントエンド）を使用
-    // Supabase Edge Function URLではない
-    return `${window.location.origin}/invite`
-  }
+ const generateLiffEndpointUrl = (liffId: string) => {
+  return liffId ? `https://liff.line.me/${liffId}` : ''
+}
+
 
   const generateLoginUrl = (channelId: string) => {
     if (!channelId) return ''
