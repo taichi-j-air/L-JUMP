@@ -659,6 +659,26 @@ export type Database = {
           usage_count: number | null
           user_id: string | null
         }
+        Insert: {
+          clicks?: never
+          created_at?: string | null
+          friends?: never
+          invite_code?: string | null
+          is_active?: boolean | null
+          scenario_id?: string | null
+          usage_count?: number | null
+          user_id?: string | null
+        }
+        Update: {
+          clicks?: never
+          created_at?: string | null
+          friends?: never
+          invite_code?: string | null
+          is_active?: boolean | null
+          scenario_id?: string | null
+          usage_count?: number | null
+          user_id?: string | null
+        }
         Relationships: [
           {
             foreignKeyName: "scenario_invite_codes_scenario_id_fkey"
