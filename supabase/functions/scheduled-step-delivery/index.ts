@@ -335,7 +335,7 @@ async function markStepAsDelivered(supabase: any, trackingId: string, scenarioId
       .from('step_delivery_tracking')
       .select(`
         id, 
-        steps!inner(step_order),
+        steps!inner(step_order, delivery_type),
         scheduled_delivery_at
       `)
       .eq('scenario_id', scenarioId)
@@ -352,8 +352,21 @@ async function markStepAsDelivered(supabase: any, trackingId: string, scenarioId
     
     if (nextSteps && nextSteps.length > 0) {
       const nextStep = nextSteps[0]
+      
+      // If next step uses relative_to_previous delivery, recalculate its scheduled time
+      if (nextStep.steps.delivery_type === 'relative_to_previous') {
+        await recalculateRelativeStepTiming(supabase, nextStep.id, scenarioId, friendId, deliveredAt)
+      }
+      
       const now = new Date()
-      const scheduledTime = new Date(nextStep.scheduled_delivery_at)
+      // Re-fetch the potentially updated scheduled time
+      const { data: updatedStep } = await supabase
+        .from('step_delivery_tracking')
+        .select('scheduled_delivery_at')
+        .eq('id', nextStep.id)
+        .single()
+      
+      const scheduledTime = new Date(updatedStep?.scheduled_delivery_at || nextStep.scheduled_delivery_at)
       
       // Mark next step as ready if its time has come, or update timing
       if (scheduledTime <= now) {
@@ -380,5 +393,70 @@ async function markStepAsDelivered(supabase: any, trackingId: string, scenarioId
   } catch (error) {
     console.error('Step completion processing error:', error)
     throw error
+  }
+}
+
+// Recalculate timing for steps that are relative to previous step
+async function recalculateRelativeStepTiming(supabase: any, stepTrackingId: string, scenarioId: string, friendId: string, previousStepDeliveredAt: string) {
+  try {
+    console.log('Recalculating relative step timing for:', stepTrackingId)
+    
+    // Get step details and friend info
+    const { data: stepData, error: stepError } = await supabase
+      .from('step_delivery_tracking')
+      .select(`
+        steps!inner(
+          delivery_type, delivery_days, delivery_hours, delivery_minutes, delivery_seconds, delivery_time_of_day
+        ),
+        line_friends!inner(added_at)
+      `)
+      .eq('id', stepTrackingId)
+      .single()
+    
+    if (stepError || !stepData) {
+      console.error('Error fetching step data for recalculation:', stepError)
+      return
+    }
+    
+    const step = stepData.steps
+    const friendAddedAt = stepData.line_friends.added_at
+    
+    // Calculate new scheduled time using the updated function
+    const { data: newScheduledTime, error: calcError } = await supabase
+      .rpc('calculate_scheduled_delivery_time', {
+        p_friend_added_at: friendAddedAt,
+        p_delivery_type: step.delivery_type,
+        p_delivery_seconds: step.delivery_seconds || 0,
+        p_delivery_minutes: step.delivery_minutes || 0,
+        p_delivery_hours: step.delivery_hours || 0,
+        p_delivery_days: step.delivery_days || 0,
+        p_specific_time: null,
+        p_previous_step_delivered_at: previousStepDeliveredAt,
+        p_delivery_time_of_day: step.delivery_time_of_day
+      })
+    
+    if (calcError) {
+      console.error('Error calculating new scheduled time:', calcError)
+      return
+    }
+    
+    // Update the scheduled delivery time
+    const { error: updateError } = await supabase
+      .from('step_delivery_tracking')
+      .update({
+        scheduled_delivery_at: newScheduledTime,
+        next_check_at: new Date(new Date(newScheduledTime).getTime() - 5000).toISOString(),
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', stepTrackingId)
+    
+    if (updateError) {
+      console.error('Error updating scheduled time:', updateError)
+    } else {
+      console.log(`Updated relative step timing to: ${newScheduledTime}`)
+    }
+    
+  } catch (error) {
+    console.error('Error in recalculateRelativeStepTiming:', error)
   }
 }

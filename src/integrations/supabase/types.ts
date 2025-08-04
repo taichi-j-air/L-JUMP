@@ -593,7 +593,9 @@ export type Database = {
           delivery_days: number | null
           delivery_hours: number | null
           delivery_minutes: number | null
+          delivery_relative_to_previous: boolean | null
           delivery_seconds: number
+          delivery_time_of_day: string | null
           delivery_type: string
           id: string
           name: string
@@ -607,7 +609,9 @@ export type Database = {
           delivery_days?: number | null
           delivery_hours?: number | null
           delivery_minutes?: number | null
+          delivery_relative_to_previous?: boolean | null
           delivery_seconds?: number
+          delivery_time_of_day?: string | null
           delivery_type: string
           id?: string
           name: string
@@ -621,7 +625,9 @@ export type Database = {
           delivery_days?: number | null
           delivery_hours?: number | null
           delivery_minutes?: number | null
+          delivery_relative_to_previous?: boolean | null
           delivery_seconds?: number
+          delivery_time_of_day?: string | null
           delivery_type?: string
           id?: string
           name?: string
@@ -666,15 +672,27 @@ export type Database = {
     }
     Functions: {
       calculate_scheduled_delivery_time: {
-        Args: {
-          p_friend_added_at: string
-          p_delivery_type: string
-          p_delivery_seconds: number
-          p_delivery_minutes: number
-          p_delivery_hours: number
-          p_delivery_days: number
-          p_specific_time?: string
-        }
+        Args:
+          | {
+              p_friend_added_at: string
+              p_delivery_type: string
+              p_delivery_seconds: number
+              p_delivery_minutes: number
+              p_delivery_hours: number
+              p_delivery_days: number
+              p_specific_time?: string
+            }
+          | {
+              p_friend_added_at: string
+              p_delivery_type: string
+              p_delivery_seconds: number
+              p_delivery_minutes: number
+              p_delivery_hours: number
+              p_delivery_days: number
+              p_specific_time?: string
+              p_previous_step_delivered_at?: string
+              p_delivery_time_of_day?: string
+            }
         Returns: string
       }
       check_rate_limit: {
