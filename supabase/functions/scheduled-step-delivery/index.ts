@@ -12,7 +12,10 @@ Deno.serve(async (req) => {
   }
 
   try {
-    console.log('Scheduled step delivery checker started')
+    const body = await req.json().catch(() => ({}))
+    const { offset = 0 } = body
+    
+    console.log('High-frequency step delivery checker started with offset:', offset)
 
     // Initialize Supabase client
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!
@@ -20,7 +23,10 @@ Deno.serve(async (req) => {
     
     const supabase = createClient(supabaseUrl, supabaseServiceKey)
 
-    // Find steps that are ready for delivery (scheduled time has passed)
+    const now = new Date()
+    const checkTime = new Date(now.getTime() + (offset * 1000)) // Add offset for staggered checks
+
+    // Find steps that are ready for delivery with high precision
     const { data: readySteps, error: stepsError } = await supabase
       .from('step_delivery_tracking')
       .select(`
@@ -38,9 +44,9 @@ Deno.serve(async (req) => {
         )
       `)
       .eq('status', 'ready')
-      .lte('scheduled_delivery_at', new Date().toISOString())
+      .lte('scheduled_delivery_at', now.toISOString())
       .order('scheduled_delivery_at', { ascending: true })
-      .limit(50) // Process up to 50 steps at a time
+      .limit(100) // Process up to 100 steps at a time for better performance
 
     if (stepsError) {
       console.error('Error fetching ready steps:', stepsError)
@@ -54,48 +60,43 @@ Deno.serve(async (req) => {
 
     let deliveredCount = 0
     let errorCount = 0
+    const deliveryPromises: Promise<void>[] = []
 
     if (readySteps && readySteps.length > 0) {
-      // Process each ready step
+      // Process steps in parallel for better performance
       for (const stepTracking of readySteps) {
-        try {
-          console.log(`Processing step delivery for tracking ID: ${stepTracking.id}`)
-          
-          // Mark step as delivering to avoid duplicate processing
-          const { error: markingError } = await supabase
-            .from('step_delivery_tracking')
-            .update({ status: 'delivering' })
-            .eq('id', stepTracking.id)
-
-          if (markingError) {
-            console.error('Error marking step as delivering:', markingError)
-            errorCount++
-            continue
-          }
-
-          // Deliver the step messages
-          await deliverStepMessages(supabase, stepTracking)
-          deliveredCount++
-
-        } catch (error) {
-          console.error(`Error processing step ${stepTracking.id}:`, error)
-          errorCount++
-          
-          // Reset status to ready for retry later
-          await supabase
-            .from('step_delivery_tracking')
-            .update({ status: 'ready' })
-            .eq('id', stepTracking.id)
-        }
+        deliveryPromises.push(
+          processStepDelivery(supabase, stepTracking)
+            .then(() => {
+              deliveredCount++
+              console.log(`Successfully delivered step ${stepTracking.id}`)
+            })
+            .catch((error) => {
+              errorCount++
+              console.error(`Failed to deliver step ${stepTracking.id}:`, error)
+            })
+        )
       }
+
+      // Wait for all deliveries to complete
+      await Promise.allSettled(deliveryPromises)
+    }
+
+    // Schedule next check cycle if there are more steps to process
+    if (readySteps && readySteps.length === 100) {
+      // If we processed the maximum, there might be more - trigger another check
+      EdgeRuntime.waitUntil(
+        scheduleNextCheck(supabase, 5) // Check again in 5 seconds
+      )
     }
 
     const result = {
-      message: 'Scheduled delivery check completed',
+      message: 'High-frequency delivery check completed',
       delivered: deliveredCount,
       errors: errorCount,
       total_checked: readySteps?.length || 0,
-      timestamp: new Date().toISOString()
+      timestamp: now.toISOString(),
+      offset: offset
     }
 
     console.log('Delivery summary:', result)
@@ -116,6 +117,69 @@ Deno.serve(async (req) => {
     )
   }
 })
+
+// Process a single step delivery
+async function processStepDelivery(supabase: any, stepTracking: any): Promise<void> {
+  try {
+    console.log(`Processing step delivery for tracking ID: ${stepTracking.id}`)
+    
+    // Mark step as delivering to avoid duplicate processing
+    const { error: markingError } = await supabase
+      .from('step_delivery_tracking')
+      .update({ 
+        status: 'delivering',
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', stepTracking.id)
+      .eq('status', 'ready') // Only update if still ready (prevents race conditions)
+
+    if (markingError) {
+      console.error('Error marking step as delivering:', markingError)
+      throw markingError
+    }
+
+    // Deliver the step messages
+    await deliverStepMessages(supabase, stepTracking)
+
+  } catch (error) {
+    console.error(`Error processing step ${stepTracking.id}:`, error)
+    
+    // Reset status to ready for retry later (with exponential backoff)
+    const retryTime = new Date(Date.now() + 30000) // Retry in 30 seconds
+    await supabase
+      .from('step_delivery_tracking')
+      .update({ 
+        status: 'ready',
+        scheduled_delivery_at: retryTime.toISOString(),
+        next_check_at: new Date(retryTime.getTime() - 5000).toISOString()
+      })
+      .eq('id', stepTracking.id)
+    
+    throw error
+  }
+}
+
+// Schedule next check for continuous processing
+async function scheduleNextCheck(supabase: any, delaySeconds: number): Promise<void> {
+  try {
+    await new Promise(resolve => setTimeout(resolve, delaySeconds * 1000))
+    
+    const response = await fetch('https://rtjxurmuaawyzjcdkqxt.supabase.co/functions/v1/scheduled-step-delivery', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${Deno.env.get('SUPABASE_ANON_KEY')}`
+      },
+      body: JSON.stringify({ source: 'self-trigger' })
+    })
+    
+    if (!response.ok) {
+      console.error('Failed to trigger next check:', response.status)
+    }
+  } catch (error) {
+    console.error('Error scheduling next check:', error)
+  }
+}
 
 // Deliver messages for a specific step
 async function deliverStepMessages(supabase: any, stepTracking: any) {
@@ -142,14 +206,17 @@ async function deliverStepMessages(supabase: any, stepTracking: any) {
       throw new Error('LINE access token not found')
     }
     
-    // Send each message
-    for (const message of sortedMessages) {
+    // Send messages with minimal delay for better timing
+    for (let i = 0; i < sortedMessages.length; i++) {
+      const message = sortedMessages[i]
       try {
         await sendLineMessage(accessToken, lineUserId, message)
         console.log('Message sent successfully:', message.id)
         
-        // Add small delay between messages to avoid rate limiting
-        await new Promise(resolve => setTimeout(resolve, 500))
+        // Only add delay between multiple messages, not after the last one
+        if (i < sortedMessages.length - 1) {
+          await new Promise(resolve => setTimeout(resolve, 300)) // Reduced to 300ms
+        }
       } catch (error) {
         console.error('Message send error:', message.id, error)
         throw error // Re-throw to handle at step level
@@ -241,15 +308,18 @@ async function sendLineMessage(accessToken: string, userId: string, message: any
   }
 }
 
-// Mark step as delivered and prepare the next step
+// Mark step as delivered and prepare the next step with precise timing
 async function markStepAsDelivered(supabase: any, trackingId: string, scenarioId: string, friendId: string, currentStepOrder: number) {
   try {
+    const deliveredAt = new Date().toISOString()
+    
     // Mark current step as delivered
     const { error: updateError } = await supabase
       .from('step_delivery_tracking')
       .update({
         status: 'delivered',
-        delivered_at: new Date().toISOString()
+        delivered_at: deliveredAt,
+        updated_at: deliveredAt
       })
       .eq('id', trackingId)
     
@@ -282,15 +352,17 @@ async function markStepAsDelivered(supabase: any, trackingId: string, scenarioId
     
     if (nextSteps && nextSteps.length > 0) {
       const nextStep = nextSteps[0]
-      
-      // Mark next step as ready only if its scheduled time has passed or is immediate
       const now = new Date()
       const scheduledTime = new Date(nextStep.scheduled_delivery_at)
       
+      // Mark next step as ready if its time has come, or update timing
       if (scheduledTime <= now) {
         const { error: readyError } = await supabase
           .from('step_delivery_tracking')
-          .update({ status: 'ready' })
+          .update({ 
+            status: 'ready',
+            updated_at: now.toISOString()
+          })
           .eq('id', nextStep.id)
         
         if (readyError) {
@@ -299,7 +371,7 @@ async function markStepAsDelivered(supabase: any, trackingId: string, scenarioId
           console.log('Next step prepared for immediate delivery:', nextStep.steps.step_order)
         }
       } else {
-        console.log(`Next step scheduled for later: ${nextStep.steps.step_order} at ${scheduledTime}`)
+        console.log(`Next step scheduled for: ${nextStep.steps.step_order} at ${scheduledTime}`)
       }
     } else {
       console.log('All steps completed for this scenario')

@@ -462,6 +462,7 @@ export type Database = {
           delivered_at: string | null
           friend_id: string
           id: string
+          next_check_at: string | null
           scenario_id: string
           scheduled_delivery_at: string | null
           status: string
@@ -473,6 +474,7 @@ export type Database = {
           delivered_at?: string | null
           friend_id: string
           id?: string
+          next_check_at?: string | null
           scenario_id: string
           scheduled_delivery_at?: string | null
           status?: string
@@ -484,6 +486,7 @@ export type Database = {
           delivered_at?: string | null
           friend_id?: string
           id?: string
+          next_check_at?: string | null
           scenario_id?: string
           scheduled_delivery_at?: string | null
           status?: string
