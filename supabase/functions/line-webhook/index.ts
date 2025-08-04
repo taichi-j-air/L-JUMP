@@ -417,7 +417,7 @@ async function startStepDelivery(supabase: any, scenarioId: string, friendId: st
   try {
     console.log('ステップ配信プロセスを開始:', { scenarioId, friendId })
     
-    // Get the first step that should be delivered (status = 'ready')
+    // Get steps that are ready for immediate delivery (scheduled time has passed or is immediate)
     const { data: readySteps, error: stepsError } = await supabase
       .from('step_delivery_tracking')
       .select(`
@@ -433,6 +433,7 @@ async function startStepDelivery(supabase: any, scenarioId: string, friendId: st
       .eq('scenario_id', scenarioId)
       .eq('friend_id', friendId)
       .eq('status', 'ready')
+      .lte('scheduled_delivery_at', new Date().toISOString())
       .order('steps.step_order')
       .limit(1)
     
@@ -442,25 +443,15 @@ async function startStepDelivery(supabase: any, scenarioId: string, friendId: st
     }
     
     if (!readySteps || readySteps.length === 0) {
-      console.log('配信準備完了のステップが見つかりません')
+      console.log('即座に配信可能なステップが見つかりません（スケジュール配信システムが処理します）')
       return
     }
     
     const firstStep = readySteps[0]
-    console.log('最初のステップを配信します:', firstStep.steps.step_order)
+    console.log('即座に配信するステップ:', firstStep.steps.step_order)
     
-    // Deliver the first step immediately if it's set for immediate delivery
-    if (firstStep.steps.delivery_type === 'immediately' || 
-        (firstStep.steps.delivery_days === 0 && 
-         firstStep.steps.delivery_hours === 0 && 
-         firstStep.steps.delivery_minutes === 0 &&
-         firstStep.steps.delivery_seconds === 0)) {
-      
-      await deliverStepMessages(supabase, firstStep)
-    } else {
-      console.log('遅延配信ステップのため、スケジュール処理が必要です')
-      // For delayed delivery, you would implement scheduling logic here
-    }
+    // Deliver immediately eligible steps
+    await deliverStepMessages(supabase, firstStep)
     
   } catch (error) {
     console.error('ステップ配信プロセスエラー:', error)
