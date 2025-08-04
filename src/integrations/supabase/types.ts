@@ -463,6 +463,7 @@ export type Database = {
           friend_id: string
           id: string
           scenario_id: string
+          scheduled_delivery_at: string | null
           status: string
           step_id: string
           updated_at: string
@@ -473,6 +474,7 @@ export type Database = {
           friend_id: string
           id?: string
           scenario_id: string
+          scheduled_delivery_at?: string | null
           status?: string
           step_id: string
           updated_at?: string
@@ -483,6 +485,7 @@ export type Database = {
           friend_id?: string
           id?: string
           scenario_id?: string
+          scheduled_delivery_at?: string | null
           status?: string
           step_id?: string
           updated_at?: string
@@ -659,6 +662,18 @@ export type Database = {
       }
     }
     Functions: {
+      calculate_scheduled_delivery_time: {
+        Args: {
+          p_friend_added_at: string
+          p_delivery_type: string
+          p_delivery_seconds: number
+          p_delivery_minutes: number
+          p_delivery_hours: number
+          p_delivery_days: number
+          p_specific_time?: string
+        }
+        Returns: string
+      }
       check_rate_limit: {
         Args: {
           identifier: string
