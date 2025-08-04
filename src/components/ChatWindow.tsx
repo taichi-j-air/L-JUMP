@@ -206,9 +206,9 @@ export function ChatWindow({ user, friend, onClose }: ChatWindowProps) {
   }
 
   return (
-    <div className="flex gap-4">
-      <Card className="h-[600px] flex flex-col flex-1">
-        <CardHeader className="flex-row items-center space-y-0 pb-2">
+    <div className="flex gap-4 h-full">
+      <Card className="min-h-[600px] max-h-[80vh] flex flex-col flex-1">
+        <CardHeader className="flex-row items-center space-y-0 pb-2 flex-shrink-0">
           <Avatar className="h-8 w-8 mr-3">
             <AvatarImage src={friend.picture_url || ""} alt={friend.display_name || ""} />
             <AvatarFallback>
@@ -223,71 +223,71 @@ export function ChatWindow({ user, friend, onClose }: ChatWindowProps) {
           </Button>
         </CardHeader>
       
-      <CardContent className="flex-1 flex flex-col p-4">
-        <div className="flex-1 overflow-y-auto space-y-4 mb-4">
-          {loading ? (
-            <div className="text-center text-muted-foreground py-8">
-              <Loader2 className="h-6 w-6 animate-spin mx-auto mb-2" />
-              <p>メッセージを読み込み中...</p>
-            </div>
-          ) : messages.length === 0 ? (
-            <div className="text-center text-muted-foreground py-8">
-              <p>メッセージはまだありません</p>
-              <p className="text-sm">最初のメッセージを送信してみましょう</p>
-            </div>
-          ) : (
-            messages.map((message) => (
-              <div
-                key={message.id}
-                className={`flex ${message.message_type === 'outgoing' ? 'justify-end' : 'justify-start'}`}
-              >
-                <div
-                  className={`max-w-[80%] rounded-lg px-3 py-2 ${
-                    message.message_type === 'outgoing'
-                      ? 'bg-primary text-primary-foreground'
-                      : 'bg-muted'
-                  }`}
-                >
-                  <p className="text-sm">{message.message_text}</p>
-                  <p className="text-xs opacity-70 mt-1">
-                    {new Date(message.sent_at).toLocaleTimeString('ja-JP', {
-                      hour: '2-digit',
-                      minute: '2-digit'
-                    })}
-                  </p>
-                </div>
+        <CardContent className="flex-1 flex flex-col p-4 min-h-0">
+          <div className="flex-1 overflow-y-auto space-y-4 mb-4 min-h-0">
+            {loading ? (
+              <div className="text-center text-muted-foreground py-8">
+                <Loader2 className="h-6 w-6 animate-spin mx-auto mb-2" />
+                <p>メッセージを読み込み中...</p>
               </div>
-            ))
-          )}
-          <div ref={messagesEndRef} />
-        </div>
-        
-        <div className="flex gap-2">
-          <Input
-            value={newMessage}
-            onChange={(e) => setNewMessage(e.target.value)}
-            onKeyDown={handleKeyDown}
-            placeholder="メッセージを入力..."
-            disabled={sending}
-            className="flex-1"
-          />
-          <Button 
-            onClick={sendMessage} 
-            disabled={!newMessage.trim() || sending}
-            size="icon"
-          >
-            {sending ? (
-              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : messages.length === 0 ? (
+              <div className="text-center text-muted-foreground py-8">
+                <p>メッセージはまだありません</p>
+                <p className="text-sm">最初のメッセージを送信してみましょう</p>
+              </div>
             ) : (
-              <Send className="h-4 w-4" />
+              messages.map((message) => (
+                <div
+                  key={message.id}
+                  className={`flex ${message.message_type === 'outgoing' ? 'justify-end' : 'justify-start'}`}
+                >
+                  <div
+                    className={`max-w-[80%] rounded-lg px-3 py-2 word-wrap break-words ${
+                      message.message_type === 'outgoing'
+                        ? 'bg-primary text-primary-foreground'
+                        : 'bg-muted'
+                    }`}
+                  >
+                    <p className="text-sm whitespace-pre-wrap">{message.message_text}</p>
+                    <p className="text-xs opacity-70 mt-1">
+                      {new Date(message.sent_at).toLocaleTimeString('ja-JP', {
+                        hour: '2-digit',
+                        minute: '2-digit'
+                      })}
+                    </p>
+                  </div>
+                </div>
+              ))
             )}
-          </Button>
-        </div>
-      </CardContent>
-    </Card>
-    <div className="w-80">
-      <MessageQuotaDisplay user={user} />
+            <div ref={messagesEndRef} />
+          </div>
+          
+          <div className="flex gap-2 flex-shrink-0">
+            <Input
+              value={newMessage}
+              onChange={(e) => setNewMessage(e.target.value)}
+              onKeyDown={handleKeyDown}
+              placeholder="メッセージを入力..."
+              disabled={sending}
+              className="flex-1"
+            />
+            <Button 
+              onClick={sendMessage} 
+              disabled={!newMessage.trim() || sending}
+              size="icon"
+            >
+              {sending ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <Send className="h-4 w-4" />
+              )}
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+      <div className="w-80 flex-shrink-0">
+        <MessageQuotaDisplay user={user} />
+      </div>
     </div>
-  </div>
   )
 }
