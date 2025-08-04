@@ -18,12 +18,13 @@ export interface Step {
   scenario_id: string
   name: string
   step_order: number
-  delivery_type: 'after_registration' | 'specific_time'
+  delivery_type: 'relative' | 'specific_time' | 'relative_to_previous'
   delivery_days: number
   delivery_hours: number
   delivery_minutes: number
   delivery_seconds: number
   specific_time?: string
+  delivery_time_of_day?: string
   created_at: string
   updated_at: string
 }
@@ -266,7 +267,7 @@ export const useStepScenarios = (userId: string | undefined) => {
           scenario_id: scenarioId,
           name,
           step_order: stepOrder,
-          delivery_type: 'after_registration',
+          delivery_type: 'relative',
           delivery_days: 0,
           delivery_hours: 0,
           delivery_minutes: 0,

@@ -169,6 +169,7 @@ export default function StepDeliveryPage() {
     if (timing.delivery_minutes !== undefined) updates.delivery_minutes = timing.delivery_minutes
     if (timing.delivery_seconds !== undefined) updates.delivery_seconds = timing.delivery_seconds
     if (timing.specific_time !== undefined) updates.specific_time = timing.specific_time
+    if (timing.delivery_time_of_day !== undefined) updates.delivery_time_of_day = timing.delivery_time_of_day
 
     const updatedStep = await updateStep(selectedStep.id, updates)
     if (updatedStep) {
@@ -388,7 +389,7 @@ export default function StepDeliveryPage() {
                         <Label className="text-sm">配信タイプ</Label>
                         <Select
                           value={selectedStep.delivery_type}
-                          onValueChange={(value: 'after_registration' | 'specific_time') => 
+                          onValueChange={(value: 'relative' | 'specific_time' | 'relative_to_previous') => 
                             handleUpdateStepTiming({ delivery_type: value })
                           }
                         >
@@ -396,15 +397,14 @@ export default function StepDeliveryPage() {
                             <SelectValue />
                           </SelectTrigger>
                           <SelectContent>
-                            <SelectItem value="after_registration">
-                              {selectedScenarioSteps.findIndex(s => s.id === selectedStep.id) === 0 ? '登録後の時間指定' : '前ステップからの時間指定'}
-                            </SelectItem>
-                            <SelectItem value="specific_time">日時指定</SelectItem>
+                            <SelectItem value="relative">①時間指定（経過時間）</SelectItem>
+                            <SelectItem value="specific_time">②日時指定（固定日時）</SelectItem>
+                            <SelectItem value="relative_to_previous">③日数+時刻指定</SelectItem>
                           </SelectContent>
                         </Select>
                       </div>
 
-                      {selectedStep.delivery_type === 'after_registration' && (
+                      {selectedStep.delivery_type === 'relative' && (
                         <div className="grid grid-cols-4 gap-2">
                           <div>
                             <Label className="text-xs">日</Label>
@@ -461,6 +461,30 @@ export default function StepDeliveryPage() {
                             value={selectedStep.specific_time?.substring(0, 16) || ''}
                             onChange={(e) => handleUpdateStepTiming({ specific_time: e.target.value ? new Date(e.target.value).toISOString() : undefined })}
                           />
+                        </div>
+                      )}
+
+                      {selectedStep.delivery_type === 'relative_to_previous' && (
+                        <div className="space-y-3">
+                          <div>
+                            <Label className="text-sm">日数</Label>
+                            <Input
+                              type="number"
+                              min="0"
+                              className="h-8"
+                              value={selectedStep.delivery_days || 0}
+                              onChange={(e) => handleUpdateStepTiming({ delivery_days: parseInt(e.target.value) || 0 })}
+                            />
+                          </div>
+                          <div>
+                            <Label className="text-sm">配信時刻</Label>
+                            <Input
+                              type="time"
+                              className="h-8"
+                              value={selectedStep.delivery_time_of_day || ''}
+                              onChange={(e) => handleUpdateStepTiming({ delivery_time_of_day: e.target.value })}
+                            />
+                          </div>
                         </div>
                       )}
                      </CardContent>
