@@ -10,6 +10,7 @@ import { AppHeader } from "./components/AppHeader";
 import Index from "./pages/Index";
 import Auth from "./pages/Auth";
 import InvitePage from "./pages/InvitePage";
+import LiffInvitePage from "./pages/LiffInvitePage";
 import LiffHandler from "./pages/LiffHandler";
 import LineApiSettings from "./pages/LineApiSettings";
 import LineLoginSettings from "./pages/LineLoginSettings";
@@ -70,6 +71,7 @@ function AppContent() {
         <Routes>
           <Route path="/liff" element={<LiffAuth />} />
           <Route path="/liff-handler" element={<LiffHandler />} />
+          <Route path="/liff-invite" element={<LiffInvitePage />} />
           <Route path="/invite/:inviteCode" element={<InvitePage />} />
           <Route path="/auth" element={<Auth />} />
           <Route path="/verify" element={<EmailVerify />} />
@@ -111,6 +113,7 @@ function AppContent() {
               <Route path="/" element={<Index />} />
               <Route path="/liff" element={<LiffAuth />} />
               <Route path="/liff-handler" element={<LiffHandler />} />
+              <Route path="/liff-invite" element={<LiffInvitePage />} />
               <Route path="/invite/:inviteCode" element={<InvitePage />} />
               <Route path="/line-api-settings" element={<LineApiSettings />} />
               <Route path="/line-login-settings" element={<LineLoginSettings />} />

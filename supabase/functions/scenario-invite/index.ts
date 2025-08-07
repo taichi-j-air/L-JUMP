@@ -18,6 +18,10 @@ serve(async (req) => {
     return new Response(null, { status: 204, headers: cors });
   }
 
+  // ユーザーエージェントでモバイル判定
+  const userAgent = req.headers.get("user-agent") || "";
+  const isMobile = /mobile|android|iphone|ipad|ipod/i.test(userAgent);
+
   // DB初期化
   const db = createClient(
     Deno.env.get("SUPABASE_URL")!,
@@ -35,7 +39,7 @@ serve(async (req) => {
         profiles!inner (
           user_id,
           line_bot_id,
-          add_friend_url
+          liff_id
         )
       )
     `)
@@ -49,31 +53,23 @@ serve(async (req) => {
   }
 
   const profile = data.step_scenarios.profiles;
-  const addFriendUrl = profile.add_friend_url;
   const botId = profile.line_bot_id;
+  const liffId = profile.liff_id;
 
-  // 友だち追加URLを構成 - botIdを優先して使用
-  let lineUrl = "";
-  if (botId) {
-    // botId形式を優先（安定的なURL生成）
-    const id = botId.startsWith("@") ? botId : `@${botId}`;
-    lineUrl = `https://line.me/R/ti/p/${id}`;
-  } else if (addFriendUrl && addFriendUrl.startsWith('https://lin.ee/')) {
-    // lin.ee形式の短縮URL（fallback）
-    lineUrl = addFriendUrl;
-  } else {
-    return new Response("LINE Bot設定が不完全です", { status: 500, headers: cors });
+  // モバイルの場合：LIFF経由で友だち状態チェック
+  if (isMobile && liffId) {
+    const liffUrl = `https://liff.line.me/${liffId}?code=${encodeURIComponent(inviteCode)}`;
+    return new Response(null, {
+      status: 302,
+      headers: { ...cors, Location: liffUrl },
+    });
   }
 
-  // 招待コードをstateパラメータとして付与（※URL末尾にクエリで必ず追加）
-  const separator = lineUrl.includes("?") ? "&" : "?";
-  lineUrl += `${separator}state=${encodeURIComponent(inviteCode)}`;
-
-  // 必要ならクリックログもここで記録可能
-
-  // リダイレクト実行
+  // PCまたはLIFF未設定の場合：招待ページ表示
+  const baseUrl = req.headers.get("origin") || req.url.split("/functions/")[0];
+  const invitePageUrl = `${baseUrl}/invite/${inviteCode}`;
   return new Response(null, {
     status: 302,
-    headers: { ...cors, Location: lineUrl },
+    headers: { ...cors, Location: invitePageUrl },
   });
 });
