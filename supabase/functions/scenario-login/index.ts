@@ -90,10 +90,21 @@ serve(async (req) => {
       `&scope=profile%20openid` +
       `&bot_prompt=aggressive`;
 
+    // デスクトップ用: JSONでURLを返す（フロントでQR表示用）
+    const format = url.searchParams.get("format");
+    if (format === "json") {
+      const body = JSON.stringify({
+        success: true,
+        authorizeUrl: lineLoginUrl,
+        scenario,
+      });
+      return new Response(body, { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    }
+
     console.log("Generated LINE login URL for scenario:", scenario);
     console.log("Redirecting to:", lineLoginUrl);
 
-    // LINEログイン画面にリダイレクト
+    // それ以外はそのままリダイレクト
     return Response.redirect(lineLoginUrl, 302);
 
   } catch (e: any) {
