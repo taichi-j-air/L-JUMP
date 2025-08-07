@@ -55,7 +55,7 @@ Deno.serve(async (req) => {
         )
       `)
       .eq('status', 'ready')
-      .lte('scheduled_delivery_at', now)
+      .or(`scheduled_delivery_at.is.null,scheduled_delivery_at.lte.${now}`)
       .order('scheduled_delivery_at', { ascending: true })
       .limit(100)
 

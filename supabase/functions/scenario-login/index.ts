@@ -74,18 +74,38 @@ serve(async (req) => {
       hasAddFriendUrl: !!profile.add_friend_url 
     });
     
-    // LINEアプリを直接起動するURL（oaMessage）を生成
+    // 認証フロー選択（デフォルト: LINE Login OAuthで即時特定→配信）
+    const flow = url.searchParams.get("flow") || "login"; // "login" | "oa"
+
+    // LINE Login OAuth 認可URLを生成（LIFFは不使用）
+    const redirectUri = "https://rtjxurmuaawyzjcdkqxt.supabase.co/functions/v1/login-callback";
+    let authUrl: string | null = null;
+    if (profile.line_login_channel_id && profile.line_login_channel_secret) {
+      const params = new URLSearchParams({
+        response_type: "code",
+        client_id: profile.line_login_channel_id,
+        redirect_uri: redirectUri,
+        state: scenario, // 招待コードをstateに保持し、コールバックで登録＆即時配信
+        scope: "openid profile",
+        bot_prompt: "normal", // 未フォローなら友だち追加を促す
+      });
+      authUrl = `https://access.line.me/oauth2/v2.1/authorize?${params.toString()}`;
+    }
+
+    // 互換: oaMessage URL（手入力トリガー用）
     const inviteMessage = `#INVITE ${scenario}`;
     let oaMessageUrl: string | null = null;
-
     if (profile.line_bot_id) {
       oaMessageUrl = `https://line.me/R/oaMessage/${encodeURIComponent(profile.line_bot_id)}/${encodeURIComponent(inviteMessage)}`;
     } else if (profile.add_friend_url) {
-      // 予備: 友だち追加URL（メッセージ送信はできないため、ユーザーに #INVITE を送ってもらう運用）
       oaMessageUrl = profile.add_friend_url;
-    } else {
-      console.error("LINE Bot information not configured for scenario:", scenario);
-      return createErrorResponse("LINE Bot not configured for this scenario", 500);
+    }
+
+    // 使用するURLを決定
+    const selectedUrl = (flow === "oa" ? oaMessageUrl : authUrl) || oaMessageUrl || authUrl;
+    if (!selectedUrl) {
+      console.error("No valid URL could be generated for scenario:", scenario);
+      return createErrorResponse("LINE configuration not set for this scenario", 500);
     }
 
     // Click logging for invite correlation
@@ -108,17 +128,17 @@ serve(async (req) => {
     if (format === "json") {
       const body = JSON.stringify({
         success: true,
-        authorizeUrl: oaMessageUrl, // 互換のためフィールド名は維持
+        authorizeUrl: selectedUrl, // フロント側はこのURLを開けばOK
         scenario,
       });
       return new Response(body, { headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
 
-    console.log("Generated LINE oaMessage URL for scenario:", scenario);
-    console.log("Redirecting to:", oaMessageUrl);
+    console.log("Selected login flow for scenario:", scenario, "flow:", flow);
+    console.log("Redirecting to:", selectedUrl);
 
-    // それ以外はそのままリダイレクト（スマホでLINEアプリ起動）
-    return Response.redirect(oaMessageUrl, 302);
+    // それ以外はそのままリダイレクト（ログイン or OAメッセージ）
+    return Response.redirect(selectedUrl, 302);
 
   } catch (e: any) {
     console.error("Scenario login error:", e);
