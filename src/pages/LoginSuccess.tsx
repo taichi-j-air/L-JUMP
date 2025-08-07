@@ -13,6 +13,23 @@ export default function LoginSuccess() {
   const scenario = searchParams.get('scenario');
 
   useEffect(() => {
+    // シナリオ招待の場合は最初のステップ配信をトリガー
+    if (scenario) {
+      console.log("Triggering first step delivery for scenario:", scenario);
+      // 少し遅延を入れて確実に登録が完了してからトリガー
+      setTimeout(() => {
+        fetch(`https://rtjxurmuaawyzjcdkqxt.supabase.co/functions/v1/scheduled-step-delivery`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ trigger: 'login_success' })
+        }).catch(error => {
+          console.error("Failed to trigger step delivery:", error);
+        });
+      }, 2000);
+    }
+
     // 5秒後に自動でリダイレクト
     const timer = setInterval(() => {
       setCountdown((prev) => {
@@ -26,7 +43,7 @@ export default function LoginSuccess() {
     }, 1000);
 
     return () => clearInterval(timer);
-  }, [navigate]);
+  }, [navigate, scenario]);
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-green-50 to-blue-100">

@@ -72,9 +72,9 @@ serve(async (req) => {
       return new Response("Usage limit exceeded", { status: 410, headers: cors });
     }
 
-    // API状態確認
-    if (profile.line_api_status !== 'active') {
-      console.warn("LINE API not active for invite:", inviteCode, "Status:", profile.line_api_status);
+    // API状態確認 - 'configured'も有効とする
+    if (profile.line_api_status !== 'active' && profile.line_api_status !== 'configured') {
+      console.warn("LINE API not configured for invite:", inviteCode, "Status:", profile.line_api_status);
       return new Response("Service not available", { status: 503, headers: cors });
     }
 

@@ -168,6 +168,8 @@ serve(async (req) => {
       line_user_id: lineProfile.userId,
       display_name: display,
       picture_url : lineProfile.pictureUrl ?? null,
+      campaign_id: state, // 招待コードをキャンペーンIDとして記録
+      registration_source: 'scenario_invite'
     });
 
     /* ── 9. シナリオ登録 RPC ── */
@@ -182,8 +184,11 @@ serve(async (req) => {
     );
 
     if (regErr || !reg?.success) {
-      throw new Error("register_friend_to_scenario failed");
+      console.error("Scenario registration failed:", regErr, reg);
+      throw new Error("register_friend_to_scenario failed: " + (regErr?.message || reg?.error || "Unknown error"));
     }
+
+    console.log("Scenario registration successful:", reg);
 
     /* ── 10. 完了ページへリダイレクト ── */
     const successUrl = `https://74048ab5-8d5a-425a-ab29-bd5cc50dc2fe.lovableproject.com/login-success?user_name=${encodeURIComponent(display)}&scenario=${state}`;

@@ -7,10 +7,11 @@ export default function InvitePage() {
   const code = inviteCode || window.location.pathname.split("/").pop() || "";
   
   useEffect(() => {
-    // シナリオコードが指定されている場合は、LINEログインページにリダイレクト
+    // シナリオコードが指定されている場合は、scenario-loginエッジ関数にリダイレクト
     if (code) {
-      console.log("Redirecting to LINE login for scenario:", code);
-      navigate(`/login?scenario=${encodeURIComponent(code)}`);
+      console.log("Redirecting to scenario login for code:", code);
+      // Supabaseエッジ関数のscenario-loginを直接呼び出し
+      window.location.href = `https://rtjxurmuaawyzjcdkqxt.supabase.co/functions/v1/scenario-login?scenario=${encodeURIComponent(code)}`;
     }
   }, [code, navigate]);
 
