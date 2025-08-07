@@ -40,20 +40,7 @@ Deno.serve(async (req) => {
     // Find ready steps that need to be delivered
     const { data: stepsToDeliver, error: fetchError } = await supabase
       .from('step_delivery_tracking')
-      .select(`
-        *,
-        steps!inner (
-          id, step_order, delivery_type, delivery_seconds, delivery_minutes, delivery_hours, delivery_days,
-          step_messages (
-            id, content, message_type, media_url, message_order,
-            flex_messages (content)
-          )
-        ),
-        line_friends!inner (
-          line_user_id,
-          profiles!inner (line_channel_access_token)
-        )
-      `)
+      .select('*')
       .eq('status', 'ready')
       .or(`scheduled_delivery_at.is.null,scheduled_delivery_at.lte.${now}`)
       .order('scheduled_delivery_at', { ascending: true })
@@ -71,7 +58,7 @@ Deno.serve(async (req) => {
 
     if (stepsToDeliver) {
       for (const step of stepsToDeliver) {
-        console.log(`⏳ Step ${step.step_id} scheduled for ${step.scheduled_delivery_at}`)
+        console.log(`⏳ Step tracking ${step.id} (step_id: ${step.step_id}) scheduled for ${step.scheduled_delivery_at}`)
       }
     }
 
@@ -191,48 +178,103 @@ async function scheduleNextCheck(supabase: any, delaySeconds: number): Promise<v
 // Deliver messages for a specific step
 async function deliverStepMessages(supabase: any, stepTracking: any) {
   try {
-    console.log('Delivering step messages:', stepTracking.step_id)
+    console.log('Delivering step messages (tracking):', stepTracking.step_id)
     
-    const messages = stepTracking.steps.step_messages || []
-    if (messages.length === 0) {
+    // Fetch step info
+    const { data: step, error: stepErr } = await supabase
+      .from('steps')
+      .select('id, step_order, delivery_type, delivery_seconds, delivery_minutes, delivery_hours, delivery_days, delivery_time_of_day')
+      .eq('id', stepTracking.step_id)
+      .maybeSingle()
+
+    if (stepErr || !step) {
+      console.error('No step found for tracking', stepTracking.step_id, stepErr)
+      // Mark delivered to avoid infinite loop
+      await supabase
+        .from('step_delivery_tracking')
+        .update({ 
+          status: 'delivered', 
+          delivered_at: new Date().toISOString(), 
+          updated_at: new Date().toISOString(),
+          last_error: 'Step not found'
+        })
+        .eq('id', stepTracking.id)
+      return
+    }
+
+    // Fetch messages for step
+    const { data: messages, error: msgErr } = await supabase
+      .from('step_messages')
+      .select('id, content, message_type, media_url, message_order, flex_message_id')
+      .eq('step_id', step.id)
+      .order('message_order', { ascending: true })
+
+    if (msgErr) {
+      console.error('Error fetching step messages:', msgErr)
+      throw msgErr
+    }
+
+    // Fetch friend info
+    const { data: friend, error: friendErr } = await supabase
+      .from('line_friends')
+      .select('line_user_id, user_id, added_at')
+      .eq('id', stepTracking.friend_id)
+      .maybeSingle()
+
+    if (friendErr || !friend) {
+      console.error('Friend not found for tracking', stepTracking.friend_id, friendErr)
+      throw friendErr || new Error('Friend not found')
+    }
+
+    // Fetch profile to get access token
+    const { data: profile, error: profErr } = await supabase
+      .from('profiles')
+      .select('line_channel_access_token')
+      .eq('user_id', friend.user_id)
+      .maybeSingle()
+
+    if (profErr || !profile?.line_channel_access_token) {
+      console.error('LINE access token not found for user:', friend.user_id, profErr)
+      throw profErr || new Error('LINE access token not found')
+    }
+
+    const accessToken = profile.line_channel_access_token
+    const lineUserId = friend.line_user_id
+
+    if (!messages || messages.length === 0) {
       console.log('No messages to deliver for this step')
-      
-      // Mark as delivered even without messages
-      await markStepAsDelivered(supabase, stepTracking.id, stepTracking.scenario_id, stepTracking.friend_id, stepTracking.steps.step_order)
+      await markStepAsDelivered(supabase, stepTracking.id, stepTracking.scenario_id, stepTracking.friend_id, step.step_order)
       return
     }
     
-    // Sort messages by order
-    const sortedMessages = messages.sort((a: any, b: any) => a.message_order - b.message_order)
-    
-    const lineUserId = stepTracking.line_friends.line_user_id
-    const accessToken = stepTracking.line_friends.profiles.line_channel_access_token
-    
-    if (!accessToken) {
-      console.error('LINE access token not found')
-      throw new Error('LINE access token not found')
-    }
-    
-    // Send messages with minimal delay for better timing
-    for (let i = 0; i < sortedMessages.length; i++) {
-      const message = sortedMessages[i]
+    for (let i = 0; i < messages.length; i++) {
+      const message = messages[i]
+
+      // Validate flex content JSON when applicable
+      if (message.message_type === 'flex') {
+        try {
+          if (message.content && typeof message.content === 'string') {
+            JSON.parse(message.content)
+          }
+        } catch {
+          console.warn('Invalid flex content JSON for message', message.id)
+        }
+      }
+
       try {
         await sendLineMessage(accessToken, lineUserId, message)
         console.log('Message sent successfully:', message.id)
-        
-        // Only add delay between multiple messages, not after the last one
-        if (i < sortedMessages.length - 1) {
-          await new Promise(resolve => setTimeout(resolve, 300)) // Reduced to 300ms
+        if (i < messages.length - 1) {
+          await new Promise(resolve => setTimeout(resolve, 300))
         }
       } catch (error) {
         console.error('Message send error:', message.id, error)
-        throw error // Re-throw to handle at step level
+        throw error
       }
     }
-    
-    // Mark step as delivered and prepare next step
-    await markStepAsDelivered(supabase, stepTracking.id, stepTracking.scenario_id, stepTracking.friend_id, stepTracking.steps.step_order)
-    
+
+    await markStepAsDelivered(supabase, stepTracking.id, stepTracking.scenario_id, stepTracking.friend_id, step.step_order)
+
   } catch (error) {
     console.error('Step message delivery error:', error)
     throw error
@@ -337,63 +379,93 @@ async function markStepAsDelivered(supabase: any, trackingId: string, scenarioId
     
     console.log('Step marked as delivered:', currentStepOrder)
     
-    // Find and prepare the next step
-    const { data: nextStepsAll, error: nextError } = await supabase
-      .from('step_delivery_tracking')
-      .select(`
-        id, 
-        steps!inner(step_order, delivery_type),
-        scheduled_delivery_at
-      `)
+    // Fetch next step (currentStepOrder + 1)
+    const { data: nextStep, error: nextStepErr } = await supabase
+      .from('steps')
+      .select('id, delivery_type, delivery_days, delivery_hours, delivery_minutes, delivery_seconds, delivery_time_of_day')
       .eq('scenario_id', scenarioId)
-      .eq('friend_id', friendId)
-      .eq('status', 'waiting')
-      .order('step_order', { foreignTable: 'steps', ascending: true })
+      .eq('step_order', currentStepOrder + 1)
+      .maybeSingle()
     
-    if (nextError) {
-      console.error('Next step search error:', nextError)
+    if (nextStepErr) {
+      console.error('Next step fetch error:', nextStepErr)
       return
     }
-    
-    const nextSteps = (nextStepsAll || []).filter((s: any) => s.steps.step_order > currentStepOrder)
-    if (nextSteps.length > 0) {
-      const nextStep = nextSteps[0]
-      
-      // If next step uses relative_to_previous delivery, recalculate its scheduled time
-      if (nextStep.steps.delivery_type === 'relative_to_previous') {
-        await recalculateRelativeStepTiming(supabase, nextStep.id, scenarioId, friendId, deliveredAt)
-      }
-      
-      const now = new Date()
-      // Re-fetch the potentially updated scheduled time
-      const { data: updatedStep } = await supabase
-        .from('step_delivery_tracking')
-        .select('scheduled_delivery_at')
-        .eq('id', nextStep.id)
-        .single()
-      
-      const scheduledTime = new Date(updatedStep?.scheduled_delivery_at || nextStep.scheduled_delivery_at)
-      
-      // Mark next step as ready if its time has come, or update timing
-      if (scheduledTime <= now) {
-        const { error: readyError } = await supabase
-          .from('step_delivery_tracking')
-          .update({ 
-            status: 'ready',
-            updated_at: now.toISOString()
-          })
-          .eq('id', nextStep.id)
-        
-        if (readyError) {
-          console.error('Next step preparation error:', readyError)
+
+    if (!nextStep) {
+      console.log('All steps completed for this scenario')
+      return
+    }
+
+    // Find tracking row for next step
+    const { data: nextTracking, error: nextTrackErr } = await supabase
+      .from('step_delivery_tracking')
+      .select('id')
+      .eq('scenario_id', scenarioId)
+      .eq('friend_id', friendId)
+      .eq('step_id', nextStep.id)
+      .eq('status', 'waiting')
+      .maybeSingle()
+
+    if (nextTrackErr || !nextTracking) {
+      console.log('No waiting tracking row for next step')
+      return
+    }
+
+    let updates: any = { updated_at: new Date().toISOString() }
+
+    if (nextStep.delivery_type === 'relative_to_previous') {
+      // Fetch friend added_at for scheduling base
+      const { data: friend, error: friendErr } = await supabase
+        .from('line_friends')
+        .select('added_at')
+        .eq('id', friendId)
+        .maybeSingle()
+
+      if (!friendErr) {
+        const { data: newScheduledTime, error: calcError } = await supabase.rpc('calculate_scheduled_delivery_time', {
+          p_friend_added_at: friend?.added_at,
+          p_delivery_type: nextStep.delivery_type,
+          p_delivery_seconds: nextStep.delivery_seconds || 0,
+          p_delivery_minutes: nextStep.delivery_minutes || 0,
+          p_delivery_hours: nextStep.delivery_hours || 0,
+          p_delivery_days: nextStep.delivery_days || 0,
+          p_specific_time: null,
+          p_previous_step_delivered_at: deliveredAt,
+          p_delivery_time_of_day: nextStep.delivery_time_of_day
+        })
+
+        if (!calcError && newScheduledTime) {
+          const scheduled = new Date(newScheduledTime)
+          const now = new Date()
+          if (scheduled <= now) {
+            updates.status = 'ready'
+          } else {
+            updates.status = 'waiting'
+            updates.scheduled_delivery_at = scheduled.toISOString()
+            updates.next_check_at = new Date(scheduled.getTime() - 5000).toISOString()
+          }
         } else {
-          console.log('Next step prepared for immediate delivery:', nextStep.steps.step_order)
+          console.warn('Failed to calculate next scheduled time, defaulting to ready', calcError)
+          updates.status = 'ready'
         }
       } else {
-        console.log(`Next step scheduled for: ${nextStep.steps.step_order} at ${scheduledTime}`)
+        console.warn('Failed to fetch friend for scheduling, defaulting to ready', friendErr)
+        updates.status = 'ready'
       }
     } else {
-      console.log('All steps completed for this scenario')
+      updates.status = 'ready'
+    }
+
+    const { error: prepErr } = await supabase
+      .from('step_delivery_tracking')
+      .update(updates)
+      .eq('id', nextTracking.id)
+
+    if (prepErr) {
+      console.error('Next step preparation error:', prepErr)
+    } else {
+      console.log('Next step prepared:', currentStepOrder + 1, updates)
     }
     
   } catch (error) {

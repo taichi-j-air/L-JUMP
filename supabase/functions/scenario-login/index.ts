@@ -55,7 +55,9 @@ serve(async (req) => {
           profiles!inner (
             line_bot_id,
             add_friend_url,
-            display_name
+            display_name,
+            line_login_channel_id,
+            line_login_channel_secret
           )
         )
       `)
