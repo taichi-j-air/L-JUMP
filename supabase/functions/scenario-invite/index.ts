@@ -7,12 +7,17 @@ const corsHeaders = {
 };
 
 serve(async (req) => {
+  console.log('=== Scenario Invite Function Called ===');
+  console.log('Method:', req.method);
+  console.log('URL:', req.url);
+  
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
   }
 
   const url = new URL(req.url);
   const inviteCode = url.searchParams.get("code");
+  console.log('Invite code received:', inviteCode);
   
   if (!inviteCode) {
     // QRコード生成や直接アクセス用の基本ページ
@@ -125,15 +130,16 @@ serve(async (req) => {
     const userAgent = req.headers.get('user-agent') || '';
     
     try {
+      console.log('Logging invite click...');
       await supabase
         .from('invite_clicks')
         .insert({
-          invite_code_id: data.id,
-          user_id: profile.user_id,
-          clicked_at: new Date().toISOString(),
-          ip_address: clientIP,
-          user_agent: userAgent
+          invite_code: inviteCode,
+          ip: clientIP,
+          user_agent: userAgent,
+          clicked_at: new Date().toISOString()
         });
+      console.log('Invite click logged successfully');
     } catch (logError) {
       console.warn('招待クリック記録に失敗:', logError);
     }
