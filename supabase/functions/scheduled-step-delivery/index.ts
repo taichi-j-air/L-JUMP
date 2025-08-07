@@ -338,7 +338,7 @@ async function markStepAsDelivered(supabase: any, trackingId: string, scenarioId
     console.log('Step marked as delivered:', currentStepOrder)
     
     // Find and prepare the next step
-    const { data: nextSteps, error: nextError } = await supabase
+    const { data: nextStepsAll, error: nextError } = await supabase
       .from('step_delivery_tracking')
       .select(`
         id, 
@@ -348,16 +348,15 @@ async function markStepAsDelivered(supabase: any, trackingId: string, scenarioId
       .eq('scenario_id', scenarioId)
       .eq('friend_id', friendId)
       .eq('status', 'waiting')
-      .gt('steps.step_order', currentStepOrder)
-      .order('steps.step_order')
-      .limit(1)
+      .order('step_order', { foreignTable: 'steps', ascending: true })
     
     if (nextError) {
       console.error('Next step search error:', nextError)
       return
     }
     
-    if (nextSteps && nextSteps.length > 0) {
+    const nextSteps = (nextStepsAll || []).filter((s: any) => s.steps.step_order > currentStepOrder)
+    if (nextSteps.length > 0) {
       const nextStep = nextSteps[0]
       
       // If next step uses relative_to_previous delivery, recalculate its scheduled time

@@ -88,6 +88,21 @@ serve(async (req) => {
       return createErrorResponse("LINE Bot not configured for this scenario", 500);
     }
 
+    // Click logging for invite correlation
+    try {
+      const userAgent = req.headers.get('user-agent') || '';
+      const referer = req.headers.get('referer');
+      const ip = req.headers.get('x-forwarded-for') || req.headers.get('x-real-ip');
+      await supabase.from('invite_clicks').insert({
+        invite_code: scenario,
+        user_agent: userAgent,
+        referer,
+        ip
+      });
+    } catch (e) {
+      console.warn('Failed to log invite click:', e);
+    }
+
     // デスクトップ用: JSONでURLを返す（フロントでQR表示用）
     const format = url.searchParams.get("format");
     if (format === "json") {

@@ -482,8 +482,7 @@ async function startStepDelivery(supabase: any, scenarioId: string, friendId: st
       .eq('scenario_id', scenarioId)
       .eq('friend_id', friendId)
       .eq('status', 'ready')
-      .lte('scheduled_delivery_at', new Date().toISOString())
-      .order('steps.step_order')
+      .order('step_order', { foreignTable: 'steps', ascending: true })
       .limit(1)
     
     if (stepsError) {
@@ -664,22 +663,21 @@ async function markStepAsDelivered(supabase: any, trackingId: string, scenarioId
     console.log('ステップを配信完了としてマーク:', currentStepOrder)
     
     // Find and prepare the next step
-    const { data: nextSteps, error: nextError } = await supabase
+    const { data: nextStepsAll, error: nextError } = await supabase
       .from('step_delivery_tracking')
       .select('id, steps!inner(step_order)')
       .eq('scenario_id', scenarioId)
       .eq('friend_id', friendId)
       .eq('status', 'waiting')
-      .gt('steps.step_order', currentStepOrder)
-      .order('steps.step_order')
-      .limit(1)
+      .order('step_order', { foreignTable: 'steps', ascending: true })
     
     if (nextError) {
       console.error('次ステップ検索エラー:', nextError)
       return
     }
     
-    if (nextSteps && nextSteps.length > 0) {
+    const nextSteps = (nextStepsAll || []).filter((s: any) => s.steps.step_order > currentStepOrder)
+    if (nextSteps.length > 0) {
       const nextStep = nextSteps[0]
       
       // Mark next step as ready
