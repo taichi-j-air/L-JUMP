@@ -18,10 +18,6 @@ serve(async (req) => {
     return new Response(null, { status: 204, headers: cors });
   }
 
-  // ユーザーエージェントでモバイル判定
-  const userAgent = req.headers.get("user-agent") || "";
-  const isMobile = /mobile|android|iphone|ipad|ipod/i.test(userAgent);
-
   // DB初期化
   const db = createClient(
     Deno.env.get("SUPABASE_URL")!,
@@ -38,8 +34,7 @@ serve(async (req) => {
       step_scenarios!inner (
         profiles!inner (
           user_id,
-          line_bot_id,
-          liff_id
+          line_bot_id
         )
       )
     `)
@@ -54,22 +49,31 @@ serve(async (req) => {
 
   const profile = data.step_scenarios.profiles;
   const botId = profile.line_bot_id;
-  const liffId = profile.liff_id;
 
-  // モバイルの場合：LIFF経由で友だち状態チェック
-  if (isMobile && liffId) {
-    const liffUrl = `https://liff.line.me/${liffId}?code=${encodeURIComponent(inviteCode)}`;
-    return new Response(null, {
-      status: 302,
-      headers: { ...cors, Location: liffUrl },
-    });
+  if (!botId) {
+    return new Response("LINE Bot設定が不完全です", { status: 500, headers: cors });
   }
 
-  // PCまたはLIFF未設定の場合：招待ページ表示
-  const baseUrl = req.headers.get("origin") || req.url.split("/functions/")[0];
-  const invitePageUrl = `${baseUrl}/invite/${inviteCode}`;
+  // LINE友だち追加URLを構成
+  const id = botId.startsWith("@") ? botId : `@${botId}`;
+  let lineUrl = `https://line.me/R/ti/p/${id}`;
+
+  // 招待コードをstateパラメータとして付与
+  const separator = lineUrl.includes("?") ? "&" : "?";
+  lineUrl += `${separator}state=${encodeURIComponent(inviteCode)}`;
+
+  // 招待クリックをログに記録
+  await db.from("invite_clicks").insert({
+    invite_code: inviteCode,
+    ip: req.headers.get("x-forwarded-for") || req.headers.get("x-real-ip") || "unknown",
+    user_agent: req.headers.get("user-agent") || "unknown",
+    referer: req.headers.get("referer") || null
+  }).catch(console.error);
+
+  // LINE友だち追加URLにリダイレクト
   return new Response(null, {
     status: 302,
-    headers: { ...cors, Location: invitePageUrl },
+    headers: { ...cors, Location: lineUrl },
   });
+});
 });
