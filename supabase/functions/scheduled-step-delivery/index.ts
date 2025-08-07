@@ -42,6 +42,7 @@ Deno.serve(async (req) => {
       .from('step_delivery_tracking')
       .select('*')
       .eq('status', 'ready')
+      .not('friend_id', 'is', null)
       .lte('scheduled_delivery_at', now)
       .order('scheduled_delivery_at', { ascending: true })
       .limit(100)
@@ -116,9 +117,19 @@ Deno.serve(async (req) => {
 async function processStepDelivery(supabase: any, stepTracking: any): Promise<void> {
   try {
     console.log(`Processing step delivery for tracking ID: ${stepTracking.id}`)
+
+    // Guard: invalid tracking without friend
+    if (!stepTracking.friend_id) {
+      await supabase
+        .from('step_delivery_tracking')
+        .update({ status: 'failed', last_error: 'Missing friend_id', updated_at: new Date().toISOString() })
+        .eq('id', stepTracking.id)
+      console.warn('Skipped tracking without friend_id:', stepTracking.id)
+      return
+    }
     
     // Mark step as delivering to avoid duplicate processing
-    const { error: markingError } = await supabase
+    const { data: marked, error: markingError } = await supabase
       .from('step_delivery_tracking')
       .update({ 
         status: 'delivering',
@@ -126,10 +137,15 @@ async function processStepDelivery(supabase: any, stepTracking: any): Promise<vo
       })
       .eq('id', stepTracking.id)
       .eq('status', 'ready') // Only update if still ready (prevents race conditions)
+      .select('id')
 
     if (markingError) {
       console.error('Error marking step as delivering:', markingError)
       throw markingError
+    }
+    if (!marked || marked.length === 0) {
+      console.log('Another worker already processing this tracking. Skipping:', stepTracking.id)
+      return
     }
 
     // Deliver the step messages
@@ -138,16 +154,24 @@ async function processStepDelivery(supabase: any, stepTracking: any): Promise<vo
   } catch (error) {
     console.error(`Error processing step ${stepTracking.id}:`, error)
     
-    // Reset status to ready for retry later (with exponential backoff)
-    const retryTime = new Date(Date.now() + 30000) // Retry in 30 seconds
-    await supabase
-      .from('step_delivery_tracking')
-      .update({ 
-        status: 'ready',
-        scheduled_delivery_at: retryTime.toISOString(),
-        next_check_at: new Date(retryTime.getTime() - 5000).toISOString()
-      })
-      .eq('id', stepTracking.id)
+    const errMsg = (error && (error as any).message) ? String((error as any).message) : ''
+    if (!stepTracking.friend_id || errMsg.includes('Friend not found')) {
+      await supabase
+        .from('step_delivery_tracking')
+        .update({ status: 'failed', last_error: errMsg || 'Friend not found', updated_at: new Date().toISOString() })
+        .eq('id', stepTracking.id)
+    } else {
+      // Reset status to ready for retry later (with backoff)
+      const retryTime = new Date(Date.now() + 30000)
+      await supabase
+        .from('step_delivery_tracking')
+        .update({ 
+          status: 'ready',
+          scheduled_delivery_at: retryTime.toISOString(),
+          next_check_at: new Date(retryTime.getTime() - 5000).toISOString()
+        })
+        .eq('id', stepTracking.id)
+    }
     
     throw error
   }

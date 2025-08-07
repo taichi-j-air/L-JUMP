@@ -57,7 +57,9 @@ serve(async (req) => {
             add_friend_url,
             display_name,
             line_login_channel_id,
-            line_login_channel_secret
+            line_login_channel_secret,
+            liff_id,
+            liff_url
           )
         )
       `)
@@ -113,8 +115,26 @@ serve(async (req) => {
       chatUrl = `https://line.me/R/ti/p/${encodeURIComponent(profile.line_bot_id)}`;
     }
 
-    // 使用するURLを決定（デフォルトはLINE Login）
-    const selectedUrl = (flow === "login" && authUrl) ? authUrl : (authUrl || chatUrl);
+    // LIFF起動用URL（スマホ外部ブラウザ→LINEアプリ遷移対策）
+    let liffUrl: string | null = null;
+    if ((profile as any).liff_id) {
+      const qs = new URLSearchParams({ inviteCode: scenario!, ...(campaign ? { campaign } : {}), ...(source ? { source } : {}) })
+      liffUrl = `https://liff.line.me/${(profile as any).liff_id}?${qs.toString()}`
+    } else if ((profile as any).liff_url) {
+      const qs = new URLSearchParams({ inviteCode: scenario!, ...(campaign ? { campaign } : {}), ...(source ? { source } : {}) })
+      liffUrl = `${(profile as any).liff_url}?${qs.toString()}`
+    }
+
+    // 使用するURLを決定（スマホ外部ブラウザならLIFF優先）
+    const userAgent = req.headers.get('user-agent') || '';
+    const isMobile = /iPhone|iPad|iPod|Android/i.test(userAgent);
+    const isLineInApp = /Line\//i.test(userAgent);
+
+    let selectedUrl = (flow === "login" && authUrl) ? authUrl : (authUrl || chatUrl);
+    if (isMobile && !isLineInApp && liffUrl) {
+      selectedUrl = liffUrl;
+    }
+
     if (!selectedUrl) {
       console.error("No valid URL could be generated for scenario:", scenario);
       return createErrorResponse("LINE configuration not set for this scenario", 500);
@@ -122,7 +142,6 @@ serve(async (req) => {
 
     // Click logging for invite correlation
     try {
-      const userAgent = req.headers.get('user-agent') || '';
       const referer = req.headers.get('referer');
       const ip = req.headers.get('x-forwarded-for') || req.headers.get('x-real-ip');
       await supabase.from('invite_clicks').insert({
