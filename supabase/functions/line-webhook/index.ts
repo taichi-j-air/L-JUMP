@@ -183,13 +183,52 @@ async function handleMessage(event: LineEvent, supabase: any, req: Request) {
 
     console.log(`Message from ${source.userId}: ${sanitizedText}`)
 
-    // Check if this user is already a friend, if not add them
+    // INVITE コマンドの判定: #INVITE <code>
+    const inviteMatch = sanitizedText.match(/^#INVITE\s+([A-Za-z0-9]{8,32})/i)
+    if (inviteMatch) {
+      const inviteCode = inviteMatch[1]
+      if (!validateInviteCode(inviteCode)) {
+        await sendReplyMessage(replyToken, '招待コードの形式が正しくありません。', supabase)
+        return
+      }
+
+      // 友だち情報を確実に作成
+      await ensureFriendExists(source.userId, supabase)
+
+      // LINEプロフィール取得
+      const userProfile = await getLineUserProfile(source.userId, supabase)
+
+      try {
+        const { data: reg, error: regErr } = await supabase.rpc('register_friend_to_scenario', {
+          p_line_user_id: source.userId,
+          p_invite_code : inviteCode,
+          p_display_name: userProfile?.displayName ?? null,
+          p_picture_url : userProfile?.pictureUrl ?? null,
+        })
+
+        if (regErr || !reg?.success) {
+          console.error('register_friend_to_scenario failed:', regErr, reg)
+          await sendReplyMessage(replyToken, 'シナリオ登録に失敗しました。時間をおいて再度お試しください。', supabase)
+          return
+        }
+
+        console.log('INVITE registration result:', reg)
+        await sendReplyMessage(replyToken, 'ご登録ありがとうございます。ステップ配信を開始します。', supabase)
+
+        // 即時配信をサーバ側で開始
+        await startStepDelivery(supabase, reg.scenario_id, reg.friend_id)
+        return
+
+      } catch (e) {
+        console.error('INVITE processing error:', e)
+        await sendReplyMessage(replyToken, '処理中にエラーが発生しました。', supabase)
+        return
+      }
+    }
+
+    // 通常メッセージ処理
     await ensureFriendExists(source.userId, supabase)
-
-    // Save incoming message to database with sanitized text
     await saveIncomingMessage(source.userId, sanitizedText, supabase)
-
-    // Example: Auto-reply with a simple text message
     await sendReplyMessage(replyToken, `受信しました: ${sanitizedText}`, supabase)
 
   } catch (error) {

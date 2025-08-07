@@ -47,14 +47,14 @@ serve(async (req) => {
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
     );
 
-    // シナリオ情報とプロファイル設定を取得
+    // シナリオ情報とプロファイル設定を取得（LINE公式アカウントID優先）
     const { data, error } = await supabase
       .from("scenario_invite_codes")
       .select(`
         step_scenarios!inner (
           profiles!inner (
-            line_login_channel_id,
-            line_login_channel_secret,
+            line_bot_id,
+            add_friend_url,
             display_name
           )
         )
@@ -70,44 +70,40 @@ serve(async (req) => {
 
     const profile = data.step_scenarios.profiles;
     console.log("Profile found:", { 
-      hasChannelId: !!profile.line_login_channel_id, 
-      hasChannelSecret: !!profile.line_login_channel_secret 
+      hasLineBotId: !!profile.line_bot_id, 
+      hasAddFriendUrl: !!profile.add_friend_url 
     });
     
-    if (!profile.line_login_channel_id || !profile.line_login_channel_secret) {
-      console.error("LINE login not configured for scenario:", scenario);
-      return createErrorResponse("LINE login not configured for this scenario", 500);
-    }
+    // LINEアプリを直接起動するURL（oaMessage）を生成
+    const inviteMessage = `#INVITE ${scenario}`;
+    let oaMessageUrl: string | null = null;
 
-    // LINEログイン認証URLを生成
-    const redirectUri = "https://rtjxurmuaawyzjcdkqxt.supabase.co/functions/v1/login-callback";
-    const lineLoginUrl = 
-      `https://access.line.me/oauth2/v2.1/authorize` +
-      `?response_type=code` +
-      `&client_id=${profile.line_login_channel_id}` +
-      `&redirect_uri=${encodeURIComponent(redirectUri)}` +
-      `&state=${scenario}` +
-      `&scope=profile%20openid` +
-      `&bot_prompt=aggressive` +
-      `&prompt=consent` +
-      `&ui_locales=ja-JP`;
+    if (profile.line_bot_id) {
+      oaMessageUrl = `https://line.me/R/oaMessage/${encodeURIComponent(profile.line_bot_id)}/${encodeURIComponent(inviteMessage)}`;
+    } else if (profile.add_friend_url) {
+      // 予備: 友だち追加URL（メッセージ送信はできないため、ユーザーに #INVITE を送ってもらう運用）
+      oaMessageUrl = profile.add_friend_url;
+    } else {
+      console.error("LINE Bot information not configured for scenario:", scenario);
+      return createErrorResponse("LINE Bot not configured for this scenario", 500);
+    }
 
     // デスクトップ用: JSONでURLを返す（フロントでQR表示用）
     const format = url.searchParams.get("format");
     if (format === "json") {
       const body = JSON.stringify({
         success: true,
-        authorizeUrl: lineLoginUrl,
+        authorizeUrl: oaMessageUrl, // 互換のためフィールド名は維持
         scenario,
       });
       return new Response(body, { headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
 
-    console.log("Generated LINE login URL for scenario:", scenario);
-    console.log("Redirecting to:", lineLoginUrl);
+    console.log("Generated LINE oaMessage URL for scenario:", scenario);
+    console.log("Redirecting to:", oaMessageUrl);
 
-    // それ以外はそのままリダイレクト
-    return Response.redirect(lineLoginUrl, 302);
+    // それ以外はそのままリダイレクト（スマホでLINEアプリ起動）
+    return Response.redirect(oaMessageUrl, 302);
 
   } catch (e: any) {
     console.error("Scenario login error:", e);
