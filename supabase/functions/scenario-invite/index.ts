@@ -145,9 +145,38 @@ serve(async (req) => {
     }
 
     // LINE友達追加URLを構築
-    let lineUrl = addFriendUrl;
-    if (!lineUrl && botId) {
+    let lineUrl;
+    
+    // Bot IDが@付きの場合は line.me/R/ti/p/ 形式を使用
+    if (botId && botId.startsWith('@')) {
       lineUrl = `https://line.me/R/ti/p/${botId}`;
+    } else if (addFriendUrl && addFriendUrl.startsWith('https://lin.ee/')) {
+      // lin.ee URLが正しい場合はそのまま使用  
+      lineUrl = addFriendUrl;
+    } else if (botId) {
+      // Bot IDが@なしの場合は追加
+      lineUrl = `https://line.me/R/ti/p/@${botId}`;
+    } else {
+      console.error('有効なLINE Bot設定が見つかりません');
+      return new Response(`
+        <!DOCTYPE html>
+        <html>
+          <head>
+            <meta charset="utf-8">
+            <title>設定エラー</title>
+            <meta name="viewport" content="width=device-width, initial-scale=1">
+          </head>
+          <body>
+            <div style="text-align: center; padding: 40px;">
+              <h1>設定エラー</h1>
+              <p>LINE Botの設定が不完全です</p>
+            </div>
+          </body>
+        </html>
+      `, {
+        status: 500,
+        headers: { ...corsHeaders, 'Content-Type': 'text/html' }
+      });
     }
     
     // 招待コードをstateパラメータとして追加
