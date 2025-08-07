@@ -52,15 +52,15 @@ serve(async (req) => {
   const addFriendUrl = profile.add_friend_url;
   const botId = profile.line_bot_id;
 
-  // 友だち追加URLを構成
+  // 友だち追加URLを構成 - botIdを優先して使用
   let lineUrl = "";
-  if (addFriendUrl && addFriendUrl.startsWith('https://lin.ee/')) {
-    // lin.ee形式の短縮URL
-    lineUrl = addFriendUrl;
-  } else if (botId) {
-    // botId形式（@から始まる or 省略されている場合も）
+  if (botId) {
+    // botId形式を優先（安定的なURL生成）
     const id = botId.startsWith("@") ? botId : `@${botId}`;
     lineUrl = `https://line.me/R/ti/p/${id}`;
+  } else if (addFriendUrl && addFriendUrl.startsWith('https://lin.ee/')) {
+    // lin.ee形式の短縮URL（fallback）
+    lineUrl = addFriendUrl;
   } else {
     return new Response("LINE Bot設定が不完全です", { status: 500, headers: cors });
   }
