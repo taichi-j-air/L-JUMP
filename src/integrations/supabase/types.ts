@@ -193,31 +193,40 @@ export type Database = {
       line_friends: {
         Row: {
           added_at: string
+          campaign_id: string | null
           created_at: string
           display_name: string | null
           id: string
           line_user_id: string
           picture_url: string | null
+          registration_source: string | null
+          scenario_name: string | null
           updated_at: string
           user_id: string
         }
         Insert: {
           added_at?: string
+          campaign_id?: string | null
           created_at?: string
           display_name?: string | null
           id?: string
           line_user_id: string
           picture_url?: string | null
+          registration_source?: string | null
+          scenario_name?: string | null
           updated_at?: string
           user_id: string
         }
         Update: {
           added_at?: string
+          campaign_id?: string | null
           created_at?: string
           display_name?: string | null
           id?: string
           line_user_id?: string
           picture_url?: string | null
+          registration_source?: string | null
+          scenario_name?: string | null
           updated_at?: string
           user_id?: string
         }
@@ -456,13 +465,81 @@ export type Database = {
         }
         Relationships: []
       }
+      step_delivery_logs: {
+        Row: {
+          created_at: string | null
+          delivered_at: string | null
+          delivery_status: string
+          error_message: string | null
+          friend_id: string | null
+          id: string
+          retry_count: number | null
+          scenario_id: string | null
+          scheduled_at: string | null
+          step_id: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          delivered_at?: string | null
+          delivery_status?: string
+          error_message?: string | null
+          friend_id?: string | null
+          id?: string
+          retry_count?: number | null
+          scenario_id?: string | null
+          scheduled_at?: string | null
+          step_id?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          delivered_at?: string | null
+          delivery_status?: string
+          error_message?: string | null
+          friend_id?: string | null
+          id?: string
+          retry_count?: number | null
+          scenario_id?: string | null
+          scheduled_at?: string | null
+          step_id?: string | null
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "step_delivery_logs_friend_id_fkey"
+            columns: ["friend_id"]
+            isOneToOne: false
+            referencedRelation: "line_friends"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "step_delivery_logs_scenario_id_fkey"
+            columns: ["scenario_id"]
+            isOneToOne: false
+            referencedRelation: "step_scenarios"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "step_delivery_logs_step_id_fkey"
+            columns: ["step_id"]
+            isOneToOne: false
+            referencedRelation: "steps"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       step_delivery_tracking: {
         Row: {
+          campaign_id: string | null
           created_at: string
           delivered_at: string | null
+          error_count: number | null
           friend_id: string
           id: string
+          last_error: string | null
           next_check_at: string | null
+          registration_source: string | null
           scenario_id: string
           scheduled_delivery_at: string | null
           status: string
@@ -470,11 +547,15 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          campaign_id?: string | null
           created_at?: string
           delivered_at?: string | null
+          error_count?: number | null
           friend_id: string
           id?: string
+          last_error?: string | null
           next_check_at?: string | null
+          registration_source?: string | null
           scenario_id: string
           scheduled_delivery_at?: string | null
           status?: string
@@ -482,11 +563,15 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          campaign_id?: string | null
           created_at?: string
           delivered_at?: string | null
+          error_count?: number | null
           friend_id?: string
           id?: string
+          last_error?: string | null
           next_check_at?: string | null
+          registration_source?: string | null
           scenario_id?: string
           scheduled_delivery_at?: string | null
           status?: string
@@ -768,6 +853,17 @@ export type Database = {
           p_invite_code: string
           p_display_name?: string
           p_picture_url?: string
+        }
+        Returns: Json
+      }
+      register_friend_with_scenario: {
+        Args: {
+          p_line_user_id: string
+          p_display_name?: string
+          p_picture_url?: string
+          p_scenario_name?: string
+          p_campaign_id?: string
+          p_registration_source?: string
         }
         Returns: Json
       }

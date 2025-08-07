@@ -91,16 +91,19 @@ export default function LineLoginSettings() {
   const generateLoginUrl = (channelId: string) => {
     if (!channelId) return ''
     
-    // LINE Loginの正確な仕様に従ったURL生成
-    const params = new URLSearchParams({
+    // LINE Login の正確な URL 構造を使用
+    const baseUrl = 'https://access.line.me/oauth2/v2.1/authorize'
+    const params = {
       response_type: 'code',
       client_id: channelId,
       redirect_uri: 'https://rtjxurmuaawyzjcdkqxt.supabase.co/functions/v1/login-callback',
       state: 'login',
-      scope: 'openid profile'  // openidを最初に、順序を修正
-    })
+      scope: 'openid profile',
+      bot_prompt: 'aggressive'  // 友だち追加を促進
+    }
     
-    return `https://access.line.me/oauth2/v2.1/authorize?${params.toString()}`
+    const searchParams = new URLSearchParams(params)
+    return `${baseUrl}?${searchParams.toString()}`
   }
 
   const handleSave = async () => {

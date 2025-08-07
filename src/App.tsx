@@ -10,6 +10,7 @@ import { AppHeader } from "./components/AppHeader";
 import Index from "./pages/Index";
 import Auth from "./pages/Auth";
 import InvitePage from "./pages/InvitePage";
+import ScenarioDeliveryDashboard from "./pages/ScenarioDeliveryDashboard";
 import LiffInvitePage from "./pages/LiffInvitePage";
 import LiffHandler from "./pages/LiffHandler";
 import LineApiSettings from "./pages/LineApiSettings";
@@ -61,7 +62,7 @@ function AppContent() {
                     window.location.pathname === '/verify' || 
                     window.location.pathname === '/reset-password'
 
-  const isInvitePage = window.location.pathname.startsWith('/invite/')
+  const isInvitePage = window.location.pathname.startsWith('/invite')
   const hasLineLoginSuccess = window.location.search.includes('line_login=success')
 
   // Show auth pages without sidebar/header  
@@ -72,6 +73,7 @@ function AppContent() {
           <Route path="/liff" element={<LiffAuth />} />
           <Route path="/liff-handler" element={<LiffHandler />} />
           <Route path="/liff-invite" element={<LiffInvitePage />} />
+          <Route path="/invite" element={<InvitePage />} />
           <Route path="/invite/:inviteCode" element={<InvitePage />} />
           <Route path="/auth" element={<Auth />} />
           <Route path="/verify" element={<EmailVerify />} />
@@ -114,6 +116,7 @@ function AppContent() {
               <Route path="/liff" element={<LiffAuth />} />
               <Route path="/liff-handler" element={<LiffHandler />} />
               <Route path="/liff-invite" element={<LiffInvitePage />} />
+              <Route path="/invite" element={<InvitePage />} />
               <Route path="/invite/:inviteCode" element={<InvitePage />} />
               <Route path="/line-api-settings" element={<LineApiSettings />} />
               <Route path="/line-login-settings" element={<LineLoginSettings />} />
@@ -123,6 +126,7 @@ function AppContent() {
               <Route path="/media-library" element={<MediaLibrary />} />
               <Route path="/friends-list" element={<FriendsListPage />} />
               <Route path="/step-delivery" element={<StepDeliveryPage />} />
+              <Route path="/delivery-dashboard" element={<ScenarioDeliveryDashboard />} />
               <Route path="/chat-inbox" element={<ChatInboxPage />} />
               <Route path="/chat/:friendId" element={<IndividualChatPage />} />
               <Route path="*" element={<NotFound />} />
