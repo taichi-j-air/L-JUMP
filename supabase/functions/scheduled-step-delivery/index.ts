@@ -250,11 +250,23 @@ async function deliverStepMessages(supabase: any, stepTracking: any) {
     for (let i = 0; i < messages.length; i++) {
       const message = messages[i]
 
-      // Validate flex content JSON when applicable
+      // Validate and prepare flex content when applicable
+      let preparedMessage: any = { ...message }
       if (message.message_type === 'flex') {
         try {
-          if (message.content && typeof message.content === 'string') {
-            JSON.parse(message.content)
+          // Prefer referenced flex_messages.content when available
+          if (message.flex_message_id) {
+            const { data: flex, error: flexErr } = await supabase
+              .from('flex_messages')
+              .select('content')
+              .eq('id', message.flex_message_id)
+              .maybeSingle()
+            if (!flexErr && flex?.content) {
+              preparedMessage = { ...preparedMessage, _flexContent: flex.content }
+            }
+          }
+          if (!preparedMessage._flexContent && message.content && typeof message.content === 'string') {
+            preparedMessage = { ...preparedMessage, _flexContent: JSON.parse(message.content) }
           }
         } catch {
           console.warn('Invalid flex content JSON for message', message.id)
@@ -262,7 +274,7 @@ async function deliverStepMessages(supabase: any, stepTracking: any) {
       }
 
       try {
-        await sendLineMessage(accessToken, lineUserId, message)
+        await sendLineMessage(accessToken, lineUserId, preparedMessage)
         console.log('Message sent successfully:', message.id)
         if (i < messages.length - 1) {
           await new Promise(resolve => setTimeout(resolve, 300))
@@ -319,8 +331,8 @@ async function sendLineMessage(accessToken: string, userId: string, message: any
       case 'flex':
         lineMessage = {
           type: 'flex',
-          altText: 'フレックスメッセージ',
-          contents: message.flex_messages?.content || JSON.parse(message.content || '{}')
+          altText: message.alt_text || 'フレックスメッセージ',
+          contents: message._flexContent || (message.content ? JSON.parse(message.content) : {})
         }
         break
         
@@ -440,6 +452,8 @@ async function markStepAsDelivered(supabase: any, trackingId: string, scenarioId
           const now = new Date()
           if (scheduled <= now) {
             updates.status = 'ready'
+            updates.scheduled_delivery_at = now.toISOString()
+            updates.next_check_at = new Date(now.getTime() - 5000).toISOString()
           } else {
             updates.status = 'waiting'
             updates.scheduled_delivery_at = scheduled.toISOString()
@@ -447,14 +461,23 @@ async function markStepAsDelivered(supabase: any, trackingId: string, scenarioId
           }
         } else {
           console.warn('Failed to calculate next scheduled time, defaulting to ready', calcError)
+          const now = new Date()
           updates.status = 'ready'
+          updates.scheduled_delivery_at = now.toISOString()
+          updates.next_check_at = new Date(now.getTime() - 5000).toISOString()
         }
       } else {
         console.warn('Failed to fetch friend for scheduling, defaulting to ready', friendErr)
+        const now = new Date()
         updates.status = 'ready'
+        updates.scheduled_delivery_at = now.toISOString()
+        updates.next_check_at = new Date(now.getTime() - 5000).toISOString()
       }
     } else {
+      const now = new Date()
       updates.status = 'ready'
+      updates.scheduled_delivery_at = now.toISOString()
+      updates.next_check_at = new Date(now.getTime() - 5000).toISOString()
     }
 
     const { error: prepErr } = await supabase
