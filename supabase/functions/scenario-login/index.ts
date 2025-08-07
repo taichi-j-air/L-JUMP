@@ -32,10 +32,12 @@ serve(async (req) => {
     console.log("Scenario login request for:", scenario);
 
     if (!scenario) {
+      console.error("Missing scenario parameter");
       return createErrorResponse("Scenario parameter is required", 400);
     }
 
     if (!validateInviteCode(scenario)) {
+      console.error("Invalid scenario code format:", scenario);
       return createErrorResponse("Invalid scenario code format", 400);
     }
 
@@ -62,11 +64,16 @@ serve(async (req) => {
       .maybeSingle();
 
     if (error || !data) {
-      console.error("Scenario not found:", error);
+      console.error("Scenario not found:", error, "Data:", data);
       return createErrorResponse("Invalid scenario code", 404);
     }
 
     const profile = data.step_scenarios.profiles;
+    console.log("Profile found:", { 
+      hasChannelId: !!profile.line_login_channel_id, 
+      hasChannelSecret: !!profile.line_login_channel_secret 
+    });
+    
     if (!profile.line_login_channel_id || !profile.line_login_channel_secret) {
       console.error("LINE login not configured for scenario:", scenario);
       return createErrorResponse("LINE login not configured for this scenario", 500);
@@ -84,6 +91,7 @@ serve(async (req) => {
       `&bot_prompt=aggressive`;
 
     console.log("Generated LINE login URL for scenario:", scenario);
+    console.log("Redirecting to:", lineLoginUrl);
 
     // LINEログイン画面にリダイレクト
     return Response.redirect(lineLoginUrl, 302);
