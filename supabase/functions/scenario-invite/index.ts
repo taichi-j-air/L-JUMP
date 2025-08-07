@@ -2,215 +2,75 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
+// ==== 設定 ====
+const LINE_LOGIN_REDIRECT_URI = "https://xxxx.supabase.co/functions/v1/login-callback"; // ←コールバック関数のエンドポイント
+const LINE_SCOPE = "profile openid";
+const BOT_PROMPT = "aggressive";
+
 serve(async (req) => {
-  console.log('=== Scenario Invite Function Called ===');
-  console.log('Method:', req.method);
-  console.log('URL:', req.url);
-  
-  if (req.method === 'OPTIONS') {
-    return new Response(null, { headers: corsHeaders });
-  }
+  if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
   const url = new URL(req.url);
   const inviteCode = url.searchParams.get("code");
-  console.log('Invite code received:', inviteCode);
-  
   if (!inviteCode) {
-    // QRコード生成や直接アクセス用の基本ページ
-    return new Response(`
-      <!DOCTYPE html>
-      <html>
-        <head>
-          <meta charset="utf-8">
-          <title>LINE友達追加</title>
-          <meta name="viewport" content="width=device-width, initial-scale=1">
-        </head>
-        <body>
-          <div style="text-align: center; padding: 40px;">
-            <h1>LINE友達追加</h1>
-            <p>招待コードが必要です</p>
-          </div>
-        </body>
-      </html>
-    `, {
-      headers: { ...corsHeaders, 'Content-Type': 'text/html' }
-    });
+    return new Response("招待コードが必要です", { status: 400, headers: corsHeaders });
   }
 
-  console.log("=== scenario-invite START ===");
-  console.log("Invite code:", inviteCode);
-
-  try {
-    // Supabaseクライアント初期化
-    const supabase = createClient(
-      Deno.env.get("SUPABASE_URL")!,
-      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
-    );
-
-    // 招待コードを検証して必要な情報を取得
-    const { data, error } = await supabase
-      .from("scenario_invite_codes")
-      .select(`
-        id,
-        scenario_id,
-        invite_code,
-        max_usage,
-        usage_count,
-        step_scenarios!inner (
-          id,
-          name,
-          profiles!inner (
-            user_id,
-            line_bot_id,
-            add_friend_url,
-            line_channel_access_token
-          )
+  // Supabaseでシナリオ情報を取得（チャンネルID/BOT ID判別用）
+  const supabase = createClient(
+    Deno.env.get("SUPABASE_URL")!,
+    Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
+  );
+  const { data, error } = await supabase
+    .from("scenario_invite_codes")
+    .select(`
+      id,
+      scenario_id,
+      invite_code,
+      step_scenarios!inner (
+        profiles!inner (
+          line_login_channel_id,
+          line_bot_id
         )
-      `)
-      .eq("invite_code", inviteCode)
-      .eq("is_active", true)
-      .single();
+      )
+    `)
+    .eq("invite_code", inviteCode)
+    .eq("is_active", true)
+    .single();
 
-    if (error || !data) {
-      console.warn("Invalid invite code:", inviteCode, error);
-      return new Response(`
-        <!DOCTYPE html>
-        <html>
-          <head>
-            <meta charset="utf-8">
-            <title>招待コードエラー</title>
-            <meta name="viewport" content="width=device-width, initial-scale=1">
-          </head>
-          <body>
-            <div style="text-align: center; padding: 40px;">
-              <h1>エラー</h1>
-              <p>無効な招待コードです</p>
-            </div>
-          </body>
-        </html>
-      `, {
-        status: 404,
-        headers: { ...corsHeaders, 'Content-Type': 'text/html' }
-      });
-    }
-
-    const profile = data.step_scenarios.profiles;
-    const addFriendUrl = profile.add_friend_url;
-    const botId = profile.line_bot_id;
-
-    if (!addFriendUrl && !botId) {
-      console.error("LINE Bot設定が不完全です");
-      return new Response(`
-        <!DOCTYPE html>
-        <html>
-          <head>
-            <meta charset="utf-8">
-            <title>設定エラー</title>
-            <meta name="viewport" content="width=device-width, initial-scale=1">
-          </head>
-          <body>
-            <div style="text-align: center; padding: 40px;">
-              <h1>設定エラー</h1>
-              <p>LINE Botの設定が不完全です</p>
-            </div>
-          </body>
-        </html>
-      `, {
-        status: 500,
-        headers: { ...corsHeaders, 'Content-Type': 'text/html' }
-      });
-    }
-
-    // 招待クリックをログに記録
-    const clientIP = req.headers.get('x-forwarded-for') || req.headers.get('x-real-ip') || 'unknown';
-    const userAgent = req.headers.get('user-agent') || '';
-    
-    try {
-      console.log('Logging invite click...');
-      await supabase
-        .from('invite_clicks')
-        .insert({
-          invite_code: inviteCode,
-          ip: clientIP,
-          user_agent: userAgent,
-          clicked_at: new Date().toISOString()
-        });
-      console.log('Invite click logged successfully');
-    } catch (logError) {
-      console.warn('招待クリック記録に失敗:', logError);
-    }
-
-    // LINE友達追加URLを構築
-    let lineUrl;
-    
-    // Bot IDが@付きの場合は line.me/R/ti/p/ 形式を使用
-    if (botId && botId.startsWith('@')) {
-      lineUrl = `https://line.me/R/ti/p/${botId}`;
-    } else if (addFriendUrl && addFriendUrl.startsWith('https://lin.ee/')) {
-      // lin.ee URLが正しい場合はそのまま使用  
-      lineUrl = addFriendUrl;
-    } else if (botId) {
-      // Bot IDが@なしの場合は追加
-      lineUrl = `https://line.me/R/ti/p/@${botId}`;
-    } else {
-      console.error('有効なLINE Bot設定が見つかりません');
-      return new Response(`
-        <!DOCTYPE html>
-        <html>
-          <head>
-            <meta charset="utf-8">
-            <title>設定エラー</title>
-            <meta name="viewport" content="width=device-width, initial-scale=1">
-          </head>
-          <body>
-            <div style="text-align: center; padding: 40px;">
-              <h1>設定エラー</h1>
-              <p>LINE Botの設定が不完全です</p>
-            </div>
-          </body>
-        </html>
-      `, {
-        status: 500,
-        headers: { ...corsHeaders, 'Content-Type': 'text/html' }
-      });
-    }
-    
-    // 招待コードをstateパラメータとして追加
-    const separator = lineUrl.includes('?') ? '&' : '?';
-    lineUrl += `${separator}state=${inviteCode}`;
-
-    console.log("LINE URL:", lineUrl);
-
-    // モバイル・PC問わず、常に直接LINEにリダイレクト
-    return new Response(null, {
-      status: 302,
-      headers: { ...corsHeaders, Location: lineUrl },
-    });
-
-  } catch (error) {
-    console.error("Scenario invite error:", error);
-    return new Response(`
-      <!DOCTYPE html>
-      <html>
-        <head>
-          <meta charset="utf-8">
-          <title>サーバーエラー</title>
-          <meta name="viewport" content="width=device-width, initial-scale=1">
-        </head>
-        <body>
-          <div style="text-align: center; padding: 40px;">
-            <h1>サーバーエラー</h1>
-            <p>一時的な問題が発生しました</p>
-          </div>
-        </body>
-      </html>
-    `, {
-      status: 500,
-      headers: { ...corsHeaders, 'Content-Type': 'text/html' }
-    });
+  if (error || !data) {
+    return new Response("無効な招待コード", { status: 404, headers: corsHeaders });
   }
+
+  const channelId = data.step_scenarios.profiles.line_login_channel_id;
+  const botId = data.step_scenarios.profiles.line_bot_id;
+
+  if (!channelId || !botId) {
+    return new Response("LINE設定が不完全です", { status: 500, headers: corsHeaders });
+  }
+
+  // 友だち追加＋認証URLを生成
+  const params = new URLSearchParams({
+    response_type: "code",
+    client_id: channelId,
+    redirect_uri: LINE_LOGIN_REDIRECT_URI,
+    state: inviteCode,
+    scope: LINE_SCOPE,
+    bot_prompt: BOT_PROMPT,
+  });
+
+  const authUrl = `https://access.line.me/oauth2/v2.1/authorize?${params.toString()}`;
+
+  // すぐに認証フローへリダイレクト
+  return new Response(null, {
+    status: 302,
+    headers: {
+      ...corsHeaders,
+      Location: authUrl,
+    },
+  });
 });
