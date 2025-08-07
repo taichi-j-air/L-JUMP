@@ -12,12 +12,13 @@ interface StepDeliveryStatusProps {
 
 interface DeliveryStats {
   waiting: number
+  ready: number
   delivered: number
   exited: number
 }
 
 export function StepDeliveryStatus({ step }: StepDeliveryStatusProps) {
-  const [stats, setStats] = useState<DeliveryStats>({ waiting: 0, delivered: 0, exited: 0 })
+  const [stats, setStats] = useState<DeliveryStats>({ waiting: 0, ready: 0, delivered: 0, exited: 0 })
   const [showDetails, setShowDetails] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
 
@@ -32,19 +33,19 @@ export function StepDeliveryStatus({ step }: StepDeliveryStatusProps) {
 
       if (error) {
         console.error('配信統計取得失敗:', error)
-        setStats({ waiting: 0, delivered: 0, exited: 0 })
+        setStats({ waiting: 0, ready: 0, delivered: 0, exited: 0 })
         return
       }
 
       const statsCount = deliveryData?.reduce((acc, item) => {
         acc[item.status as keyof DeliveryStats] = (acc[item.status as keyof DeliveryStats] || 0) + 1
         return acc
-      }, { waiting: 0, delivered: 0, exited: 0 } as DeliveryStats) || { waiting: 0, delivered: 0, exited: 0 }
+      }, { waiting: 0, ready: 0, delivered: 0, exited: 0 } as DeliveryStats) || { waiting: 0, ready: 0, delivered: 0, exited: 0 }
 
       setStats(statsCount)
     } catch (error) {
       console.error('配信統計取得失敗:', error)
-      setStats({ waiting: 0, delivered: 0, exited: 0 })
+      setStats({ waiting: 0, ready: 0, delivered: 0, exited: 0 })
     } finally {
       setLoading(false)
     }
@@ -61,6 +62,7 @@ export function StepDeliveryStatus({ step }: StepDeliveryStatusProps) {
   const getStatusIcon = (type: string) => {
     switch (type) {
       case 'waiting': return <Clock className="h-3 w-3" />
+      case 'ready': return <Eye className="h-3 w-3" />
       case 'delivered': return <CheckCircle className="h-3 w-3" />
       case 'exited': return <UserX className="h-3 w-3" />
       default: return <Users className="h-3 w-3" />
@@ -70,6 +72,7 @@ export function StepDeliveryStatus({ step }: StepDeliveryStatusProps) {
   const getStatusLabel = (type: string) => {
     switch (type) {
       case 'waiting': return '配信待機'
+      case 'ready': return '配信準備中'
       case 'delivered': return '配信完了'
       case 'exited': return 'シナリオ離脱'
       default: return ''
@@ -79,6 +82,7 @@ export function StepDeliveryStatus({ step }: StepDeliveryStatusProps) {
   const getStatusValue = (type: string) => {
     switch (type) {
       case 'waiting': return stats.waiting
+      case 'ready': return stats.ready
       case 'delivered': return stats.delivered
       case 'exited': return stats.exited
       default: return 0
@@ -94,8 +98,8 @@ export function StepDeliveryStatus({ step }: StepDeliveryStatusProps) {
         </CardTitle>
       </CardHeader>
       <CardContent className="space-y-3 pb-3">
-        <div className="grid grid-cols-3 gap-2">
-          {['waiting', 'delivered', 'exited'].map((type) => (
+        <div className="grid grid-cols-4 gap-2">
+          {['waiting', 'ready', 'delivered', 'exited'].map((type) => (
             <div key={type} className="text-center">
               <Button
                 variant="ghost"
