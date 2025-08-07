@@ -65,10 +65,11 @@ function AppContent() {
                     window.location.pathname === '/reset-password'
 
   const isInvitePage = window.location.pathname.startsWith('/invite')
+  const isLoginPage = window.location.pathname === '/login'
   const hasLineLoginSuccess = window.location.search.includes('line_login=success')
 
   // Show auth pages without sidebar/header  
-  if (isAuthPage || (!user && !isInvitePage && !hasLineLoginSuccess)) {
+  if (isAuthPage || (!user && !isInvitePage && !isLoginPage && !hasLineLoginSuccess)) {
     return (
       <div className="min-h-screen">
         <Routes>
