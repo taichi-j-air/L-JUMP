@@ -1,31 +1,31 @@
+// supabase/functions/scenario-invite/index.ts
+
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
-const corsHeaders = {
+const cors = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
-// ==== 設定 ====
-const LINE_LOGIN_REDIRECT_URI = "https://xxxx.supabase.co/functions/v1/login-callback"; // ←コールバック関数のエンドポイント
-const LINE_SCOPE = "profile openid";
-const BOT_PROMPT = "aggressive";
-
 serve(async (req) => {
-  if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
+  if (req.method === "OPTIONS") return new Response(null, { headers: cors });
 
   const url = new URL(req.url);
   const inviteCode = url.searchParams.get("code");
   if (!inviteCode) {
-    return new Response("招待コードが必要です", { status: 400, headers: corsHeaders });
+    // 招待コード未指定時：何も返さない
+    return new Response(null, { status: 204, headers: cors });
   }
 
-  // Supabaseでシナリオ情報を取得（チャンネルID/BOT ID判別用）
-  const supabase = createClient(
+  // DB初期化
+  const db = createClient(
     Deno.env.get("SUPABASE_URL")!,
-    Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
+    Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
   );
-  const { data, error } = await supabase
+
+  // シナリオ/プロファイル取得
+  const { data, error } = await db
     .from("scenario_invite_codes")
     .select(`
       id,
@@ -33,8 +33,9 @@ serve(async (req) => {
       invite_code,
       step_scenarios!inner (
         profiles!inner (
-          line_login_channel_id,
-          line_bot_id
+          user_id,
+          line_bot_id,
+          add_friend_url
         )
       )
     `)
@@ -43,34 +44,36 @@ serve(async (req) => {
     .single();
 
   if (error || !data) {
-    return new Response("無効な招待コード", { status: 404, headers: corsHeaders });
+    console.warn("Invalid invite code:", inviteCode);
+    return new Response("Invalid invite code", { status: 404, headers: cors });
   }
 
-  const channelId = data.step_scenarios.profiles.line_login_channel_id;
-  const botId = data.step_scenarios.profiles.line_bot_id;
+  const profile = data.step_scenarios.profiles;
+  const addFriendUrl = profile.add_friend_url;
+  const botId = profile.line_bot_id;
 
-  if (!channelId || !botId) {
-    return new Response("LINE設定が不完全です", { status: 500, headers: corsHeaders });
+  // 友だち追加URLを構成
+  let lineUrl = "";
+  if (addFriendUrl && addFriendUrl.startsWith('https://lin.ee/')) {
+    // lin.ee形式の短縮URL
+    lineUrl = addFriendUrl;
+  } else if (botId) {
+    // botId形式（@から始まる or 省略されている場合も）
+    const id = botId.startsWith("@") ? botId : `@${botId}`;
+    lineUrl = `https://line.me/R/ti/p/${id}`;
+  } else {
+    return new Response("LINE Bot設定が不完全です", { status: 500, headers: cors });
   }
 
-  // 友だち追加＋認証URLを生成
-  const params = new URLSearchParams({
-    response_type: "code",
-    client_id: channelId,
-    redirect_uri: LINE_LOGIN_REDIRECT_URI,
-    state: inviteCode,
-    scope: LINE_SCOPE,
-    bot_prompt: BOT_PROMPT,
-  });
+  // 招待コードをstateパラメータとして付与（※URL末尾にクエリで必ず追加）
+  const separator = lineUrl.includes("?") ? "&" : "?";
+  lineUrl += `${separator}state=${encodeURIComponent(inviteCode)}`;
 
-  const authUrl = `https://access.line.me/oauth2/v2.1/authorize?${params.toString()}`;
+  // 必要ならクリックログもここで記録可能
 
-  // すぐに認証フローへリダイレクト
+  // リダイレクト実行
   return new Response(null, {
     status: 302,
-    headers: {
-      ...corsHeaders,
-      Location: authUrl,
-    },
+    headers: { ...cors, Location: lineUrl },
   });
 });
