@@ -77,7 +77,7 @@ serve(async (req) => {
     });
     
     // 認証フロー選択（デフォルト: LINE Login OAuthで即時特定→配信）
-    const flow = url.searchParams.get("flow") || "login"; // "login" | "oa"
+    const flow = url.searchParams.get("flow") || "oa"; // "oa" | "login"
 
     // LINE Login OAuth 認可URLを生成（LIFFは不使用）
     const redirectUri = "https://rtjxurmuaawyzjcdkqxt.supabase.co/functions/v1/login-callback";
