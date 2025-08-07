@@ -24,7 +24,7 @@ const menuItems = [
   { title: "友達一覧", url: "/friends-list", icon: Users },
   { title: "チャット受信箱", url: "/chat-inbox", icon: MessageCircle },
   { title: "ステップ配信", url: "/step-delivery", icon: ArrowRight },
-  { title: "FMデザイナー", url: "/flex-message-designer", icon: MessageSquare },
+  { title: "フレックスメッセージ作成", url: "/flex-message-designer", icon: MessageSquare },
   { title: "メディアライブラリ", url: "/media-library", icon: FileImage },
 ]
 
