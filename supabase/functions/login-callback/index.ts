@@ -60,6 +60,7 @@ serve(async (req) => {
 
     let profile: any;
     let isGeneralLogin = false;
+    let scenarioUserId: string | null = null;
 
     /* ── 3. 一般ログインかシナリオ招待かを判定 ── */
     if (state === "login") {
@@ -106,7 +107,7 @@ serve(async (req) => {
       if (cfgErr || !cfg?.step_scenarios?.profiles) {
         throw new Error("Profile not found for invite code " + state);
       }
-      const scenarioUserId = cfg.step_scenarios.user_id;
+      scenarioUserId = cfg.step_scenarios.user_id;
       profile = cfg.step_scenarios.profiles;
     }
 
@@ -193,11 +194,63 @@ serve(async (req) => {
 
     console.log("Scenario registration successful:", reg);
 
+    // ── 10. ステップ1の配信スケジュールを設定（開始時間を厳密に反映） ──
+    try {
+      // 友だちの追加日時
+      const { data: friendRow } = await supabase
+        .from('line_friends')
+        .select('id, added_at')
+        .eq('id', reg.friend_id)
+        .maybeSingle();
+
+      // ステップ1取得
+      const { data: firstStep } = await supabase
+        .from('steps')
+        .select('id, delivery_type, delivery_seconds, delivery_minutes, delivery_hours, delivery_days, specific_time, delivery_time_of_day')
+        .eq('scenario_id', reg.scenario_id)
+        .order('step_order', { ascending: true })
+        .limit(1)
+        .maybeSingle();
+
+      if (friendRow && firstStep) {
+        const { data: scheduledAt } = await supabase.rpc('calculate_scheduled_delivery_time', {
+          p_friend_added_at: friendRow.added_at,
+          p_delivery_type: firstStep.delivery_type,
+          p_delivery_seconds: firstStep.delivery_seconds || 0,
+          p_delivery_minutes: firstStep.delivery_minutes || 0,
+          p_delivery_hours: firstStep.delivery_hours || 0,
+          p_delivery_days: firstStep.delivery_days || 0,
+          p_specific_time: firstStep.specific_time || null,
+          p_previous_step_delivered_at: null,
+          p_delivery_time_of_day: firstStep.delivery_time_of_day || null
+        });
+
+        if (scheduledAt) {
+          const sched = new Date(scheduledAt as unknown as string);
+          const now = new Date();
+          const status = sched <= now ? 'ready' : 'waiting';
+
+          await supabase
+            .from('step_delivery_tracking')
+            .update({
+              scheduled_delivery_at: sched.toISOString(),
+              next_check_at: new Date(sched.getTime() - 5000).toISOString(),
+              status
+            })
+            .eq('scenario_id', reg.scenario_id)
+            .eq('friend_id', reg.friend_id)
+            .eq('step_id', firstStep.id);
+        }
+      }
+    } catch (schedErr) {
+      console.warn('Failed to set first step schedule:', schedErr);
+    }
+
     // ── 10. 即時ステップ配信をバックエンド側でトリガー（フロント依存を排除） ──
     try {
       await fetch('https://rtjxurmuaawyzjcdkqxt.supabase.co/functions/v1/scheduled-step-delivery', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${Deno.env.get('SUPABASE_ANON_KEY')}` },
         body: JSON.stringify({ trigger: 'login_callback', scenario: state, line_user_id: lineProfile.userId })
       });
     } catch (triggerErr) {

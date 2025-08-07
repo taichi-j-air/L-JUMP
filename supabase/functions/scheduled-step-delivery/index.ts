@@ -42,7 +42,7 @@ Deno.serve(async (req) => {
       .from('step_delivery_tracking')
       .select('*')
       .eq('status', 'ready')
-      .or(`scheduled_delivery_at.is.null,scheduled_delivery_at.lte.${now}`)
+      .lte('scheduled_delivery_at', now)
       .order('scheduled_delivery_at', { ascending: true })
       .limit(100)
 

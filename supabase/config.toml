@@ -51,3 +51,9 @@ verify_jwt = false
 
 [functions.trigger-scenario]
 verify_jwt = false
+
+[functions.scheduled-step-delivery]
+verify_jwt = false
+
+[functions.enhanced-step-delivery]
+verify_jwt = false

@@ -77,7 +77,7 @@ serve(async (req) => {
     });
     
     // 認証フロー選択（デフォルト: LINE Login OAuthで即時特定→配信）
-    const flow = url.searchParams.get("flow") || "oa"; // "oa" | "login"
+    const flow = url.searchParams.get("flow") || "login"; // "login" | "oa"
 
     // LINE Login OAuth 認可URLを生成（LIFFは不使用）
     const redirectUri = "https://rtjxurmuaawyzjcdkqxt.supabase.co/functions/v1/login-callback";
@@ -94,17 +94,16 @@ serve(async (req) => {
       authUrl = `https://access.line.me/oauth2/v2.1/authorize?${params.toString()}`;
     }
 
-    // 互換: oaMessage URL（手入力トリガー用）
-    const inviteMessage = `#INVITE ${scenario}`;
-    let oaMessageUrl: string | null = null;
-    if (profile.line_bot_id) {
-      oaMessageUrl = `https://line.me/R/oaMessage/${encodeURIComponent(profile.line_bot_id)}/${encodeURIComponent(inviteMessage)}`;
-    } else if (profile.add_friend_url) {
-      oaMessageUrl = profile.add_friend_url;
+    // チャット/友だち追加用URL（プレフィル無し）
+    let chatUrl: string | null = null;
+    if (profile.add_friend_url) {
+      chatUrl = profile.add_friend_url;
+    } else if (profile.line_bot_id) {
+      chatUrl = `https://line.me/R/ti/p/${encodeURIComponent(profile.line_bot_id)}`;
     }
 
-    // 使用するURLを決定
-    const selectedUrl = (flow === "oa" ? oaMessageUrl : authUrl) || oaMessageUrl || authUrl;
+    // 使用するURLを決定（デフォルトはLINE Login）
+    const selectedUrl = (flow === "login" && authUrl) ? authUrl : (authUrl || chatUrl);
     if (!selectedUrl) {
       console.error("No valid URL could be generated for scenario:", scenario);
       return createErrorResponse("LINE configuration not set for this scenario", 500);
