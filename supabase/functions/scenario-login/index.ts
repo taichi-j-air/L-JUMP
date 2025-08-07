@@ -79,15 +79,26 @@ serve(async (req) => {
     // 認証フロー選択（デフォルト: LINE Login OAuthで即時特定→配信）
     const flow = url.searchParams.get("flow") || "login"; // "login" | "oa"
 
+    // Collect optional attribution params
+    const campaign = url.searchParams.get("campaign") || null;
+    const source = url.searchParams.get("source") || null;
+
     // LINE Login OAuth 認可URLを生成（LIFFは不使用）
     const redirectUri = "https://rtjxurmuaawyzjcdkqxt.supabase.co/functions/v1/login-callback";
     let authUrl: string | null = null;
     if (profile.line_login_channel_id && profile.line_login_channel_secret) {
+      // Encode state as Base64URL JSON to carry scenario/campaign/source safely
+      const statePayload = { scenario, campaign, source, t: Date.now() };
+      const encodedState = btoa(JSON.stringify(statePayload))
+        .replace(/\+/g, "-")
+        .replace(/\//g, "_")
+        .replace(/=+$/,"");
+
       const params = new URLSearchParams({
         response_type: "code",
         client_id: profile.line_login_channel_id,
         redirect_uri: redirectUri,
-        state: scenario, // 招待コードをstateに保持し、コールバックで登録＆即時配信
+        state: encodedState, // 招待コード等をstateに保持し、コールバックで登録＆即時配信
         scope: "openid profile",
         bot_prompt: "normal", // 未フォローなら友だち追加を促す
       });

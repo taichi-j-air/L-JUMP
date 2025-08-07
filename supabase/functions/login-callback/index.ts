@@ -47,9 +47,29 @@ serve(async (req) => {
     
     validateRequiredParams({ code, state }, ['code', 'state']);
     
-    // Validate invite code format if not login
-    if (state !== "login" && !validateInviteCode(state)) {
-      throw new Error("Invalid invite code format");
+    // Parse state: supports raw invite code or Base64URL JSON
+    let scenarioCode: string | null = null;
+    let campaign: string | null = null;
+    let source: string | null = null;
+
+    if (state && state !== "login") {
+      try {
+        const b64 = state.replace(/-/g, '+').replace(/_/g, '/');
+        const pad = b64.length % 4 ? '='.repeat(4 - (b64.length % 4)) : '';
+        const json = atob(b64 + pad);
+        const obj = JSON.parse(json);
+        if (obj?.scenario) {
+          scenarioCode = String(obj.scenario);
+          if (obj.campaign != null) campaign = String(obj.campaign);
+          if (obj.source != null) source = String(obj.source);
+        }
+      } catch (_) {
+        // ignore, fallback to raw state
+      }
+      if (!scenarioCode) scenarioCode = state;
+      if (!validateInviteCode(scenarioCode)) {
+        throw new Error("Invalid invite code format");
+      }
     }
 
     /* ── 2. Supabase 初期化 ── */
@@ -84,7 +104,7 @@ serve(async (req) => {
       isGeneralLogin = true;
       console.log("Using profile for general login:", profile.display_name);
     } else {
-      console.log("Processing scenario invite with code:", state);
+      console.log("Processing scenario invite with code:", scenarioCode);
       // 招待コード由来の設定取得
       const { data: cfg, error: cfgErr } = await supabase
         .from("scenario_invite_codes")
@@ -100,12 +120,12 @@ serve(async (req) => {
             )
           )
         `)
-        .eq("invite_code", state)
+        .eq("invite_code", scenarioCode)
         .eq("is_active", true)
         .single();
 
       if (cfgErr || !cfg?.step_scenarios?.profiles) {
-        throw new Error("Profile not found for invite code " + state);
+        throw new Error("Profile not found for invite code " + scenarioCode);
       }
       scenarioUserId = cfg.step_scenarios.user_id;
       profile = cfg.step_scenarios.profiles;
@@ -172,8 +192,8 @@ serve(async (req) => {
       line_user_id: lineProfile.userId,
       display_name: display,
       picture_url : lineProfile.pictureUrl ?? null,
-      campaign_id: state, // 招待コードをキャンペーンIDとして記録
-      registration_source: 'scenario_invite'
+      campaign_id: campaign,
+      registration_source: source ?? 'scenario_invite'
     });
 
     /* ── 9. シナリオ登録 RPC ── */
@@ -181,7 +201,7 @@ serve(async (req) => {
       "register_friend_to_scenario",
       {
         p_line_user_id: lineProfile.userId,
-        p_invite_code : state,
+        p_invite_code : scenarioCode,
         p_display_name: display,
         p_picture_url : lineProfile.pictureUrl ?? null,
       },
@@ -193,6 +213,32 @@ serve(async (req) => {
     }
 
     console.log("Scenario registration successful:", reg);
+
+    // Tag campaign/source to friend and tracking rows
+    try {
+      if (campaign || source) {
+        await supabase
+          .from('line_friends')
+          .update({
+            campaign_id: campaign,
+            registration_source: source ?? 'scenario_invite',
+            updated_at: new Date().toISOString()
+          })
+          .eq('id', reg.friend_id);
+
+        await supabase
+          .from('step_delivery_tracking')
+          .update({
+            campaign_id: campaign,
+            registration_source: source ?? 'scenario_invite',
+            updated_at: new Date().toISOString()
+          })
+          .eq('friend_id', reg.friend_id)
+          .eq('scenario_id', reg.scenario_id);
+      }
+    } catch (tagErr) {
+      console.warn('Failed to tag campaign/source:', tagErr);
+    }
 
     // ── 10. ステップ1の配信スケジュールを設定（開始時間を厳密に反映） ──
     try {
@@ -251,7 +297,7 @@ serve(async (req) => {
       await fetch('https://rtjxurmuaawyzjcdkqxt.supabase.co/functions/v1/scheduled-step-delivery', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${Deno.env.get('SUPABASE_ANON_KEY')}` },
-        body: JSON.stringify({ trigger: 'login_callback', scenario: state, line_user_id: lineProfile.userId })
+        body: JSON.stringify({ trigger: 'login_callback', scenario: scenarioCode, line_user_id: lineProfile.userId })
       });
     } catch (triggerErr) {
       console.warn('Failed to trigger scheduled-step-delivery:', triggerErr);
@@ -262,7 +308,7 @@ serve(async (req) => {
       ? profile.add_friend_url
       : (profile.line_bot_id
           ? `https://line.me/R/ti/p/${encodeURIComponent(profile.line_bot_id)}`
-          : `https://74048ab5-8d5a-425a-ab29-bd5cc50dc2fe.lovableproject.com/login-success?user_name=${encodeURIComponent(display)}&scenario=${state}`
+          : `https://74048ab5-8d5a-425a-ab29-bd5cc50dc2fe.lovableproject.com/login-success?user_name=${encodeURIComponent(display)}&scenario=${scenarioCode}`
         );
 
     return Response.redirect(chatUrl, 302);

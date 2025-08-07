@@ -10,6 +10,8 @@ export default function LineLoginPage() {
   const [error, setError] = useState<string | null>(null);
 
   const scenario = searchParams.get('scenario');
+  const campaign = searchParams.get('campaign');
+  const source = searchParams.get('source');
 
   useEffect(() => {
     // scenarioパラメータが必要
@@ -20,7 +22,7 @@ export default function LineLoginPage() {
 
     // 即座にエッジ関数にリダイレクトしてLINE認証を開始
     const redirectToLineLogin = () => {
-      const edgeFunctionUrl = `https://rtjxurmuaawyzjcdkqxt.supabase.co/functions/v1/scenario-login?scenario=${encodeURIComponent(scenario)}`;
+      const edgeFunctionUrl = `https://rtjxurmuaawyzjcdkqxt.supabase.co/functions/v1/scenario-login?scenario=${encodeURIComponent(scenario)}${campaign ? `&campaign=${encodeURIComponent(campaign)}` : ''}${source ? `&source=${encodeURIComponent(source)}` : ''}`;
       window.location.href = edgeFunctionUrl;
     };
 
