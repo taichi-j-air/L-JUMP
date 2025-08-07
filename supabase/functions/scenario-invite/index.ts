@@ -144,9 +144,6 @@ serve(async (req) => {
       console.warn('招待クリック記録に失敗:', logError);
     }
 
-    // デバイス判定
-    const isMobile = /mobile|android|iphone|ipad|ipod/i.test(userAgent);
-    
     // LINE友達追加URLを構築
     let lineUrl = addFriendUrl;
     if (!lineUrl && botId) {
@@ -159,92 +156,11 @@ serve(async (req) => {
 
     console.log("LINE URL:", lineUrl);
 
-    if (isMobile) {
-      // モバイル: 直接LINEアプリにリダイレクト
-      return new Response(null, {
-        status: 302,
-        headers: { ...corsHeaders, Location: lineUrl },
-      });
-    } else {
-      // PC: QRコード表示ページ
-      const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(lineUrl)}`;
-      
-      return new Response(`
-        <!DOCTYPE html>
-        <html>
-          <head>
-            <meta charset="utf-8">
-            <title>LINE友達追加 - ${data.step_scenarios.name}</title>
-            <meta name="viewport" content="width=device-width, initial-scale=1">
-            <style>
-              body {
-                font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-                margin: 0;
-                padding: 20px;
-                background: #f5f5f5;
-                display: flex;
-                justify-content: center;
-                align-items: center;
-                min-height: 100vh;
-              }
-              .container {
-                background: white;
-                padding: 40px;
-                border-radius: 12px;
-                box-shadow: 0 4px 20px rgba(0,0,0,0.1);
-                text-align: center;
-                max-width: 400px;
-              }
-              .qr-code {
-                margin: 20px 0;
-                border: 1px solid #eee;
-                border-radius: 8px;
-                overflow: hidden;
-                display: inline-block;
-              }
-              .scenario-name {
-                color: #00B900;
-                font-weight: bold;
-                margin-bottom: 10px;
-              }
-              .instructions {
-                color: #666;
-                font-size: 14px;
-                line-height: 1.5;
-              }
-              .mobile-link {
-                margin-top: 20px;
-                padding: 12px 24px;
-                background: #00B900;
-                color: white;
-                text-decoration: none;
-                border-radius: 6px;
-                display: inline-block;
-                font-weight: bold;
-              }
-            </style>
-          </head>
-          <body>
-            <div class="container">
-              <h1>LINE友達追加</h1>
-              <div class="scenario-name">${data.step_scenarios.name}</div>
-              <div class="qr-code">
-                <img src="${qrUrl}" alt="QRコード" />
-              </div>
-              <div class="instructions">
-                スマートフォンでQRコードを読み取ると<br>
-                LINEアプリが起動します
-              </div>
-              <a href="${lineUrl}" class="mobile-link">
-                スマートフォンの方はこちら
-              </a>
-            </div>
-          </body>
-        </html>
-      `, {
-        headers: { ...corsHeaders, 'Content-Type': 'text/html' }
-      });
-    }
+    // モバイル・PC問わず、常に直接LINEにリダイレクト
+    return new Response(null, {
+      status: 302,
+      headers: { ...corsHeaders, Location: lineUrl },
+    });
 
   } catch (error) {
     console.error("Scenario invite error:", error);
