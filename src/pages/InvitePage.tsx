@@ -1,56 +1,27 @@
 import { useEffect, useState } from "react";
-import { supabase } from "@/integrations/supabase/client";
+import { useNavigate, useParams } from "react-router-dom";
 
 export default function InvitePage() {
-  const code = window.location.pathname.split("/").pop() ?? "";
-  const isMobile = /mobile|android|iphone|ipad|ipod/i.test(navigator.userAgent);
-  const [liffId, setLiffId] = useState<string>("");
-
+  const navigate = useNavigate();
+  const { inviteCode } = useParams();
+  const code = inviteCode || window.location.pathname.split("/").pop() || "";
+  
   useEffect(() => {
-    // LIFF IDを取得
-    const fetchLiffId = async () => {
-      if (!code) return;
-      
-      const { data, error } = await supabase
-        .from("scenario_invite_codes")
-        .select(`
-          step_scenarios!inner (
-            profiles!inner (
-              liff_id
-            )
-          )
-        `)
-        .eq("invite_code", code)
-        .eq("is_active", true)
-        .maybeSingle();
-      
-      if (error) {
-        console.error("Error fetching LIFF ID:", error);
-        return;
-      }
-      
-      const fetchedLiffId = data?.step_scenarios?.profiles?.liff_id;
-      if (fetchedLiffId) {
-        setLiffId(fetchedLiffId);
-      }
-    };
-    
-    fetchLiffId();
-  }, [code]);
+    // シナリオコードが指定されている場合は、LINEログインページにリダイレクト
+    if (code) {
+      console.log("Redirecting to LINE login for scenario:", code);
+      navigate(`/login?scenario=${encodeURIComponent(code)}`);
+    }
+  }, [code, navigate]);
 
-  if (isMobile) return null; // リダイレクト済み
-
-  /* ---- PC 用 QR 表示 ---- */
-  const url = `https://liff.line.me/${liffId}?code=${code}`;
-  const qr = `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(url)}`;
-
+  // リダイレクト中の表示
   return (
     <div className="min-h-screen flex items-center justify-center bg-gray-50">
       <div className="bg-white p-8 rounded-lg shadow text-center">
-        <h1 className="text-xl font-bold mb-4">LINE 友だち追加</h1>
-        <img src={qr} alt="qr" className="mx-auto mb-4 border" />
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-4"></div>
+        <h1 className="text-xl font-bold mb-4">LINE認証ページに移動中...</h1>
         <p className="text-sm text-gray-600">
-          スマホで QR を読み取ると LINE アプリが起動します
+          自動的にLINE認証ページにリダイレクトされます
         </p>
       </div>
     </div>
