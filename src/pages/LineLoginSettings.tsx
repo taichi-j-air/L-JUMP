@@ -96,7 +96,7 @@ export default function LineLoginSettings() {
       client_id: channelId,
       redirect_uri: `https://rtjxurmuaawyzjcdkqxt.supabase.co/functions/v1/login-callback`,
       state: 'login',
-      scope: 'profile openid email'
+      scope: 'profile openid'
     })
     
     return `https://access.line.me/oauth2/v2.1/authorize?${params.toString()}`
