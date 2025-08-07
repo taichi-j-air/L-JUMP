@@ -312,6 +312,16 @@ async function handleFollow(event: LineEvent, supabase: any, req: Request) {
       inviteCode = req.headers.get('x-invite-code')
     }
     
+    // Check for recent invite clicks if no direct invite code
+    if (!inviteCode) {
+      await findRecentInviteCode(source.userId, supabase).then(code => {
+        if (code) {
+          inviteCode = code
+          console.log('Found invite code from recent clicks:', inviteCode)
+        }
+      })
+    }
+    
     console.log('Invite code from follow event:', inviteCode)
 
     // Get user profile using LINE Messaging API
@@ -815,6 +825,40 @@ async function getLineUserProfile(userId: string, supabase: any) {
 
   } catch (error) {
     console.error('Error getting user profile:', error)
+    return null
+  }
+}
+
+// Find recent invite code for a user based on timing and other factors
+async function findRecentInviteCode(lineUserId: string, supabase: any) {
+  try {
+    // Get recent invite clicks (within last 10 minutes)
+    const tenMinutesAgo = new Date(Date.now() - 10 * 60 * 1000).toISOString()
+    
+    const { data: recentClicks, error } = await supabase
+      .from('invite_clicks')
+      .select(`
+        scenario_invite_codes!inner (
+          invite_code,
+          is_active
+        )
+      `)
+      .gte('clicked_at', tenMinutesAgo)
+      .eq('scenario_invite_codes.is_active', true)
+      .order('clicked_at', { ascending: false })
+      .limit(5)
+    
+    if (error || !recentClicks || recentClicks.length === 0) {
+      console.log('最近の招待クリックが見つかりません')
+      return null
+    }
+    
+    // Return the most recent invite code
+    const mostRecentClick = recentClicks[0]
+    return mostRecentClick.scenario_invite_codes.invite_code
+    
+  } catch (error) {
+    console.error('招待コード検索エラー:', error)
     return null
   }
 }
