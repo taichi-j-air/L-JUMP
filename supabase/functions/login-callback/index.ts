@@ -158,10 +158,8 @@ serve(async (req) => {
       console.log("General login successful for user:", lineProfile.userId);
       
       /* ── 9. 完了ページへリダイレクト ── */
-      return Response.redirect(
-        "https://74048ab5-8d5a-425a-ab29-bd5cc50dc2fe.lovableproject.com/?login_success=1",
-        302,
-      );
+      const generalLoginSuccessUrl = `https://74048ab5-8d5a-425a-ab29-bd5cc50dc2fe.lovableproject.com/login-success?user_name=${encodeURIComponent(display)}`;
+      return Response.redirect(generalLoginSuccessUrl, 302);
     }
 
     /* ── 8. シナリオ招待の場合：友達とシナリオ登録 ── */
@@ -188,10 +186,8 @@ serve(async (req) => {
     }
 
     /* ── 10. 完了ページへリダイレクト ── */
-    return Response.redirect(
-      "https://74048ab5-8d5a-425a-ab29-bd5cc50dc2fe.lovableproject.com/?ok=1",
-      302,
-    );
+    const successUrl = `https://74048ab5-8d5a-425a-ab29-bd5cc50dc2fe.lovableproject.com/login-success?user_name=${encodeURIComponent(display)}&scenario=${state}`;
+    return Response.redirect(successUrl, 302);
   } catch (e: any) {
     console.error("callback error:", e);
     return new Response(

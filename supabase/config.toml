@@ -43,6 +43,9 @@ verify_jwt = false
 [functions.login-callback]
 verify_jwt = false
 
+[functions.scenario-login]
+verify_jwt = false
+
 [functions.liff-handler]
 verify_jwt = false
 

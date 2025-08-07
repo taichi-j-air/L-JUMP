@@ -28,6 +28,8 @@ import ErrorPage from "./pages/ErrorPage";
 import IndividualChatPage from "./pages/IndividualChatPage";
 import ChatInboxPage from "./pages/ChatInboxPage";
 import LiffAuth from "./pages/LiffAuth";
+import LineLoginPage from "./pages/LineLoginPage";
+import LoginSuccess from "./pages/LoginSuccess";
 import { supabase } from "@/integrations/supabase/client";
 import { User } from "@supabase/supabase-js";
 
@@ -75,6 +77,8 @@ function AppContent() {
           <Route path="/liff-invite" element={<LiffInvitePage />} />
           <Route path="/invite" element={<InvitePage />} />
           <Route path="/invite/:inviteCode" element={<InvitePage />} />
+          <Route path="/login" element={<LineLoginPage />} />
+          <Route path="/login-success" element={<LoginSuccess />} />
           <Route path="/auth" element={<Auth />} />
           <Route path="/verify" element={<EmailVerify />} />
           <Route path="/reset-password" element={<ResetPassword />} />
@@ -118,6 +122,8 @@ function AppContent() {
               <Route path="/liff-invite" element={<LiffInvitePage />} />
               <Route path="/invite" element={<InvitePage />} />
               <Route path="/invite/:inviteCode" element={<InvitePage />} />
+              <Route path="/login" element={<LineLoginPage />} />
+              <Route path="/login-success" element={<LoginSuccess />} />
               <Route path="/line-api-settings" element={<LineApiSettings />} />
               <Route path="/line-login-settings" element={<LineLoginSettings />} />
               <Route path="/webhook-settings" element={<WebhookSettings />} />
