@@ -6,28 +6,39 @@ const corsHeaders = {
 }
 
 Deno.serve(async (req) => {
+  console.log('🕐 Scheduled step delivery function started at:', new Date().toISOString())
+
   // Handle CORS preflight requests
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders })
   }
 
   try {
-    const body = await req.json().catch(() => ({}))
-    const { offset = 0 } = body
-    
-    console.log('High-frequency step delivery checker started with offset:', offset)
-
     // Initialize Supabase client
-    const supabaseUrl = Deno.env.get('SUPABASE_URL')!
-    const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
-    
-    const supabase = createClient(supabaseUrl, supabaseServiceKey)
+    const supabase = createClient(
+      Deno.env.get('SUPABASE_URL') ?? '',
+      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
+    )
 
-    const now = new Date()
-    const checkTime = new Date(now.getTime() + (offset * 1000)) // Add offset for staggered checks
+    // Get current time
+    const now = new Date().toISOString()
+    console.log(`⏰ Current time: ${now}`)
 
-    // Find steps that are ready for delivery with high precision
-    const { data: readySteps, error: stepsError } = await supabase
+    // まず全てのtrackingレコードを確認
+    const { data: allTracking, error: allError } = await supabase
+      .from('step_delivery_tracking')
+      .select('*')
+      
+    console.log('📊 All tracking records:', allTracking?.length || 0)
+    if (allTracking) {
+      console.log('📋 Status breakdown:', allTracking.reduce((acc, item) => {
+        acc[item.status] = (acc[item.status] || 0) + 1
+        return acc
+      }, {}))
+    }
+
+    // Find ready steps that need to be delivered
+    const { data: stepsToDeliver, error: fetchError } = await supabase
       .from('step_delivery_tracking')
       .select(`
         *,
@@ -44,73 +55,69 @@ Deno.serve(async (req) => {
         )
       `)
       .eq('status', 'ready')
-      .lte('scheduled_delivery_at', now.toISOString())
+      .lte('scheduled_delivery_at', now)
       .order('scheduled_delivery_at', { ascending: true })
-      .limit(100) // Process up to 100 steps at a time for better performance
+      .limit(100)
 
-    if (stepsError) {
-      console.error('Error fetching ready steps:', stepsError)
-      return new Response(
-        JSON.stringify({ error: 'Failed to fetch ready steps' }),
-        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      )
+    if (fetchError) {
+      console.error('❌ Error fetching steps to deliver:', fetchError)
+      return new Response(JSON.stringify({ error: fetchError.message }), {
+        status: 500,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+      })
     }
 
-    console.log(`Found ${readySteps?.length || 0} steps ready for delivery`)
+    console.log(`📨 Found ${stepsToDeliver?.length || 0} steps ready for delivery`)
+
+    if (stepsToDeliver) {
+      for (const step of stepsToDeliver) {
+        console.log(`⏳ Step ${step.step_id} scheduled for ${step.scheduled_delivery_at}`)
+      }
+    }
 
     let deliveredCount = 0
     let errorCount = 0
-    const deliveryPromises: Promise<void>[] = []
 
-    if (readySteps && readySteps.length > 0) {
-      // Process steps in parallel for better performance
-      for (const stepTracking of readySteps) {
-        deliveryPromises.push(
-          processStepDelivery(supabase, stepTracking)
-            .then(() => {
-              deliveredCount++
-              console.log(`Successfully delivered step ${stepTracking.id}`)
-            })
-            .catch((error) => {
-              errorCount++
-              console.error(`Failed to deliver step ${stepTracking.id}:`, error)
-            })
-        )
-      }
+    if (stepsToDeliver && stepsToDeliver.length > 0) {
+      // Process steps in parallel
+      const deliveryPromises = stepsToDeliver.map((stepTracking) =>
+        processStepDelivery(supabase, stepTracking)
+          .then(() => {
+            deliveredCount++
+            console.log(`✅ Successfully delivered step ${stepTracking.id}`)
+          })
+          .catch((error) => {
+            errorCount++
+            console.error(`❌ Failed to deliver step ${stepTracking.id}:`, error)
+          })
+      )
 
-      // Wait for all deliveries to complete
       await Promise.allSettled(deliveryPromises)
     }
 
-    // Schedule next check cycle if there are more steps to process
-    if (readySteps && readySteps.length === 100) {
-      // If we processed the maximum, there might be more - trigger another check
-      EdgeRuntime.waitUntil(
-        scheduleNextCheck(supabase, 5) // Check again in 5 seconds
-      )
+    // Schedule next check if we processed the maximum
+    if (stepsToDeliver && stepsToDeliver.length === 100) {
+      console.log('🔄 Scheduling next check due to max steps processed')
+      EdgeRuntime.waitUntil(scheduleNextCheck(supabase, 2))
     }
 
     const result = {
-      message: 'High-frequency delivery check completed',
+      success: true,
       delivered: deliveredCount,
       errors: errorCount,
-      total_checked: readySteps?.length || 0,
-      timestamp: now.toISOString(),
-      offset: offset
+      totalChecked: stepsToDeliver?.length || 0,
+      timestamp: now
     }
 
-    console.log('Delivery summary:', result)
+    console.log('📈 Delivery summary:', result)
 
-    return new Response(
-      JSON.stringify(result),
-      { 
-        status: 200, 
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
-      }
-    )
+    return new Response(JSON.stringify(result), {
+      status: 200,
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+    })
 
   } catch (error) {
-    console.error('Scheduled delivery error:', error)
+    console.error('💥 Scheduled delivery error:', error)
     return new Response(
       JSON.stringify({ error: 'Internal server error', details: error.message }),
       { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
