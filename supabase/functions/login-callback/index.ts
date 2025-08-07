@@ -93,7 +93,9 @@ serve(async (req) => {
             profiles!inner (
               line_login_channel_id,
               line_login_channel_secret,
-              display_name
+              display_name,
+              add_friend_url,
+              line_bot_id
             )
           )
         `)
@@ -104,6 +106,7 @@ serve(async (req) => {
       if (cfgErr || !cfg?.step_scenarios?.profiles) {
         throw new Error("Profile not found for invite code " + state);
       }
+      const scenarioUserId = cfg.step_scenarios.user_id;
       profile = cfg.step_scenarios.profiles;
     }
 
@@ -164,7 +167,7 @@ serve(async (req) => {
 
     /* ── 8. シナリオ招待の場合：友達とシナリオ登録 ── */
     await supabase.from("line_friends").upsert({
-      user_id: profile.user_id,
+      user_id: scenarioUserId,
       line_user_id: lineProfile.userId,
       display_name: display,
       picture_url : lineProfile.pictureUrl ?? null,
@@ -190,9 +193,26 @@ serve(async (req) => {
 
     console.log("Scenario registration successful:", reg);
 
-    /* ── 10. 完了ページへリダイレクト ── */
-    const successUrl = `https://74048ab5-8d5a-425a-ab29-bd5cc50dc2fe.lovableproject.com/login-success?user_name=${encodeURIComponent(display)}&scenario=${state}`;
-    return Response.redirect(successUrl, 302);
+    // ── 10. 即時ステップ配信をバックエンド側でトリガー（フロント依存を排除） ──
+    try {
+      await fetch('https://rtjxurmuaawyzjcdkqxt.supabase.co/functions/v1/scheduled-step-delivery', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ trigger: 'login_callback', scenario: state, line_user_id: lineProfile.userId })
+      });
+    } catch (triggerErr) {
+      console.warn('Failed to trigger scheduled-step-delivery:', triggerErr);
+    }
+
+    // ── 11. LINEアプリのトーク画面（または友だち追加）へ遷移 ──
+    const chatUrl = (profile.add_friend_url && profile.add_friend_url.startsWith('https://'))
+      ? profile.add_friend_url
+      : (profile.line_bot_id
+          ? `https://line.me/R/ti/p/${encodeURIComponent(profile.line_bot_id)}`
+          : `https://74048ab5-8d5a-425a-ab29-bd5cc50dc2fe.lovableproject.com/login-success?user_name=${encodeURIComponent(display)}&scenario=${state}`
+        );
+
+    return Response.redirect(chatUrl, 302);
   } catch (e: any) {
     console.error("callback error:", e);
     return new Response(

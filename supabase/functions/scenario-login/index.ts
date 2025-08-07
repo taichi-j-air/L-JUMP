@@ -88,7 +88,9 @@ serve(async (req) => {
       `&redirect_uri=${encodeURIComponent(redirectUri)}` +
       `&state=${scenario}` +
       `&scope=profile%20openid` +
-      `&bot_prompt=aggressive`;
+      `&bot_prompt=aggressive` +
+      `&prompt=consent` +
+      `&ui_locales=ja-JP`;
 
     // デスクトップ用: JSONでURLを返す（フロントでQR表示用）
     const format = url.searchParams.get("format");
