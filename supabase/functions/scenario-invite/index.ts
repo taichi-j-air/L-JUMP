@@ -76,4 +76,3 @@ serve(async (req) => {
     headers: { ...cors, Location: lineUrl },
   });
 });
-});

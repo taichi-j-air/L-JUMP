@@ -76,7 +76,7 @@ export function FriendsList({ user }: FriendsListProps) {
   return (
     <div className="space-y-4">
       {friends.map((friend) => (
-        <Card key={friend.id} className="hover:bg-muted/50 transition-colors">
+        <Card key={friend.line_user_id} className="hover:bg-muted/50 transition-colors">
           <CardContent className="p-4">
             <div className="flex items-center gap-3">
               <Avatar className="h-10 w-10">
