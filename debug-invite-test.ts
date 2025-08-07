@@ -130,7 +130,17 @@ serve(async (req) => {
     }
 
     // 友達追加URLを生成
-    let baseUrl = profileData.add_friend_url || \`https://line.me/R/ti/p/@\${profileData.line_channel_id}\`
+    // ✅ 正しい実装（LINE Login認証URLにリダイレクト）
+const frontendUrl = "https://74048ab5-8d5a-425a-ab29-bd5cc50dc2fe.lovableproject.com";
+const redirectUrl = `${frontendUrl}/invite/${encodeURIComponent(inviteCode)}`;
+
+return new Response(null, {
+  status: 302,
+  headers: {
+    ...corsHeaders,
+    'Location': redirectUrl  // フロントエンドの招待ページへ
+  }
+})
     
     // URLに招待コードパラメータを追加
     try {
