@@ -33,29 +33,7 @@ export function FriendsList({ user }: FriendsListProps) {
 
   const loadFriends = async () => {
     try {
-      // LINE APIから直接友達リストを取得
-      const { data, error } = await supabase.functions.invoke('get-line-friends');
-
-      if (error) {
-        console.error('Error loading friends from LINE API:', error);
-        // フォールバック: DBから取得
-        const { data: dbData, error: dbError } = await supabase
-          .from('line_friends')
-          .select('*')
-          .eq('user_id', user.id)
-          .order('added_at', { ascending: false });
-
-        if (dbError) {
-          console.error('Error loading friends from DB:', dbError);
-        } else {
-          setFriends(dbData || []);
-        }
-      } else {
-        setFriends(data.friends || []);
-      }
-    } catch (error) {
-      console.error('Error:', error);
-      // フォールバック: DBから取得
+      // データベースから友達リストを取得（APIは友だち追加時のみ使用）
       const { data: dbData, error: dbError } = await supabase
         .from('line_friends')
         .select('*')
@@ -67,6 +45,8 @@ export function FriendsList({ user }: FriendsListProps) {
       } else {
         setFriends(dbData || []);
       }
+    } catch (error) {
+      console.error('Error loading friends:', error);
     } finally {
       setLoading(false);
     }
