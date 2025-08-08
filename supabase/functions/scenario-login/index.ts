@@ -94,7 +94,7 @@ serve(async (req) => {
       const encodedState = btoa(JSON.stringify(statePayload))
         .replace(/\+/g, "-")
         .replace(/\//g, "_")
-        .replace(/=+$/,""");
+        .replace(/=+$/, "");
 
       const params = new URLSearchParams({
         response_type: "code",
