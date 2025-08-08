@@ -78,8 +78,8 @@ serve(async (req) => {
       hasAddFriendUrl: !!profile.add_friend_url 
     });
     
-    // 認証フロー選択（デフォルト: LINE Login OAuthで即時特定→配信）
-    const flow = url.searchParams.get("flow") || "login"; // "login" | "oa"
+    // 認証フロー選択（デフォルト: 友だち追加/OA起動）
+    const flow = url.searchParams.get("flow") || "oa"; // "login" | "oa"
 
     // Collect optional attribution params
     const campaign = url.searchParams.get("campaign") || null;
@@ -94,7 +94,7 @@ serve(async (req) => {
       const encodedState = btoa(JSON.stringify(statePayload))
         .replace(/\+/g, "-")
         .replace(/\//g, "_")
-        .replace(/=+$/,"");
+        .replace(/=+$/,""");
 
       const params = new URLSearchParams({
         response_type: "code",
@@ -107,32 +107,33 @@ serve(async (req) => {
       authUrl = `https://access.line.me/oauth2/v2.1/authorize?${params.toString()}`;
     }
 
-    // チャット/友だち追加用URL（プレフィル無し）
+    // チャット/友だち追加用URL（アプリ起動を優先）
     let chatUrl: string | null = null;
+    let deepChatUrl: string | null = null;
     if (profile.add_friend_url) {
-      chatUrl = profile.add_friend_url;
-    } else if (profile.line_bot_id) {
-      chatUrl = `https://line.me/R/ti/p/${encodeURIComponent(profile.line_bot_id)}`;
+      chatUrl = profile.add_friend_url; // lin.ee はアプリ起動を誘導
+    }
+    if (profile.line_bot_id) {
+      const botId = encodeURIComponent(profile.line_bot_id);
+      // deep link は確実にアプリを開く
+      deepChatUrl = `line://ti/p/${botId}`;
+      if (!chatUrl) {
+        chatUrl = `https://line.me/R/ti/p/${botId}`;
+      }
     }
 
-    // LIFF起動用URL（スマホ外部ブラウザ→LINEアプリ遷移対策）
-    let liffUrl: string | null = null;
-    if ((profile as any).liff_id) {
-      const qs = new URLSearchParams({ inviteCode: scenario!, ...(campaign ? { campaign } : {}), ...(source ? { source } : {}) })
-      liffUrl = `https://liff.line.me/${(profile as any).liff_id}?${qs.toString()}`
-    } else if ((profile as any).liff_url) {
-      const qs = new URLSearchParams({ inviteCode: scenario!, ...(campaign ? { campaign } : {}), ...(source ? { source } : {}) })
-      liffUrl = `${(profile as any).liff_url}?${qs.toString()}`
-    }
-
-    // 使用するURLを決定（スマホ外部ブラウザならLIFF優先）
+    // 使用するURLを決定（モバイルはLINEアプリ起動を最優先、LIFFは使用しない）
     const userAgent = req.headers.get('user-agent') || '';
     const isMobile = /iPhone|iPad|iPod|Android/i.test(userAgent);
     const isLineInApp = /Line\//i.test(userAgent);
 
-    let selectedUrl = (flow === "login" && authUrl) ? authUrl : (authUrl || chatUrl);
-    if (isMobile && !isLineInApp && liffUrl) {
-      selectedUrl = liffUrl;
+    let selectedUrl: string | null = null;
+    if (flow === "login" && authUrl) {
+      selectedUrl = authUrl; // OAuth ログイン明示指定時のみ
+    } else if (isMobile && !isLineInApp && (deepChatUrl || chatUrl)) {
+      selectedUrl = deepChatUrl || chatUrl!; // モバイルはアプリを開く
+    } else {
+      selectedUrl = chatUrl || authUrl; // デスクトップ等は通常URL
     }
 
     if (!selectedUrl) {

@@ -344,7 +344,22 @@ export type Database = {
           line_user_id?: string | null
           scenario_id?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "fk_sfl_friend"
+            columns: ["friend_id"]
+            isOneToOne: false
+            referencedRelation: "line_friends"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "fk_sfl_scenario"
+            columns: ["scenario_id"]
+            isOneToOne: false
+            referencedRelation: "step_scenarios"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       scenario_invite_codes: {
         Row: {

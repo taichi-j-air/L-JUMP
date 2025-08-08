@@ -37,15 +37,16 @@ Deno.serve(async (req) => {
       }, {}))
     }
 
-    // Find ready steps that need to be delivered
+    // Atomically claim up to 100 ready steps to avoid duplicate processing
     const { data: stepsToDeliver, error: fetchError } = await supabase
       .from('step_delivery_tracking')
-      .select('*')
+      .update({ status: 'delivering', updated_at: now })
       .eq('status', 'ready')
       .not('friend_id', 'is', null)
       .lte('scheduled_delivery_at', now)
       .order('scheduled_delivery_at', { ascending: true })
       .limit(100)
+      .select('*')
 
     if (fetchError) {
       console.error('❌ Error fetching steps to deliver:', fetchError)
@@ -128,25 +129,8 @@ async function processStepDelivery(supabase: any, stepTracking: any): Promise<vo
       return
     }
     
-    // Mark step as delivering to avoid duplicate processing
-    const { data: marked, error: markingError } = await supabase
-      .from('step_delivery_tracking')
-      .update({ 
-        status: 'delivering',
-        updated_at: new Date().toISOString()
-      })
-      .eq('id', stepTracking.id)
-      .eq('status', 'ready') // Only update if still ready (prevents race conditions)
-      .select('id')
+    // Already claimed at fetch-time; proceed to deliver
 
-    if (markingError) {
-      console.error('Error marking step as delivering:', markingError)
-      throw markingError
-    }
-    if (!marked || marked.length === 0) {
-      console.log('Another worker already processing this tracking. Skipping:', stepTracking.id)
-      return
-    }
 
     // Deliver the step messages
     await deliverStepMessages(supabase, stepTracking)
