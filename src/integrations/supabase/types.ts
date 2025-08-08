@@ -359,6 +359,20 @@ export type Database = {
             referencedRelation: "step_scenarios"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "scenario_friend_logs_friend_id_fkey"
+            columns: ["friend_id"]
+            isOneToOne: false
+            referencedRelation: "line_friends"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "scenario_friend_logs_scenario_id_fkey"
+            columns: ["scenario_id"]
+            isOneToOne: false
+            referencedRelation: "step_scenarios"
+            referencedColumns: ["id"]
+          },
         ]
       }
       scenario_invite_codes: {
@@ -432,8 +446,22 @@ export type Database = {
         }
         Relationships: [
           {
+            foreignKeyName: "scenario_transitions_from_fkey"
+            columns: ["from_scenario_id"]
+            isOneToOne: false
+            referencedRelation: "step_scenarios"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "scenario_transitions_from_scenario_id_fkey"
             columns: ["from_scenario_id"]
+            isOneToOne: false
+            referencedRelation: "step_scenarios"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "scenario_transitions_to_fkey"
+            columns: ["to_scenario_id"]
             isOneToOne: false
             referencedRelation: "step_scenarios"
             referencedColumns: ["id"]
@@ -594,6 +622,20 @@ export type Database = {
           updated_at?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "step_delivery_tracking_friend_id_fkey"
+            columns: ["friend_id"]
+            isOneToOne: false
+            referencedRelation: "line_friends"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "step_delivery_tracking_scenario_id_fkey"
+            columns: ["scenario_id"]
+            isOneToOne: false
+            referencedRelation: "step_scenarios"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "step_delivery_tracking_step_id_fkey"
             columns: ["step_id"]
