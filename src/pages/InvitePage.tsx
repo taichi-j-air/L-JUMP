@@ -28,7 +28,7 @@ export default function InvitePage() {
 
     const fetchAuthorizeUrl = async () => {
       try {
-        const res = await fetch(`${base}?scenario=${encodeURIComponent(code)}&format=json`);
+        const res = await fetch(`${base}?scenario=${encodeURIComponent(code)}&format=json&flow=login`);
         if (!res.ok) throw new Error("認証URLの取得に失敗しました");
         const json = await res.json();
         setAuthorizeUrl(json.authorizeUrl);
