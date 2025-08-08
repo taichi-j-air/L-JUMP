@@ -22,7 +22,7 @@ export default function InvitePage() {
     const base = "https://rtjxurmuaawyzjcdkqxt.supabase.co/functions/v1/scenario-login";
 
     if (isMobile) {
-      window.location.href = `${base}?scenario=${encodeURIComponent(code)}`;
+      window.location.href = `${base}?scenario=${encodeURIComponent(code)}&flow=login`;
       return;
     }
 

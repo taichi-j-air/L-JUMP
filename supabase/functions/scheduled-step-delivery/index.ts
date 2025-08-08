@@ -402,7 +402,7 @@ async function markStepAsDelivered(supabase: any, trackingId: string, scenarioId
     // Fetch next step (currentStepOrder + 1)
     const { data: nextStep, error: nextStepErr } = await supabase
       .from('steps')
-      .select('id, delivery_type, delivery_days, delivery_hours, delivery_minutes, delivery_seconds, delivery_time_of_day')
+      .select('id, delivery_type, delivery_days, delivery_hours, delivery_minutes, delivery_seconds, delivery_time_of_day, specific_time')
       .eq('scenario_id', scenarioId)
       .eq('step_order', currentStepOrder + 1)
       .maybeSingle()
@@ -432,27 +432,34 @@ async function markStepAsDelivered(supabase: any, trackingId: string, scenarioId
       return
     }
 
+    // Calculate precise scheduled time for the next step using DB function
     let updates: any = { updated_at: new Date().toISOString() }
 
-    if (nextStep.delivery_type === 'relative_to_previous') {
-      // Fetch friend added_at for scheduling base
+    try {
+      // Fetch base friend info for calculation
       const { data: friend, error: friendErr } = await supabase
         .from('line_friends')
         .select('added_at')
         .eq('id', friendId)
         .maybeSingle()
 
-      if (!friendErr) {
+      if (friendErr) {
+        console.warn('Failed to fetch friend for scheduling, defaulting to ready', friendErr)
+        const now = new Date()
+        updates.status = 'ready'
+        updates.scheduled_delivery_at = now.toISOString()
+        updates.next_check_at = new Date(now.getTime() - 5000).toISOString()
+      } else {
         const { data: newScheduledTime, error: calcError } = await supabase.rpc('calculate_scheduled_delivery_time', {
-          p_friend_added_at: friend?.added_at,
+          p_friend_added_at: friend?.added_at || null,
           p_delivery_type: nextStep.delivery_type,
           p_delivery_seconds: nextStep.delivery_seconds || 0,
           p_delivery_minutes: nextStep.delivery_minutes || 0,
           p_delivery_hours: nextStep.delivery_hours || 0,
           p_delivery_days: nextStep.delivery_days || 0,
-          p_specific_time: null,
+          p_specific_time: nextStep.specific_time || null,
           p_previous_step_delivered_at: deliveredAt,
-          p_delivery_time_of_day: nextStep.delivery_time_of_day
+          p_delivery_time_of_day: nextStep.delivery_time_of_day || null
         })
 
         if (!calcError && newScheduledTime) {
@@ -474,14 +481,9 @@ async function markStepAsDelivered(supabase: any, trackingId: string, scenarioId
           updates.scheduled_delivery_at = now.toISOString()
           updates.next_check_at = new Date(now.getTime() - 5000).toISOString()
         }
-      } else {
-        console.warn('Failed to fetch friend for scheduling, defaulting to ready', friendErr)
-        const now = new Date()
-        updates.status = 'ready'
-        updates.scheduled_delivery_at = now.toISOString()
-        updates.next_check_at = new Date(now.getTime() - 5000).toISOString()
       }
-    } else {
+    } catch (calcCatch) {
+      console.warn('Scheduling calculation error, defaulting to ready', calcCatch)
       const now = new Date()
       updates.status = 'ready'
       updates.scheduled_delivery_at = now.toISOString()
