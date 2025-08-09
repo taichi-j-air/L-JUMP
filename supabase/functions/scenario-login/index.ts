@@ -47,32 +47,38 @@ serve(async (req) => {
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
     );
 
-    // シナリオ情報とプロファイル設定を取得（LINE公式アカウントID優先）
-    const { data, error } = await supabase
+    // 招待コードから所有者（user_id）を解決し、プロフィールを取得
+    const { data: invite, error: inviteErr } = await supabase
       .from("scenario_invite_codes")
-      .select(`
-        step_scenarios!inner (
-          profiles!inner (
-            line_bot_id,
-            add_friend_url,
-            display_name,
-            line_login_channel_id,
-            line_login_channel_secret,
-            liff_id,
-            liff_url
-          )
-        )
-      `)
+      .select("user_id, scenario_id, is_active")
       .eq("invite_code", scenario)
       .eq("is_active", true)
       .maybeSingle();
 
-    if (error || !data) {
-      console.error("Scenario not found:", error, "Data:", data);
+    if (inviteErr || !invite) {
+      console.error("Invalid scenario code:", inviteErr, "Invite:", invite);
       return createErrorResponse("Invalid scenario code", 404);
     }
 
-    const profile = data.step_scenarios.profiles;
+    const { data: profile, error: profileErr } = await supabase
+      .from("profiles")
+      .select(`
+        line_bot_id,
+        add_friend_url,
+        display_name,
+        line_login_channel_id,
+        line_login_channel_secret,
+        liff_id,
+        liff_url
+      `)
+      .eq("user_id", invite.user_id)
+      .maybeSingle();
+
+    if (profileErr || !profile) {
+      console.error("Profile not found or misconfigured for invite:", scenario, profileErr);
+      return createErrorResponse("LINE configuration not set for this scenario", 500);
+    }
+
     console.log("Profile found:", { 
       hasLineBotId: !!profile.line_bot_id, 
       hasAddFriendUrl: !!profile.add_friend_url 
