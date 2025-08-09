@@ -60,26 +60,31 @@ export default function LiffInvitePage() {
           }, 2000);
         } else {
           setStatus("友だち追加が必要です");
-          // プロファイル情報を取得して友だち追加URLを生成
-          const { data: profileData, error: profileError } = await supabase
+          // プロファイル情報を取得して友だち追加URLを生成（埋め込みを避ける）
+          const { data: inviteRow, error: inviteRowErr } = await supabase
             .from("scenario_invite_codes")
-            .select(`
-              step_scenarios!inner (
-                profiles!inner (
-                  line_bot_id
-                )
-              )
-            `)
+            .select("user_id")
             .eq("invite_code", inviteCode)
             .eq("is_active", true)
             .single();
 
-          if (profileError || !profileData) {
+          if (inviteRowErr || !inviteRow) {
             setError("設定情報の取得に失敗しました");
             return;
           }
 
-          const botId = profileData.step_scenarios.profiles.line_bot_id;
+          const { data: prof, error: profErr } = await supabase
+            .from("profiles")
+            .select("line_bot_id")
+            .eq("user_id", inviteRow.user_id)
+            .single();
+
+          if (profErr || !prof) {
+            setError("設定情報の取得に失敗しました");
+            return;
+          }
+
+          const botId = prof.line_bot_id;
           if (botId) {
             const id = botId.startsWith("@") ? botId : `@${botId}`;
             const addFriendUrl = `https://line.me/R/ti/p/${id}?state=${encodeURIComponent(inviteCode)}`;

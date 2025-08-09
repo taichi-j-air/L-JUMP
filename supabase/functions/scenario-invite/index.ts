@@ -28,60 +28,61 @@ serve(async (req) => {
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
     );
     
-    // ✅ 修正：LINE Login設定を含む適切なデータ取得
-    const { data, error } = await db
+    // 招待コードと関連ユーザーを取得（埋め込みを避けて明示クエリ）
+    const { data: invite, error: inviteErr } = await db
       .from("scenario_invite_codes")
-      .select(`
-        scenario_id,
-        max_usage,
-        usage_count,
-        step_scenarios!inner (
-          user_id,
-          name,
-          profiles!inner (
-            line_login_channel_id,
-            line_login_channel_secret,
-            line_api_status,
-            display_name
-          )
-        )
-      `)
+      .select("scenario_id, user_id, max_usage, usage_count, is_active")
       .eq("invite_code", inviteCode)
       .eq("is_active", true)
       .single();
 
-    if (error || !data) {
-      console.warn("Invalid invite code:", inviteCode, error?.message);
+    if (inviteErr || !invite) {
+      console.warn("Invalid invite code:", inviteCode, inviteErr?.message);
       return new Response("Invalid invite code", { status: 404, headers: cors });
     }
 
-    const profile = data.step_scenarios.profiles;
+    // プロファイル（LINE Login設定）取得
+    const { data: profile, error: profileErr } = await db
+      .from("profiles")
+      .select("line_login_channel_id, line_login_channel_secret, line_api_status, display_name")
+      .eq("user_id", invite.user_id)
+      .single();
 
-    // ✅ 修正：LINE Login設定の確認（LIFF不要）
+    if (profileErr || !profile) {
+      console.error("Profile not found for user:", invite.user_id, profileErr?.message);
+      return new Response("Profile not found", { status: 404, headers: cors });
+    }
+
+    // LINE Login設定確認
     if (!profile.line_login_channel_id || !profile.line_login_channel_secret) {
       console.error("Missing LINE Login config for invite:", inviteCode, {
         hasChannelId: !!profile.line_login_channel_id,
-        hasChannelSecret: !!profile.line_login_channel_secret
+        hasChannelSecret: !!profile.line_login_channel_secret,
       });
       return new Response("LINE Login not configured", { status: 500, headers: cors });
     }
 
     // 使用制限チェック
-    if (data.max_usage && data.usage_count >= data.max_usage) {
+    if (invite.max_usage && invite.usage_count >= invite.max_usage) {
       console.warn("Usage limit exceeded for invite:", inviteCode);
       return new Response("Usage limit exceeded", { status: 410, headers: cors });
     }
 
-    // API状態確認 - 'configured'も有効とする
-    if (profile.line_api_status !== 'active' && profile.line_api_status !== 'configured') {
-      console.warn("LINE API not configured for invite:", inviteCode, "Status:", profile.line_api_status);
+    // API状態確認 - 'configured' も許可
+    if (profile.line_api_status !== "active" && profile.line_api_status !== "configured") {
+      console.warn(
+        "LINE API not configured for invite:",
+        inviteCode,
+        "Status:",
+        profile.line_api_status,
+      );
       return new Response("Service not available", { status: 503, headers: cors });
     }
 
     // 使用カウント更新
     const { error: updateError } = await db
       .from("scenario_invite_codes")
-      .update({ usage_count: data.usage_count + 1 })
+      .update({ usage_count: invite.usage_count + 1 })
       .eq("invite_code", inviteCode);
 
     if (updateError) {
@@ -102,18 +103,25 @@ serve(async (req) => {
       console.error('Click log insert error:', clickError);
     }
 
-    // ✅ 修正：全デバイスでフロントエンドの招待ページにリダイレクト
-    // LIFF使用せず、統一されたLINE Login認証フローを使用
-    const fe = "https://74048ab5-8d5a-425a-ab29-bd5cc50dc2fe.lovableproject.com";
-    const redirectUrl = `${fe}/invite/${encodeURIComponent(inviteCode)}`;
-    
+    // 招待ページへリダイレクト（ドメインは優先順で決定: 環境変数 > Referer > 既定）
+    const envBase = Deno.env.get('FE_BASE_URL');
+    const referer = req.headers.get('referer');
+    let feBase = envBase || null;
+    if (!feBase && referer) {
+      try { feBase = new URL(referer).origin; } catch {}
+    }
+    // TODO: 必要に応じて既定値をあなたのフロントエンドURLに変更してください
+    feBase = feBase || "https://74048ab5-8d5a-425a-ab29-bd5cc50dc2fe.lovableproject.com";
+
+    const redirectUrl = `${feBase}/invite/${encodeURIComponent(inviteCode)}`;
+
     console.log("Redirect to invite page:", redirectUrl);
     console.log("Profile info:", {
-      userId: data.step_scenarios.user_id,
+      userId: invite.user_id,
       displayName: profile.display_name,
-      hasLineLogin: !!profile.line_login_channel_id
+      hasLineLogin: !!profile.line_login_channel_id,
     });
-    
+
     return new Response(null, {
       status: 302,
       headers: { ...cors, Location: redirectUrl },
