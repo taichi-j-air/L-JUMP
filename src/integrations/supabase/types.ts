@@ -346,6 +346,20 @@ export type Database = {
         }
         Relationships: [
           {
+            foreignKeyName: "fk_scenario_friend_logs_friend"
+            columns: ["friend_id"]
+            isOneToOne: false
+            referencedRelation: "line_friends"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "fk_scenario_friend_logs_scenario"
+            columns: ["scenario_id"]
+            isOneToOne: false
+            referencedRelation: "step_scenarios"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "fk_sfl_friend"
             columns: ["friend_id"]
             isOneToOne: false
@@ -411,6 +425,13 @@ export type Database = {
         }
         Relationships: [
           {
+            foreignKeyName: "fk_invite_codes_scenario"
+            columns: ["scenario_id"]
+            isOneToOne: false
+            referencedRelation: "step_scenarios"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "scenario_invite_codes_scenario_id_fkey"
             columns: ["scenario_id"]
             isOneToOne: false
@@ -445,6 +466,20 @@ export type Database = {
           updated_at?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "fk_scenario_transitions_from"
+            columns: ["from_scenario_id"]
+            isOneToOne: false
+            referencedRelation: "step_scenarios"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "fk_scenario_transitions_to"
+            columns: ["to_scenario_id"]
+            isOneToOne: false
+            referencedRelation: "step_scenarios"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "scenario_transitions_from_fkey"
             columns: ["from_scenario_id"]
@@ -623,6 +658,27 @@ export type Database = {
         }
         Relationships: [
           {
+            foreignKeyName: "fk_sdt_friend"
+            columns: ["friend_id"]
+            isOneToOne: false
+            referencedRelation: "line_friends"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "fk_sdt_scenario"
+            columns: ["scenario_id"]
+            isOneToOne: false
+            referencedRelation: "step_scenarios"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "fk_sdt_step"
+            columns: ["step_id"]
+            isOneToOne: false
+            referencedRelation: "steps"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "step_delivery_tracking_friend_id_fkey"
             columns: ["friend_id"]
             isOneToOne: false
@@ -685,6 +741,13 @@ export type Database = {
             columns: ["flex_message_id"]
             isOneToOne: false
             referencedRelation: "flex_messages"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "fk_step_messages_step"
+            columns: ["step_id"]
+            isOneToOne: false
+            referencedRelation: "steps"
             referencedColumns: ["id"]
           },
           {
@@ -788,6 +851,13 @@ export type Database = {
         }
         Relationships: [
           {
+            foreignKeyName: "fk_steps_scenario"
+            columns: ["scenario_id"]
+            isOneToOne: false
+            referencedRelation: "step_scenarios"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "steps_scenario_id_fkey"
             columns: ["scenario_id"]
             isOneToOne: false
@@ -830,6 +900,13 @@ export type Database = {
           user_id?: string | null
         }
         Relationships: [
+          {
+            foreignKeyName: "fk_invite_codes_scenario"
+            columns: ["scenario_id"]
+            isOneToOne: false
+            referencedRelation: "step_scenarios"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "scenario_invite_codes_scenario_id_fkey"
             columns: ["scenario_id"]
