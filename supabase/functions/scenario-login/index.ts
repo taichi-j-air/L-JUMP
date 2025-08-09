@@ -84,9 +84,6 @@ serve(async (req) => {
       hasAddFriendUrl: !!profile.add_friend_url 
     });
     
-    // 認証フロー選択（デフォルト: 友だち追加/OA起動）
-    const flow = url.searchParams.get("flow") || "oa"; // "login" | "oa"
-
     // Collect optional attribution params
     const campaign = url.searchParams.get("campaign") || null;
     const source = url.searchParams.get("source") || null;
@@ -113,6 +110,9 @@ serve(async (req) => {
       authUrl = `https://access.line.me/oauth2/v2.1/authorize?${params.toString()}`;
     }
 
+    // フロー（既定は authUrl があれば "login"、なければ "oa"）
+    const flow = url.searchParams.get("flow") || (authUrl ? "login" : "oa");
+
     // チャット/友だち追加用URL（アプリ起動を優先）
     let chatUrl: string | null = null;
     let deepChatUrl: string | null = null;
@@ -128,18 +128,21 @@ serve(async (req) => {
       }
     }
 
-    // 使用するURLを決定（モバイルはLINEアプリ起動を最優先、LIFFは使用しない）
+    // 使用するURLを決定
     const userAgent = req.headers.get('user-agent') || '';
     const isMobile = /iPhone|iPad|iPod|Android/i.test(userAgent);
     const isLineInApp = /Line\//i.test(userAgent);
 
     let selectedUrl: string | null = null;
     if (flow === "login" && authUrl) {
-      selectedUrl = authUrl; // OAuth ログイン明示指定時のみ
-    } else if (isMobile && !isLineInApp && (deepChatUrl || chatUrl)) {
-      selectedUrl = deepChatUrl || chatUrl!; // モバイルはアプリを開く
-    } else {
-      selectedUrl = chatUrl || authUrl; // デスクトップ等は通常URL
+      // 同意画面 → 友だち追加（bot_prompt=normal）
+      selectedUrl = authUrl;
+    } else if (deepChatUrl || chatUrl) {
+      // OA起動を優先（モバイル時は deep link）
+      selectedUrl = (isMobile && !isLineInApp && deepChatUrl) ? deepChatUrl : (chatUrl || deepChatUrl);
+    } else if (authUrl) {
+      // 最後の手段としてログインURL
+      selectedUrl = authUrl;
     }
 
     if (!selectedUrl) {

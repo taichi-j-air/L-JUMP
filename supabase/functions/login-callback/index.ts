@@ -105,10 +105,10 @@ serve(async (req) => {
       console.log("Using profile for general login:", profile.display_name);
     } else {
       console.log("Processing scenario invite with code:", scenarioCode);
-      // 招待コード由来の設定取得（曖昧な埋め込みを避けて二段クエリ）
+      // 招待コード由来の設定取得（曖昧な埋め込みを避けて二段クエリ＋フォールバック）
       const { data: invite, error: inviteErr } = await supabase
         .from("scenario_invite_codes")
-        .select("user_id, is_active")
+        .select("user_id, scenario_id, is_active")
         .eq("invite_code", scenarioCode)
         .eq("is_active", true)
         .maybeSingle();
@@ -117,23 +117,54 @@ serve(async (req) => {
         throw new Error("Invalid or inactive invite code " + scenarioCode);
       }
 
-      const { data: prof, error: profErr } = await supabase
+      // まずは invite.user_id でプロフィール検索
+      let resolvedUserId: string | null = invite.user_id ?? null;
+
+      let { data: prof, error: profErr } = await supabase
         .from("profiles")
         .select(`
           line_login_channel_id,
           line_login_channel_secret,
           display_name,
           add_friend_url,
-          line_bot_id
+          line_bot_id,
+          user_id
         `)
-        .eq("user_id", invite.user_id)
+        .eq("user_id", resolvedUserId)
         .maybeSingle();
+
+      // 見つからない場合は scenario_id → step_scenarios 経由で user_id を再解決
+      if ((!prof || profErr) && invite.scenario_id) {
+        const { data: scen, error: scenErr } = await supabase
+          .from('step_scenarios')
+          .select('user_id')
+          .eq('id', invite.scenario_id)
+          .maybeSingle();
+
+        if (!scenErr && scen?.user_id) {
+          resolvedUserId = scen.user_id;
+          const r = await supabase
+            .from("profiles")
+            .select(`
+              line_login_channel_id,
+              line_login_channel_secret,
+              display_name,
+              add_friend_url,
+              line_bot_id,
+              user_id
+            `)
+            .eq("user_id", resolvedUserId)
+            .maybeSingle();
+          prof = r.data;
+          profErr = r.error;
+        }
+      }
 
       if (profErr || !prof) {
         throw new Error("Profile not found for invite code " + scenarioCode);
       }
 
-      scenarioUserId = invite.user_id;
+      scenarioUserId = resolvedUserId;
       profile = prof;
     }
 
