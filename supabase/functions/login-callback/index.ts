@@ -105,30 +105,36 @@ serve(async (req) => {
       console.log("Using profile for general login:", profile.display_name);
     } else {
       console.log("Processing scenario invite with code:", scenarioCode);
-      // 招待コード由来の設定取得
-      const { data: cfg, error: cfgErr } = await supabase
+      // 招待コード由来の設定取得（曖昧な埋め込みを避けて二段クエリ）
+      const { data: invite, error: inviteErr } = await supabase
         .from("scenario_invite_codes")
-        .select(`
-          step_scenarios!inner (
-            user_id,
-            profiles!inner (
-              line_login_channel_id,
-              line_login_channel_secret,
-              display_name,
-              add_friend_url,
-              line_bot_id
-            )
-          )
-        `)
+        .select("user_id, is_active")
         .eq("invite_code", scenarioCode)
         .eq("is_active", true)
-        .single();
+        .maybeSingle();
 
-      if (cfgErr || !cfg?.step_scenarios?.profiles) {
+      if (inviteErr || !invite) {
+        throw new Error("Invalid or inactive invite code " + scenarioCode);
+      }
+
+      const { data: prof, error: profErr } = await supabase
+        .from("profiles")
+        .select(`
+          line_login_channel_id,
+          line_login_channel_secret,
+          display_name,
+          add_friend_url,
+          line_bot_id
+        `)
+        .eq("user_id", invite.user_id)
+        .maybeSingle();
+
+      if (profErr || !prof) {
         throw new Error("Profile not found for invite code " + scenarioCode);
       }
-      scenarioUserId = cfg.step_scenarios.user_id;
-      profile = cfg.step_scenarios.profiles;
+
+      scenarioUserId = invite.user_id;
+      profile = prof;
     }
 
     /* ── 4. LINE /token でアクセストークン取得 ── */
