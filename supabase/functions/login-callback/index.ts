@@ -329,65 +329,71 @@ serve(async (req) => {
       console.warn('Failed to set first step schedule:', schedErr);
     }
 
-    // ── 10. 即時ステップ配信をバックエンド側でトリガー（フロント依存を排除） ──
+    // ── 11. 友だち登録状況を確認 ── 
+    const { data: existingFriend } = await supabase
+      .from("line_friends")
+      .select("id, user_id")
+      .eq("line_user_id", lineProfile.userId)
+      .eq("user_id", scenarioUserId)
+      .maybeSingle();
+
+    // ── 12. 即時ステップ配信の改善版トリガー ──
     try {
+      const deliveryPayload = {
+        trigger: 'login_callback',
+        scenario_code: scenarioCode,
+        line_user_id: lineProfile.userId,
+        friend_id: reg.friend_id,
+        scenario_id: reg.scenario_id,
+        is_existing_friend: !!existingFriend,
+        timestamp: new Date().toISOString()
+      };
+
+      console.log("Triggering step delivery with payload:", deliveryPayload);
+
       await fetch('https://rtjxurmuaawyzjcdkqxt.supabase.co/functions/v1/scheduled-step-delivery', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${Deno.env.get('SUPABASE_ANON_KEY')}` },
-        body: JSON.stringify({ trigger: 'login_callback', scenario: scenarioCode, line_user_id: lineProfile.userId })
+        headers: { 
+          'Content-Type': 'application/json', 
+          'Authorization': `Bearer ${Deno.env.get('SUPABASE_ANON_KEY')}` 
+        },
+        body: JSON.stringify(deliveryPayload)
       });
     } catch (triggerErr) {
       console.warn('Failed to trigger scheduled-step-delivery:', triggerErr);
     }
 
-   // login-callback/index.ts の修正
-/* ── 11. 友だち状態に応じたリダイレクト先決定 ── */
-let redirectUrl: string;
+    // ── 13. 友だち状態に応じたリダイレクト先決定 ── 
+    let redirectUrl: string;
 
-if (isGeneralLogin) {
-  // 一般ログインは成功ページへ
-  redirectUrl = `https://74048ab5-8d5a-425a-ab29-bd5cc50dc2fe.lovableproject.com/login-success?user_name=${encodeURIComponent(display)}`;
-} else {
-  // シナリオ招待の場合
-  
-  // 友だち登録状況を確認
-  const { data: existingFriend } = await supabase
-    .from("line_friends")
-    .select("id, user_id")
-    .eq("line_user_id", lineProfile.userId)
-    .eq("user_id", scenarioUserId)
-    .maybeSingle();
-  
-  if (existingFriend) {
-    // 既存の友だち = 既にフォロー済み
-    // LINEトーク画面を開く（ディープリンク優先）
-    const userAgent = req.headers.get('user-agent') || '';
-    const isMobile = /iPhone|iPad|iPod|Android/i.test(userAgent);
-    
-    if (isMobile && profile.line_bot_id) {
-      // モバイルはディープリンクでLINEアプリを直接開く
-      redirectUrl = `line://ti/p/${encodeURIComponent(profile.line_bot_id)}`;
-    } else if (profile.add_friend_url && profile.add_friend_url.startsWith('https://')) {
-      // デスクトップまたはフォールバック
-      redirectUrl = profile.add_friend_url;
-    } else if (profile.line_bot_id) {
-      redirectUrl = `https://line.me/R/ti/p/${encodeURIComponent(profile.line_bot_id)}`;
+    if (existingFriend) {
+      // 既存の友だち = 既にフォロー済み
+      // LINEトーク画面を開く（ディープリンク優先）
+      const userAgent = req.headers.get('user-agent') || '';
+      const isMobile = /iPhone|iPad|iPod|Android/i.test(userAgent);
+      
+      if (isMobile && profile.line_bot_id) {
+        // モバイルはディープリンクでLINEアプリを直接開く
+        redirectUrl = `line://ti/p/${encodeURIComponent(profile.line_bot_id)}`;
+      } else if (profile.add_friend_url && profile.add_friend_url.startsWith('https://')) {
+        // デスクトップまたはフォールバック
+        redirectUrl = profile.add_friend_url;
+      } else if (profile.line_bot_id) {
+        redirectUrl = `https://line.me/R/ti/p/${encodeURIComponent(profile.line_bot_id)}`;
+      } else {
+        // 最終フォールバック
+        redirectUrl = `https://74048ab5-8d5a-425a-ab29-bd5cc50dc2fe.lovableproject.com/login-success?user_name=${encodeURIComponent(display)}&scenario=${scenarioCode}&message=already_friend`;
+      }
     } else {
-      // 最終フォールバック
-      redirectUrl = `https://74048ab5-8d5a-425a-ab29-bd5cc50dc2fe.lovableproject.com/login-success?user_name=${encodeURIComponent(display)}&scenario=${scenarioCode}&message=already_friend`;
+      // 新規友だち = 友だち追加が必要
+      redirectUrl = profile.add_friend_url && profile.add_friend_url.startsWith('https://')
+        ? profile.add_friend_url
+        : `https://line.me/R/ti/p/${encodeURIComponent(profile.line_bot_id || '')}`;
     }
-  } else {
-    // 新規友だち = 友だち追加が必要
-    redirectUrl = profile.add_friend_url && profile.add_friend_url.startsWith('https://')
-      ? profile.add_friend_url
-      : `https://line.me/R/ti/p/${encodeURIComponent(profile.line_bot_id || '')}`;
-  }
-}
 
-console.log("Final redirect URL:", redirectUrl);
-return Response.redirect(redirectUrl, 302);
+    console.log("Final redirect URL:", redirectUrl);
+    return Response.redirect(redirectUrl, 302);
 
-    return Response.redirect(chatUrl, 302);
   } catch (e: any) {
     console.error("callback error:", e);
     return new Response(
