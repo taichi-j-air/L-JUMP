@@ -463,22 +463,94 @@ async function markStepAsDelivered(supabase: any, trackingId: string, scenarioId
 
     if (!nextStep) {
       console.log('All steps completed for this scenario')
+      // シナリオ遷移設定がある場合は遷移
+      const { data: transition, error: transErr } = await supabase
+        .from('scenario_transitions')
+        .select('to_scenario_id')
+        .eq('from_scenario_id', scenarioId)
+        .order('created_at', { ascending: true })
+        .limit(1)
+        .maybeSingle()
+      if (transErr) {
+        console.warn('Transition fetch error:', transErr)
+        return
+      }
+      if (!transition?.to_scenario_id) {
+        return
+      }
+
+      // 現在のシナリオは離脱扱いにする
+      await supabase
+        .from('step_delivery_tracking')
+        .update({ status: 'exited', updated_at: new Date().toISOString() })
+        .eq('scenario_id', scenarioId)
+        .eq('friend_id', friendId)
+        .neq('status', 'exited')
+
+      // 遷移先の最初のステップを取得
+      const { data: firstStep, error: firstErr } = await supabase
+        .from('steps')
+        .select('id')
+        .eq('scenario_id', transition.to_scenario_id)
+        .order('step_order', { ascending: true })
+        .limit(1)
+        .maybeSingle()
+      if (firstErr || !firstStep) {
+        console.warn('No first step for transition scenario:', transition.to_scenario_id, firstErr)
+        return
+      }
+
+      const now = new Date()
+      // 既存があれば更新、なければ作成
+      const { data: existing, error: exErr } = await supabase
+        .from('step_delivery_tracking')
+        .select('id')
+        .eq('scenario_id', transition.to_scenario_id)
+        .eq('friend_id', friendId)
+        .eq('step_id', firstStep.id)
+        .maybeSingle()
+      if (exErr) {
+        console.warn('Transition existing check error:', exErr)
+      }
+      if (!existing) {
+        await supabase
+          .from('step_delivery_tracking')
+          .insert({
+            scenario_id: transition.to_scenario_id,
+            step_id: firstStep.id,
+            friend_id: friendId,
+            status: 'ready',
+            scheduled_delivery_at: now.toISOString(),
+            next_check_at: new Date(now.getTime() - 5000).toISOString(),
+            created_at: now.toISOString(),
+            updated_at: now.toISOString(),
+          })
+      } else {
+        await supabase
+          .from('step_delivery_tracking')
+          .update({
+            status: 'ready',
+            scheduled_delivery_at: now.toISOString(),
+            next_check_at: new Date(now.getTime() - 5000).toISOString(),
+            updated_at: now.toISOString(),
+          })
+          .eq('id', existing.id)
+      }
       return
     }
 
     // Find or create tracking row for next step
-    const { data: nextTracking, error: nextTrackErr } = await supabase
+    const { data: nextTracking } = await supabase
       .from('step_delivery_tracking')
       .select('id')
       .eq('scenario_id', scenarioId)
       .eq('friend_id', friendId)
       .eq('step_id', nextStep.id)
-      .eq('status', 'waiting')
       .maybeSingle()
 
     let nextId = nextTracking?.id as string | undefined
-    if (nextTrackErr || !nextTracking) {
-      console.log('No waiting tracking row for next step, creating one')
+    if (!nextId) {
+      console.log('No tracking row for next step, creating one')
       const { data: prevTracking } = await supabase
         .from('step_delivery_tracking')
         .select('campaign_id, registration_source')
@@ -501,9 +573,17 @@ async function markStepAsDelivered(supabase: any, trackingId: string, scenarioId
         .maybeSingle()
       if (insErr || !inserted) {
         console.error('Failed to create next tracking row:', insErr)
-        return
+        const { data: existing } = await supabase
+          .from('step_delivery_tracking')
+          .select('id')
+          .eq('scenario_id', scenarioId)
+          .eq('friend_id', friendId)
+          .eq('step_id', nextStep.id)
+          .maybeSingle()
+        nextId = existing?.id
+      } else {
+        nextId = inserted.id
       }
-      nextId = inserted.id
     }
 
     // Calculate precise scheduled time for the next step using DB function

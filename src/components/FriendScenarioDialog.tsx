@@ -195,6 +195,8 @@ export function FriendScenarioDialog({ open, onOpenChange, user, friend }: Frien
         .eq('scenario_id', unassignId)
       if (error) throw error
       toast({ title: '解除完了', description: 'シナリオを解除しました。' })
+      setAssignedScenarios((prev) => prev.filter((s) => s.id !== unassignId))
+      setUnassignId("")
     } catch (e: any) {
       toast({ title: '解除に失敗しました', description: e.message || '不明なエラー' })
     } finally {

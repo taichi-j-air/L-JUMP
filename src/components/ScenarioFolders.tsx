@@ -98,63 +98,70 @@ function FolderRow({
   }
 
   return (
-    <Card ref={(node) => { setNodeRef(node); setSortableRef(node as any) }} style={style} className={`border-2 border-solid ${isOver ? 'ring-2 ring-primary' : ''}`}>
+    <Card ref={(node) => { setSortableRef(node as any) }} style={style} className="border-2 border-solid">
       <CardContent className="p-2">
-        <div className="flex items-center gap-2">
-          <div {...attributes} {...listeners} className="cursor-grab active:cursor-grabbing p-1 hover:bg-muted rounded h-6 w-6 flex items-center justify-center">
-            <GripVertical className="h-4 w-4 text-muted-foreground" />
+        <div ref={setNodeRef} className={`${isOver ? 'ring-2 ring-primary rounded-md' : ''}`}>
+          <div className="flex items-center gap-2">
+            <div {...attributes} {...listeners} className="cursor-grab active:cursor-grabbing p-1 hover:bg-muted rounded h-6 w-6 flex items-center justify-center">
+              <GripVertical className="h-4 w-4 text-muted-foreground" />
+            </div>
+            <Button variant="ghost" size="icon" onClick={onToggle} className="h-6 w-6">
+              {folder.collapsed ? <ChevronRight className="h-4 w-4"/> : <ChevronDown className="h-4 w-4"/>}
+            </Button>
+            {editing ? (
+              <input
+                className="text-sm bg-transparent border-b border-border focus:outline-none"
+                value={tempName}
+                onChange={(e) => onTempNameChange(e.target.value)}
+                onBlur={() => onCommitEdit(tempName)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') onCommitEdit(tempName)
+                  if (e.key === 'Escape') onCancelEdit()
+                }}
+              />
+            ) : (
+              <span className="text-sm font-medium">
+                {folder.name}
+              </span>
+            )}
+            <span className="text-xs text-muted-foreground">{folder.scenarioIds.length}件</span>
+            <div className="ml-auto flex items-center gap-1">
+              <Button variant="ghost" size="icon" onClick={onStartEdit} className="h-6 w-6"><Pencil className="h-3 w-3"/></Button>
+              <DeleteFolderButton onDelete={onDelete} folderName={folder.name} scenarioNames={folder.scenarioIds.map(getScenarioName)} />
+            </div>
           </div>
-          <Button variant="ghost" size="icon" onClick={onToggle} className="h-6 w-6">
-            {folder.collapsed ? <ChevronRight className="h-4 w-4"/> : <ChevronDown className="h-4 w-4"/>}
-          </Button>
-          {editing ? (
-            <input
-              className="text-sm bg-transparent border-b border-border focus:outline-none"
-              value={tempName}
-              onChange={(e) => onTempNameChange(e.target.value)}
-              onBlur={() => onCommitEdit(tempName)}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter') onCommitEdit(tempName)
-                if (e.key === 'Escape') onCancelEdit()
-              }}
-            />
-          ) : (
-            <span className="text-sm font-medium">
-              {folder.name}
-            </span>
-          )}
-          <span className="text-xs text-muted-foreground">{folder.scenarioIds.length}件</span>
-          <div className="ml-auto flex items-center gap-1">
-            <Button variant="ghost" size="icon" onClick={onStartEdit} className="h-6 w-6"><Pencil className="h-3 w-3"/></Button>
+
+          {/* 2段目: カラー（ボーダー）設定 */}
+          <div className="mt-2">
             <HexColorPicker
               color={folder.borderColor || '#94a3b8'}
               onChange={(hex) => onBorderColor(hex)}
-              className="h-6 w-28"
+              className="h-8 w-full"
             />
-            <DeleteFolderButton onDelete={onDelete} folderName={folder.name} scenarioNames={folder.scenarioIds.map(getScenarioName)} />
           </div>
+
+          {!folder.collapsed && (
+            <div className="mt-2 space-y-2">
+              {folder.scenarioIds.length === 0 ? (
+                <div className="text-xs text-muted-foreground">ここにドラッグ＆ドロップ</div>
+              ) : (
+                folder.scenarioIds.map(id => (
+                  <div key={id} className="group relative">
+                    {renderScenario(id)}
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="absolute top-1 right-1 opacity-0 group-hover:opacity-100 h-6 px-2"
+                      onClick={(e) => { e.stopPropagation(); onMoveOut(id) }}
+                    >
+                      <Undo2 className="h-3 w-3 mr-1"/>外に出す
+                    </Button>
+                  </div>
+                ))
+              )}
+            </div>
+          )}
         </div>
-        {!folder.collapsed && (
-          <div className="mt-2 space-y-2">
-            {folder.scenarioIds.length === 0 ? (
-              <div className="text-xs text-muted-foreground">ここにドラッグ＆ドロップ</div>
-            ) : (
-              folder.scenarioIds.map(id => (
-                <div key={id} className="group relative">
-                  {renderScenario(id)}
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    className="absolute top-1 right-1 opacity-0 group-hover:opacity-100 h-6 px-2"
-                    onClick={(e) => { e.stopPropagation(); onMoveOut(id) }}
-                  >
-                    <Undo2 className="h-3 w-3 mr-1"/>外に出す
-                  </Button>
-                </div>
-              ))
-            )}
-          </div>
-        )}
       </CardContent>
     </Card>
   )
