@@ -57,3 +57,6 @@ verify_jwt = false
 
 [functions.enhanced-step-delivery]
 verify_jwt = false
+
+[functions.liff-scenario-invite]
+verify_jwt = false
