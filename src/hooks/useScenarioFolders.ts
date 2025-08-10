@@ -8,6 +8,7 @@ export interface ScenarioFolder {
   color: FolderColor
   collapsed: boolean
   scenarioIds: string[]
+  borderColor?: string
 }
 
 const uid = () => crypto.randomUUID()
@@ -40,9 +41,13 @@ export function useScenarioFolders(userId?: string) {
     setFolders(prev => prev.map(f => f.id === id ? { ...f, name } : f))
   }
 
-  const setFolderColor = (id: string, color: FolderColor) => {
-    setFolders(prev => prev.map(f => f.id === id ? { ...f, color } : f))
-  }
+const setFolderColor = (id: string, color: FolderColor) => {
+  setFolders(prev => prev.map(f => f.id === id ? { ...f, color } : f))
+}
+
+const setFolderBorderColor = (id: string, borderColor: string) => {
+  setFolders(prev => prev.map(f => f.id === id ? { ...f, borderColor } : f))
+}
 
   const toggleFolder = (id: string) => {
     setFolders(prev => prev.map(f => f.id === id ? { ...f, collapsed: !f.collapsed } : f))
@@ -81,6 +86,7 @@ export function useScenarioFolders(userId?: string) {
     addFolder,
     renameFolder,
     setFolderColor,
+    setFolderBorderColor,
     toggleFolder,
     moveToFolder,
     removeFromFolder,

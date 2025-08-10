@@ -5,35 +5,20 @@ import { CSS } from "@dnd-kit/utilities"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog"
-import { ChevronDown, ChevronRight, Paintbrush, Pencil, Undo2, Trash2, GripVertical } from "lucide-react"
-import type { ScenarioFolder, FolderColor } from "@/hooks/useScenarioFolders"
+import { ChevronDown, ChevronRight, Pencil, Undo2, Trash2, GripVertical } from "lucide-react"
+import type { ScenarioFolder } from "@/hooks/useScenarioFolders"
+import { ColorPicker as HexColorPicker } from "@/components/ui/color-picker"
 
 interface ScenarioFoldersProps {
   folders: ScenarioFolder[]
   onAdd: () => void
   onRename: (id: string, name: string) => void
-  onColor: (id: string, color: FolderColor) => void
+  onBorderColor: (id: string, colorHex: string) => void
   onToggle: (id: string) => void
   onMoveOut: (scenarioId: string) => void
   onDelete: (id: string) => void
   getScenarioName: (id: string) => string
   renderScenario: (scenarioId: string) => JSX.Element | null
-}
-
-const colorClass: Record<FolderColor, string> = {
-  primary: 'bg-primary',
-  secondary: 'bg-secondary',
-  accent: 'bg-accent',
-  destructive: 'bg-destructive',
-  muted: 'bg-muted',
-}
-
-const borderClass: Record<FolderColor, string> = {
-  primary: 'border-primary',
-  secondary: 'border-secondary',
-  accent: 'border-accent',
-  destructive: 'border-destructive',
-  muted: 'border-muted',
 }
 
 export function ScenarioFolders({
