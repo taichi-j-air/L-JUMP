@@ -279,6 +279,7 @@ async function sendLineMessage(userId: string, message: any, accessToken: string
       };
       break;
     
+    case 'media':
     case 'image':
       if (message.media_url) {
         lineMessage = {
@@ -296,19 +297,30 @@ async function sendLineMessage(userId: string, message: any, accessToken: string
           Deno.env.get("SUPABASE_URL")!,
           Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
         );
-        
         const { data: flexData } = await supabase
           .from('flex_messages')
           .select('content')
           .eq('id', message.flex_message_id)
           .single();
-        
         if (flexData?.content) {
           lineMessage = {
             type: 'flex',
-            altText: 'Flex Message',
+            altText: message.alt_text || 'Flex Message',
             contents: flexData.content
           };
+        }
+      }
+      // fallback when content is inline JSON string
+      if (!lineMessage && message.content) {
+        try {
+          const parsed = typeof message.content === 'string' ? JSON.parse(message.content) : message.content
+          lineMessage = {
+            type: 'flex',
+            altText: message.alt_text || 'Flex Message',
+            contents: parsed
+          }
+        } catch (_) {
+          // ignore parse error
         }
       }
       break;

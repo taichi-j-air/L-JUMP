@@ -76,6 +76,22 @@ serve(async (req) => {
     console.log('配信トリガー結果:', triggerResult)
 
     if (triggerResult?.success) {
+      try {
+        await fetch('https://rtjxurmuaawyzjcdkqxt.supabase.co/functions/v1/scheduled-step-delivery', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${Deno.env.get('SUPABASE_ANON_KEY') || ''}`,
+          },
+          body: JSON.stringify({
+            trigger: 'login_success',
+            scenario_id: scenarioId,
+            line_user_id: lineUserId,
+          }),
+        })
+      } catch (e) {
+        console.warn('Failed to trigger scheduled-step-delivery:', e)
+      }
       return new Response(JSON.stringify({
         success: true,
         message: 'Scenario delivery triggered',

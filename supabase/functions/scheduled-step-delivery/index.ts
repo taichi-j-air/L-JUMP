@@ -20,9 +20,25 @@ Deno.serve(async (req) => {
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
     )
 
+    // Parse optional filters from request body (non-fatal)
+    let body: any = {}
+    try {
+      if (req.method === 'POST') {
+        body = await req.json().catch(() => ({}))
+      }
+    } catch (_) {
+      body = {}
+    }
+
+    // Allow scoping by scenario or friend, or process only recent updates for login-trigger
+    const scenarioIdFilter = body?.scenario_id ?? null
+    const friendIdFilter = body?.friend_id ?? null
+    const lineUserIdFilter = body?.line_user_id ?? null
+    const recentOnly = body?.trigger === 'login_success'
+
     // Get current time
     const now = new Date().toISOString()
-    console.log(`⏰ Current time: ${now}`)
+    console.log(`⏰ Current time: ${now}`, { scenarioIdFilter, friendIdFilter, recentOnly, lineUserIdFilter })
 
     // まず全てのtrackingレコードを確認
     const { data: allTracking, error: allError } = await supabase
@@ -37,13 +53,37 @@ Deno.serve(async (req) => {
       }, {}))
     }
 
-    // Atomically claim up to 100 ready steps to avoid duplicate processing
-    const { data: stepsToDeliver, error: fetchError } = await supabase
+    const cutoff = new Date(Date.now() - 2 * 60 * 1000).toISOString()
+
+    let query = supabase
       .from('step_delivery_tracking')
       .update({ status: 'delivering', updated_at: now })
       .eq('status', 'ready')
       .not('friend_id', 'is', null)
       .lte('scheduled_delivery_at', now)
+
+    if (recentOnly) {
+      query = query.gte('updated_at', cutoff)
+    }
+    if (scenarioIdFilter) {
+      query = query.eq('scenario_id', scenarioIdFilter)
+    }
+    if (friendIdFilter) {
+      query = query.eq('friend_id', friendIdFilter)
+    }
+    if (lineUserIdFilter) {
+      const { data: friendRows } = await supabase
+        .from('line_friends')
+        .select('id')
+        .eq('line_user_id', lineUserIdFilter)
+      if (friendRows && friendRows.length > 0) {
+        query = query.in('friend_id', friendRows.map((f: any) => f.id))
+      } else {
+        console.log('No friend found for provided line_user_id, nothing to process')
+      }
+    }
+
+    const { data: stepsToDeliver, error: fetchError } = await query
       .order('scheduled_delivery_at', { ascending: true })
       .limit(100)
       .select('*')
@@ -417,7 +457,7 @@ async function markStepAsDelivered(supabase: any, trackingId: string, scenarioId
       return
     }
 
-    // Find tracking row for next step
+    // Find or create tracking row for next step
     const { data: nextTracking, error: nextTrackErr } = await supabase
       .from('step_delivery_tracking')
       .select('id')
@@ -427,9 +467,34 @@ async function markStepAsDelivered(supabase: any, trackingId: string, scenarioId
       .eq('status', 'waiting')
       .maybeSingle()
 
+    let nextId = nextTracking?.id as string | undefined
     if (nextTrackErr || !nextTracking) {
-      console.log('No waiting tracking row for next step')
-      return
+      console.log('No waiting tracking row for next step, creating one')
+      const { data: prevTracking } = await supabase
+        .from('step_delivery_tracking')
+        .select('campaign_id, registration_source')
+        .eq('id', trackingId)
+        .maybeSingle()
+      const baseNow = new Date().toISOString()
+      const { data: inserted, error: insErr } = await supabase
+        .from('step_delivery_tracking')
+        .insert({
+          scenario_id: scenarioId,
+          step_id: nextStep.id,
+          friend_id: friendId,
+          status: 'waiting',
+          campaign_id: prevTracking?.campaign_id || null,
+          registration_source: prevTracking?.registration_source || null,
+          created_at: baseNow,
+          updated_at: baseNow,
+        })
+        .select('id')
+        .maybeSingle()
+      if (insErr || !inserted) {
+        console.error('Failed to create next tracking row:', insErr)
+        return
+      }
+      nextId = inserted.id
     }
 
     // Calculate precise scheduled time for the next step using DB function
@@ -493,7 +558,7 @@ async function markStepAsDelivered(supabase: any, trackingId: string, scenarioId
     const { error: prepErr } = await supabase
       .from('step_delivery_tracking')
       .update(updates)
-      .eq('id', nextTracking.id)
+      .eq('id', nextId as string)
 
     if (prepErr) {
       console.error('Next step preparation error:', prepErr)
