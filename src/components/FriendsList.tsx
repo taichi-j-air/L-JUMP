@@ -2,13 +2,14 @@ import { useEffect, useState } from "react"
 import { supabase } from "@/integrations/supabase/client"
 import { User } from "@supabase/supabase-js"
 import { Avatar, AvatarFallback, AvatarImage } from "./ui/avatar"
-import { Card, CardContent, CardHeader, CardTitle } from "./ui/card"
 import { Badge } from "./ui/badge"
 import { Button } from "./ui/button"
-import { MessageCircle } from "lucide-react"
-import { formatDistanceToNow } from "date-fns"
-import { ja } from "date-fns/locale"
+import { MessageCircle, Tag as TagIcon, ListChecks } from "lucide-react"
+import { format } from "date-fns"
 import { ChatWindow } from "./ChatWindow"
+import { Input } from "./ui/input"
+import { useToast } from "./ui/use-toast"
+import { FriendScenarioDialog } from "./FriendScenarioDialog"
 
 interface Friend {
   id: string
@@ -26,6 +27,9 @@ export function FriendsList({ user }: FriendsListProps) {
   const [friends, setFriends] = useState<Friend[]>([])
   const [loading, setLoading] = useState(true)
   const [selectedFriend, setSelectedFriend] = useState<Friend | null>(null)
+  const [searchTerm, setSearchTerm] = useState("")
+  const [scenarioDialogFriend, setScenarioDialogFriend] = useState<Friend | null>(null)
+  const { toast } = useToast()
 
   useEffect(() => {
     loadFriends()
@@ -74,49 +78,98 @@ export function FriendsList({ user }: FriendsListProps) {
     )
   }
 
+  const filteredFriends = friends.filter((f) => {
+    const q = searchTerm.trim().toLowerCase()
+    if (!q) return true
+    return (
+      (f.display_name || '').toLowerCase().includes(q) ||
+      f.line_user_id.toLowerCase().includes(q)
+    )
+  })
+
   return (
-    <div className="space-y-4">
-      {friends.map((friend) => (
-        <Card key={friend.line_user_id} className="hover:bg-muted/50 transition-colors">
-          <CardContent className="p-4">
-            <div className="flex items-center gap-3">
-              <Avatar className="h-10 w-10">
-                <AvatarImage src={friend.picture_url || ""} alt={friend.display_name || ""} />
-                <AvatarFallback>
-                  {friend.display_name?.charAt(0) || "?"}
-                </AvatarFallback>
-              </Avatar>
-              
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-2">
-                  <h4 className="font-medium truncate">
-                    {friend.display_name || "名前未設定"}
-                  </h4>
-                  <Badge variant="secondary" className="text-xs">
-                    {formatDistanceToNow(new Date(friend.added_at), { 
-                      addSuffix: true, 
-                      locale: ja 
-                    })}
-                  </Badge>
+    <div className="space-y-2">
+      <div className="mb-2">
+        <Input
+          value={searchTerm}
+          onChange={(e) => setSearchTerm(e.target.value)}
+          placeholder="ユーザー名やIDで検索"
+          className="h-9"
+          aria-label="友だち検索"
+        />
+      </div>
+
+      <div className="space-y-0 divide-y rounded-md border">
+        {filteredFriends.map((friend) => (
+          <div key={friend.line_user_id} className="hover:bg-muted/50 transition-colors">
+            <div className="p-2">
+              <div className="flex items-center gap-3">
+                <Avatar className="h-10 w-10">
+                  <AvatarImage src={friend.picture_url || ""} alt={friend.display_name || ""} />
+                  <AvatarFallback>
+                    {friend.display_name?.charAt(0) || "?"}
+                  </AvatarFallback>
+                </Avatar>
+
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2">
+                    <h4 className="font-medium truncate">
+                      {friend.display_name || "名前未設定"}
+                    </h4>
+                    <Badge variant="secondary" className="text-xs">
+                      {format(new Date(friend.added_at), "yyyy/MM/dd")}
+                    </Badge>
+                  </div>
+                  <p className="text-sm text-muted-foreground font-mono">
+                    ID: {friend.line_user_id}
+                  </p>
                 </div>
-                <p className="text-sm text-muted-foreground font-mono">
-                  ID: {friend.line_user_id}
-                </p>
+
+                <div className="flex items-center gap-2">
+                  <Button 
+                    size="sm" 
+                    variant="outline"
+                    onClick={() => toast({ title: 'タグ設定', description: 'この機能は近日追加予定です。' })}
+                    className="flex items-center gap-2"
+                  >
+                    <TagIcon className="h-4 w-4" />
+                    タグ
+                  </Button>
+
+                  <Button 
+                    size="sm" 
+                    variant="secondary"
+                    onClick={() => setScenarioDialogFriend(friend)}
+                    className="flex items-center gap-2"
+                  >
+                    <ListChecks className="h-4 w-4" />
+                    シナリオ選択/解除
+                  </Button>
+
+                  <Button 
+                    size="sm" 
+                    variant="outline"
+                    onClick={() => setSelectedFriend(friend)}
+                    className="flex items-center gap-2"
+                  >
+                    <MessageCircle className="h-4 w-4" />
+                    チャット
+                  </Button>
+                </div>
               </div>
-              
-              <Button 
-                size="sm" 
-                variant="outline"
-                onClick={() => setSelectedFriend(friend)}
-                className="flex items-center gap-2"
-              >
-                <MessageCircle className="h-4 w-4" />
-                チャット
-              </Button>
             </div>
-          </CardContent>
-        </Card>
-      ))}
+          </div>
+        ))}
+      </div>
+
+      {scenarioDialogFriend && (
+        <FriendScenarioDialog
+          open={!!scenarioDialogFriend}
+          onOpenChange={(open) => { if (!open) setScenarioDialogFriend(null) }}
+          user={user}
+          friend={scenarioDialogFriend}
+        />
+      )}
     </div>
   )
 }
