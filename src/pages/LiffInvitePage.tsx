@@ -35,7 +35,29 @@ export default function LiffInvitePage() {
     // LIFF初期化
     const initializeLiff = async () => {
       try {
-        await window.liff.init({ liffId: window.liff.id });
+        setStatus("設定を取得中...");
+        const edgeBase = 'https://rtjxurmuaawyzjcdkqxt.supabase.co';
+        const cfgRes = await fetch(`${edgeBase}/functions/v1/liff-scenario-invite?code=${encodeURIComponent(inviteCode!)}&format=json`);
+        if (!cfgRes.ok) {
+          const t = await cfgRes.text();
+          throw new Error(`設定取得失敗: ${t}`);
+        }
+        const cfg = await cfgRes.json();
+        const liffId: string | undefined = cfg.liff_id;
+        if (!liffId) throw new Error('LIFF IDが取得できません');
+
+        // SDKロード
+        if (!(window as any).liff) {
+          await new Promise<void>((resolve, reject) => {
+            const s = document.createElement('script');
+            s.src = 'https://static.line-scdn.net/liff/edge/2/sdk.js';
+            s.onload = () => resolve();
+            s.onerror = () => reject(new Error('LIFF SDKの読み込みに失敗しました'));
+            document.head.appendChild(s);
+          });
+        }
+
+        await window.liff.init({ liffId });
         
         if (!window.liff.isLoggedIn()) {
           setStatus("LINE ログインが必要です");
@@ -113,12 +135,7 @@ export default function LiffInvitePage() {
       }
     };
 
-    // LIFF SDKが読み込まれているかチェック
-    if (window.liff) {
-      initializeLiff();
-    } else {
-      setError("LIFF SDKが読み込まれていません");
-    }
+    initializeLiff();
   }, []);
 
   return (

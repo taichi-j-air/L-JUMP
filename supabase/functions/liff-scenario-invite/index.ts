@@ -89,6 +89,22 @@ serve(async (req) => {
     // Step 4: クリックログ記録（省略可）
     // …（省略）…
 
+    // JSONレスポンスが欲しい場合（設定取得用）
+    const format = url.searchParams.get('format')
+    if (format === 'json') {
+      const body = {
+        success: true,
+        invite_code: inviteCode,
+        scenario_id: inviteData.scenario_id,
+        liff_id: profileData.liff_id,
+        liff_launch: `https://liff.line.me/${profileData.liff_id}?inviteCode=${inviteCode}&scenarioId=${inviteData.scenario_id}`
+      }
+      return new Response(JSON.stringify(body), {
+        status: 200,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+      })
+    }
+
     // Step 5: LIFF URL生成＆302リダイレクト
     const liffUrl = `https://liff.line.me/${profileData.liff_id}`
                   + `?inviteCode=${inviteCode}`
