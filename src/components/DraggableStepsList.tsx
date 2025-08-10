@@ -1,4 +1,4 @@
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import {
   DndContext,
   closestCenter,
@@ -23,6 +23,7 @@ import { GripVertical, Trash2, Edit2 } from "lucide-react"
 import { Step } from "@/hooks/useStepScenarios"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
+import { supabase } from "@/integrations/supabase/client"
 
 interface SortableStepCardProps {
   step: Step
@@ -32,9 +33,10 @@ interface SortableStepCardProps {
   onDelete: () => void
   onUpdateName: (stepId: string, name: string) => void
   allSteps: Step[]
+  readyCount?: number
 }
 
-function SortableStepCard({ step, index, isSelected, onClick, onDelete, onUpdateName, allSteps }: SortableStepCardProps) {
+function SortableStepCard({ step, index, isSelected, onClick, onDelete, onUpdateName, allSteps, readyCount }: SortableStepCardProps) {
   const [isEditing, setIsEditing] = useState(false)
   const [tempName, setTempName] = useState(step.name)
 
@@ -146,7 +148,8 @@ function SortableStepCard({ step, index, isSelected, onClick, onDelete, onUpdate
               {getDeliveryTimeText()}
             </p>
           </div>
-          <div className="flex gap-1">
+          <div className="flex items-center gap-2">
+            <span className="text-xs" title="このステップにいる人数">👥 {readyCount ?? 0}</span>
             <Button
               variant="ghost"
               size="sm"
@@ -201,6 +204,30 @@ export function DraggableStepsList({
     })
   )
 
+  const [readyCounts, setReadyCounts] = useState<Record<string, number>>({})
+
+  useEffect(() => {
+    const ids = steps.map(s => s.id)
+    if (ids.length === 0) { setReadyCounts({}); return }
+    ;(async () => {
+      const { data, error } = await supabase
+        .from('step_delivery_tracking')
+        .select('step_id')
+        .in('step_id', ids)
+        .eq('status', 'ready')
+      if (error) {
+        console.error('ステップ人数取得失敗:', error)
+        setReadyCounts({})
+        return
+      }
+      const counts: Record<string, number> = {}
+      ;(data || []).forEach((row: any) => {
+        counts[row.step_id] = (counts[row.step_id] || 0) + 1
+      })
+      setReadyCounts(counts)
+    })()
+  }, [steps.map(s => s.id).join(',')])
+
   const handleDragEnd = (event: DragEndEvent) => {
     const { active, over } = event
 
@@ -231,6 +258,7 @@ export function DraggableStepsList({
                 onDelete={() => onStepDelete(step.id)}
                 onUpdateName={onStepUpdate}
                 allSteps={steps}
+                readyCount={readyCounts[step.id] || 0}
               />
           ))}
         </div>

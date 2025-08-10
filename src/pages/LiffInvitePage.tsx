@@ -53,11 +53,31 @@ export default function LiffInvitePage() {
         }
 
         if (data.isFriend) {
-          setStatus("シナリオ配信を開始しました！");
-          // 成功ページに遷移またはLIFFを閉じる
-          setTimeout(() => {
-            window.liff.closeWindow();
-          }, 2000);
+          try {
+            setStatus("シナリオ登録中...");
+            // 招待コードに紐づくシナリオへ登録（安全なSECURITY DEFINER関数）
+            const { error: regErr } = await supabase.rpc('register_friend_to_scenario', {
+              p_line_user_id: lineUserId,
+              p_invite_code: inviteCode,
+              p_display_name: profile?.displayName ?? null,
+              p_picture_url: profile?.pictureUrl ?? null,
+            });
+            if (regErr) throw new Error(regErr.message);
+
+            // このユーザーの配信だけ即時処理
+            setStatus("初回ステップ配信を準備中...");
+            await supabase.functions.invoke('scheduled-step-delivery', {
+              body: { lineUserIdFilter: lineUserId }
+            });
+
+            setStatus("シナリオ配信を開始しました！");
+            setTimeout(() => {
+              window.liff.closeWindow();
+            }, 1500);
+          } catch (e: any) {
+            console.error(e);
+            setError(e.message || 'シナリオ登録に失敗しました');
+          }
         } else {
           setStatus("友だち追加が必要です");
           // プロファイル情報を取得して友だち追加URLを生成（埋め込みを避ける）

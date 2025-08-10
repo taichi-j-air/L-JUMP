@@ -21,6 +21,7 @@ export function StepDeliveryStatus({ step }: StepDeliveryStatusProps) {
   const [stats, setStats] = useState<DeliveryStats>({ waiting: 0, ready: 0, delivered: 0, exited: 0 })
   const [showDetails, setShowDetails] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
+  const [detailUsers, setDetailUsers] = useState<Array<{ id: string; display_name: string | null; picture_url: string | null; line_user_id: string }>>([])
 
   const loadStats = async () => {
     setLoading(true)
@@ -55,8 +56,36 @@ export function StepDeliveryStatus({ step }: StepDeliveryStatusProps) {
     loadStats()
   }, [step.id])
 
-  const handleShowDetails = (type: string) => {
-    setShowDetails(showDetails === type ? null : type)
+  const handleShowDetails = async (type: string) => {
+    const next = showDetails === type ? null : type
+    setShowDetails(next)
+    setDetailUsers([])
+
+    if (!next) return
+
+    setLoading(true)
+    try {
+      const { data: trackingRows, error: tErr } = await supabase
+        .from('step_delivery_tracking')
+        .select('friend_id, status, delivered_at')
+        .eq('step_id', step.id)
+        .eq('status', next)
+      if (tErr) throw tErr
+
+      const friendIds = (trackingRows || []).map((r: any) => r.friend_id).filter(Boolean)
+      if (friendIds.length > 0) {
+        const { data: friends, error: fErr } = await supabase
+          .from('line_friends')
+          .select('id, display_name, picture_url, line_user_id')
+          .in('id', friendIds)
+        if (fErr) throw fErr
+        setDetailUsers(friends || [])
+      }
+    } catch (e) {
+      console.error('詳細取得失敗:', e)
+    } finally {
+      setLoading(false)
+    }
   }
 
   const getStatusIcon = (type: string) => {
@@ -98,8 +127,8 @@ export function StepDeliveryStatus({ step }: StepDeliveryStatusProps) {
         </CardTitle>
       </CardHeader>
       <CardContent className="space-y-3 pb-3">
-        <div className="grid grid-cols-4 gap-2">
-          {['waiting', 'ready', 'delivered', 'exited'].map((type) => (
+        <div className="grid grid-cols-3 gap-2">
+          {['waiting', 'delivered', 'exited'].map((type) => (
             <div key={type} className="text-center">
               <Button
                 variant="ghost"
@@ -126,9 +155,24 @@ export function StepDeliveryStatus({ step }: StepDeliveryStatusProps) {
               {getStatusIcon(showDetails)}
               {getStatusLabel(showDetails)}ユーザー
             </div>
-            <div className="text-xs text-muted-foreground">
-              ※ 実装予定：実際のユーザーリストを表示
-            </div>
+            {loading ? (
+              <div className="text-xs text-muted-foreground">読み込み中...</div>
+            ) : detailUsers.length > 0 ? (
+              <ul className="space-y-1">
+                {detailUsers.map((u) => (
+                  <li key={u.id} className="flex items-center gap-2">
+                    <div className="h-5 w-5 rounded-full bg-muted overflow-hidden">
+                      {u.picture_url ? (
+                        <img src={u.picture_url} alt={u.display_name ?? u.line_user_id} className="h-full w-full object-cover" />
+                      ) : null}
+                    </div>
+                    <span className="text-xs">{u.display_name || u.line_user_id}</span>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <div className="text-xs text-muted-foreground">ユーザーはいません</div>
+            )}
           </div>
         )}
       </CardContent>
