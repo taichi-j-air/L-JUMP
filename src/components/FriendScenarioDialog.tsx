@@ -36,6 +36,10 @@ export function FriendScenarioDialog({ open, onOpenChange, user, friend }: Frien
   const [scenarios, setScenarios] = useState<ScenarioItem[]>([])
   const [selectedId, setSelectedId] = useState<string>("")
   const [loading, setLoading] = useState(false)
+  const [assignedScenarios, setAssignedScenarios] = useState<ScenarioItem[]>([])
+  const [unassignId, setUnassignId] = useState<string>("")
+  const [scenarioSteps, setScenarioSteps] = useState<Array<{ id: string; name: string; step_order: number }>>([])
+  const [startStepId, setStartStepId] = useState<string>("")
   const { toast } = useToast()
 
   useEffect(() => {
@@ -52,9 +56,30 @@ export function FriendScenarioDialog({ open, onOpenChange, user, friend }: Frien
       } else {
         setScenarios(data || [])
       }
+
+      // 現在この友だちに紐づくシナリオ一覧を取得（退出以外）
+      const { data: tracking, error: tErr } = await supabase
+        .from('step_delivery_tracking')
+        .select('scenario_id')
+        .eq('friend_id', friend.id)
+        .neq('status', 'exited')
+      if (!tErr) {
+        const ids = Array.from(new Set((tracking || []).map((r: any) => r.scenario_id).filter(Boolean)))
+        if (ids.length > 0) {
+          const { data: assigned, error: aErr } = await supabase
+            .from('step_scenarios')
+            .select('id, name')
+            .in('id', ids)
+          if (!aErr) {
+            setAssignedScenarios(assigned || [])
+          }
+        } else {
+          setAssignedScenarios([])
+        }
+      }
     }
     load()
-  }, [open, user.id])
+  }, [open, user.id, friend.id])
 
   const handleAssign = async () => {
     const scenario = scenarios.find(s => s.id === selectedId)
@@ -62,27 +87,88 @@ export function FriendScenarioDialog({ open, onOpenChange, user, friend }: Frien
       toast({ title: 'シナリオ未選択', description: 'シナリオを選択してください。' })
       return
     }
-    setLoading(true)
-    const { data, error } = await supabase.rpc('register_friend_with_scenario', {
-      p_line_user_id: friend.line_user_id,
-      p_display_name: friend.display_name,
-      p_picture_url: friend.picture_url,
-      p_scenario_name: scenario.name,
-      p_campaign_id: null,
-      p_registration_source: 'manual'
-    })
-    setLoading(false)
-    if (error) {
-      toast({ title: '登録に失敗しました', description: error.message })
+    if (!startStepId) {
+      toast({ title: '開始ステップ未選択', description: '開始ステップを選択してください。' })
       return
     }
-    toast({ title: '登録完了', description: `${friend.display_name || 'ユーザー'} を「${scenario.name}」に登録しました。` })
-    onOpenChange(false)
+    setLoading(true)
+    try {
+      // すべてのステップ取得（順序判定用）
+      const { data: allSteps } = await supabase
+        .from('steps')
+        .select('id, step_order')
+        .eq('scenario_id', scenario.id)
+        .order('step_order', { ascending: true })
+
+      const startOrder = (allSteps || []).find((s: any) => s.id === startStepId)?.step_order ?? 1
+
+      // 既存のトラッキング
+      const { data: existing } = await supabase
+        .from('step_delivery_tracking')
+        .select('id, step_id')
+        .eq('scenario_id', scenario.id)
+        .eq('friend_id', friend.id)
+
+      const existingMap = new Map<string, string>((existing || []).map((r: any) => [r.step_id, r.id]))
+
+      // まず不足分を一括INSERT
+      const missingRows = (allSteps || [])
+        .filter((s: any) => !existingMap.has(s.id))
+        .map((s: any) => ({
+          scenario_id: scenario.id,
+          step_id: s.id,
+          friend_id: friend.id,
+          status: s.step_order < startOrder ? 'delivered' : s.step_order === startOrder ? 'ready' : 'waiting',
+          delivered_at: s.step_order < startOrder ? new Date().toISOString() : null,
+        }))
+      if (missingRows.length > 0) {
+        const { error: insErr } = await supabase.from('step_delivery_tracking').insert(missingRows)
+        if (insErr) throw insErr
+      }
+
+      // 既存分を個別UPDATE（状態を正規化）
+      for (const s of allSteps || []) {
+        const id = existingMap.get(s.id)
+        if (!id) continue
+        const target = s.step_order < startOrder ? { status: 'delivered', delivered_at: new Date().toISOString() } :
+                       s.step_order === startOrder ? { status: 'ready', delivered_at: null } :
+                       { status: 'waiting', delivered_at: null }
+        const { error: updErr } = await supabase
+          .from('step_delivery_tracking')
+          .update({ ...target, updated_at: new Date().toISOString() })
+          .eq('id', id)
+        if (updErr) throw updErr
+      }
+
+      toast({ title: '登録/更新完了', description: `${friend.display_name || 'ユーザー'} を「${scenario.name}」の${(allSteps||[]).find((s:any)=>s.id===startStepId)?.step_order || 1}番目ステップから配信開始に設定しました。` })
+      onOpenChange(false)
+    } catch (e: any) {
+      toast({ title: '設定に失敗しました', description: e.message || '不明なエラー' })
+    } finally {
+      setLoading(false)
+    }
   }
 
-  const handleManage = () => {
-    // 管理ダッシュボードへ遷移（友だちIDをクエリに付与）
-    window.location.href = `/delivery-dashboard?friend=${friend.id}`
+  const handleUnassign = async () => {
+    if (!unassignId) {
+      toast({ title: '解除対象未選択', description: '解除するシナリオを選択してください。' })
+      return
+    }
+    setLoading(true)
+    try {
+      const { error } = await supabase
+        .from('step_delivery_tracking')
+        .update({ status: 'exited', delivered_at: new Date().toISOString(), updated_at: new Date().toISOString() })
+        .eq('friend_id', friend.id)
+        .eq('scenario_id', unassignId)
+      if (error) throw error
+      toast({ title: '解除完了', description: 'シナリオを解除しました。' })
+      onOpenChange(false)
+    } catch (e: any) {
+      toast({ title: '解除に失敗しました', description: e.message || '不明なエラー' })
+    } finally {
+      setLoading(false)
+    }
   }
 
   return (
@@ -91,27 +177,70 @@ export function FriendScenarioDialog({ open, onOpenChange, user, friend }: Frien
         <DialogHeader>
           <DialogTitle>シナリオ選択/解除</DialogTitle>
           <DialogDescription>
-            {friend.display_name || 'ユーザー'} に適用するシナリオを選択してください。解除や詳細管理はダッシュボードで行えます。
+            {friend.display_name || 'ユーザー'} に対して、シナリオの登録や解除、開始ステップの設定ができます。
           </DialogDescription>
         </DialogHeader>
 
-        <div className="space-y-3">
-          <Select value={selectedId} onValueChange={setSelectedId}>
-            <SelectTrigger>
-              <SelectValue placeholder="シナリオを選択" />
-            </SelectTrigger>
-            <SelectContent>
-              {scenarios.map((s) => (
-                <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
+        <div className="space-y-4">
+          <section className="space-y-2">
+            <h4 className="text-sm font-medium">現在登録されているシナリオ</h4>
+            {assignedScenarios.length > 0 ? (
+              <ul className="text-sm list-disc pl-5">
+                {assignedScenarios.map(s => <li key={s.id}>{s.name}</li>)}
+              </ul>
+            ) : (
+              <p className="text-sm text-muted-foreground">登録なし</p>
+            )}
 
-        <DialogFooter className="gap-2">
-          <Button variant="outline" onClick={handleManage}>管理ページを開く</Button>
-          <Button onClick={handleAssign} disabled={loading}>{loading ? '登録中...' : '選択して登録'}</Button>
-        </DialogFooter>
+            <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+              <Select value={unassignId} onValueChange={setUnassignId}>
+                <SelectTrigger>
+                  <SelectValue placeholder="解除するシナリオを選択" />
+                </SelectTrigger>
+                <SelectContent>
+                  {assignedScenarios.map((s) => (
+                    <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <Button variant="destructive" onClick={handleUnassign} disabled={loading || !unassignId}>
+                {loading ? '処理中...' : '選択したシナリオを解除'}
+              </Button>
+            </div>
+          </section>
+
+          <section className="space-y-2">
+            <h4 className="text-sm font-medium">シナリオ登録と開始ステップ</h4>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+              <Select value={selectedId} onValueChange={setSelectedId}>
+                <SelectTrigger>
+                  <SelectValue placeholder="シナリオを選択" />
+                </SelectTrigger>
+                <SelectContent>
+                  {scenarios.map((s) => (
+                    <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+
+              <Select value={startStepId} onValueChange={setStartStepId} disabled={!scenarioSteps.length}>
+                <SelectTrigger>
+                  <SelectValue placeholder="開始ステップを選択" />
+                </SelectTrigger>
+                <SelectContent>
+                  {scenarioSteps.map((st) => (
+                    <SelectItem key={st.id} value={st.id}>{st.step_order}. {st.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="flex justify-end">
+              <Button onClick={handleAssign} disabled={loading || !selectedId || !startStepId}>
+                {loading ? '登録中...' : '選択して登録/更新'}
+              </Button>
+            </div>
+          </section>
+        </div>
       </DialogContent>
     </Dialog>
   )

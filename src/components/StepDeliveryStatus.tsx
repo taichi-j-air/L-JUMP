@@ -54,22 +54,19 @@ export function StepDeliveryStatus({ step }: StepDeliveryStatusProps) {
 
   useEffect(() => {
     loadStats()
+    if (showDetails) {
+      loadDetailsFor(showDetails)
+    }
   }, [step.id])
 
-  const handleShowDetails = async (type: string) => {
-    const next = showDetails === type ? null : type
-    setShowDetails(next)
-    setDetailUsers([])
-
-    if (!next) return
-
+  const loadDetailsFor = async (type: string) => {
     setLoading(true)
     try {
       const { data: trackingRows, error: tErr } = await supabase
         .from('step_delivery_tracking')
-        .select('friend_id, status, delivered_at')
+        .select('friend_id')
         .eq('step_id', step.id)
-        .eq('status', next)
+        .eq('status', type)
       if (tErr) throw tErr
 
       const friendIds = (trackingRows || []).map((r: any) => r.friend_id).filter(Boolean)
@@ -80,12 +77,23 @@ export function StepDeliveryStatus({ step }: StepDeliveryStatusProps) {
           .in('id', friendIds)
         if (fErr) throw fErr
         setDetailUsers(friends || [])
+      } else {
+        setDetailUsers([])
       }
     } catch (e) {
       console.error('詳細取得失敗:', e)
+      setDetailUsers([])
     } finally {
       setLoading(false)
     }
+  }
+
+  const handleShowDetails = async (type: string) => {
+    const next = showDetails === type ? null : type
+    setShowDetails(next)
+    setDetailUsers([])
+    if (!next) return
+    await loadDetailsFor(next)
   }
 
   const getStatusIcon = (type: string) => {

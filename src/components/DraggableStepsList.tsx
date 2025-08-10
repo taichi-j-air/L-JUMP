@@ -19,7 +19,7 @@ import {
 } from "@dnd-kit/sortable"
 import { CSS } from "@dnd-kit/utilities"
 import { Card, CardContent } from "@/components/ui/card"
-import { GripVertical, Trash2, Edit2 } from "lucide-react"
+import { GripVertical, Trash2, Edit2, Users } from "lucide-react"
 import { Step } from "@/hooks/useStepScenarios"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -149,7 +149,7 @@ function SortableStepCard({ step, index, isSelected, onClick, onDelete, onUpdate
             </p>
           </div>
           <div className="flex items-center gap-2">
-            <span className="text-xs" title="このステップにいる人数">👥 {readyCount ?? 0}</span>
+            <span className="text-xs flex items-center gap-1" title="このステップにいる人数"><Users className="h-3 w-3" /> {readyCount ?? 0}</span>
             <Button
               variant="ghost"
               size="sm"
@@ -226,6 +226,30 @@ export function DraggableStepsList({
       })
       setReadyCounts(counts)
     })()
+  }, [steps.map(s => s.id).join(',')])
+
+  useEffect(() => {
+    const channel = supabase
+      .channel('step-tracking-counts')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'step_delivery_tracking' }, () => {
+        const ids = steps.map(s => s.id)
+        if (ids.length === 0) { setReadyCounts({}); return }
+        ;(async () => {
+          const { data, error } = await supabase
+            .from('step_delivery_tracking')
+            .select('step_id')
+            .in('step_id', ids)
+            .eq('status', 'ready')
+          if (error) { setReadyCounts({}); return }
+          const counts: Record<string, number> = {}
+          ;(data || []).forEach((row: any) => {
+            counts[row.step_id] = (counts[row.step_id] || 0) + 1
+          })
+          setReadyCounts(counts)
+        })()
+      })
+      .subscribe()
+    return () => { supabase.removeChannel(channel) }
   }, [steps.map(s => s.id).join(',')])
 
   const handleDragEnd = (event: DragEndEvent) => {
