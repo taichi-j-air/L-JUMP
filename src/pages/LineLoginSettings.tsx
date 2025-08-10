@@ -69,7 +69,7 @@ export default function LineLoginSettings() {
         const liffUrl = profile.liff_url || ''
         
         // LIFF認証専用ページのエンドポイントURL生成
-        const liffEndpointUrl = liffId ? `https://rtjxurmuaawyzjcdkqxt.supabase.co/functions/v1/liff-scenario-invite?code=YOUR_INVITE_CODE` : ''
+        const liffEndpointUrl = liffId ? `${window.location.origin}/liff-invite` : ''
         
         setSettings({
           channelId,
@@ -171,7 +171,7 @@ export default function LineLoginSettings() {
       if (error) throw error
 
       // LIFF設定保存後、エンドポイントURLを更新
-      const liffEndpointUrl = liffSettings.liffId ? `https://rtjxurmuaawyzjcdkqxt.supabase.co/functions/v1/liff-scenario-invite?code=YOUR_INVITE_CODE` : ''
+      const liffEndpointUrl = liffSettings.liffId ? `${window.location.origin}/liff-invite` : ''
       setLiffSettings(prev => ({ ...prev, liffEndpointUrl }))
 
       toast({
@@ -297,7 +297,7 @@ export default function LineLoginSettings() {
                     setLiffSettings(prev => ({ 
                       ...prev, 
                       liffId: newLiffId,
-                      liffEndpointUrl: newLiffId ? `https://rtjxurmuaawyzjcdkqxt.supabase.co/functions/v1/liff-scenario-invite?code=YOUR_INVITE_CODE` : ''
+                      liffEndpointUrl: newLiffId ? `${window.location.origin}/liff-invite` : ''
                     }))
                   }}
                   placeholder="LIFF IDを入力 (例: 2007859465-L5VQg5q9)"

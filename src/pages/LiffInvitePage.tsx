@@ -12,9 +12,20 @@ export default function LiffInvitePage() {
   const [error, setError] = useState<string>("");
 
   useEffect(() => {
-    // URLパラメータから招待コードを取得
+    // URLパラメータから招待コードを取得（liff.stateにも対応）
     const urlParams = new URLSearchParams(window.location.search);
-    const inviteCode = urlParams.get('code');
+    let inviteCode: string | null = urlParams.get('code') || urlParams.get('inviteCode');
+
+    // LIFFのリダイレクト後は liff.state に元のクエリが入る場合がある
+    const liffState = urlParams.get('liff.state');
+    if (!inviteCode && liffState) {
+      try {
+        const stateParams = new URLSearchParams(decodeURIComponent(liffState));
+        inviteCode = stateParams.get('inviteCode') || stateParams.get('code');
+      } catch (e) {
+        console.warn('Failed to parse liff.state:', e);
+      }
+    }
 
     if (!inviteCode) {
       setError("招待コードが見つかりません");

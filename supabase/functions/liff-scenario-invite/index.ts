@@ -12,18 +12,27 @@ serve(async (req) => {
     return new Response('ok', { headers: corsHeaders })
   }
 
-  // ── ここから追加 ──
-  // LIFF プリフェッチ対策：?code が無い場合は静的 index.html を返却
+  // LIFF/外部からの起動パラメータ取得。codeが無い/プレースホルダの場合は liff.state を参照
   const url = new URL(req.url)
-  const inviteCode = url.searchParams.get('code')
-  if (!inviteCode) {
-    const html = `<!doctype html><html lang="ja"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>LIFF起動</title></head><body>LIFFエンドポイントです。招待コードがありません。</body></html>`
-    return new Response(html, {
-      status: 200,
-      headers: { ...corsHeaders, 'Content-Type': 'text/html' }
+  let inviteCode = url.searchParams.get('code')
+  const liffState = url.searchParams.get('liff.state')
+  if (!inviteCode || inviteCode === 'YOUR_INVITE_CODE') {
+    try {
+      if (liffState) {
+        const state = new URLSearchParams(decodeURIComponent(liffState))
+        inviteCode = state.get('inviteCode') || state.get('code') || inviteCode
+      }
+    } catch (_) {
+      // no-op
+    }
+  }
+
+  if (!inviteCode || inviteCode === 'YOUR_INVITE_CODE') {
+    return new Response(JSON.stringify({ error: 'Invite code is required' }), {
+      status: 400,
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' }
     })
   }
-  // ── ここまで追加 ──
 
   try {
     console.log('=== LIFF SCENARIO INVITE ===')
