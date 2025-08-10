@@ -56,6 +56,8 @@ export default function StepDeliveryPage() {
     toggleFolder,
     moveToFolder,
     removeFromFolder,
+    deleteFolder,
+    reorderFolders,
     getFolderIdByScenario,
   } = useScenarioFolders(user?.id)
 
@@ -294,21 +296,57 @@ export default function StepDeliveryPage() {
     const { active, over } = event
     if (!over) return
 
-    // フォルダへのドロップ
-    if (typeof over.id === 'string' && over.id.startsWith('folder:')) {
-      const folderId = over.id.replace('folder:', '')
-      moveToFolder(String(active.id), folderId)
+    const activeId = String(active.id)
+    const overId = String(over.id)
+
+    // フォルダの並び替え
+    if (activeId.startsWith('folderItem:') && overId.startsWith('folderItem:')) {
+      const folderIds = folders.map(f => `folderItem:${f.id}`)
+      const oldIndex = folderIds.indexOf(activeId)
+      const newIndex = folderIds.indexOf(overId)
+      if (oldIndex !== -1 && newIndex !== -1) {
+        const newOrder = arrayMove(folders.map(f => f.id), oldIndex, newIndex)
+        reorderFolders(newOrder)
+      }
       return
     }
 
-    // ルート内での並び替え
-    if (active.id !== over.id) {
-      const root = scenarios.filter(s => !getFolderIdByScenario(s.id))
-      const oldIndex = root.findIndex((item) => item.id === active.id)
-      const newIndex = root.findIndex((item) => item.id === over.id)
-      if (oldIndex !== -1 && newIndex !== -1) {
-        const newOrder = arrayMove(root, oldIndex, newIndex).map(s => s.id)
-        reorderScenarios(newOrder)
+    // フォルダへのドロップ
+    if (overId.startsWith('folder:')) {
+      const folderId = overId.replace('folder:', '')
+      moveToFolder(activeId, folderId)
+      return
+    }
+
+    // シナリオ上にドロップされた場合
+    const overFolderId = getFolderIdByScenario(overId)
+    if (overFolderId) {
+      // 対象がフォルダ内のシナリオなら、そのフォルダへ移動
+      moveToFolder(activeId, overFolderId)
+      return
+    }
+
+    // ルート内での移動（またはフォルダからルートへ）
+    const root = scenarios.filter(s => !getFolderIdByScenario(s.id))
+    if (activeId !== overId) {
+      const inRoot = root.some(r => r.id === activeId)
+      const overIndex = root.findIndex((item) => item.id === overId)
+
+      if (!inRoot) {
+        // フォルダからルートに出す
+        removeFromFolder(activeId)
+        const targetScenario = scenarios.find(s => s.id === activeId)
+        if (targetScenario) {
+          const newRoot = [...root]
+          newRoot.splice(overIndex, 0, targetScenario)
+          reorderScenarios(newRoot.map(s => s.id))
+        }
+      } else {
+        const oldIndex = root.findIndex((item) => item.id === activeId)
+        if (oldIndex !== -1 && overIndex !== -1) {
+          const newOrder = arrayMove(root, oldIndex, overIndex).map(s => s.id)
+          reorderScenarios(newOrder)
+        }
       }
     }
   }
@@ -373,15 +411,22 @@ export default function StepDeliveryPage() {
             >
               {/* フォルダ一覧 */}
               <div className="space-y-2 mb-4">
-                <ScenarioFolders
-                  folders={folders}
-                  onAdd={() => addFolder()}
-                  onRename={renameFolder}
-                  onColor={setFolderColor}
-                  onToggle={toggleFolder}
-                  onMoveOut={(id) => removeFromFolder(id)}
-                  renderScenario={renderScenarioItem}
-                />
+                <SortableContext
+                  items={folders.map(f => `folderItem:${f.id}`)}
+                  strategy={verticalListSortingStrategy}
+               >
+                  <ScenarioFolders
+                    folders={folders}
+                    onAdd={() => addFolder()}
+                    onRename={renameFolder}
+                    onColor={setFolderColor}
+                    onToggle={toggleFolder}
+                    onMoveOut={(id) => removeFromFolder(id)}
+                    onDelete={deleteFolder}
+                    getScenarioName={(id) => scenarios.find(s => s.id === id)?.name || ''}
+                    renderScenario={renderScenarioItem}
+                  />
+                </SortableContext>
               </div>
 
               {/* ルートのシナリオ */}

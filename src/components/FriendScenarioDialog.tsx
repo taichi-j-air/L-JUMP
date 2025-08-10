@@ -141,6 +141,8 @@ export function FriendScenarioDialog({ open, onOpenChange, user, friend }: Frien
           friend_id: friend.id,
           status: s.step_order < startOrder ? 'delivered' : s.step_order === startOrder ? 'ready' : 'waiting',
           delivered_at: s.step_order < startOrder ? new Date().toISOString() : null,
+          scheduled_delivery_at: s.step_order === startOrder ? new Date().toISOString() : null,
+          next_check_at: s.step_order === startOrder ? new Date().toISOString() : null,
         }))
       if (missingRows.length > 0) {
         const { error: insErr } = await supabase.from('step_delivery_tracking').insert(missingRows)
@@ -151,9 +153,9 @@ export function FriendScenarioDialog({ open, onOpenChange, user, friend }: Frien
       for (const s of allSteps || []) {
         const id = existingMap.get(s.id)
         if (!id) continue
-        const target = s.step_order < startOrder ? { status: 'delivered', delivered_at: new Date().toISOString() } :
-                       s.step_order === startOrder ? { status: 'ready', delivered_at: null } :
-                       { status: 'waiting', delivered_at: null }
+        const target = s.step_order < startOrder ? { status: 'delivered', delivered_at: new Date().toISOString(), scheduled_delivery_at: null, next_check_at: null } :
+                       s.step_order === startOrder ? { status: 'ready', delivered_at: null, scheduled_delivery_at: new Date().toISOString(), next_check_at: new Date().toISOString() } :
+                       { status: 'waiting', delivered_at: null, scheduled_delivery_at: null, next_check_at: null }
         const { error: updErr } = await supabase
           .from('step_delivery_tracking')
           .update({ ...target, updated_at: new Date().toISOString() })
@@ -164,7 +166,7 @@ export function FriendScenarioDialog({ open, onOpenChange, user, friend }: Frien
       // 即時に配信処理をトリガー（この友だちのみ）
       try {
         await supabase.functions.invoke('scheduled-step-delivery', {
-          body: { lineUserIdFilter: friend.line_user_id }
+          body: { line_user_id: friend.line_user_id }
         })
       } catch (e) {
         console.warn('scheduled-step-delivery invoke failed', e)

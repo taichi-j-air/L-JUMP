@@ -65,6 +65,17 @@ export function useScenarioFolders(userId?: string) {
     setFolders(prev => prev.map(f => ({ ...f, scenarioIds: f.scenarioIds.filter(id => id !== scenarioId) })))
   }
 
+  const deleteFolder = (id: string) => {
+    setFolders(prev => prev.filter(f => f.id !== id))
+  }
+
+  const reorderFolders = (orderedIds: string[]) => {
+    setFolders(prev => orderedIds
+      .map(id => prev.find(f => f.id === id))
+      .filter((f): f is ScenarioFolder => Boolean(f))
+    )
+  }
+
   return {
     folders,
     addFolder,
@@ -73,6 +84,8 @@ export function useScenarioFolders(userId?: string) {
     toggleFolder,
     moveToFolder,
     removeFromFolder,
+    deleteFolder,
+    reorderFolders,
     getFolderIdByScenario,
   }
 }
