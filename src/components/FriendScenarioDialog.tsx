@@ -172,6 +172,23 @@ export function FriendScenarioDialog({ open, onOpenChange, user, friend }: Frien
         console.warn('scheduled-step-delivery invoke failed', e)
       }
 
+      // 手動登録のログを追加（重複は許容）
+      try {
+        await supabase
+          .from('scenario_friend_logs')
+          .insert({
+            scenario_id: scenario.id,
+            friend_id: friend.id,
+            line_user_id: friend.line_user_id,
+            invite_code: 'manual'
+          })
+      } catch (logErr) {
+        console.warn('scenario_friend_logs insert failed', logErr)
+      }
+
+      // 統計更新通知
+      window.dispatchEvent(new CustomEvent('scenario-stats-updated'))
+
       toast({ title: '登録/更新完了', description: `${friend.display_name || 'ユーザー'} を「${scenario.name}」の${((((allSteps||[]).find((s:any)=>s.id===startStepId)?.step_order) ?? 0) + 1)}番目ステップから配信開始に設定しました。` })
       onOpenChange(false)
     } catch (e: any) {
@@ -197,6 +214,8 @@ export function FriendScenarioDialog({ open, onOpenChange, user, friend }: Frien
       toast({ title: '解除完了', description: 'シナリオを解除しました。' })
       setAssignedScenarios((prev) => prev.filter((s) => s.id !== unassignId))
       setUnassignId("")
+      // 統計更新通知
+      window.dispatchEvent(new CustomEvent('scenario-stats-updated'))
     } catch (e: any) {
       toast({ title: '解除に失敗しました', description: e.message || '不明なエラー' })
     } finally {

@@ -117,7 +117,7 @@ export function FriendsList({ user }: FriendsListProps) {
                       {friend.display_name || "名前未設定"}
                     </h4>
                     <Badge variant="secondary" className="text-xs">
-                      {format(new Date(friend.added_at), "yyyy/MM/dd")}
+                      {format(new Date(friend.added_at), "yyyy/MM/dd HH:mm")}
                     </Badge>
                   </div>
                   <p className="text-sm text-muted-foreground font-mono">
@@ -138,7 +138,7 @@ export function FriendsList({ user }: FriendsListProps) {
 
                   <Button 
                     size="sm" 
-                    variant="secondary"
+                    variant="outline"
                     onClick={() => setScenarioDialogFriend(friend)}
                     className="flex items-center gap-2"
                   >

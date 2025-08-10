@@ -47,6 +47,7 @@ export default function StepDeliveryPage() {
   const [isMessageCreationCollapsed, setIsMessageCreationCollapsed] = useState(false)
   const [collapsedMessages, setCollapsedMessages] = useState<Set<string>>(new Set())
   const [scenarioStats, setScenarioStats] = useState<Record<string, { registered: number; exited: number; blocked: number }>>({})
+  const [statsRefreshToken, setStatsRefreshToken] = useState(0)
 
   const { 
     folders,
@@ -150,6 +151,13 @@ export default function StepDeliveryPage() {
     }).filter(name => name !== '不明なシナリオ')
   }
 
+  // 統計の手動更新イベント
+  useEffect(() => {
+    const handler = () => setStatsRefreshToken((t) => t + 1)
+    window.addEventListener('scenario-stats-updated', handler)
+    return () => window.removeEventListener('scenario-stats-updated', handler)
+  }, [])
+
   // シナリオ統計の読み込み（登録数・離脱数・ブロック数）
   useEffect(() => {
     if (!user || scenarios.length === 0) {
@@ -196,7 +204,7 @@ export default function StepDeliveryPage() {
       }
     }
     load()
-  }, [user?.id, scenarios.map(s => s.id).join(',')])
+  }, [user?.id, scenarios.map(s => s.id).join(','), statsRefreshToken])
 
   const handleCreateNewScenario = async () => {
     if (!user) return

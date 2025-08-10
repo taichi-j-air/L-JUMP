@@ -208,16 +208,41 @@ async function processStepDelivery(supabase: any, stepTracking: any): Promise<vo
       console.warn('Skipped tracking without friend_id:', stepTracking.id)
       return
     }
-    
-    // Already claimed at fetch-time; proceed to deliver
 
-
-    // Deliver the step messages
+    // Deliver the current step
     await deliverStepMessages(supabase, stepTracking)
 
+    // After completion, attempt to cascade deliver subsequent immediate steps for the same friend/scenario
+    let guard = 0
+    const nowIso = () => new Date().toISOString()
+    while (guard < 5) { // hard cap to avoid infinite loops
+      guard++
+      const { data: nextReady, error: nextErr } = await supabase
+        .from('step_delivery_tracking')
+        .select('*')
+        .eq('scenario_id', stepTracking.scenario_id)
+        .eq('friend_id', stepTracking.friend_id)
+        .eq('status', 'ready')
+        .lte('scheduled_delivery_at', nowIso())
+        .order('scheduled_delivery_at', { ascending: true })
+        .limit(1)
+        .maybeSingle()
+      if (nextErr || !nextReady) break
+
+      // claim
+      const { data: claimed, error: claimErr } = await supabase
+        .from('step_delivery_tracking')
+        .update({ status: 'delivering', updated_at: nowIso() })
+        .eq('id', nextReady.id)
+        .select('*')
+        .maybeSingle()
+      if (claimErr || !claimed) break
+
+      await deliverStepMessages(supabase, claimed)
+    }
   } catch (error) {
     console.error(`Error processing step ${stepTracking.id}:`, error)
-    
+
     const errMsg = (error && (error as any).message) ? String((error as any).message) : ''
     if (!stepTracking.friend_id || errMsg.includes('Friend not found')) {
       await supabase
@@ -236,7 +261,7 @@ async function processStepDelivery(supabase: any, stepTracking: any): Promise<vo
         })
         .eq('id', stepTracking.id)
     }
-    
+
     throw error
   }
 }
