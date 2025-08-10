@@ -646,55 +646,218 @@ async function sendLineMessage(accessToken: string, userId: string, message: any
 // Mark step as delivered and prepare the next step
 async function markStepAsDelivered(supabase: any, trackingId: string, scenarioId: string, friendId: string, currentStepOrder: number) {
   try {
-    // Mark current step as delivered
+    const deliveredAt = new Date().toISOString()
+
+    // 現在のステップを配信完了に更新
     const { error: updateError } = await supabase
       .from('step_delivery_tracking')
       .update({
         status: 'delivered',
-        delivered_at: new Date().toISOString()
+        delivered_at: deliveredAt,
+        updated_at: deliveredAt
       })
       .eq('id', trackingId)
-    
+
     if (updateError) {
       console.error('配信ステータス更新エラー:', updateError)
       return
     }
-    
+
     console.log('ステップを配信完了としてマーク:', currentStepOrder)
-    
-    // Find and prepare the next step
-    const { data: nextStepsAll, error: nextError } = await supabase
-      .from('step_delivery_tracking')
-      .select('id, steps!inner(step_order)')
+
+    // 次のステップを取得（現在+1）
+    const { data: nextStep, error: nextStepErr } = await supabase
+      .from('steps')
+      .select('id, delivery_type, delivery_days, delivery_hours, delivery_minutes, delivery_seconds, delivery_time_of_day, specific_time')
       .eq('scenario_id', scenarioId)
-      .eq('friend_id', friendId)
-      .eq('status', 'waiting')
-      .order('step_order', { foreignTable: 'steps', ascending: true })
-    
-    if (nextError) {
-      console.error('次ステップ検索エラー:', nextError)
+      .eq('step_order', currentStepOrder + 1)
+      .maybeSingle()
+
+    if (nextStepErr) {
+      console.error('次ステップ取得エラー:', nextStepErr)
       return
     }
-    
-    const nextSteps = (nextStepsAll || []).filter((s: any) => s.steps.step_order > currentStepOrder)
-    if (nextSteps.length > 0) {
-      const nextStep = nextSteps[0]
-      
-      // Mark next step as ready
-      const { error: readyError } = await supabase
-        .from('step_delivery_tracking')
-        .update({ status: 'ready' })
-        .eq('id', nextStep.id)
-      
-      if (readyError) {
-        console.error('次ステップ準備エラー:', readyError)
-      } else {
-        console.log('次のステップを準備しました:', nextStep.steps.step_order)
+
+    // シナリオが完了した場合は遷移を処理
+    if (!nextStep) {
+      console.log('このシナリオの全ステップが完了しました')
+      const { data: transition, error: transErr } = await supabase
+        .from('scenario_transitions')
+        .select('to_scenario_id')
+        .eq('from_scenario_id', scenarioId)
+        .order('created_at', { ascending: true })
+        .limit(1)
+        .maybeSingle()
+
+      if (transErr) {
+        console.warn('遷移設定の取得エラー:', transErr)
+        return
       }
-    } else {
-      console.log('すべてのステップが完了しました')
+      if (!transition?.to_scenario_id) return
+
+      // 現在のシナリオを離脱にする
+      await supabase
+        .from('step_delivery_tracking')
+        .update({ status: 'exited', updated_at: new Date().toISOString() })
+        .eq('scenario_id', scenarioId)
+        .eq('friend_id', friendId)
+        .neq('status', 'exited')
+
+      // 遷移先の最初のステップを開始
+      const { data: firstStep, error: firstErr } = await supabase
+        .from('steps')
+        .select('id')
+        .eq('scenario_id', transition.to_scenario_id)
+        .order('step_order', { ascending: true })
+        .limit(1)
+        .maybeSingle()
+
+      if (firstErr || !firstStep) {
+        console.warn('遷移先シナリオに最初のステップがありません:', transition.to_scenario_id, firstErr)
+        return
+      }
+
+      const now = new Date()
+      const { data: existing, error: exErr } = await supabase
+        .from('step_delivery_tracking')
+        .select('id')
+        .eq('scenario_id', transition.to_scenario_id)
+        .eq('friend_id', friendId)
+        .eq('step_id', firstStep.id)
+        .maybeSingle()
+
+      if (exErr) console.warn('遷移先トラッキング確認エラー:', exErr)
+
+      if (!existing) {
+        await supabase
+          .from('step_delivery_tracking')
+          .insert({
+            scenario_id: transition.to_scenario_id,
+            step_id: firstStep.id,
+            friend_id: friendId,
+            status: 'ready',
+            scheduled_delivery_at: now.toISOString(),
+            next_check_at: new Date(now.getTime() - 5000).toISOString(),
+            created_at: now.toISOString(),
+            updated_at: now.toISOString(),
+          })
+      } else {
+        await supabase
+          .from('step_delivery_tracking')
+          .update({
+            status: 'ready',
+            scheduled_delivery_at: now.toISOString(),
+            next_check_at: new Date(now.getTime() - 5000).toISOString(),
+            updated_at: now.toISOString(),
+          })
+          .eq('id', existing.id)
+      }
+      return
     }
-    
+
+    // 次ステップのトラッキングを用意
+    const { data: nextTracking } = await supabase
+      .from('step_delivery_tracking')
+      .select('id')
+      .eq('scenario_id', scenarioId)
+      .eq('friend_id', friendId)
+      .eq('step_id', nextStep.id)
+      .maybeSingle()
+
+    let nextId = nextTracking?.id as string | undefined
+    if (!nextId) {
+      const { data: prevTracking } = await supabase
+        .from('step_delivery_tracking')
+        .select('campaign_id, registration_source')
+        .eq('id', trackingId)
+        .maybeSingle()
+
+      const baseNow = new Date().toISOString()
+      const { data: inserted } = await supabase
+        .from('step_delivery_tracking')
+        .insert({
+          scenario_id: scenarioId,
+          step_id: nextStep.id,
+          friend_id: friendId,
+          status: 'waiting',
+          campaign_id: prevTracking?.campaign_id || null,
+          registration_source: prevTracking?.registration_source || null,
+          created_at: baseNow,
+          updated_at: baseNow,
+        })
+        .select('id')
+        .maybeSingle()
+
+      nextId = inserted?.id
+    }
+
+    // スケジュール時間を計算
+    let updates: any = { updated_at: new Date().toISOString() }
+    try {
+      const { data: friend, error: friendErr } = await supabase
+        .from('line_friends')
+        .select('added_at')
+        .eq('id', friendId)
+        .maybeSingle()
+
+      if (friendErr) {
+        console.warn('スケジュール計算用の友達取得に失敗。即時配信にフォールバック', friendErr)
+        const now = new Date()
+        updates.status = 'ready'
+        updates.scheduled_delivery_at = now.toISOString()
+        updates.next_check_at = new Date(now.getTime() - 5000).toISOString()
+      } else {
+        const { data: newScheduledTime, error: calcError } = await supabase.rpc('calculate_scheduled_delivery_time', {
+          p_friend_added_at: friend?.added_at || null,
+          p_delivery_type: nextStep.delivery_type,
+          p_delivery_seconds: nextStep.delivery_seconds || 0,
+          p_delivery_minutes: nextStep.delivery_minutes || 0,
+          p_delivery_hours: nextStep.delivery_hours || 0,
+          p_delivery_days: nextStep.delivery_days || 0,
+          p_specific_time: nextStep.specific_time || null,
+          p_previous_step_delivered_at: deliveredAt,
+          p_delivery_time_of_day: nextStep.delivery_time_of_day || null
+        })
+
+        if (!calcError && newScheduledTime) {
+          const scheduled = new Date(newScheduledTime)
+          const now = new Date()
+          if (scheduled <= now) {
+            updates.status = 'ready'
+            updates.scheduled_delivery_at = now.toISOString()
+            updates.next_check_at = new Date(now.getTime() - 5000).toISOString()
+          } else {
+            updates.status = 'waiting'
+            updates.scheduled_delivery_at = scheduled.toISOString()
+            updates.next_check_at = new Date(scheduled.getTime() - 5000).toISOString()
+          }
+        } else {
+          console.warn('次回スケジュールの計算に失敗。即時配信にフォールバック', calcError)
+          const now = new Date()
+          updates.status = 'ready'
+          updates.scheduled_delivery_at = now.toISOString()
+          updates.next_check_at = new Date(now.getTime() - 5000).toISOString()
+        }
+      }
+    } catch (calcCatch) {
+      console.warn('スケジュール計算処理でエラー。即時配信にフォールバック', calcCatch)
+      const now = new Date()
+      updates.status = 'ready'
+      updates.scheduled_delivery_at = now.toISOString()
+      updates.next_check_at = new Date(now.getTime() - 5000).toISOString()
+    }
+
+    const { error: prepErr } = await supabase
+      .from('step_delivery_tracking')
+      .update(updates)
+      .eq('id', nextId as string)
+
+    if (prepErr) {
+      console.error('次ステップ準備エラー:', prepErr)
+    } else {
+      console.log('次のステップを準備:', currentStepOrder + 1, updates)
+    }
+
   } catch (error) {
     console.error('ステップ完了処理エラー:', error)
   }

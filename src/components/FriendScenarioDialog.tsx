@@ -166,7 +166,7 @@ export function FriendScenarioDialog({ open, onOpenChange, user, friend }: Frien
       // 即時に配信処理をトリガー（この友だちのみ）
       try {
         await supabase.functions.invoke('scheduled-step-delivery', {
-          body: { line_user_id: friend.line_user_id }
+          body: { line_user_id: friend.line_user_id, scenario_id: scenario.id }
         })
       } catch (e) {
         console.warn('scheduled-step-delivery invoke failed', e)

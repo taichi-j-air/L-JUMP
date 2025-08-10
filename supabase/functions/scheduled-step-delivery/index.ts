@@ -55,6 +55,34 @@ Deno.serve(async (req) => {
 
     const cutoff = new Date(Date.now() - 2 * 60 * 1000).toISOString()
 
+    // Optionally resolve friend IDs from line_user_id once to reuse
+    let friendIdsFilter: string[] | null = null
+    if (lineUserIdFilter) {
+      const { data: friendRows } = await supabase
+        .from('line_friends')
+        .select('id')
+        .eq('line_user_id', lineUserIdFilter)
+      if (friendRows && friendRows.length > 0) {
+        friendIdsFilter = friendRows.map((f: any) => f.id)
+      } else {
+        console.log('No friend found for provided line_user_id, nothing to process')
+      }
+    }
+
+    // 1) Flip waiting -> ready where scheduled time has arrived
+    let waitingToReady = supabase
+      .from('step_delivery_tracking')
+      .update({ status: 'ready', updated_at: now })
+      .eq('status', 'waiting')
+      .not('friend_id', 'is', null)
+      .lte('scheduled_delivery_at', now)
+    if (recentOnly) waitingToReady = waitingToReady.gte('updated_at', cutoff)
+    if (scenarioIdFilter) waitingToReady = waitingToReady.eq('scenario_id', scenarioIdFilter)
+    if (friendIdFilter) waitingToReady = waitingToReady.eq('friend_id', friendIdFilter)
+    if (friendIdsFilter) waitingToReady = waitingToReady.in('friend_id', friendIdsFilter)
+    await waitingToReady.select('id')
+
+    // 2) Claim ready rows for delivery
     let query = supabase
       .from('step_delivery_tracking')
       .update({ status: 'delivering', updated_at: now })
@@ -71,16 +99,8 @@ Deno.serve(async (req) => {
     if (friendIdFilter) {
       query = query.eq('friend_id', friendIdFilter)
     }
-    if (lineUserIdFilter) {
-      const { data: friendRows } = await supabase
-        .from('line_friends')
-        .select('id')
-        .eq('line_user_id', lineUserIdFilter)
-      if (friendRows && friendRows.length > 0) {
-        query = query.in('friend_id', friendRows.map((f: any) => f.id))
-      } else {
-        console.log('No friend found for provided line_user_id, nothing to process')
-      }
+    if (friendIdsFilter) {
+      query = query.in('friend_id', friendIdsFilter)
     }
 
     const { data: stepsToDeliver, error: fetchError } = await query
@@ -124,10 +144,30 @@ Deno.serve(async (req) => {
       await Promise.allSettled(deliveryPromises)
     }
 
-    // Schedule next check if we processed the maximum
+    // Schedule next check if we processed the maximum, or if a waiting step is due soon
     if (stepsToDeliver && stepsToDeliver.length === 100) {
       console.log('🔄 Scheduling next check due to max steps processed')
       EdgeRuntime.waitUntil(scheduleNextCheck(supabase, 2))
+    } else {
+      // Check for any waiting steps due within the next 60 seconds
+      let upcomingQuery = supabase
+        .from('step_delivery_tracking')
+        .select('scheduled_delivery_at')
+        .eq('status', 'waiting')
+        .not('friend_id', 'is', null)
+        .lte('scheduled_delivery_at', new Date(Date.now() + 60000).toISOString())
+        .order('scheduled_delivery_at', { ascending: true })
+        .limit(1)
+      if (scenarioIdFilter) upcomingQuery = upcomingQuery.eq('scenario_id', scenarioIdFilter)
+      if (friendIdFilter) upcomingQuery = upcomingQuery.eq('friend_id', friendIdFilter)
+      if (friendIdsFilter) upcomingQuery = upcomingQuery.in('friend_id', friendIdsFilter)
+      const { data: upcoming } = await upcomingQuery
+      if (upcoming && upcoming.length > 0) {
+        const dueAt = new Date(upcoming[0].scheduled_delivery_at)
+        const delay = Math.max(1, Math.min(55, Math.ceil((dueAt.getTime() - Date.now()) / 1000) + 1))
+        console.log(`⏭️ Scheduling next check in ${delay}s for upcoming delivery at ${dueAt.toISOString()}`)
+        EdgeRuntime.waitUntil(scheduleNextCheck(supabase, delay))
+      }
     }
 
     const result = {
