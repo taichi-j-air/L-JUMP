@@ -17,10 +17,10 @@ serve(async (req) => {
   const url = new URL(req.url)
   const inviteCode = url.searchParams.get('code')
   if (!inviteCode) {
-    const html = await Deno.readTextFile("public/index.html")
+    const html = `<!doctype html><html lang="ja"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>LIFF起動</title></head><body>LIFFエンドポイントです。招待コードがありません。</body></html>`
     return new Response(html, {
       status: 200,
-      headers: { 'Content-Type': 'text/html' }
+      headers: { ...corsHeaders, 'Content-Type': 'text/html' }
     })
   }
   // ── ここまで追加 ──
@@ -40,7 +40,7 @@ serve(async (req) => {
       .select('*')
       .eq('invite_code', inviteCode)
       .eq('is_active', true)
-      .single()
+      .maybeSingle()
 
     if (inviteError || !inviteData) {
       return new Response(`Invalid invite code: ${inviteCode}`, {
@@ -54,7 +54,7 @@ serve(async (req) => {
       .from('step_scenarios')
       .select('user_id')
       .eq('id', inviteData.scenario_id)
-      .single()
+      .maybeSingle()
 
     if (scenarioError || !scenarioData) {
       return new Response('Scenario not found', {
@@ -68,7 +68,7 @@ serve(async (req) => {
       .from('profiles')
       .select('liff_id, line_login_channel_id')
       .eq('user_id', scenarioData.user_id)
-      .single()
+      .maybeSingle()
 
     if (profileError || !profileData?.liff_id || !profileData?.line_login_channel_id) {
       return new Response('LIFF configuration not found', {
