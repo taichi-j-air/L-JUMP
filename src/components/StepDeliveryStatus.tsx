@@ -2,7 +2,7 @@ import { useState, useEffect } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
-import { Clock, Users, UserX, CheckCircle, Eye } from "lucide-react"
+import { Clock, Users, UserX, CheckCircle, Ban } from "lucide-react"
 import { supabase } from "@/integrations/supabase/client"
 import { Step } from "@/hooks/useStepScenarios"
 
@@ -15,10 +15,11 @@ interface DeliveryStats {
   ready: number
   delivered: number
   exited: number
+  blocked: number
 }
 
 export function StepDeliveryStatus({ step }: StepDeliveryStatusProps) {
-  const [stats, setStats] = useState<DeliveryStats>({ waiting: 0, ready: 0, delivered: 0, exited: 0 })
+  const [stats, setStats] = useState<DeliveryStats>({ waiting: 0, ready: 0, delivered: 0, exited: 0, blocked: 0 })
   const [showDetails, setShowDetails] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
   const [detailUsers, setDetailUsers] = useState<Array<{ id: string; display_name: string | null; picture_url: string | null; line_user_id: string }>>([])
@@ -26,7 +27,7 @@ export function StepDeliveryStatus({ step }: StepDeliveryStatusProps) {
   const loadStats = async () => {
     setLoading(true)
     try {
-      // 実際の配信統計を取得
+      // 配信統計を取得（readyはwaitingに加算）
       const { data: deliveryData, error } = await supabase
         .from('step_delivery_tracking')
         .select('status')
@@ -34,19 +35,37 @@ export function StepDeliveryStatus({ step }: StepDeliveryStatusProps) {
 
       if (error) {
         console.error('配信統計取得失敗:', error)
-        setStats({ waiting: 0, ready: 0, delivered: 0, exited: 0 })
+        setStats({ waiting: 0, ready: 0, delivered: 0, exited: 0, blocked: 0 })
         return
       }
 
-      const statsCount = deliveryData?.reduce((acc, item) => {
-        acc[item.status as keyof DeliveryStats] = (acc[item.status as keyof DeliveryStats] || 0) + 1
-        return acc
-      }, { waiting: 0, ready: 0, delivered: 0, exited: 0 } as DeliveryStats) || { waiting: 0, ready: 0, delivered: 0, exited: 0 }
+      let statsCount: DeliveryStats = { waiting: 0, ready: 0, delivered: 0, exited: 0, blocked: 0 }
+      for (const item of deliveryData || []) {
+        const s = (item as any).status
+        if (s === 'ready') {
+          statsCount.waiting += 1 // 準備中も「待機」に含める
+          statsCount.ready += 1
+        } else if (s === 'waiting' || s === 'delivered' || s === 'exited') {
+          ;(statsCount as any)[s] = ((statsCount as any)[s] || 0) + 1
+        }
+      }
+
+      // 当該ステップでの配信失敗（ブロック等）数を取得（友だち重複排除）
+      const { data: failedLogs, error: logErr } = await supabase
+        .from('step_delivery_logs')
+        .select('friend_id')
+        .eq('step_id', step.id)
+        .eq('delivery_status', 'failed')
+
+      if (!logErr) {
+        const uniq = new Set<string>((failedLogs || []).map((r: any) => r.friend_id).filter(Boolean))
+        statsCount.blocked = uniq.size
+      }
 
       setStats(statsCount)
     } catch (error) {
       console.error('配信統計取得失敗:', error)
-      setStats({ waiting: 0, ready: 0, delivered: 0, exited: 0 })
+      setStats({ waiting: 0, ready: 0, delivered: 0, exited: 0, blocked: 0 })
     } finally {
       setLoading(false)
     }
@@ -62,23 +81,43 @@ export function StepDeliveryStatus({ step }: StepDeliveryStatusProps) {
   const loadDetailsFor = async (type: string) => {
     setLoading(true)
     try {
-      const { data: trackingRows, error: tErr } = await supabase
-        .from('step_delivery_tracking')
-        .select('friend_id')
-        .eq('step_id', step.id)
-        .eq('status', type)
-      if (tErr) throw tErr
-
-      const friendIds = (trackingRows || []).map((r: any) => r.friend_id).filter(Boolean)
-      if (friendIds.length > 0) {
-        const { data: friends, error: fErr } = await supabase
-          .from('line_friends')
-          .select('id, display_name, picture_url, line_user_id')
-          .in('id', friendIds)
-        if (fErr) throw fErr
-        setDetailUsers(friends || [])
+      if (type === 'blocked') {
+        const { data: logs, error: lErr } = await supabase
+          .from('step_delivery_logs')
+          .select('friend_id')
+          .eq('step_id', step.id)
+          .eq('delivery_status', 'failed')
+        if (lErr) throw lErr
+        const friendIds = Array.from(new Set((logs || []).map((r: any) => r.friend_id).filter(Boolean)))
+        if (friendIds.length > 0) {
+          const { data: friends, error: fErr } = await supabase
+            .from('line_friends')
+            .select('id, display_name, picture_url, line_user_id')
+            .in('id', friendIds)
+          if (fErr) throw fErr
+          setDetailUsers(friends || [])
+        } else {
+          setDetailUsers([])
+        }
       } else {
-        setDetailUsers([])
+        const { data: trackingRows, error: tErr } = await supabase
+          .from('step_delivery_tracking')
+          .select('friend_id')
+          .eq('step_id', step.id)
+          .eq('status', type)
+        if (tErr) throw tErr
+
+        const friendIds = (trackingRows || []).map((r: any) => r.friend_id).filter(Boolean)
+        if (friendIds.length > 0) {
+          const { data: friends, error: fErr } = await supabase
+            .from('line_friends')
+            .select('id, display_name, picture_url, line_user_id')
+            .in('id', friendIds)
+          if (fErr) throw fErr
+          setDetailUsers(friends || [])
+        } else {
+          setDetailUsers([])
+        }
       }
     } catch (e) {
       console.error('詳細取得失敗:', e)
@@ -99,9 +138,9 @@ export function StepDeliveryStatus({ step }: StepDeliveryStatusProps) {
   const getStatusIcon = (type: string) => {
     switch (type) {
       case 'waiting': return <Clock className="h-3 w-3" />
-      case 'ready': return <Eye className="h-3 w-3" />
       case 'delivered': return <CheckCircle className="h-3 w-3" />
       case 'exited': return <UserX className="h-3 w-3" />
+      case 'blocked': return <Ban className="h-3 w-3" />
       default: return <Users className="h-3 w-3" />
     }
   }
@@ -109,9 +148,9 @@ export function StepDeliveryStatus({ step }: StepDeliveryStatusProps) {
   const getStatusLabel = (type: string) => {
     switch (type) {
       case 'waiting': return '配信待機'
-      case 'ready': return '配信準備中'
       case 'delivered': return '配信完了'
       case 'exited': return 'シナリオ離脱'
+      case 'blocked': return 'ブロック'
       default: return ''
     }
   }
@@ -119,9 +158,9 @@ export function StepDeliveryStatus({ step }: StepDeliveryStatusProps) {
   const getStatusValue = (type: string) => {
     switch (type) {
       case 'waiting': return stats.waiting
-      case 'ready': return stats.ready
       case 'delivered': return stats.delivered
       case 'exited': return stats.exited
+      case 'blocked': return stats.blocked
       default: return 0
     }
   }
@@ -135,8 +174,8 @@ export function StepDeliveryStatus({ step }: StepDeliveryStatusProps) {
         </CardTitle>
       </CardHeader>
       <CardContent className="space-y-3 pb-3">
-        <div className="grid grid-cols-3 gap-2">
-          {['waiting', 'delivered', 'exited'].map((type) => (
+        <div className="grid grid-cols-4 gap-2">
+          {['waiting', 'delivered', 'exited', 'blocked'].map((type) => (
             <div key={type} className="text-center">
               <Button
                 variant="ghost"

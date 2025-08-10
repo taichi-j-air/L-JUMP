@@ -2,7 +2,7 @@ import { useSortable } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
-import { Trash2, GripVertical } from "lucide-react"
+import { Trash2, GripVertical, Users, UserX, Ban } from "lucide-react"
 import { StepScenario } from "@/hooks/useStepScenarios"
 
 interface SortableScenarioItemProps {
@@ -11,6 +11,7 @@ interface SortableScenarioItemProps {
   scenarioSteps: number
   deliveryTime: string
   transitionDestinations: string[]
+  stats?: { registered: number; exited: number; blocked: number }
   onSelect: () => void
   onDelete: () => void
 }
@@ -22,7 +23,8 @@ export function SortableScenarioItem({
   deliveryTime,
   transitionDestinations,
   onSelect,
-  onDelete
+  onDelete,
+  stats,
 }: SortableScenarioItemProps) {
   const {
     attributes,
@@ -60,10 +62,14 @@ export function SortableScenarioItem({
           
           <div className="flex-1 min-w-0">
             <h3 className="font-medium">{scenario.name}</h3>
-            <p className="text-sm text-muted-foreground">{scenarioSteps} ステップ</p>
-            <p className="text-xs text-muted-foreground">
-              配信: {deliveryTime}
-            </p>
+            <p className="text-sm text-muted-foreground">{scenarioSteps} ステップ・配信: {deliveryTime}</p>
+            {stats && (
+              <div className="mt-1 flex items-center gap-3 text-xs text-muted-foreground">
+                <span className="flex items-center gap-1"><Users className="h-3 w-3" />{stats.registered}</span>
+                <span className="flex items-center gap-1"><UserX className="h-3 w-3" />{stats.exited}</span>
+                <span className="flex items-center gap-1"><Ban className="h-3 w-3" />{stats.blocked}</span>
+              </div>
+            )}
             {transitionDestinations.length > 0 && (
               <div className="mt-1">
                 {transitionDestinations.length === 1 ? (

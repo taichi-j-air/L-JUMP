@@ -81,6 +81,27 @@ export function FriendScenarioDialog({ open, onOpenChange, user, friend }: Frien
     load()
   }, [open, user.id, friend.id])
 
+  // シナリオ選択時にそのシナリオのステップ一覧を取得
+  useEffect(() => {
+    if (!selectedId) {
+      setScenarioSteps([])
+      setStartStepId("")
+      return
+    }
+    const fetchSteps = async () => {
+      const { data, error } = await supabase
+        .from('steps')
+        .select('id, name, step_order')
+        .eq('scenario_id', selectedId)
+        .order('step_order', { ascending: true })
+      if (!error) {
+        setScenarioSteps(data || [])
+        setStartStepId((data && data[0]?.id) || "")
+      }
+    }
+    fetchSteps()
+  }, [selectedId])
+
   const handleAssign = async () => {
     const scenario = scenarios.find(s => s.id === selectedId)
     if (!scenario) {

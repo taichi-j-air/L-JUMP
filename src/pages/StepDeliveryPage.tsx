@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react"
-import { Plus, MessageSquare, Trash2, ChevronDown, ChevronUp } from "lucide-react"
+import { Plus, MessageSquare, Trash2, ChevronDown, ChevronUp, FolderPlus } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
@@ -44,6 +44,7 @@ export default function StepDeliveryPage() {
   const [loading, setLoading] = useState(true)
   const [isMessageCreationCollapsed, setIsMessageCreationCollapsed] = useState(false)
   const [collapsedMessages, setCollapsedMessages] = useState<Set<string>>(new Set())
+  const [scenarioStats, setScenarioStats] = useState<Record<string, { registered: number; exited: number; blocked: number }>>({})
 
   const sensors = useSensors(
     useSensor(PointerSensor),
@@ -130,6 +131,54 @@ export default function StepDeliveryPage() {
       return destination ? destination.name : '不明なシナリオ'
     }).filter(name => name !== '不明なシナリオ')
   }
+
+  // シナリオ統計の読み込み（登録数・離脱数・ブロック数）
+  useEffect(() => {
+    if (!user || scenarios.length === 0) {
+      setScenarioStats({})
+      return
+    }
+    const scenarioIds = scenarios.map(s => s.id)
+    const load = async () => {
+      try {
+        const [regRes, exitRes, failRes] = await Promise.all([
+          supabase.from('scenario_friend_logs').select('scenario_id, friend_id, line_user_id').in('scenario_id', scenarioIds),
+          supabase.from('step_delivery_tracking').select('scenario_id, friend_id, status').in('scenario_id', scenarioIds).eq('status','exited'),
+          supabase.from('step_delivery_logs').select('scenario_id, friend_id, delivery_status').in('scenario_id', scenarioIds).eq('delivery_status','failed'),
+        ])
+        const stats: Record<string, { registered: number; exited: number; blocked: number }> = {}
+        for (const id of scenarioIds) stats[id] = { registered: 0, exited: 0, blocked: 0 }
+        const regMap: Record<string, Set<string>> = {}
+        ;(regRes.data || []).forEach((l: any) => {
+          const sid = l.scenario_id; const fid = l.friend_id || l.line_user_id
+          if (!sid || !fid) return
+          regMap[sid] = regMap[sid] || new Set<string>()
+          regMap[sid].add(fid)
+        })
+        Object.keys(regMap).forEach(sid => { stats[sid].registered = regMap[sid].size })
+        const exitMap: Record<string, Set<string>> = {}
+        ;(exitRes.data || []).forEach((r: any) => {
+          const sid = r.scenario_id; const fid = r.friend_id
+          if (!sid || !fid) return
+          exitMap[sid] = exitMap[sid] || new Set<string>()
+          exitMap[sid].add(fid)
+        })
+        Object.keys(exitMap).forEach(sid => { stats[sid].exited = exitMap[sid].size })
+        const blockMap: Record<string, Set<string>> = {}
+        ;(failRes.data || []).forEach((r: any) => {
+          const sid = r.scenario_id; const fid = r.friend_id
+          if (!sid || !fid) return
+          blockMap[sid] = blockMap[sid] || new Set<string>()
+          blockMap[sid].add(fid)
+        })
+        Object.keys(blockMap).forEach(sid => { stats[sid].blocked = blockMap[sid].size })
+        setScenarioStats(stats)
+      } catch (e) {
+        console.error('シナリオ統計取得失敗:', e)
+      }
+    }
+    load()
+  }, [user?.id, scenarios.map(s => s.id).join(',')])
 
   const handleCreateNewScenario = async () => {
     if (!user) return
