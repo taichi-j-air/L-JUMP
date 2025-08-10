@@ -25,7 +25,7 @@ export function ScenarioFolders({
   folders,
   onAdd,
   onRename,
-  onColor,
+  onBorderColor,
   onToggle,
   onMoveOut,
   onDelete,
@@ -47,7 +47,7 @@ export function ScenarioFolders({
           onCancelEdit={() => { setEditingId(null); setTempName('') }}
           onCommitEdit={(name) => { onRename(folder.id, name); setEditingId(null) }}
           onTempNameChange={(name) => setTempName(name)}
-          onColor={(c) => onColor(folder.id, c)}
+          onBorderColor={(hex) => onBorderColor(folder.id, hex)}
           onToggle={() => onToggle(folder.id)}
           onMoveOut={onMoveOut}
           onDelete={() => onDelete(folder.id)}
@@ -67,7 +67,7 @@ function FolderRow({
   onCancelEdit,
   onCommitEdit,
   onTempNameChange,
-  onColor,
+  onBorderColor,
   onToggle,
   onMoveOut,
   onDelete,
@@ -81,7 +81,7 @@ function FolderRow({
   onCancelEdit: () => void
   onCommitEdit: (name: string) => void
   onTempNameChange: (name: string) => void
-  onColor: (c: FolderColor) => void
+  onBorderColor: (hex: string) => void
   onToggle: () => void
   onMoveOut: (scenarioId: string) => void
   onDelete: () => void
@@ -94,10 +94,11 @@ function FolderRow({
     transform: CSS.Transform.toString(transform),
     transition,
     opacity: isDragging ? 0.6 : 1,
+    borderColor: folder.borderColor || undefined,
   }
 
   return (
-    <Card ref={(node) => { setNodeRef(node); setSortableRef(node as any) }} style={style} className={`border-2 ${borderClass[folder.color]} ${isOver ? 'ring-2 ring-primary' : ''}`}>
+    <Card ref={(node) => { setNodeRef(node); setSortableRef(node as any) }} style={style} className={`border-2 border-solid ${isOver ? 'ring-2 ring-primary' : ''}`}>
       <CardContent className="p-2">
         <div className="flex items-center gap-2">
           <div {...attributes} {...listeners} className="cursor-grab active:cursor-grabbing p-1 hover:bg-muted rounded h-6 w-6 flex items-center justify-center">
@@ -125,7 +126,11 @@ function FolderRow({
           <span className="text-xs text-muted-foreground">{folder.scenarioIds.length}件</span>
           <div className="ml-auto flex items-center gap-1">
             <Button variant="ghost" size="icon" onClick={onStartEdit} className="h-6 w-6"><Pencil className="h-3 w-3"/></Button>
-            <ColorPicker current={folder.color} onSelect={onColor} />
+            <HexColorPicker
+              color={folder.borderColor || '#94a3b8'}
+              onChange={(hex) => onBorderColor(hex)}
+              className="h-6 w-28"
+            />
             <DeleteFolderButton onDelete={onDelete} folderName={folder.name} scenarioNames={folder.scenarioIds.map(getScenarioName)} />
           </div>
         </div>
@@ -152,23 +157,6 @@ function FolderRow({
         )}
       </CardContent>
     </Card>
-  )
-}
-
-function ColorPicker({ current, onSelect }: { current: FolderColor; onSelect: (c: FolderColor) => void }) {
-  const colors: FolderColor[] = ['primary','secondary','accent','destructive','muted']
-  return (
-    <div className="flex items-center gap-1">
-      <Paintbrush className="h-3 w-3 text-muted-foreground"/>
-      {colors.map(c => (
-        <button
-          key={c}
-          aria-label={c}
-          onClick={(e) => { e.stopPropagation(); onSelect(c) }}
-          className={`h-3 w-3 rounded-full ${colorClass[c]} border border-border`}
-        />
-      ))}
-    </div>
   )
 }
 

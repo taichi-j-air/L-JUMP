@@ -376,13 +376,22 @@ async function sendLineMessage(accessToken: string, userId: string, message: any
         }
         break
         
-      case 'flex':
+      case 'flex': {
+        let altText = message.alt_text || 'フレックスメッセージ'
+        let flexPayload: any = message._flexContent || (message.content ? JSON.parse(message.content) : {})
+        // If saved as full LINE message { type: 'flex', altText, contents }, unwrap
+        if (flexPayload && typeof flexPayload === 'object' && flexPayload.type === 'flex') {
+          if (flexPayload.altText) altText = flexPayload.altText
+          if (flexPayload.contents) flexPayload = flexPayload.contents
+        }
         lineMessage = {
           type: 'flex',
-          altText: message.alt_text || 'フレックスメッセージ',
-          contents: message._flexContent || (message.content ? JSON.parse(message.content) : {})
+          altText,
+          contents: flexPayload || {}
         }
         break
+      }
+
         
       default:
         lineMessage = {

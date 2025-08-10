@@ -53,6 +53,7 @@ export default function StepDeliveryPage() {
     addFolder,
     renameFolder,
     setFolderColor,
+    setFolderBorderColor,
     toggleFolder,
     moveToFolder,
     removeFromFolder,
@@ -313,6 +314,8 @@ export default function StepDeliveryPage() {
 
     // フォルダへのドロップ
     if (overId.startsWith('folder:')) {
+      // Prevent nesting folders inside folders
+      if (activeId.startsWith('folderItem:')) return
       const folderId = overId.replace('folder:', '')
       moveToFolder(activeId, folderId)
       return
@@ -419,7 +422,7 @@ export default function StepDeliveryPage() {
                     folders={folders}
                     onAdd={() => addFolder()}
                     onRename={renameFolder}
-                    onColor={setFolderColor}
+                    onBorderColor={setFolderBorderColor}
                     onToggle={toggleFolder}
                     onMoveOut={(id) => removeFromFolder(id)}
                     onDelete={deleteFolder}

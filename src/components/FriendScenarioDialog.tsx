@@ -172,7 +172,7 @@ export function FriendScenarioDialog({ open, onOpenChange, user, friend }: Frien
         console.warn('scheduled-step-delivery invoke failed', e)
       }
 
-      toast({ title: '登録/更新完了', description: `${friend.display_name || 'ユーザー'} を「${scenario.name}」の${(allSteps||[]).find((s:any)=>s.id===startStepId)?.step_order || 1}番目ステップから配信開始に設定しました。` })
+      toast({ title: '登録/更新完了', description: `${friend.display_name || 'ユーザー'} を「${scenario.name}」の${((((allSteps||[]).find((s:any)=>s.id===startStepId)?.step_order) ?? 0) + 1)}番目ステップから配信開始に設定しました。` })
       onOpenChange(false)
     } catch (e: any) {
       toast({ title: '設定に失敗しました', description: e.message || '不明なエラー' })
@@ -195,7 +195,6 @@ export function FriendScenarioDialog({ open, onOpenChange, user, friend }: Frien
         .eq('scenario_id', unassignId)
       if (error) throw error
       toast({ title: '解除完了', description: 'シナリオを解除しました。' })
-      onOpenChange(false)
     } catch (e: any) {
       toast({ title: '解除に失敗しました', description: e.message || '不明なエラー' })
     } finally {
@@ -261,7 +260,7 @@ export function FriendScenarioDialog({ open, onOpenChange, user, friend }: Frien
                 </SelectTrigger>
                 <SelectContent>
                   {scenarioSteps.map((st) => (
-                    <SelectItem key={st.id} value={st.id}>{st.step_order}. {st.name}</SelectItem>
+                    <SelectItem key={st.id} value={st.id}>{st.step_order + 1}. {st.name}</SelectItem>
                   ))}
                 </SelectContent>
               </Select>
