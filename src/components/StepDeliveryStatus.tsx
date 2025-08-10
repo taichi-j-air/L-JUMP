@@ -5,6 +5,7 @@ import { Badge } from "@/components/ui/badge"
 import { Clock, Users, UserX, CheckCircle, Ban } from "lucide-react"
 import { supabase } from "@/integrations/supabase/client"
 import { Step } from "@/hooks/useStepScenarios"
+import { format } from "date-fns"
 
 interface StepDeliveryStatusProps {
   step: Step
@@ -22,7 +23,7 @@ export function StepDeliveryStatus({ step }: StepDeliveryStatusProps) {
   const [stats, setStats] = useState<DeliveryStats>({ waiting: 0, ready: 0, delivered: 0, exited: 0, blocked: 0 })
   const [showDetails, setShowDetails] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
-  const [detailUsers, setDetailUsers] = useState<Array<{ id: string; display_name: string | null; picture_url: string | null; line_user_id: string }>>([])
+  const [detailUsers, setDetailUsers] = useState<Array<{ id: string; display_name: string | null; picture_url: string | null; line_user_id: string; ts: string | null }>>([])
 
   const loadStats = async () => {
     setLoading(true)
@@ -95,14 +96,14 @@ export function StepDeliveryStatus({ step }: StepDeliveryStatusProps) {
             .select('id, display_name, picture_url, line_user_id')
             .in('id', friendIds)
           if (fErr) throw fErr
-          setDetailUsers(friends || [])
+          setDetailUsers((friends || []).map((f: any) => ({ ...f, ts: null })))
         } else {
           setDetailUsers([])
         }
       } else {
         let trackingQuery = supabase
           .from('step_delivery_tracking')
-          .select('friend_id')
+          .select('friend_id, scheduled_delivery_at, delivered_at, updated_at, status')
           .eq('step_id', step.id)
         if (type === 'waiting') {
           // 「待機」は準備中(ready)も含めて表示
@@ -115,12 +116,24 @@ export function StepDeliveryStatus({ step }: StepDeliveryStatusProps) {
 
         const friendIds = (trackingRows || []).map((r: any) => r.friend_id).filter(Boolean)
         if (friendIds.length > 0) {
+          // 友だち情報
           const { data: friends, error: fErr } = await supabase
             .from('line_friends')
             .select('id, display_name, picture_url, line_user_id')
             .in('id', friendIds)
           if (fErr) throw fErr
-          setDetailUsers(friends || [])
+
+          // 友だちごとの表示用時刻を決定
+          const timeByFriend = new Map<string, string | null>()
+          ;(trackingRows || []).forEach((r: any) => {
+            let ts: string | null = null
+            if (type === 'waiting') ts = r.scheduled_delivery_at
+            else if (type === 'delivered') ts = r.delivered_at
+            else if (type === 'exited') ts = r.updated_at
+            timeByFriend.set(r.friend_id, ts)
+          })
+
+          setDetailUsers((friends || []).map((f: any) => ({ ...f, ts: timeByFriend.get(f.id) || null })))
         } else {
           setDetailUsers([])
         }
@@ -219,7 +232,12 @@ export function StepDeliveryStatus({ step }: StepDeliveryStatusProps) {
                         <img src={u.picture_url} alt={u.display_name ?? u.line_user_id} className="h-full w-full object-cover" />
                       ) : null}
                     </div>
-                    <span className="text-xs">{u.display_name || u.line_user_id}</span>
+                    <span className="text-xs">
+                      {u.display_name || u.line_user_id}
+                      {showDetails && u.ts ? (
+                        <span className="ml-2 text-muted-foreground">{format(new Date(u.ts), 'yyyy/MM/dd HH:mm')}</span>
+                      ) : null}
+                    </span>
                   </li>
                 ))}
               </ul>

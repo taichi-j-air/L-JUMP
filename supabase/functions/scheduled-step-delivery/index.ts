@@ -516,7 +516,7 @@ async function markStepAsDelivered(supabase: any, trackingId: string, scenarioId
     // Fetch next step (currentStepOrder + 1)
     const { data: nextStep, error: nextStepErr } = await supabase
       .from('steps')
-      .select('id, delivery_type, delivery_days, delivery_hours, delivery_minutes, delivery_seconds, delivery_time_of_day, specific_time')
+      .select('id, delivery_type, delivery_days, delivery_hours, delivery_minutes, delivery_seconds, delivery_time_of_day, specific_time, delivery_relative_to_previous')
       .eq('scenario_id', scenarioId)
       .eq('step_order', currentStepOrder + 1)
       .maybeSingle()
@@ -552,10 +552,10 @@ async function markStepAsDelivered(supabase: any, trackingId: string, scenarioId
         .eq('friend_id', friendId)
         .neq('status', 'exited')
 
-      // 遷移先の最初のステップを取得
+      // 遷移先の最初のステップ詳細を取得
       const { data: firstStep, error: firstErr } = await supabase
         .from('steps')
-        .select('id')
+        .select('id, delivery_type, delivery_days, delivery_hours, delivery_minutes, delivery_seconds, delivery_time_of_day, specific_time, delivery_relative_to_previous')
         .eq('scenario_id', transition.to_scenario_id)
         .order('step_order', { ascending: true })
         .limit(1)
@@ -565,7 +565,41 @@ async function markStepAsDelivered(supabase: any, trackingId: string, scenarioId
         return
       }
 
+      // 友だちの登録時刻
+      const { data: friendRow } = await supabase
+        .from('line_friends')
+        .select('added_at')
+        .eq('id', friendId)
+        .maybeSingle()
+
+      // delivery_typeのマッピング
+      let effectiveType = (firstStep as any).delivery_type as string
+      if (effectiveType === 'immediate') effectiveType = 'immediately'
+      if (effectiveType === 'specific') effectiveType = 'specific_time'
+      if (effectiveType === 'time_of_day') effectiveType = 'relative_to_previous'
+      if (effectiveType === 'relative' && (firstStep as any).delivery_relative_to_previous) effectiveType = 'relative_to_previous'
+
+      // 次回配信時刻を算出
+      let scheduledIso: string | null = null
+      try {
+        const { data: sched } = await supabase.rpc('calculate_scheduled_delivery_time', {
+          p_friend_added_at: friendRow?.added_at || null,
+          p_delivery_type: effectiveType,
+          p_delivery_seconds: (firstStep as any).delivery_seconds || 0,
+          p_delivery_minutes: (firstStep as any).delivery_minutes || 0,
+          p_delivery_hours: (firstStep as any).delivery_hours || 0,
+          p_delivery_days: (firstStep as any).delivery_days || 0,
+          p_specific_time: (firstStep as any).specific_time || null,
+          p_previous_step_delivered_at: deliveredAt,
+          p_delivery_time_of_day: (firstStep as any).delivery_time_of_day || null,
+        })
+        if (sched) scheduledIso = new Date(sched).toISOString()
+      } catch (_) {}
+
       const now = new Date()
+      const scheduled = scheduledIso ? new Date(scheduledIso) : now
+      const isReady = scheduled <= now
+
       // 既存があれば更新、なければ作成
       const { data: existing, error: exErr } = await supabase
         .from('step_delivery_tracking')
@@ -584,9 +618,9 @@ async function markStepAsDelivered(supabase: any, trackingId: string, scenarioId
             scenario_id: transition.to_scenario_id,
             step_id: firstStep.id,
             friend_id: friendId,
-            status: 'ready',
-            scheduled_delivery_at: now.toISOString(),
-            next_check_at: new Date(now.getTime() - 5000).toISOString(),
+            status: isReady ? 'ready' : 'waiting',
+            scheduled_delivery_at: (isReady ? now : scheduled).toISOString(),
+            next_check_at: new Date((isReady ? now : scheduled).getTime() - 5000).toISOString(),
             created_at: now.toISOString(),
             updated_at: now.toISOString(),
           })
@@ -594,9 +628,9 @@ async function markStepAsDelivered(supabase: any, trackingId: string, scenarioId
         await supabase
           .from('step_delivery_tracking')
           .update({
-            status: 'ready',
-            scheduled_delivery_at: now.toISOString(),
-            next_check_at: new Date(now.getTime() - 5000).toISOString(),
+            status: isReady ? 'ready' : 'waiting',
+            scheduled_delivery_at: (isReady ? now : scheduled).toISOString(),
+            next_check_at: new Date((isReady ? now : scheduled).getTime() - 5000).toISOString(),
             updated_at: now.toISOString(),
           })
           .eq('id', existing.id)
@@ -669,9 +703,16 @@ async function markStepAsDelivered(supabase: any, trackingId: string, scenarioId
         updates.scheduled_delivery_at = now.toISOString()
         updates.next_check_at = new Date(now.getTime() - 5000).toISOString()
       } else {
+        // Map UI delivery_type to DB function expected values
+        let effectiveType = nextStep.delivery_type as string
+        if (effectiveType === 'immediate') effectiveType = 'immediately'
+        if (effectiveType === 'specific') effectiveType = 'specific_time'
+        if (effectiveType === 'time_of_day') effectiveType = 'relative_to_previous'
+        if (effectiveType === 'relative' && (nextStep as any).delivery_relative_to_previous) effectiveType = 'relative_to_previous'
+
         const { data: newScheduledTime, error: calcError } = await supabase.rpc('calculate_scheduled_delivery_time', {
           p_friend_added_at: friend?.added_at || null,
-          p_delivery_type: nextStep.delivery_type,
+          p_delivery_type: effectiveType,
           p_delivery_seconds: nextStep.delivery_seconds || 0,
           p_delivery_minutes: nextStep.delivery_minutes || 0,
           p_delivery_hours: nextStep.delivery_hours || 0,
