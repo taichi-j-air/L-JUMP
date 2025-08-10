@@ -10,6 +10,11 @@ export default function InvitePage() {
   const { inviteCode } = useParams();
   const code = inviteCode || window.location.pathname.split("/").pop() || "";
   const isMobile = useIsMobile();
+  // In-app LINE ブラウザやUAベースでもモバイル判定（幅だけだと誤判定が起きるため）
+  const ua = navigator.userAgent || "";
+  const isMobileUA = /iPhone|iPad|iPod|Android/i.test(ua);
+  const isLineInApp = /Line\//i.test(ua);
+  const shouldRedirectMobile = isMobile || isMobileUA || isLineInApp;
 
   const [authorizeUrl, setAuthorizeUrl] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -20,10 +25,9 @@ export default function InvitePage() {
 
     // Edge Function (scenario-login) のベースURL
     const base = "https://rtjxurmuaawyzjcdkqxt.supabase.co/functions/v1/scenario-login";
-
-    if (isMobile) {
-      // モバイルはLINEアプリ（友だち追加/トーク）起動を優先
-      window.location.href = `${base}?scenario=${encodeURIComponent(code)}`;
+    // モバイル/LINE内ブラウザは即リダイレクト（UIを見せない）
+    if (shouldRedirectMobile) {
+      window.location.replace(`${base}?scenario=${encodeURIComponent(code)}`);
       return;
     }
 
