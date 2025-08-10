@@ -161,6 +161,15 @@ export function FriendScenarioDialog({ open, onOpenChange, user, friend }: Frien
         if (updErr) throw updErr
       }
 
+      // 即時に配信処理をトリガー（この友だちのみ）
+      try {
+        await supabase.functions.invoke('scheduled-step-delivery', {
+          body: { lineUserIdFilter: friend.line_user_id }
+        })
+      } catch (e) {
+        console.warn('scheduled-step-delivery invoke failed', e)
+      }
+
       toast({ title: '登録/更新完了', description: `${friend.display_name || 'ユーザー'} を「${scenario.name}」の${(allSteps||[]).find((s:any)=>s.id===startStepId)?.step_order || 1}番目ステップから配信開始に設定しました。` })
       onOpenChange(false)
     } catch (e: any) {

@@ -19,6 +19,8 @@ import { ScenarioAnalytics } from "@/components/ScenarioAnalytics"
 import { StepDeliveryStatus } from "@/components/StepDeliveryStatus"
 import { MessagePreview } from "@/components/MessagePreview"
 import { SortableScenarioItem } from "@/components/SortableScenarioItem"
+import { ScenarioFolders } from "@/components/ScenarioFolders"
+import { useScenarioFolders } from "@/hooks/useScenarioFolders"
 import { useStepScenarios, StepScenario, Step, StepMessage } from "@/hooks/useStepScenarios"
 import { toast } from "sonner"
 import {
@@ -45,6 +47,19 @@ export default function StepDeliveryPage() {
   const [isMessageCreationCollapsed, setIsMessageCreationCollapsed] = useState(false)
   const [collapsedMessages, setCollapsedMessages] = useState<Set<string>>(new Set())
   const [scenarioStats, setScenarioStats] = useState<Record<string, { registered: number; exited: number; blocked: number }>>({})
+
+  const { 
+    folders,
+    addFolder,
+    renameFolder,
+    setFolderColor,
+    toggleFolder,
+    moveToFolder,
+    removeFromFolder,
+    getFolderIdByScenario,
+  } = useScenarioFolders(user?.id)
+
+  // rootScenarios はデータ取得後に計算
 
   const sensors = useSensors(
     useSensor(PointerSensor),
@@ -144,7 +159,7 @@ export default function StepDeliveryPage() {
         const [regRes, exitRes, failRes] = await Promise.all([
           supabase.from('scenario_friend_logs').select('scenario_id, friend_id, line_user_id').in('scenario_id', scenarioIds),
           supabase.from('step_delivery_tracking').select('scenario_id, friend_id, status').in('scenario_id', scenarioIds).eq('status','exited'),
-          supabase.from('step_delivery_logs').select('scenario_id, friend_id, delivery_status').in('scenario_id', scenarioIds).eq('delivery_status','failed'),
+          supabase.from('step_delivery_logs').select('scenario_id, friend_id, delivery_status, error_message').in('scenario_id', scenarioIds).eq('delivery_status','failed'),
         ])
         const stats: Record<string, { registered: number; exited: number; blocked: number }> = {}
         for (const id of scenarioIds) stats[id] = { registered: 0, exited: 0, blocked: 0 }
@@ -277,20 +292,48 @@ export default function StepDeliveryPage() {
 
   const handleScenarioDragEnd = (event: DragEndEvent) => {
     const { active, over } = event
+    if (!over) return
 
-    if (over && active.id !== over.id) {
-      const oldIndex = scenarios.findIndex((item) => item.id === active.id)
-      const newIndex = scenarios.findIndex((item) => item.id === over.id)
-      
+    // フォルダへのドロップ
+    if (typeof over.id === 'string' && over.id.startsWith('folder:')) {
+      const folderId = over.id.replace('folder:', '')
+      moveToFolder(String(active.id), folderId)
+      return
+    }
+
+    // ルート内での並び替え
+    if (active.id !== over.id) {
+      const root = scenarios.filter(s => !getFolderIdByScenario(s.id))
+      const oldIndex = root.findIndex((item) => item.id === active.id)
+      const newIndex = root.findIndex((item) => item.id === over.id)
       if (oldIndex !== -1 && newIndex !== -1) {
-        // Reorder scenarios immediately in UI
-        const newScenarios = arrayMove(scenarios, oldIndex, newIndex)
-        const newOrder = newScenarios.map(s => s.id)
-        
-        // Update the database order
+        const newOrder = arrayMove(root, oldIndex, newIndex).map(s => s.id)
         reorderScenarios(newOrder)
       }
     }
+  }
+
+  const renderScenarioItem = (scenarioId: string) => {
+    const scenario = scenarios.find(s => s.id === scenarioId)
+    if (!scenario) return null
+    const scenarioSteps = steps.filter(s => s.scenario_id === scenario.id)
+    const transitionDestinations = getTransitionDestinations(scenario.id)
+    return (
+      <SortableScenarioItem
+        key={scenario.id}
+        scenario={scenario}
+        isSelected={selectedScenario?.id === scenario.id}
+        scenarioSteps={scenarioSteps.length}
+        deliveryTime={getFirstMessageDeliveryTime(scenario)}
+        transitionDestinations={transitionDestinations}
+        stats={scenarioStats[scenario.id]}
+        onSelect={() => {
+          setSelectedScenario(scenario)
+          setSelectedStep(null)
+        }}
+        onDelete={() => handleDeleteScenario(scenario.id)}
+      />
+    )
   }
 
   if (loading || dataLoading || !user) {
@@ -311,10 +354,16 @@ export default function StepDeliveryPage() {
           <div className="w-80 bg-card p-4 flex-shrink-0">
             <div className="flex items-center justify-between mb-4">
               <h2 className="text-lg font-semibold">シナリオ一覧</h2>
-              <Button onClick={handleCreateNewScenario} size="sm" className="gap-2">
-                <Plus className="h-4 w-4" />
-                追加
-              </Button>
+              <div className="flex items-center gap-2">
+                <Button onClick={() => addFolder()} size="sm" variant="outline" className="gap-2">
+                  <FolderPlus className="h-4 w-4" />
+                  フォルダ
+                </Button>
+                <Button onClick={handleCreateNewScenario} size="sm" className="gap-2">
+                  <Plus className="h-4 w-4" />
+                  追加
+                </Button>
+              </div>
             </div>
             
             <DndContext
@@ -322,30 +371,28 @@ export default function StepDeliveryPage() {
               collisionDetection={closestCenter}
               onDragEnd={handleScenarioDragEnd}
             >
+              {/* フォルダ一覧 */}
+              <div className="space-y-2 mb-4">
+                <ScenarioFolders
+                  folders={folders}
+                  onAdd={() => addFolder()}
+                  onRename={renameFolder}
+                  onColor={setFolderColor}
+                  onToggle={toggleFolder}
+                  onMoveOut={(id) => removeFromFolder(id)}
+                  renderScenario={renderScenarioItem}
+                />
+              </div>
+
+              {/* ルートのシナリオ */}
               <SortableContext
-                items={scenarios.map(s => s.id)}
+                items={scenarios.filter(s => !getFolderIdByScenario(s.id)).map(s => s.id)}
                 strategy={verticalListSortingStrategy}
               >
                 <div className="space-y-2">
-                  {scenarios.map((scenario) => {
-                    const scenarioSteps = steps.filter(s => s.scenario_id === scenario.id)
-                    const transitionDestinations = getTransitionDestinations(scenario.id)
-                    return (
-                      <SortableScenarioItem
-                        key={scenario.id}
-                        scenario={scenario}
-                        isSelected={selectedScenario?.id === scenario.id}
-                        scenarioSteps={scenarioSteps.length}
-                        deliveryTime={getFirstMessageDeliveryTime(scenario)}
-                        transitionDestinations={transitionDestinations}
-                        onSelect={() => {
-                          setSelectedScenario(scenario)
-                          setSelectedStep(null)
-                        }}
-                        onDelete={() => handleDeleteScenario(scenario.id)}
-                      />
-                    )
-                  })}
+                  {scenarios.filter(s => !getFolderIdByScenario(s.id)).map((scenario) => (
+                    renderScenarioItem(scenario.id)
+                  ))}
                 </div>
               </SortableContext>
             </DndContext>

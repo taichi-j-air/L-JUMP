@@ -100,11 +100,17 @@ export function StepDeliveryStatus({ step }: StepDeliveryStatusProps) {
           setDetailUsers([])
         }
       } else {
-        const { data: trackingRows, error: tErr } = await supabase
+        let trackingQuery = supabase
           .from('step_delivery_tracking')
           .select('friend_id')
           .eq('step_id', step.id)
-          .eq('status', type)
+        if (type === 'waiting') {
+          // 「待機」は準備中(ready)も含めて表示
+          trackingQuery = (trackingQuery as any).in('status', ['waiting', 'ready'])
+        } else {
+          trackingQuery = (trackingQuery as any).eq('status', type)
+        }
+        const { data: trackingRows, error: tErr } = await trackingQuery
         if (tErr) throw tErr
 
         const friendIds = (trackingRows || []).map((r: any) => r.friend_id).filter(Boolean)
