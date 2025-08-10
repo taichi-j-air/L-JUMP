@@ -14,14 +14,14 @@ export default function LiffInvitePage() {
   useEffect(() => {
     // URLパラメータから招待コードを取得（liff.stateにも対応）
     const urlParams = new URLSearchParams(window.location.search);
-    let inviteCode: string | null = urlParams.get('code') || urlParams.get('inviteCode');
+    let inviteCode: string | null = urlParams.get('inviteCode');
 
     // LIFFのリダイレクト後は liff.state に元のクエリが入る場合がある
     const liffState = urlParams.get('liff.state');
     if (!inviteCode && liffState) {
       try {
         const stateParams = new URLSearchParams(decodeURIComponent(liffState));
-        inviteCode = stateParams.get('inviteCode') || stateParams.get('code');
+        inviteCode = stateParams.get('inviteCode');
       } catch (e) {
         console.warn('Failed to parse liff.state:', e);
       }
@@ -37,7 +37,7 @@ export default function LiffInvitePage() {
       try {
         setStatus("設定を取得中...");
         const edgeBase = 'https://rtjxurmuaawyzjcdkqxt.supabase.co';
-        const cfgRes = await fetch(`${edgeBase}/functions/v1/liff-scenario-invite?code=${encodeURIComponent(inviteCode!)}&format=json`);
+        const cfgRes = await fetch(`${edgeBase}/functions/v1/liff-scenario-invite?inviteCode=${encodeURIComponent(inviteCode!)}&format=json`);
         if (!cfgRes.ok) {
           const t = await cfgRes.text();
           throw new Error(`設定取得失敗: ${t}`);

@@ -12,22 +12,22 @@ serve(async (req) => {
     return new Response('ok', { headers: corsHeaders })
   }
 
-  // LIFF/外部からの起動パラメータ取得。codeが無い/プレースホルダの場合は liff.state を参照
+  // LIFF/外部からの起動パラメータ取得。inviteCode を使用（code はOAuth用のため使用しない）
   const url = new URL(req.url)
-  let inviteCode = url.searchParams.get('code')
+  let inviteCode = url.searchParams.get('inviteCode')
   const liffState = url.searchParams.get('liff.state')
-  if (!inviteCode || inviteCode === 'YOUR_INVITE_CODE') {
+  if (!inviteCode) {
     try {
       if (liffState) {
         const state = new URLSearchParams(decodeURIComponent(liffState))
-        inviteCode = state.get('inviteCode') || state.get('code') || inviteCode
+        inviteCode = state.get('inviteCode') || inviteCode
       }
     } catch (_) {
       // no-op
     }
   }
 
-  if (!inviteCode || inviteCode === 'YOUR_INVITE_CODE') {
+  if (!inviteCode) {
     return new Response(JSON.stringify({ error: 'Invite code is required' }), {
       status: 400,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' }
