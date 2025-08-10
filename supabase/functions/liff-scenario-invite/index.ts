@@ -12,27 +12,18 @@ serve(async (req) => {
     return new Response('ok', { headers: corsHeaders })
   }
 
-  // LIFF/外部からの起動パラメータ取得。inviteCode を使用（code はOAuth用のため使用しない）
+  // ── ここから追加 ──
+  // LIFF プリフェッチ対策：?code が無い場合は静的 index.html を返却
   const url = new URL(req.url)
-  let inviteCode = url.searchParams.get('inviteCode')
-  const liffState = url.searchParams.get('liff.state')
+  const inviteCode = url.searchParams.get('code')
   if (!inviteCode) {
-    try {
-      if (liffState) {
-        const state = new URLSearchParams(decodeURIComponent(liffState))
-        inviteCode = state.get('inviteCode') || inviteCode
-      }
-    } catch (_) {
-      // no-op
-    }
-  }
-
-  if (!inviteCode) {
-    return new Response(JSON.stringify({ error: 'Invite code is required' }), {
-      status: 400,
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+    const html = await Deno.readTextFile("public/index.html")
+    return new Response(html, {
+      status: 200,
+      headers: { 'Content-Type': 'text/html' }
     })
   }
+  // ── ここまで追加 ──
 
   try {
     console.log('=== LIFF SCENARIO INVITE ===')
@@ -49,7 +40,7 @@ serve(async (req) => {
       .select('*')
       .eq('invite_code', inviteCode)
       .eq('is_active', true)
-      .maybeSingle()
+      .single()
 
     if (inviteError || !inviteData) {
       return new Response(`Invalid invite code: ${inviteCode}`, {
@@ -63,7 +54,7 @@ serve(async (req) => {
       .from('step_scenarios')
       .select('user_id')
       .eq('id', inviteData.scenario_id)
-      .maybeSingle()
+      .single()
 
     if (scenarioError || !scenarioData) {
       return new Response('Scenario not found', {
@@ -77,7 +68,7 @@ serve(async (req) => {
       .from('profiles')
       .select('liff_id, line_login_channel_id')
       .eq('user_id', scenarioData.user_id)
-      .maybeSingle()
+      .single()
 
     if (profileError || !profileData?.liff_id || !profileData?.line_login_channel_id) {
       return new Response('LIFF configuration not found', {
@@ -88,22 +79,6 @@ serve(async (req) => {
 
     // Step 4: クリックログ記録（省略可）
     // …（省略）…
-
-    // JSONレスポンスが欲しい場合（設定取得用）
-    const format = url.searchParams.get('format')
-    if (format === 'json') {
-      const body = {
-        success: true,
-        invite_code: inviteCode,
-        scenario_id: inviteData.scenario_id,
-        liff_id: profileData.liff_id,
-        liff_launch: `https://liff.line.me/${profileData.liff_id}?inviteCode=${inviteCode}&scenarioId=${inviteData.scenario_id}`
-      }
-      return new Response(JSON.stringify(body), {
-        status: 200,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-      })
-    }
 
     // Step 5: LIFF URL生成＆302リダイレクト
     const liffUrl = `https://liff.line.me/${profileData.liff_id}`

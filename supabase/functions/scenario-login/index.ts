@@ -133,17 +133,8 @@ serve(async (req) => {
     const isMobile = /iPhone|iPad|iPod|Android/i.test(userAgent);
     const isLineInApp = /Line\//i.test(userAgent);
 
-    // LIFF 起動用URL（招待コードを渡すためのラッパー関数経由）
-    let liffLaunchUrl: string | null = null;
-    if (profile.liff_id) {
-      liffLaunchUrl = `https://rtjxurmuaawyzjcdkqxt.supabase.co/functions/v1/liff-scenario-invite?code=${encodeURIComponent(scenario)}`;
-    }
-
     let selectedUrl: string | null = null;
-    if (isMobile && liffLaunchUrl) {
-      // 既存友だちはLIFF内で完結（未友だちでも後段のLIFF→OAuthで友だち追加に誘導）
-      selectedUrl = liffLaunchUrl;
-    } else if (flow === "login" && authUrl) {
+    if (flow === "login" && authUrl) {
       // 同意画面 → 友だち追加（bot_prompt=normal）
       selectedUrl = authUrl;
     } else if (deepChatUrl || chatUrl) {
@@ -176,10 +167,9 @@ serve(async (req) => {
     // デスクトップ用: JSONでURLを返す（フロントでQR表示用）
     const format = url.searchParams.get("format");
     if (format === "json") {
-      const qrUrl = liffLaunchUrl || selectedUrl;
       const body = JSON.stringify({
         success: true,
-        authorizeUrl: qrUrl, // フロント側はこのURLを開けばOK
+        authorizeUrl: selectedUrl, // フロント側はこのURLを開けばOK
         scenario,
       });
       return new Response(body, { headers: { ...corsHeaders, "Content-Type": "application/json" } });

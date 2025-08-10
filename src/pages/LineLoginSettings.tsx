@@ -29,7 +29,6 @@ export default function LineLoginSettings() {
     liffUrl: '',
     liffEndpointUrl: ''
   })
-  const [inviteCodes, setInviteCodes] = useState<string[]>([])
 
   useEffect(() => {
     checkUser()
@@ -69,7 +68,7 @@ export default function LineLoginSettings() {
         const liffUrl = profile.liff_url || ''
         
         // LIFF認証専用ページのエンドポイントURL生成
-        const liffEndpointUrl = liffId ? `${window.location.origin}/liff-invite` : ''
+        const liffEndpointUrl = liffId ? `${window.location.origin}/liff` : ''
         
         setSettings({
           channelId,
@@ -84,15 +83,6 @@ export default function LineLoginSettings() {
           liffEndpointUrl
         })
       }
-
-      // 招待コード一覧を取得（自分のアカウント用・動的）
-      const { data: codes } = await supabase
-        .from('scenario_invite_codes')
-        .select('invite_code')
-        .eq('user_id', userId)
-        .order('created_at', { ascending: false })
-
-      setInviteCodes((codes || []).map((c: any) => c.invite_code))
     } catch (error) {
       console.error('設定読み込みエラー:', error)
     }
@@ -171,7 +161,7 @@ export default function LineLoginSettings() {
       if (error) throw error
 
       // LIFF設定保存後、エンドポイントURLを更新
-      const liffEndpointUrl = liffSettings.liffId ? `${window.location.origin}/liff-invite` : ''
+      const liffEndpointUrl = liffSettings.liffId ? `${window.location.origin}/liff` : ''
       setLiffSettings(prev => ({ ...prev, liffEndpointUrl }))
 
       toast({
@@ -297,7 +287,7 @@ export default function LineLoginSettings() {
                     setLiffSettings(prev => ({ 
                       ...prev, 
                       liffId: newLiffId,
-                      liffEndpointUrl: newLiffId ? `${window.location.origin}/liff-invite` : ''
+                      liffEndpointUrl: newLiffId ? `${window.location.origin}/liff` : ''
                     }))
                   }}
                   placeholder="LIFF IDを入力 (例: 2007859465-L5VQg5q9)"
@@ -342,54 +332,6 @@ export default function LineLoginSettings() {
               <Button onClick={handleLiffSave} disabled={savingLiff || !liffSettings.liffId || !liffSettings.liffUrl}>
                 {savingLiff ? "保存中..." : "LIFF設定を保存"}
               </Button>
-            </CardContent>
-          </Card>
-
-          {/* 招待コードとLIFF起動URL（動的） */}
-          <Card>
-            <CardHeader>
-              <CardTitle>招待コードとLIFF起動URL（動的）</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              {inviteCodes.length === 0 ? (
-                <p className="text-sm text-muted-foreground">招待コードがまだありません。シナリオから招待コードを作成してください。</p>
-              ) : (
-                inviteCodes.map((code) => {
-                  const liffStartUrl = `https://rtjxurmuaawyzjcdkqxt.supabase.co/functions/v1/liff-scenario-invite?code=${code}`
-                  const invitePageUrl = `${window.location.origin}/invite/${code}`
-                  return (
-                    <div key={code} className="space-y-2 border rounded-md p-3">
-                      <div className="space-y-1">
-                        <Label>招待コード</Label>
-                        <div className="flex items-center gap-2">
-                          <Input value={code} readOnly className="font-mono text-sm" />
-                          <Button variant="outline" size="sm" onClick={() => copyToClipboard(code, '招待コード')}>
-                            <Copy className="h-4 w-4" />
-                          </Button>
-                        </div>
-                      </div>
-                      <div className="space-y-1">
-                        <Label>LIFF起動URL（LINEアプリ内で完結）</Label>
-                        <div className="flex items-center gap-2">
-                          <Input value={liffStartUrl} readOnly className="font-mono text-sm" />
-                          <Button variant="outline" size="sm" onClick={() => copyToClipboard(liffStartUrl, 'LIFF起動URL')}>
-                            <Copy className="h-4 w-4" />
-                          </Button>
-                        </div>
-                      </div>
-                      <div className="space-y-1">
-                        <Label>QR配布用URL（未追加ユーザーの誘導にも対応）</Label>
-                        <div className="flex items-center gap-2">
-                          <Input value={invitePageUrl} readOnly className="font-mono text-sm" />
-                          <Button variant="outline" size="sm" onClick={() => copyToClipboard(invitePageUrl, 'QR配布用URL')}>
-                            <Copy className="h-4 w-4" />
-                          </Button>
-                        </div>
-                      </div>
-                    </div>
-                  )
-                })
-              )}
             </CardContent>
           </Card>
 
