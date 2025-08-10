@@ -340,13 +340,52 @@ serve(async (req) => {
       console.warn('Failed to trigger scheduled-step-delivery:', triggerErr);
     }
 
-    // ── 11. LINEアプリのトーク画面（または友だち追加）へ遷移 ──
-    const chatUrl = (profile.add_friend_url && profile.add_friend_url.startsWith('https://'))
+   // login-callback/index.ts の修正
+/* ── 11. 友だち状態に応じたリダイレクト先決定 ── */
+let redirectUrl: string;
+
+if (isGeneralLogin) {
+  // 一般ログインは成功ページへ
+  redirectUrl = `https://74048ab5-8d5a-425a-ab29-bd5cc50dc2fe.lovableproject.com/login-success?user_name=${encodeURIComponent(display)}`;
+} else {
+  // シナリオ招待の場合
+  
+  // 友だち登録状況を確認
+  const { data: existingFriend } = await supabase
+    .from("line_friends")
+    .select("id, user_id")
+    .eq("line_user_id", lineProfile.userId)
+    .eq("user_id", scenarioUserId)
+    .maybeSingle();
+  
+  if (existingFriend) {
+    // 既存の友だち = 既にフォロー済み
+    // LINEトーク画面を開く（ディープリンク優先）
+    const userAgent = req.headers.get('user-agent') || '';
+    const isMobile = /iPhone|iPad|iPod|Android/i.test(userAgent);
+    
+    if (isMobile && profile.line_bot_id) {
+      // モバイルはディープリンクでLINEアプリを直接開く
+      redirectUrl = `line://ti/p/${encodeURIComponent(profile.line_bot_id)}`;
+    } else if (profile.add_friend_url && profile.add_friend_url.startsWith('https://')) {
+      // デスクトップまたはフォールバック
+      redirectUrl = profile.add_friend_url;
+    } else if (profile.line_bot_id) {
+      redirectUrl = `https://line.me/R/ti/p/${encodeURIComponent(profile.line_bot_id)}`;
+    } else {
+      // 最終フォールバック
+      redirectUrl = `https://74048ab5-8d5a-425a-ab29-bd5cc50dc2fe.lovableproject.com/login-success?user_name=${encodeURIComponent(display)}&scenario=${scenarioCode}&message=already_friend`;
+    }
+  } else {
+    // 新規友だち = 友だち追加が必要
+    redirectUrl = profile.add_friend_url && profile.add_friend_url.startsWith('https://')
       ? profile.add_friend_url
-      : (profile.line_bot_id
-          ? `https://line.me/R/ti/p/${encodeURIComponent(profile.line_bot_id)}`
-          : `https://74048ab5-8d5a-425a-ab29-bd5cc50dc2fe.lovableproject.com/login-success?user_name=${encodeURIComponent(display)}&scenario=${scenarioCode}`
-        );
+      : `https://line.me/R/ti/p/${encodeURIComponent(profile.line_bot_id || '')}`;
+  }
+}
+
+console.log("Final redirect URL:", redirectUrl);
+return Response.redirect(redirectUrl, 302);
 
     return Response.redirect(chatUrl, 302);
   } catch (e: any) {
