@@ -72,40 +72,49 @@ function SortableStepCard({ step, index, isSelected, onClick, onDelete, onUpdate
   }
 
   const getDeliveryTimeText = () => {
-    if (index === 0) {
-      const days = step.delivery_days || 0
-      const hours = step.delivery_hours || 0
-      const minutes = step.delivery_minutes || 0
-      const seconds = step.delivery_seconds || 0
-      
-      if (days === 0 && hours === 0 && minutes === 0 && seconds === 0) {
-        return "登録後：即時配信"
+    const days = step.delivery_days || 0
+    const hours = step.delivery_hours || 0
+    const minutes = step.delivery_minutes || 0
+    const seconds = step.delivery_seconds || 0
+
+    const parts: string[] = []
+    if (days > 0) parts.push(`${days}日`)
+    if (hours > 0) parts.push(`${hours}時間`)
+    if (minutes > 0) parts.push(`${minutes}分`)
+    if (seconds > 0) parts.push(`${seconds}秒`)
+    const duration = parts.join('')
+
+    if (step.delivery_type === 'specific_time') {
+      if (step.specific_time) {
+        try {
+          const dt = new Date(step.specific_time)
+          const formatted = dt.toLocaleString('ja-JP', {
+            month: 'numeric',
+            day: 'numeric',
+            hour: '2-digit',
+            minute: '2-digit'
+          })
+          return `日時指定：${formatted}`
+        } catch {
+          return '日時指定'
+        }
       }
-      
-      const parts = []
-      if (days > 0) parts.push(`${days}日`)
-      if (hours > 0) parts.push(`${hours}時間`)
-      if (minutes > 0) parts.push(`${minutes}分`)
-      if (seconds > 0) parts.push(`${seconds}秒`)
-      
-      return `登録後：${parts.join('')}後`
+      return '日時指定'
+    }
+
+    if (step.delivery_type === 'relative') {
+      if (!duration) return '登録後：即時配信'
+      return `登録後：${duration}後`
+    }
+
+    // relative_to_previous
+    if (step.delivery_time_of_day) {
+      const t = step.delivery_time_of_day
+      if (days > 0) return `前ステップ後：${days}日後の ${t}`
+      return `前ステップ後：指定時刻 ${t}`
     } else {
-      const days = step.delivery_days || 0
-      const hours = step.delivery_hours || 0
-      const minutes = step.delivery_minutes || 0
-      const seconds = step.delivery_seconds || 0
-      
-      if (days === 0 && hours === 0 && minutes === 0 && seconds === 0) {
-        return "前ステップから：即時配信"
-      }
-      
-      const parts = []
-      if (days > 0) parts.push(`${days}日`)
-      if (hours > 0) parts.push(`${hours}時間`)
-      if (minutes > 0) parts.push(`${minutes}分`)
-      if (seconds > 0) parts.push(`${seconds}秒`)
-      
-      return `前ステップから：${parts.join('')}後`
+      if (!duration) return '前ステップ後：即時配信'
+      return `前ステップ後：${duration}後`
     }
   }
 
@@ -118,16 +127,16 @@ function SortableStepCard({ step, index, isSelected, onClick, onDelete, onUpdate
       }`}
       onClick={onClick}
     >
-      <CardContent className="p-3">
-        <div className="flex items-center gap-2">
+      <CardContent className="p-2">
+        <div className="flex items-center gap-1.5">
           <div
             {...attributes}
             {...listeners}
-            className="cursor-grab active:cursor-grabbing p-1 hover:bg-muted rounded"
+            className="cursor-grab active:cursor-grabbing p-0.5 hover:bg-muted rounded"
           >
-            <GripVertical className="h-4 w-4 text-muted-foreground" />
+            <GripVertical className="h-3 w-3 text-muted-foreground" />
           </div>
-          <div className="w-6 h-6 rounded-full bg-primary text-primary-foreground text-xs flex items-center justify-center flex-shrink-0">
+          <div className="w-5 h-5 rounded-full bg-primary text-primary-foreground text-[10px] flex items-center justify-center flex-shrink-0">
             {index + 1}
           </div>
           <div className="flex-1 min-w-0">
@@ -142,14 +151,14 @@ function SortableStepCard({ step, index, isSelected, onClick, onDelete, onUpdate
                 onClick={(e) => e.stopPropagation()}
               />
             ) : (
-              <h4 className="font-medium">{step.name}</h4>
+              <h4 className="text-sm font-medium leading-tight truncate">{step.name}</h4>
             )}
-            <p className="text-xs text-muted-foreground">
+            <p className="text-[11px] text-muted-foreground truncate">
               {getDeliveryTimeText()}
             </p>
           </div>
-          <div className="flex items-center gap-2">
-            <span className="text-xs flex items-center gap-1" title="このステップの登録ユーザー数"><Users className="h-3 w-3" /> {readyCount ?? 0}</span>
+          <div className="flex items-center gap-1.5">
+            <span className="text-[11px] flex items-center gap-1" title="このステップの登録ユーザー数"><Users className="h-3 w-3" /> {readyCount ?? 0}</span>
             <Button
               variant="ghost"
               size="sm"
@@ -158,7 +167,7 @@ function SortableStepCard({ step, index, isSelected, onClick, onDelete, onUpdate
                 setIsEditing(true)
                 setTempName(step.name)
               }}
-              className="flex-shrink-0 h-6 w-6 p-0"
+              className="flex-shrink-0 h-5 w-5 p-0"
             >
               <Edit2 className="h-3 w-3" />
             </Button>
@@ -169,7 +178,7 @@ function SortableStepCard({ step, index, isSelected, onClick, onDelete, onUpdate
                 e.stopPropagation()
                 onDelete()
               }}
-              className="flex-shrink-0 h-6 w-6 p-0"
+              className="flex-shrink-0 h-5 w-5 p-0"
             >
               <Trash2 className="h-3 w-3 text-destructive" />
             </Button>

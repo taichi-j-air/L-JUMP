@@ -52,17 +52,17 @@ export function SortableScenarioItem({
       {...attributes}
       {...listeners}
     >
-      <CardContent className="p-3">
-        <div className="flex items-start gap-2">
+      <CardContent className="p-2">
+        <div className="flex items-start gap-1.5">
           <div 
-            className="cursor-grab active:cursor-grabbing p-1 hover:bg-muted rounded flex-shrink-0"
+            className="cursor-grab active:cursor-grabbing p-0.5 hover:bg-muted rounded flex-shrink-0"
           >
-            <GripVertical className="h-4 w-4 text-muted-foreground" />
+            <GripVertical className="h-3 w-3 text-muted-foreground" />
           </div>
           
           <div className="flex-1 min-w-0">
-            <h3 className="text-sm font-medium truncate">{scenario.name}</h3>
-            <div className="mt-0.5 flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
+            <h3 className="text-sm font-medium truncate leading-tight">{scenario.name}</h3>
+            <div className="mt-0.5 flex flex-wrap items-center gap-2 text-[11px] text-muted-foreground truncate">
               <span>{scenarioSteps} ステップ</span>
               <span>配信: {deliveryTime}</span>
               {transitionDestinations.length > 0 && (
@@ -70,7 +70,7 @@ export function SortableScenarioItem({
               )}
             </div>
             {stats && (
-              <div className="mt-1 flex flex-wrap items-center gap-3 text-[11px] text-muted-foreground">
+              <div className="mt-0.5 flex flex-wrap items-center gap-2 text-[10px] text-muted-foreground">
                 <span className="flex items-center gap-1"><Users className="h-3 w-3" />累計 {stats.total ?? 0}</span>
                 <span>現在 {stats.registered}</span>
                 <span className="flex items-center gap-1"><UserX className="h-3 w-3" />離脱 {stats.exited}</span>
@@ -86,9 +86,9 @@ export function SortableScenarioItem({
               e.stopPropagation()
               onDelete()
             }}
-            className="flex-shrink-0"
+            className="flex-shrink-0 h-6 w-6 p-0"
           >
-            <Trash2 className="h-4 w-4 text-destructive" />
+            <Trash2 className="h-3 w-3 text-destructive" />
           </Button>
         </div>
       </CardContent>
