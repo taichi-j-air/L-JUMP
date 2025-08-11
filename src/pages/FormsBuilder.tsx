@@ -236,7 +236,7 @@ const handleUpdate = async () => {
 
       <div className="grid gap-4 lg:grid-cols-12">
         {/* 左: フォーム一覧 */}
-        <div className="lg:col-span-3">
+        <div className="lg:col-span-4">
           <FormListPanel
             items={forms as any}
             loading={loading}
@@ -245,9 +245,36 @@ const handleUpdate = async () => {
               const f = forms.find((x) => x.id === id);
               if (f) startEdit(f);
             }}
-            onAddNew={() => {
-              resetCreator();
-              setEditingId(null);
+            onAddNew={async () => {
+              const { data: { user } } = await supabase.auth.getUser();
+              if (!user) { toast.error('ログインが必要です'); return; }
+              // 即時DB作成
+              const { data, error } = await (supabase as any)
+                .from('forms')
+                .insert({
+                  user_id: user.id,
+                  name: '無題のフォーム',
+                  description: null,
+                  is_public: true,
+                  success_message: '送信ありがとうございました。',
+                  fields: [],
+                  require_line_friend: true,
+                  prevent_duplicate_per_friend: false,
+                  post_submit_scenario_id: null,
+                  submit_button_text: '送信',
+                  submit_button_variant: 'default',
+                })
+                .select('*')
+                .single();
+              if (error || !data) {
+                console.error(error);
+                toast.error('フォームの作成に失敗しました');
+                return;
+              }
+              // 一覧に反映して編集状態へ
+              await loadForms();
+              const created = { ...data, fields: Array.isArray(data.fields) ? data.fields : [] } as any;
+              startEdit(created);
             }}
             onCopyLink={copyLink}
             onOpenPublic={(id) => window.open(`/form/${id}`, '_blank', 'noopener,noreferrer')}
@@ -256,7 +283,7 @@ const handleUpdate = async () => {
         </div>
 
         {/* 中央: 項目設定 */}
-        <div className="lg:col-span-4">
+        <div className="lg:col-span-3">
           <Card>
             <CardHeader>
               <CardTitle className="text-sm font-semibold">項目設定</CardTitle>

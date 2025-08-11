@@ -2,10 +2,9 @@ import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Select, SelectTrigger, SelectContent, SelectItem, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
-import FormListPanel, { FormListItem } from "@/components/forms/FormListPanel";
+import FormListTable from "@/components/forms/FormListTable";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 
 interface FormRow {
   id: string;
@@ -129,28 +128,17 @@ export default function FormResponses() {
       </header>
 
       <div className="grid grid-cols-12 gap-6">
-        <div className="col-span-12 md:col-span-4 lg:col-span-3">
-          <FormListPanel
-            items={(forms as any) as FormListItem[]}
+        <div className="col-span-12 md:col-span-5 lg:col-span-4">
+          <FormListTable
+            items={forms}
             loading={false}
             selectedId={selectedForm || null}
             onSelect={setSelectedForm}
-            onAddNew={() => navigate('/forms')}
-            onCopyLink={(id) => {
-              const url = `${window.location.origin}/form/${id}`
-              navigator.clipboard.writeText(url)
-              toast.success('URLをコピーしました')
-            }}
-            onOpenPublic={(id) => {
-              const url = `${window.location.origin}/form/${id}`
-              window.open(url, '_blank')
-            }}
-            onDelete={() => toast.message('削除はフォーム管理から行ってください')}
             unreadCounts={unreadCounts}
           />
         </div>
 
-        <div className="col-span-12 md:col-span-8 lg:col-span-9 space-y-4">
+        <div className="col-span-12 md:col-span-7 lg:col-span-8 space-y-4">
           <Card>
             <CardHeader>
               <CardTitle>{selectedFormObj?.name || 'フォーム選択'}</CardTitle>
@@ -162,26 +150,33 @@ export default function FormResponses() {
               ) : submissions.length === 0 ? (
                 <p className="text-muted-foreground">まだ回答はありません</p>
               ) : (
-                <div className="space-y-3">
-                  {submissions.map((s) => (
-                    <div key={s.id} className="rounded-md border p-4">
-                      <div className="flex items-center justify-between text-xs text-muted-foreground">
-                        <span>提出日時: {new Date(s.submitted_at).toLocaleString()}</span>
-                        <span>{s.friend_id ? `友だちID: ${s.friend_id}` : '匿名'}</span>
-                      </div>
-                      <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-3">
-                        {fieldOrder.map((f) => {
-                          const val = s.data?.[f.name]
-                          return (
-                            <div key={f.id} className="text-sm">
-                              <div className="text-xs text-muted-foreground">{f.label}</div>
-                              <div className="mt-0.5 break-words">{renderValue(f.type, val)}</div>
-                            </div>
-                          )
-                        })}
-                      </div>
-                    </div>
-                  ))}
+                <div className="rounded-md border overflow-x-auto">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead className="whitespace-nowrap">提出日時</TableHead>
+                        <TableHead className="whitespace-nowrap">友だち</TableHead>
+                        {fieldOrder.map((f) => (
+                          <TableHead key={f.id} className="whitespace-nowrap">{f.label}</TableHead>
+                        ))}
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {submissions.map((s) => (
+                        <TableRow key={s.id}>
+                          <TableCell className="align-top whitespace-nowrap text-xs text-muted-foreground">{new Date(s.submitted_at).toLocaleString()}</TableCell>
+                          <TableCell className="align-top whitespace-nowrap text-xs text-muted-foreground">{s.friend_id ? s.friend_id : '匿名'}</TableCell>
+                          {fieldOrder.map((f) => {
+                            const val = s.data?.[f.name]
+                            const text = renderValue(f.type, val)
+                            return (
+                              <TableCell key={f.id} className="align-top text-sm break-words max-w-[320px]">{text}</TableCell>
+                            )
+                          })}
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
                 </div>
               )}
             </CardContent>
