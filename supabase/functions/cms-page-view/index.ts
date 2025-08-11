@@ -31,7 +31,7 @@ serve(async (req) => {
     const { data: page, error: pageErr } = await supabase
       .from("cms_pages")
       .select(
-        "id, user_id, title, tag_label, content, content_blocks, visibility, allowed_tag_ids, blocked_tag_ids, require_passcode, passcode, timer_enabled, timer_mode, timer_deadline, timer_duration_seconds, show_milliseconds, timer_style, timer_bg_color, timer_text_color, internal_timer, timer_text"
+        "id, user_id, title, tag_label, content, content_blocks, visibility, allowed_tag_ids, blocked_tag_ids, require_passcode, passcode, timer_enabled, timer_mode, timer_deadline, timer_duration_seconds, show_milliseconds, timer_style, timer_bg_color, timer_text_color, internal_timer, timer_text, timer_day_label, timer_hour_label, timer_minute_label, timer_second_label"
       )
       .eq("share_code", shareCode)
       .single();
@@ -72,10 +72,22 @@ serve(async (req) => {
       .single();
 
     if (frErr || !friend) {
-      return new Response(JSON.stringify({ error: "not a friend" }), {
-        status: 403,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+      const { data: profile } = await supabase
+        .from("profiles")
+        .select("display_name, line_user_id, add_friend_url")
+        .eq("user_id", page.user_id)
+        .maybeSingle();
+
+      const friendInfo = {
+        account_name: profile?.display_name || null,
+        line_id: profile?.line_user_id || null,
+        add_friend_url: profile?.add_friend_url || null,
+      };
+
+      return new Response(
+        JSON.stringify({ require_friend: true, friend_info: friendInfo }),
+        { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
     }
 
     // Passcode check if required
@@ -129,6 +141,10 @@ serve(async (req) => {
       timer_text_color: page.timer_text_color || "#ffffff",
       internal_timer: !!page.internal_timer,
       timer_text: page.timer_text,
+      timer_day_label: page.timer_day_label || null,
+      timer_hour_label: page.timer_hour_label || null,
+      timer_minute_label: page.timer_minute_label || null,
+      timer_second_label: page.timer_second_label || null,
     };
 
     return new Response(JSON.stringify(payload), {
