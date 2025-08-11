@@ -142,6 +142,7 @@ function AppContent() {
               <Route path="/step-delivery" element={<StepDeliveryPage />} />
               <Route path="/chat-inbox" element={<ChatInboxPage />} />
               <Route path="/chat/:friendId" element={<IndividualChatPage />} />
+              <Route path="/form/:id" element={<PublicForm />} />
               <Route path="/forms" element={<FormsBuilder />} />
               <Route path="/forms/responses" element={<FormResponses />} />
               <Route path="*" element={<NotFound />} />

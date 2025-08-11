@@ -99,13 +99,19 @@ const [editingId, setEditingId] = useState<string | null>(null);
     setFields(prev => prev.filter(f => f.id !== id));
   };
 
-  const resetCreator = () => {
-    setFormName("");
-    setDescription("");
-    setIsPublic(true);
-    setSuccessMessage("送信ありがとうございました。");
-    setFields([]);
-  };
+const resetCreator = () => {
+  setFormName("");
+  setDescription("");
+  setIsPublic(true);
+  setSuccessMessage("送信ありがとうございました。");
+  setFields([]);
+  setRequireLineFriend(true);
+  setPreventDuplicate(false);
+  setPostScenario(null);
+  setSubmitButtonText("送信");
+  setSubmitButtonVariant("default");
+  setEditingId(null);
+};
 
   const handleCreate = async () => {
     if (!formName.trim()) {
@@ -115,18 +121,20 @@ const [editingId, setEditingId] = useState<string | null>(null);
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) { toast.error('ログインが必要です'); return; }
 
-    const cleanFields = fields.map(f => ({ id: f.id, label: f.label.trim(), name: f.name.trim(), type: f.type, required: !!f.required, options: Array.isArray(f.options) ? f.options : undefined }));
-    const { error } = await (supabase as any).from('forms').insert({
-      user_id: user.id,
-      name: formName.trim(),
-      description: description.trim() || null,
-      is_public: isPublic,
-      success_message: successMessage.trim() || null,
-      fields: cleanFields,
-      require_line_friend: requireLineFriend,
-      prevent_duplicate_per_friend: preventDuplicate,
-      post_submit_scenario_id: postScenario,
-    });
+const cleanFields = fields.map(f => ({ id: f.id, label: f.label.trim(), name: f.name.trim(), type: f.type, required: !!f.required, options: Array.isArray(f.options) ? f.options : undefined }));
+const { error } = await (supabase as any).from('forms').insert({
+  user_id: user.id,
+  name: formName.trim(),
+  description: description.trim() || null,
+  is_public: isPublic,
+  success_message: successMessage.trim() || null,
+  fields: cleanFields,
+  require_line_friend: requireLineFriend,
+  prevent_duplicate_per_friend: preventDuplicate,
+  post_submit_scenario_id: postScenario,
+  submit_button_text: submitButtonText,
+  submit_button_variant: submitButtonVariant,
+});
     if (error) {
       console.error(error);
       toast.error('作成に失敗しました');
@@ -138,14 +146,72 @@ const [editingId, setEditingId] = useState<string | null>(null);
     }
   };
 
+  const deleteForm = async (formId: string) => {
+    if (!confirm('本当に削除しますか？この操作は元に戻せません。')) return;
+    const { data, error } = await (supabase as any).functions.invoke('delete-form', { body: { form_id: formId } });
+    if (error) {
+      console.error(error);
+      toast.error('削除に失敗しました');
+    } else {
+      toast.success('フォームを削除しました');
+      loadForms();
+    }
+  };
+
+const startEdit = (f: FormRow) => {
+  setCreating(true);
+  setEditingId(f.id);
+  setFormName(f.name);
+  setDescription(f.description || "");
+  setIsPublic(!!f.is_public);
+  setSuccessMessage(f.success_message || "");
+  setFields(Array.isArray(f.fields) ? f.fields : []);
+  setRequireLineFriend(true);
+  setPreventDuplicate(false);
+  setPostScenario(null);
+  setSubmitButtonText(f.submit_button_text || "送信");
+  setSubmitButtonVariant(f.submit_button_variant || "default");
+};
+
   const copyLink = (id: string) => {
     const url = `${window.location.origin}/form/${id}`;
     navigator.clipboard.writeText(url);
     toast.success('埋め込みURLをコピーしました');
-  };
+};
+
+const handleUpdate = async () => {
+  if (!editingId) return;
+  if (!formName.trim()) { toast.error('フォーム名を入力してください'); return; }
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) { toast.error('ログインが必要です'); return; }
+
+  const cleanFields = fields.map(f => ({ id: f.id, label: f.label.trim(), name: f.name.trim(), type: f.type, required: !!f.required, options: Array.isArray(f.options) ? f.options : undefined }));
+  const { error } = await (supabase as any).from('forms').update({
+    name: formName.trim(),
+    description: description.trim() || null,
+    is_public: isPublic,
+    success_message: successMessage.trim() || null,
+    fields: cleanFields,
+    require_line_friend: requireLineFriend,
+    prevent_duplicate_per_friend: preventDuplicate,
+    post_submit_scenario_id: postScenario,
+    submit_button_text: submitButtonText,
+    submit_button_variant: submitButtonVariant,
+  }).eq('id', editingId);
+
+  if (error) {
+    console.error(error);
+    toast.error('更新に失敗しました');
+  } else {
+    toast.success('フォームを更新しました');
+    resetCreator();
+    setCreating(false);
+    loadForms();
+  }
+};
 
   return (
-    <div className="container mx-auto max-w-6xl space-y-6">
+    <div className="container mx-auto max-w-4xl space-y-4">
       <header className="space-y-1">
         <h1 className="text-2xl font-bold tracking-tight">フォーム作成</h1>
         <p className="text-muted-foreground">公開フォームを作成し、CMSへ埋め込みできます。</p>
@@ -182,6 +248,24 @@ const [editingId, setEditingId] = useState<string | null>(null);
               <div className="space-y-2 sm:col-span-2">
                 <label className="text-sm">送信成功メッセージ</label>
                 <Input value={successMessage} onChange={(e)=>setSuccessMessage(e.target.value)} />
+              </div>
+              <div className="space-y-2">
+                <label className="text-sm">送信ボタンのテキスト</label>
+                <Input value={submitButtonText} onChange={(e)=>setSubmitButtonText(e.target.value)} placeholder="送信 / 申し込み など" />
+              </div>
+              <div className="space-y-2">
+                <label className="text-sm">送信ボタンのデザイン</label>
+                <Select value={submitButtonVariant} onValueChange={setSubmitButtonVariant}>
+                  <SelectTrigger><SelectValue placeholder="ボタンスタイル" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="default">標準</SelectItem>
+                    <SelectItem value="secondary">セカンダリ</SelectItem>
+                    <SelectItem value="outline">アウトライン</SelectItem>
+                    <SelectItem value="destructive">警告</SelectItem>
+                    <SelectItem value="ghost">ゴースト</SelectItem>
+                    <SelectItem value="link">リンク</SelectItem>
+                  </SelectContent>
+                </Select>
               </div>
               <div className="grid gap-4 sm:grid-cols-3 sm:col-span-2">
                 <div className="space-y-2">
@@ -223,9 +307,9 @@ const [editingId, setEditingId] = useState<string | null>(null);
               <div className="space-y-3">
                 {fields.length === 0 && <p className="text-sm text-muted-foreground">フィールドがありません</p>}
                 {fields.map((f) => (
-                  <div key={f.id} className="rounded-md border p-3 grid gap-3 sm:grid-cols-4">
-<Input className="sm:col-span-1" placeholder="表示ラベル" value={f.label} onChange={(e)=>updateField(f.id,{label:e.target.value})} />
-<Input className="sm:col-span-1" placeholder="保存用キー（英数字）" value={f.name} onChange={(e)=>updateField(f.id,{name:e.target.value})} />
+                  <div key={f.id} className="rounded-md border p-2 grid gap-2 sm:grid-cols-4">
+                    <Input className="sm:col-span-1" placeholder="表示ラベル" value={f.label} onChange={(e)=>updateField(f.id,{label:e.target.value})} />
+                    <Input className="sm:col-span-1" placeholder="保存用キー（英数字）" value={f.name} onChange={(e)=>updateField(f.id,{name:e.target.value})} />
                     <Select value={f.type} onValueChange={(v)=>updateField(f.id,{type:v})}>
                       <SelectTrigger className="sm:col-span-1"><SelectValue placeholder="タイプ" /></SelectTrigger>
                       <SelectContent>
@@ -260,7 +344,7 @@ const [editingId, setEditingId] = useState<string | null>(null);
               </div>
 
               <div className="flex gap-2">
-                <Button onClick={handleCreate}><Save className="mr-2 h-4 w-4" /> 保存</Button>
+                <Button onClick={editingId ? handleUpdate : handleCreate}><Save className="mr-2 h-4 w-4" /> {editingId ? '更新' : '保存'}</Button>
                 <Button variant="outline" onClick={resetCreator}>クリア</Button>
               </div>
             </div>
@@ -271,7 +355,7 @@ const [editingId, setEditingId] = useState<string | null>(null);
       <Card>
         <CardHeader>
           <CardTitle>フォーム一覧</CardTitle>
-          <CardDescription>作成済みフォームのリンクをコピーできます</CardDescription>
+          <CardDescription>作成済みフォームのリンクをコピー・編集・削除できます</CardDescription>
         </CardHeader>
         <CardContent>
           {loading ? (
@@ -280,27 +364,40 @@ const [editingId, setEditingId] = useState<string | null>(null);
             <div className="space-y-3">
               {forms.length === 0 && <p className="text-muted-foreground">まだフォームがありません</p>}
               {forms.map((f) => (
-                <div key={f.id} className="rounded-md border p-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                <div key={f.id} className="rounded-md border p-3 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
                   <div className="space-y-1">
                     <h3 className="font-medium">{f.name}</h3>
                     {f.description && <p className="text-sm text-muted-foreground">{f.description}</p>}
                     <p className="text-xs text-muted-foreground">フィールド数: {f.fields?.length || 0} / 公開: {f.is_public ? 'はい' : 'いいえ'}</p>
                   </div>
                   <div className="flex items-center gap-2">
-                    <Button variant="secondary" onClick={()=>copyLink(f.id)}>
+                    <Button size="sm" variant="secondary" onClick={()=>copyLink(f.id)}>
                       <Copy className="mr-2 h-4 w-4" /> 埋め込みURL
                     </Button>
                     <a href={`/form/${f.id}`} target="_blank" rel="noopener noreferrer">
-                      <Button variant="outline">
+                      <Button size="sm" variant="outline">
                         <LinkIcon className="mr-2 h-4 w-4" /> 公開ページ
                       </Button>
                     </a>
+                    <Button size="sm" variant="outline" onClick={() => startEdit(f)}>
+                      <Pencil className="mr-2 h-4 w-4" /> 編集
+                    </Button>
+                    <Button size="sm" variant="destructive" onClick={() => deleteForm(f.id)}>
+                      <Trash2 className="mr-2 h-4 w-4" /> 削除
+                    </Button>
                   </div>
                 </div>
               ))}
             </div>
           )}
         </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>削除について</CardTitle>
+          <CardDescription>削除するとフォームと回答データは完全に削除され、元に戻せません。</CardDescription>
+        </CardHeader>
       </Card>
     </div>
   );
