@@ -64,6 +64,7 @@ export default function StepDeliveryPage() {
     removeFromFolder,
     deleteFolder,
     reorderFolders,
+    reorderFolderItems,
     getFolderIdByScenario,
   } = useScenarioFolders(user?.id)
 
@@ -107,6 +108,11 @@ export default function StepDeliveryPage() {
     generateInviteCode,
     deactivateInviteCode
   } = useStepScenarios(user?.id)
+
+  // シナリオ名ドラフトを選択状態に同期（IME対応）
+  useEffect(() => {
+    setScenarioNameDraft(selectedScenario?.name ?? '')
+  }, [selectedScenario?.id, selectedScenario?.name])
 
   // シナリオに属するステップのみを取得
   const selectedScenarioSteps = selectedScenario 
@@ -279,6 +285,8 @@ export default function StepDeliveryPage() {
   }
 
   const handleDeleteScenario = async (scenarioId: string) => {
+    // フォルダからも即時に外す（件数更新のため）
+    removeFromFolder(scenarioId)
     await deleteScenario(scenarioId)
     if (selectedScenario?.id === scenarioId) {
       setSelectedScenario(null)
@@ -337,7 +345,7 @@ export default function StepDeliveryPage() {
       return
     }
 
-    // フォルダへのドロップ
+    // フォルダへのドロップ（シナリオ→フォルダ）
     if (overId.startsWith('folder:')) {
       // Prevent nesting folders inside folders
       if (activeId.startsWith('folderItem:')) return
@@ -346,10 +354,25 @@ export default function StepDeliveryPage() {
       return
     }
 
-    // シナリオ上にドロップされた場合
+    const activeFolderId = getFolderIdByScenario(activeId)
     const overFolderId = getFolderIdByScenario(overId)
-    if (overFolderId) {
-      // 対象がフォルダ内のシナリオなら、そのフォルダへ移動
+
+    // 同一フォルダ内での並び替え
+    if (activeFolderId && overFolderId && activeFolderId === overFolderId) {
+      const folder = folders.find(f => f.id === activeFolderId)
+      if (folder) {
+        const oldIndex = folder.scenarioIds.indexOf(activeId)
+        const newIndex = folder.scenarioIds.indexOf(overId)
+        if (oldIndex !== -1 && newIndex !== -1) {
+          const newOrder = arrayMove(folder.scenarioIds, oldIndex, newIndex)
+          reorderFolderItems(activeFolderId, newOrder)
+        }
+      }
+      return
+    }
+
+    // フォルダ間の移動（シナリオ→シナリオを基準にフォルダ検出）
+    if (activeFolderId && overFolderId && activeFolderId !== overFolderId) {
       moveToFolder(activeId, overFolderId)
       return
     }
@@ -366,7 +389,11 @@ export default function StepDeliveryPage() {
         const targetScenario = scenarios.find(s => s.id === activeId)
         if (targetScenario) {
           const newRoot = [...root]
-          newRoot.splice(overIndex, 0, targetScenario)
+          if (overIndex === -1) {
+            newRoot.push(targetScenario)
+          } else {
+            newRoot.splice(overIndex, 0, targetScenario)
+          }
           reorderScenarios(newRoot.map(s => s.id))
         }
       } else {
@@ -486,8 +513,14 @@ export default function StepDeliveryPage() {
                 <Label htmlFor="scenario-name">シナリオ名</Label>
                 <Input
                   id="scenario-name"
-                  value={selectedScenario.name}
-                  onChange={(e) => handleUpdateScenarioName(e.target.value)}
+                  value={scenarioNameDraft}
+                  onChange={(e) => setScenarioNameDraft(e.target.value)}
+                  onBlur={() => {
+                    if (selectedScenario && scenarioNameDraft !== selectedScenario.name) {
+                      handleUpdateScenarioName(scenarioNameDraft)
+                    }
+                  }}
+                  onKeyDown={(e) => { if (e.key === 'Enter') (e.currentTarget as HTMLInputElement).blur() }}
                 />
               </div>
 

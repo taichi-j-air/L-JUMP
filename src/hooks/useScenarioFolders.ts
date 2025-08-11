@@ -81,6 +81,13 @@ const setFolderBorderColor = (id: string, borderColor: string) => {
     )
   }
 
+  const reorderFolderItems = (folderId: string, orderedIds: string[]) => {
+    setFolders(prev => prev.map(f => f.id === folderId 
+      ? { ...f, scenarioIds: orderedIds.filter(id => f.scenarioIds.includes(id)) } 
+      : f
+    ))
+  }
+
   return {
     folders,
     addFolder,
@@ -92,6 +99,7 @@ const setFolderBorderColor = (id: string, borderColor: string) => {
     removeFromFolder,
     deleteFolder,
     reorderFolders,
+    reorderFolderItems,
     getFolderIdByScenario,
   }
 }

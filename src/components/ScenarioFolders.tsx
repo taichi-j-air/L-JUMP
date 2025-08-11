@@ -1,6 +1,6 @@
 import { useState } from "react"
 import { useDroppable } from "@dnd-kit/core"
-import { useSortable } from "@dnd-kit/sortable"
+import { useSortable, SortableContext, verticalListSortingStrategy } from "@dnd-kit/sortable"
 import { CSS } from "@dnd-kit/utilities"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
@@ -142,23 +142,25 @@ function FolderRow({
 
           {!folder.collapsed && (
             <div className="mt-2 space-y-2">
-              {folder.scenarioIds.length === 0 ? (
-                <div className="text-xs text-muted-foreground">ここにドラッグ＆ドロップ</div>
-              ) : (
-                folder.scenarioIds.map(id => (
-                  <div key={id} className="group relative">
-                    {renderScenario(id)}
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className="absolute top-1 right-1 opacity-0 group-hover:opacity-100 h-6 px-2"
-                      onClick={(e) => { e.stopPropagation(); onMoveOut(id) }}
-                    >
-                      <Undo2 className="h-3 w-3 mr-1"/>外に出す
-                    </Button>
-                  </div>
-                ))
-              )}
+              <SortableContext items={folder.scenarioIds} strategy={verticalListSortingStrategy}>
+                {folder.scenarioIds.length === 0 ? (
+                  <div className="text-xs text-muted-foreground">ここにドラッグ＆ドロップ</div>
+                ) : (
+                  folder.scenarioIds.map(id => (
+                    <div key={id} className="group relative">
+                      {renderScenario(id)}
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="absolute top-1 right-1 opacity-0 group-hover:opacity-100 h-6 px-2"
+                        onClick={(e) => { e.stopPropagation(); onMoveOut(id) }}
+                      >
+                        <Undo2 className="h-3 w-3 mr-1"/>外に出す
+                      </Button>
+                    </div>
+                  ))
+                )}
+              </SortableContext>
             </div>
           )}
         </div>
