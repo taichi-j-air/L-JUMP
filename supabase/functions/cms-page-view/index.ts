@@ -15,8 +15,8 @@ serve(async (req) => {
     const body = await req.json();
     const { shareCode, uid, passcode } = body || {};
 
-    if (!shareCode || !uid) {
-      return new Response(JSON.stringify({ error: "shareCode and uid are required" }), {
+    if (!shareCode) {
+      return new Response(JSON.stringify({ error: "shareCode is required" }), {
         status: 400,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
@@ -31,7 +31,7 @@ serve(async (req) => {
     const { data: page, error: pageErr } = await supabase
       .from("cms_pages")
       .select(
-        "id, user_id, title, tag_label, content, visibility, allowed_tag_ids, blocked_tag_ids, require_passcode, passcode, timer_enabled, timer_mode, timer_deadline, timer_duration_seconds, show_milliseconds, timer_style, timer_bg_color, timer_text_color, internal_timer, timer_text"
+        "id, user_id, title, tag_label, content, content_blocks, visibility, allowed_tag_ids, blocked_tag_ids, require_passcode, passcode, timer_enabled, timer_mode, timer_deadline, timer_duration_seconds, show_milliseconds, timer_style, timer_bg_color, timer_text_color, internal_timer, timer_text"
       )
       .eq("share_code", shareCode)
       .single();
@@ -43,12 +43,24 @@ serve(async (req) => {
       });
     }
 
-    // Require UID for all views (as requested)
+    // If UID is missing, return friend-add info for guidance
     if (!uid) {
-      return new Response(JSON.stringify({ error: "UID required" }), {
-        status: 401,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+      const { data: profile } = await supabase
+        .from("profiles")
+        .select("display_name, line_user_id, add_friend_url")
+        .eq("user_id", page.user_id)
+        .maybeSingle();
+
+      const friendInfo = {
+        account_name: profile?.display_name || null,
+        line_id: profile?.line_user_id || null,
+        add_friend_url: profile?.add_friend_url || null,
+      };
+
+      return new Response(
+        JSON.stringify({ require_friend: true, friend_info: friendInfo }),
+        { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
     }
 
     // Validate friend relationship
@@ -106,6 +118,7 @@ serve(async (req) => {
       title: page.title,
       tag_label: page.tag_label,
       content: page.content,
+      content_blocks: Array.isArray(page.content_blocks) ? page.content_blocks : [],
       timer_enabled: !!page.timer_enabled,
       timer_mode: page.timer_mode || "absolute",
       timer_deadline: page.timer_deadline,

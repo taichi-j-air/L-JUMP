@@ -76,9 +76,10 @@ function AppContent() {
   const hasLineLoginSuccess = window.location.search.includes('line_login=success')
   const isPublicFormPage = window.location.pathname.startsWith('/form/')
   const isCMSPublicPath = window.location.pathname.startsWith('/cms/f/')
+  const isCMSPreviewPath = window.location.pathname.startsWith('/cms/preview/')
 
   // Show auth pages without sidebar/header  
-  if (isAuthPage || (!user && !isInvitePage && !isLoginPage && !hasLineLoginSuccess && !isPublicFormPage && !isCMSPublicPath)) {
+  if (isAuthPage || (!user && !isInvitePage && !isLoginPage && !hasLineLoginSuccess && !isPublicFormPage && !(isCMSPublicPath || isCMSPreviewPath))) {
     return (
       <div className="min-h-screen">
         <Routes>
@@ -94,6 +95,7 @@ function AppContent() {
           <Route path="/reset-password" element={<ResetPassword />} />
           <Route path="/form/:id" element={<PublicForm />} />
           <Route path="/cms/f/:shareCode" element={<CMSFriendsPublicView />} />
+          <Route path="/cms/preview/:pageId" element={<CMSFriendsPublicView />} />
           <Route path="/error" element={<ErrorPage />} />
           <Route path="*" element={<Auth />} />
         </Routes>

@@ -89,7 +89,6 @@ export const TimerPreview = ({
   return (
     <div className={className}>
       <div className={`${styleClasses[styleVariant]}`} style={containerStyle}>
-        <div className="text-sm opacity-90 mb-1">カウントダウン</div>
         <div className="text-xl font-semibold tracking-wide">{text}</div>
       </div>
     </div>

@@ -12,6 +12,7 @@ import { Switch } from "@/components/ui/switch";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { ColorPicker } from "@/components/ui/color-picker";
 import RichTextEditor from "@/components/RichTextEditor";
+import RichTextBlocksEditor from "@/components/RichTextBlocksEditor";
 import { TimerPreview } from "@/components/TimerPreview";
 
 // Type helpers (loosened to avoid tight coupling with generated types)
@@ -56,6 +57,7 @@ export default function CMSFriendsPageBuilder() {
   const [slug, setSlug] = useState("");
   const [title, setTitle] = useState("");
   const [contentHtml, setContentHtml] = useState<string>("");
+  const [contentBlocks, setContentBlocks] = useState<string[]>([]);
 
   // Right settings
   const [tags, setTags] = useState<TagRow[]>([]);
@@ -125,6 +127,7 @@ export default function CMSFriendsPageBuilder() {
     setSlug(selected.slug || "");
     setTitle(selected.title || "");
     setContentHtml((selected as any).content || "");
+    setContentBlocks(Array.isArray((selected as any).content_blocks) ? (selected as any).content_blocks : []);
     setAllowedTags(selected.allowed_tag_ids || []);
     setBlockedTags(selected.blocked_tag_ids || []);
     setRequirePass(!!selected.require_passcode);
@@ -203,6 +206,7 @@ export default function CMSFriendsPageBuilder() {
         internal_name: internalName,
         tag_label: tagLabel,
         content: contentHtml,
+        content_blocks: contentBlocks,
         allowed_tag_ids: allowedTags,
         blocked_tag_ids: blockedTags,
         require_passcode: requirePass,
@@ -369,8 +373,8 @@ export default function CMSFriendsPageBuilder() {
                     />
                   )}
                   <div className="space-y-2">
-                    <Label>本文（リッチテキスト）</Label>
-                    <RichTextEditor value={contentHtml} onChange={setContentHtml} />
+                    <Label>本文（リッチテキスト・複数可）</Label>
+                    <RichTextBlocksEditor value={contentBlocks} onChange={setContentBlocks} />
                   </div>
                 </>
               )}
