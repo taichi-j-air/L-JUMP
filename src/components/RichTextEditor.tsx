@@ -100,17 +100,24 @@ export function RichTextEditor({ value, onChange, className }: RichTextEditorPro
         <span className="ql-formats">
           <label className="text-xs text-muted-foreground">
             文字色
-            <input type="color" className="ml-2 h-6 w-10 p-0 border rounded" onChange={(e) => applyColor("color", e.target.value)} />
+            <input type="color" className="ml-2 h-6 w-6 p-0 border rounded-none" onChange={(e) => applyColor("color", e.target.value)} />
           </label>
           <label className="text-xs text-muted-foreground">
             背景色
-            <input type="color" className="ml-2 h-6 w-10 p-0 border rounded" onChange={(e) => applyColor("background", e.target.value)} />
+            <input type="color" className="ml-2 h-6 w-6 p-0 border rounded-none" onChange={(e) => applyColor("background", e.target.value)} />
           </label>
         </span>
         <span className="ql-formats ms-auto">
-          <button type="button" onClick={() => { setHtmlMode(!htmlMode); setDraftHtml(value); }}>
-            {htmlMode ? "リッチテキストに戻る" : "HTML編集"}
-          </button>
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            className={htmlMode ? "bg-muted" : ""}
+            onClick={() => { setHtmlMode(!htmlMode); setDraftHtml(value); }}
+            title="HTML"
+          >
+            HTML
+          </Button>
         </span>
       </div>
 

@@ -80,6 +80,12 @@ export default function CMSFriendsPageBuilder() {
   const [hourLabel, setHourLabel] = useState<string>("時間");
   const [minuteLabel, setMinuteLabel] = useState<string>("分");
   const [secondLabel, setSecondLabel] = useState<string>("秒");
+  // Per-access duration inputs (D/H/M/S)
+  const [durDays, setDurDays] = useState<number>(0);
+  const [durHours, setDurHours] = useState<number>(0);
+  const [durMinutes, setDurMinutes] = useState<number>(0);
+  const [durSecs, setDurSecs] = useState<number>(0);
+  const toSeconds = (d: number, h: number, m: number, s: number) => d * 86400 + h * 3600 + m * 60 + s;
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
@@ -151,6 +157,15 @@ export default function CMSFriendsPageBuilder() {
     setHourLabel(((selected as any).timer_hour_label as any) || "時間");
     setMinuteLabel(((selected as any).timer_minute_label as any) || "分");
     setSecondLabel(((selected as any).timer_second_label as any) || "秒");
+    const secsInit = Number((selected as any).timer_duration_seconds || 0);
+    const d = Math.floor(secsInit / 86400);
+    const h = Math.floor((secsInit % 86400) / 3600);
+    const m = Math.floor((secsInit % 3600) / 60);
+    const s = secsInit % 60;
+    setDurDays(d);
+    setDurHours(h);
+    setDurMinutes(m);
+    setDurSecs(s);
   }, [selectedId]);
 
   const handleAddPage = async () => {
@@ -386,6 +401,7 @@ export default function CMSFriendsPageBuilder() {
                       hourLabel={hourLabel}
                       minuteLabel={minuteLabel}
                       secondLabel={secondLabel}
+                      preview={timerMode === 'per_access'}
                     />
                   )}
                   <div className="space-y-2">
@@ -482,8 +498,41 @@ export default function CMSFriendsPageBuilder() {
                         </div>
                       ) : (
                         <div className="space-y-2">
-                          <Label>カウント時間（秒）</Label>
-                          <Input type="number" min={0} value={durationSeconds} onChange={(e) => setDurationSeconds(Number(e.target.value || 0))} />
+                          <Label>カウント時間</Label>
+                          <div className="grid grid-cols-4 gap-2">
+                            <div className="space-y-1">
+                              <Label className="text-xs">日</Label>
+                              <Input type="number" min={0} value={durDays} onChange={(e) => {
+                                const v = Math.max(0, Number(e.target.value || 0));
+                                setDurDays(v);
+                                setDurationSeconds(toSeconds(v, durHours, durMinutes, durSecs));
+                              }} />
+                            </div>
+                            <div className="space-y-1">
+                              <Label className="text-xs">時</Label>
+                              <Input type="number" min={0} value={durHours} onChange={(e) => {
+                                const v = Math.max(0, Number(e.target.value || 0));
+                                setDurHours(v);
+                                setDurationSeconds(toSeconds(durDays, v, durMinutes, durSecs));
+                              }} />
+                            </div>
+                            <div className="space-y-1">
+                              <Label className="text-xs">分</Label>
+                              <Input type="number" min={0} value={durMinutes} onChange={(e) => {
+                                const v = Math.max(0, Number(e.target.value || 0));
+                                setDurMinutes(v);
+                                setDurationSeconds(toSeconds(durDays, durHours, v, durSecs));
+                              }} />
+                            </div>
+                            <div className="space-y-1">
+                              <Label className="text-xs">秒</Label>
+                              <Input type="number" min={0} value={durSecs} onChange={(e) => {
+                                const v = Math.max(0, Number(e.target.value || 0));
+                                setDurSecs(v);
+                                setDurationSeconds(toSeconds(durDays, durHours, durMinutes, v));
+                              }} />
+                            </div>
+                          </div>
                         </div>
                       )}
 

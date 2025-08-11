@@ -18,6 +18,7 @@ interface TimerPreviewProps {
   hourLabel?: string;
   minuteLabel?: string;
   secondLabel?: string;
+  preview?: boolean;
 }
 
 function formatRemaining(
@@ -53,6 +54,7 @@ export const TimerPreview = ({
   hourLabel = "時間",
   minuteLabel = "分",
   secondLabel = "秒",
+  preview = false,
 }: TimerPreviewProps) => {
   const [remainingMs, setRemainingMs] = useState<number>(0);
   const intervalRef = useRef<number | null>(null);
@@ -62,6 +64,10 @@ export const TimerPreview = ({
       return new Date(deadline).getTime();
     }
     if (mode === "per_access" && durationSeconds) {
+      // In preview mode, always start from now for live reflection
+      if (preview) {
+        return Date.now() + durationSeconds * 1000;
+      }
       // per-visitor start time (local storage) to avoid DB changes for now
       const key = `cms_page_first_access:${shareCode || ""}:${uid || "anon"}`;
       const stored = localStorage.getItem(key);
@@ -70,7 +76,7 @@ export const TimerPreview = ({
       return start + durationSeconds * 1000;
     }
     return Date.now();
-  }, [mode, deadline, durationSeconds, shareCode, uid]);
+  }, [mode, deadline, durationSeconds, shareCode, uid, preview]);
 
   useEffect(() => {
     if (intervalRef.current) window.clearInterval(intervalRef.current);
