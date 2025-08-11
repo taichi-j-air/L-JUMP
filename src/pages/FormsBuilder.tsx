@@ -7,7 +7,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
 import { Select, SelectTrigger, SelectContent, SelectItem, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
-import { Copy, Link as LinkIcon, Plus, Save, Trash2 } from "lucide-react";
+import { Copy, Link as LinkIcon, Plus, Save, Trash2, Pencil } from "lucide-react";
 
 interface FormRow {
   id: string;
@@ -15,6 +15,8 @@ interface FormRow {
   description: string | null;
   is_public: boolean;
   success_message: string | null;
+  submit_button_text?: string | null;
+  submit_button_variant?: string | null;
   fields: Array<{ id: string; label: string; name: string; type: string; required?: boolean; options?: string[] }>;
   created_at: string;
   updated_at: string;
@@ -54,8 +56,10 @@ export default function FormsBuilder() {
   const [requireLineFriend, setRequireLineFriend] = useState(true);
   const [preventDuplicate, setPreventDuplicate] = useState(false);
   const [postScenario, setPostScenario] = useState<string | null>(null);
-  const [scenarios, setScenarios] = useState<Array<{ id: string; name: string }>>([]);
-
+const [scenarios, setScenarios] = useState<Array<{ id: string; name: string }>>([]);
+const [submitButtonText, setSubmitButtonText] = useState<string>("送信");
+const [submitButtonVariant, setSubmitButtonVariant] = useState<string>("default");
+const [editingId, setEditingId] = useState<string | null>(null);
   const loadForms = async () => {
     setLoading(true);
     const { data, error } = await (supabase as any)
@@ -220,8 +224,8 @@ export default function FormsBuilder() {
                 {fields.length === 0 && <p className="text-sm text-muted-foreground">フィールドがありません</p>}
                 {fields.map((f) => (
                   <div key={f.id} className="rounded-md border p-3 grid gap-3 sm:grid-cols-4">
-                    <Input className="sm:col-span-1" placeholder="ラベル" value={f.label} onChange={(e)=>updateField(f.id,{label:e.target.value})} />
-                    <Input className="sm:col-span-1" placeholder="name" value={f.name} onChange={(e)=>updateField(f.id,{name:e.target.value})} />
+<Input className="sm:col-span-1" placeholder="表示ラベル" value={f.label} onChange={(e)=>updateField(f.id,{label:e.target.value})} />
+<Input className="sm:col-span-1" placeholder="保存用キー（英数字）" value={f.name} onChange={(e)=>updateField(f.id,{name:e.target.value})} />
                     <Select value={f.type} onValueChange={(v)=>updateField(f.id,{type:v})}>
                       <SelectTrigger className="sm:col-span-1"><SelectValue placeholder="タイプ" /></SelectTrigger>
                       <SelectContent>
@@ -240,16 +244,17 @@ export default function FormsBuilder() {
                         <Trash2 className="h-4 w-4" />
                       </Button>
                     </div>
-                    {(f.type === 'select' || f.type === 'radio' || f.type === 'checkbox') && (
-                      <div className="sm:col-span-4">
-                        <label className="text-xs text-muted-foreground">選択肢（カンマ区切り）</label>
-                        <Input
-                          placeholder="例）はい, いいえ, その他"
-                          value={(f.options || []).join(', ')}
-                          onChange={(e)=>updateField(f.id,{ options: e.target.value.split(',').map(s=>s.trim()).filter(Boolean) })}
-                        />
-                      </div>
-                    )}
+{(f.type === 'select' || f.type === 'radio' || f.type === 'checkbox') && (
+  <div className="sm:col-span-4">
+    <label className="text-xs text-muted-foreground">選択肢（1行に1つ）</label>
+    <Textarea
+      placeholder={`例）\nはい\nいいえ\nその他`}
+      value={(f.options || []).join('\n')}
+      onChange={(e)=>updateField(f.id,{ options: e.target.value.split(/\r?\n/).map(s=>s.trim()).filter(Boolean) })}
+      className="min-h-[96px]"
+    />
+  </div>
+)}
                   </div>
                 ))}
               </div>
