@@ -13,6 +13,10 @@ interface PublicFormRow {
   description: string | null;
   is_public: boolean;
   success_message: string | null;
+  user_id?: string;
+  require_line_friend?: boolean;
+  prevent_duplicate_per_friend?: boolean;
+  post_submit_scenario_id?: string | null;
   fields: Array<{ id: string; label: string; name: string; type: string; required?: boolean }>;
 }
 
@@ -40,7 +44,7 @@ export default function PublicForm() {
   const params = useParams();
   const formId = params.id as string;
   const [form, setForm] = useState<PublicFormRow | null>(null);
-  const [values, setValues] = useState<Record<string, string>>({});
+  const [values, setValues] = useState<Record<string, any>>({});
   const [submitted, setSubmitted] = useState(false);
   const [loading, setLoading] = useState(true);
 
@@ -55,7 +59,7 @@ export default function PublicForm() {
       setLoading(true);
       const { data, error } = await (supabase as any)
         .from('forms')
-        .select('id,name,description,fields,success_message,is_public')
+        .select('id,name,description,fields,success_message,is_public,user_id,require_line_friend,prevent_duplicate_per_friend,post_submit_scenario_id')
         .eq('id', formId)
         .maybeSingle();
       if (error) {
@@ -70,7 +74,7 @@ export default function PublicForm() {
     if (formId) load();
   }, [formId]);
 
-  const handleChange = (name: string, value: string) => {
+  const handleChange = (name: string, value: any) => {
     setValues(prev => ({ ...prev, [name]: value }));
   };
 
@@ -78,7 +82,6 @@ export default function PublicForm() {
     e.preventDefault();
     if (!form) return;
 
-    // Basic required validation
     for (const f of form.fields) {
       if (f.required && !values[f.name]) {
         toast.error(`${f.label} は必須です`);
@@ -86,9 +89,47 @@ export default function PublicForm() {
       }
     }
 
+    const url = new URL(window.location.href);
+    const lineUserId = url.searchParams.get('line_user_id') || url.searchParams.get('lu');
+
+    let friendId: string | null = null;
+    if (form.require_line_friend) {
+      if (!lineUserId) {
+        toast.error('LINEアプリから開いてください（友だち限定フォーム）');
+        return;
+      }
+      // Check friend existence for the form owner
+      const { data: friend, error: fErr } = await (supabase as any)
+        .from('line_friends')
+        .select('id')
+        .eq('line_user_id', lineUserId)
+        .eq('user_id', form.user_id)
+        .maybeSingle();
+      if (fErr || !friend) {
+        toast.error('このフォームはLINE友だち限定です。先に友だち追加してください。');
+        return;
+      }
+      friendId = friend.id;
+
+      if (form.prevent_duplicate_per_friend) {
+        const { data: dup } = await (supabase as any)
+          .from('form_submissions')
+          .select('id')
+          .eq('form_id', form.id)
+          .eq('friend_id', friendId)
+          .maybeSingle();
+        if (dup) {
+          toast.error('このフォームはお一人様1回までです。');
+          return;
+        }
+      }
+    }
+
     const { error } = await (supabase as any).from('form_submissions').insert({
       form_id: form.id,
       data: values,
+      friend_id: friendId,
+      line_user_id: lineUserId || null,
     });
     if (error) {
       console.error(error);
@@ -96,6 +137,7 @@ export default function PublicForm() {
     } else {
       setSubmitted(true);
       toast.success('送信しました');
+      // TODO: 回答後シナリオ遷移の実行（安全な関数を用意してサーバー側で切替）
     }
   };
 
@@ -119,6 +161,11 @@ export default function PublicForm() {
             </div>
           ) : (
             <form className="space-y-4" onSubmit={handleSubmit}>
+              {form.require_line_friend && (
+                <p className="text-xs text-muted-foreground">
+                  このフォームはLINE友だち限定です。LINEから開くと自動で認証されます。
+                </p>
+              )}
               {form.fields.map((f) => (
                 <div key={f.id} className="space-y-2">
                   <label className="text-sm font-medium" htmlFor={f.name}>

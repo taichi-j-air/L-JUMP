@@ -88,6 +88,121 @@ export type Database = {
         }
         Relationships: []
       }
+      form_submissions: {
+        Row: {
+          data: Json
+          form_id: string
+          friend_id: string | null
+          id: string
+          line_user_id: string | null
+          submitted_at: string
+          user_id: string | null
+        }
+        Insert: {
+          data: Json
+          form_id: string
+          friend_id?: string | null
+          id?: string
+          line_user_id?: string | null
+          submitted_at?: string
+          user_id?: string | null
+        }
+        Update: {
+          data?: Json
+          form_id?: string
+          friend_id?: string | null
+          id?: string
+          line_user_id?: string | null
+          submitted_at?: string
+          user_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "form_submissions_friend_id_fkey"
+            columns: ["friend_id"]
+            isOneToOne: false
+            referencedRelation: "line_friends"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      forms: {
+        Row: {
+          created_at: string
+          description: string | null
+          fields: Json
+          id: string
+          is_public: boolean
+          name: string
+          post_submit_scenario_id: string | null
+          prevent_duplicate_per_friend: boolean
+          require_line_friend: boolean
+          success_message: string | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          description?: string | null
+          fields?: Json
+          id?: string
+          is_public?: boolean
+          name: string
+          post_submit_scenario_id?: string | null
+          prevent_duplicate_per_friend?: boolean
+          require_line_friend?: boolean
+          success_message?: string | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          description?: string | null
+          fields?: Json
+          id?: string
+          is_public?: boolean
+          name?: string
+          post_submit_scenario_id?: string | null
+          prevent_duplicate_per_friend?: boolean
+          require_line_friend?: boolean
+          success_message?: string | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "forms_post_submit_scenario_id_fkey"
+            columns: ["post_submit_scenario_id"]
+            isOneToOne: false
+            referencedRelation: "step_scenarios"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      friend_tags: {
+        Row: {
+          created_at: string
+          friend_id: string
+          id: string
+          tag_id: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          friend_id: string
+          id?: string
+          tag_id: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          friend_id?: string
+          id?: string
+          tag_id?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       invite_clicks: {
         Row: {
           clicked_at: string | null
@@ -907,6 +1022,36 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      tags: {
+        Row: {
+          color: string | null
+          created_at: string
+          description: string | null
+          id: string
+          name: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          color?: string | null
+          created_at?: string
+          description?: string | null
+          id?: string
+          name: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          color?: string | null
+          created_at?: string
+          description?: string | null
+          id?: string
+          name?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
       }
     }
     Views: {

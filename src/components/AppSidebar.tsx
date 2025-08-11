@@ -1,4 +1,4 @@
-import { Home, MessageSquare, Settings, FileImage, Webhook, User, Bot, Users, MessageCircle, ArrowRight, LogIn, ChevronRight, ChevronDown } from "lucide-react"
+import { Home, MessageSquare, Settings, FileImage, Webhook, User, Bot, Users, MessageCircle, ArrowRight, LogIn, ChevronRight, ChevronDown, FileText, BarChart3 } from "lucide-react"
 import { NavLink, useLocation } from "react-router-dom"
 import { useState, useEffect } from "react"
 import { supabase } from "@/integrations/supabase/client"
@@ -58,6 +58,7 @@ export function AppSidebar({ user }: AppSidebarProps) {
   const [loading, setLoading] = useState(true)
   const [unreadCount, setUnreadCount] = useState(0)
   const [friendsOpen, setFriendsOpen] = useState(false)
+  const [formsOpen, setFormsOpen] = useState(false)
   const collapsed = state === "collapsed"
 
   useEffect(() => {
@@ -165,6 +166,37 @@ export function AppSidebar({ user }: AppSidebarProps) {
                       <SidebarMenuSubButton asChild>
                         <NavLink to="/tags" end className={({ isActive }) => (isActive ? "bg-sidebar-accent text-sidebar-accent-foreground" : "")}> 
                           <span>タグ一覧/設定</span>
+                        </NavLink>
+                      </SidebarMenuSubButton>
+                    </SidebarMenuSubItem>
+                  </SidebarMenuSub>
+                )}
+              </SidebarMenuItem>
+
+              {/* Forms dropdown */}
+              <SidebarMenuItem>
+                <SidebarMenuButton onClick={() => setFormsOpen((v) => !v)} isActive={formsOpen}>
+                  <FileText className="h-4 w-4" />
+                  {!collapsed && (
+                    <span className="flex items-center gap-1">
+                      フォーム管理
+                      <ChevronDown className="h-3 w-3" />
+                    </span>
+                  )}
+                </SidebarMenuButton>
+                {formsOpen && (
+                  <SidebarMenuSub>
+                    <SidebarMenuSubItem>
+                      <SidebarMenuSubButton asChild>
+                        <NavLink to="/forms" end className={({ isActive }) => (isActive ? "bg-sidebar-accent text-sidebar-accent-foreground focus-visible:outline-none focus-visible:ring-0" : "focus-visible:outline-none focus-visible:ring-0")}> 
+                          <span>フォーム作成/一覧</span>
+                        </NavLink>
+                      </SidebarMenuSubButton>
+                    </SidebarMenuSubItem>
+                    <SidebarMenuSubItem>
+                      <SidebarMenuSubButton asChild>
+                        <NavLink to="/forms/responses" end className={({ isActive }) => (isActive ? "bg-sidebar-accent text-sidebar-accent-foreground" : "")}> 
+                          <span>回答結果</span>
                         </NavLink>
                       </SidebarMenuSubButton>
                     </SidebarMenuSubItem>

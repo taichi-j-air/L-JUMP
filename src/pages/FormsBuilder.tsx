@@ -15,7 +15,7 @@ interface FormRow {
   description: string | null;
   is_public: boolean;
   success_message: string | null;
-  fields: Array<{ id: string; label: string; name: string; type: string; required?: boolean }>;
+  fields: Array<{ id: string; label: string; name: string; type: string; required?: boolean; options?: string[] }>;
   created_at: string;
   updated_at: string;
 }
@@ -51,6 +51,10 @@ export default function FormsBuilder() {
   const [isPublic, setIsPublic] = useState(true);
   const [successMessage, setSuccessMessage] = useState("送信ありがとうございました。");
   const [fields, setFields] = useState<FormRow["fields"]>([]);
+  const [requireLineFriend, setRequireLineFriend] = useState(true);
+  const [preventDuplicate, setPreventDuplicate] = useState(false);
+  const [postScenario, setPostScenario] = useState<string | null>(null);
+  const [scenarios, setScenarios] = useState<Array<{ id: string; name: string }>>([]);
 
   const loadForms = async () => {
     setLoading(true);
@@ -67,6 +71,17 @@ export default function FormsBuilder() {
   };
 
   useEffect(() => { loadForms(); }, []);
+
+  useEffect(() => {
+    const loadScenarios = async () => {
+      const { data, error } = await (supabase as any)
+        .from('step_scenarios')
+        .select('id,name')
+        .order('created_at', { ascending: true });
+      if (!error) setScenarios(data || []);
+    };
+    loadScenarios();
+  }, []);
 
   const addField = () => {
     setFields(prev => [...prev, { id: crypto.randomUUID(), label: "", name: "", type: "text", required: false }]);
@@ -96,7 +111,7 @@ export default function FormsBuilder() {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) { toast.error('ログインが必要です'); return; }
 
-    const cleanFields = fields.map(f => ({ id: f.id, label: f.label.trim(), name: f.name.trim(), type: f.type, required: !!f.required }));
+    const cleanFields = fields.map(f => ({ id: f.id, label: f.label.trim(), name: f.name.trim(), type: f.type, required: !!f.required, options: Array.isArray(f.options) ? f.options : undefined }));
     const { error } = await (supabase as any).from('forms').insert({
       user_id: user.id,
       name: formName.trim(),
@@ -104,6 +119,9 @@ export default function FormsBuilder() {
       is_public: isPublic,
       success_message: successMessage.trim() || null,
       fields: cleanFields,
+      require_line_friend: requireLineFriend,
+      prevent_duplicate_per_friend: preventDuplicate,
+      post_submit_scenario_id: postScenario,
     });
     if (error) {
       console.error(error);
@@ -161,6 +179,33 @@ export default function FormsBuilder() {
                 <label className="text-sm">送信成功メッセージ</label>
                 <Input value={successMessage} onChange={(e)=>setSuccessMessage(e.target.value)} />
               </div>
+              <div className="grid gap-4 sm:grid-cols-3 sm:col-span-2">
+                <div className="space-y-2">
+                  <label className="text-sm">LINE友だち限定</label>
+                  <div className="flex items-center gap-3">
+                    <Switch checked={requireLineFriend} onCheckedChange={setRequireLineFriend} />
+                    <span className="text-sm text-muted-foreground">有効化するとLINE友だちのみ回答可能</span>
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  <label className="text-sm">同一友だちの重複回答を禁止</label>
+                  <div className="flex items-center gap-3">
+                    <Switch checked={preventDuplicate} onCheckedChange={setPreventDuplicate} />
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  <label className="text-sm">回答後のシナリオ遷移（任意）</label>
+                  <Select value={postScenario ?? ''} onValueChange={(v)=> setPostScenario(v || null)}>
+                    <SelectTrigger><SelectValue placeholder="シナリオを選択" /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="">なし</SelectItem>
+                      {scenarios.map(s => (
+                        <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
             </div>
 
             <div className="space-y-3">
@@ -183,6 +228,9 @@ export default function FormsBuilder() {
                         <SelectItem value="text">テキスト</SelectItem>
                         <SelectItem value="email">メール</SelectItem>
                         <SelectItem value="textarea">テキストエリア</SelectItem>
+                        <SelectItem value="select">ドロップダウン</SelectItem>
+                        <SelectItem value="radio">ラジオボタン</SelectItem>
+                        <SelectItem value="checkbox">チェックボックス</SelectItem>
                       </SelectContent>
                     </Select>
                     <div className="flex items-center justify-between sm:col-span-1 gap-2">
@@ -192,6 +240,16 @@ export default function FormsBuilder() {
                         <Trash2 className="h-4 w-4" />
                       </Button>
                     </div>
+                    {(f.type === 'select' || f.type === 'radio' || f.type === 'checkbox') && (
+                      <div className="sm:col-span-4">
+                        <label className="text-xs text-muted-foreground">選択肢（カンマ区切り）</label>
+                        <Input
+                          placeholder="例）はい, いいえ, その他"
+                          value={(f.options || []).join(', ')}
+                          onChange={(e)=>updateField(f.id,{ options: e.target.value.split(',').map(s=>s.trim()).filter(Boolean) })}
+                        />
+                      </div>
+                    )}
                   </div>
                 ))}
               </div>

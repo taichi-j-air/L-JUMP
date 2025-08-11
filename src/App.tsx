@@ -33,6 +33,9 @@ import LineLoginPage from "./pages/LineLoginPage";
 import LoginSuccess from "./pages/LoginSuccess";
 import { supabase } from "@/integrations/supabase/client";
 import { User } from "@supabase/supabase-js";
+import FormsBuilder from "./pages/FormsBuilder";
+import PublicForm from "./pages/PublicForm";
+import FormResponses from "./pages/FormResponses";
 
 const queryClient = new QueryClient();
 
@@ -68,9 +71,10 @@ function AppContent() {
   const isInvitePage = window.location.pathname.startsWith('/invite')
   const isLoginPage = window.location.pathname === '/login'
   const hasLineLoginSuccess = window.location.search.includes('line_login=success')
+  const isPublicFormPage = window.location.pathname.startsWith('/form/')
 
   // Show auth pages without sidebar/header  
-  if (isAuthPage || (!user && !isInvitePage && !isLoginPage && !hasLineLoginSuccess)) {
+  if (isAuthPage || (!user && !isInvitePage && !isLoginPage && !hasLineLoginSuccess && !isPublicFormPage)) {
     return (
       <div className="min-h-screen">
         <Routes>
@@ -84,6 +88,7 @@ function AppContent() {
           <Route path="/auth" element={<Auth />} />
           <Route path="/verify" element={<EmailVerify />} />
           <Route path="/reset-password" element={<ResetPassword />} />
+          <Route path="/form/:id" element={<PublicForm />} />
           <Route path="/error" element={<ErrorPage />} />
           <Route path="*" element={<Auth />} />
         </Routes>
@@ -137,6 +142,8 @@ function AppContent() {
               <Route path="/step-delivery" element={<StepDeliveryPage />} />
               <Route path="/chat-inbox" element={<ChatInboxPage />} />
               <Route path="/chat/:friendId" element={<IndividualChatPage />} />
+              <Route path="/forms" element={<FormsBuilder />} />
+              <Route path="/forms/responses" element={<FormResponses />} />
               <Route path="*" element={<NotFound />} />
             </Routes>
           </main>
