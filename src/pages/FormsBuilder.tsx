@@ -60,7 +60,7 @@ export default function FormsBuilder() {
   const [creating, setCreating] = useState(true);
   const [formName, setFormName] = useState("");
   const [description, setDescription] = useState("");
-  const [isPublic, setIsPublic] = useState(true);
+  const [isPublic, setIsPublic] = useState(false);
   const [successMessage, setSuccessMessage] = useState("送信ありがとうございました。");
   const [fields, setFields] = useState<FormRow["fields"]>([]);
   const [requireLineFriend, setRequireLineFriend] = useState(true);
@@ -73,9 +73,16 @@ const [editingId, setEditingId] = useState<string | null>(null);
 const [selectedFieldId, setSelectedFieldId] = useState<string | null>(null);
   const loadForms = async () => {
     setLoading(true);
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) {
+      setForms([]);
+      setLoading(false);
+      return;
+    }
     const { data, error } = await (supabase as any)
       .from('forms')
       .select('*')
+      .eq('user_id', user.id)
       .order('updated_at', { ascending: false });
     if (error) {
       console.error(error);
@@ -118,7 +125,7 @@ const addField = () => {
 const resetCreator = () => {
   setFormName("");
   setDescription("");
-  setIsPublic(true);
+  setIsPublic(false);
   setSuccessMessage("送信ありがとうございました。");
   setFields([]);
   setRequireLineFriend(true);
@@ -236,7 +243,7 @@ const handleUpdate = async () => {
 
       <div className="grid gap-4 lg:grid-cols-12">
         {/* 左: フォーム一覧 */}
-        <div className="lg:col-span-4">
+        <div className="lg:col-span-5">
           <FormListPanel
             items={forms as any}
             loading={loading}
@@ -255,7 +262,7 @@ const handleUpdate = async () => {
                   user_id: user.id,
                   name: '無題のフォーム',
                   description: null,
-                  is_public: true,
+                  is_public: false,
                   success_message: '送信ありがとうございました。',
                   fields: [],
                   require_line_friend: true,
@@ -283,7 +290,7 @@ const handleUpdate = async () => {
         </div>
 
         {/* 中央: 項目設定 */}
-        <div className="lg:col-span-3">
+        <div className="lg:col-span-2">
           <Card>
             <CardHeader>
               <CardTitle className="text-sm font-semibold">項目設定</CardTitle>

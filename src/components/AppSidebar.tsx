@@ -61,6 +61,8 @@ export function AppSidebar({ user }: AppSidebarProps) {
   const [formsOpen, setFormsOpen] = useState(false)
   const [responsesHasNew, setResponsesHasNew] = useState(false)
   const collapsed = state === "collapsed"
+  const groupActiveFriends = currentPath.startsWith('/friends-list') || currentPath.startsWith('/tags')
+  const groupActiveForms = currentPath.startsWith('/forms')
 
   useEffect(() => {
     loadFriends()
@@ -174,7 +176,7 @@ export function AppSidebar({ user }: AppSidebarProps) {
             <SidebarMenu>
               {/* Friends dropdown */}
               <SidebarMenuItem>
-                <SidebarMenuButton onClick={() => setFriendsOpen((v) => !v)} isActive={friendsOpen}>
+                <SidebarMenuButton onClick={() => setFriendsOpen((v) => !v)} isActive={groupActiveFriends}>
                   <Users className="h-4 w-4" />
                   {!collapsed && (
                     <span className="flex items-center gap-1">
@@ -205,7 +207,7 @@ export function AppSidebar({ user }: AppSidebarProps) {
 
               {/* Forms dropdown */}
               <SidebarMenuItem>
-                <SidebarMenuButton onClick={() => setFormsOpen((v) => !v)} isActive={formsOpen}>
+                <SidebarMenuButton onClick={() => setFormsOpen((v) => !v)} isActive={groupActiveForms}>
                   <FileText className="h-4 w-4" />
                   {!collapsed && (
                     <span className="flex items-center gap-1">

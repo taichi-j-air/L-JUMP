@@ -194,7 +194,7 @@ export default function PublicForm() {
                   {f.type === 'select' && Array.isArray(f.options) && (
                     <Select onValueChange={(v)=>handleChange(f.name, v)}>
                       <SelectTrigger><SelectValue placeholder="選択してください" /></SelectTrigger>
-                      <SelectContent>
+                      <SelectContent className="bg-background z-[60]">
                         {f.options.map((opt)=> (
                           <SelectItem key={opt} value={opt}>{opt}</SelectItem>
                         ))}
