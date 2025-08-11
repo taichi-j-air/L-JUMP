@@ -6,6 +6,9 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
 import { Select, SelectTrigger, SelectContent, SelectItem, SelectValue } from "@/components/ui/select";
+import { Label } from "@/components/ui/label";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
+import { Checkbox } from "@/components/ui/checkbox";
 import { toast } from "sonner";
 import { Copy, Link as LinkIcon, Plus, Save, Trash2, Pencil } from "lucide-react";
 
@@ -59,6 +62,7 @@ export default function FormsBuilder() {
 const [scenarios, setScenarios] = useState<Array<{ id: string; name: string }>>([]);
 const [submitButtonText, setSubmitButtonText] = useState<string>("送信");
 const [submitButtonVariant, setSubmitButtonVariant] = useState<string>("default");
+const [newFieldType, setNewFieldType] = useState<string>("text");
 const [editingId, setEditingId] = useState<string | null>(null);
   const loadForms = async () => {
     setLoading(true);
@@ -87,9 +91,9 @@ const [editingId, setEditingId] = useState<string | null>(null);
     loadScenarios();
   }, []);
 
-  const addField = () => {
-    setFields(prev => [...prev, { id: crypto.randomUUID(), label: "", name: "", type: "text", required: false }]);
-  };
+const addField = () => {
+  setFields(prev => [...prev, { id: crypto.randomUUID(), label: "", name: "", type: newFieldType, required: false }]);
+};
 
   const updateField = (id: string, patch: Partial<FormRow["fields"][number]>) => {
     setFields(prev => prev.map(f => f.id === id ? { ...f, ...patch } : f));
@@ -146,17 +150,16 @@ const { error } = await (supabase as any).from('forms').insert({
     }
   };
 
-  const deleteForm = async (formId: string) => {
-    if (!confirm('本当に削除しますか？この操作は元に戻せません。')) return;
-    const { data, error } = await (supabase as any).functions.invoke('delete-form', { body: { form_id: formId } });
-    if (error) {
-      console.error(error);
-      toast.error('削除に失敗しました');
-    } else {
-      toast.success('フォームを削除しました');
-      loadForms();
-    }
-  };
+const deleteForm = async (formId: string) => {
+  const { error } = await (supabase as any).functions.invoke('delete-form', { body: { form_id: formId } });
+  if (error) {
+    console.error(error);
+    toast.error('削除に失敗しました');
+  } else {
+    toast.success('フォームを削除しました');
+    loadForms();
+  }
+};
 
 const startEdit = (f: FormRow) => {
   setCreating(true);
@@ -334,7 +337,7 @@ const handleUpdate = async () => {
     <Textarea
       placeholder={`例）\nはい\nいいえ\nその他`}
       value={(f.options || []).join('\n')}
-      onChange={(e)=>updateField(f.id,{ options: e.target.value.split(/\r?\n/).map(s=>s.trim()).filter(Boolean) })}
+      onChange={(e)=>updateField(f.id,{ options: e.target.value.split(/\r?\n/).map(s=>s.trim()) })}
       className="min-h-[96px]"
     />
   </div>
