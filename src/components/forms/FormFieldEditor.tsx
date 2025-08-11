@@ -11,20 +11,20 @@ interface Props {
 }
 
 export default function FormFieldEditor({ field, onChange }: Props) {
-  if (!field) {
-    return <div className="text-sm text-muted-foreground">左のリストからフィールドを選択、または追加してください。</div>;
-  }
+  const isChoice = field?.type === "select" || field?.type === "radio" || field?.type === "checkbox";
 
-  const isChoice = field.type === "select" || field.type === "radio" || field.type === "checkbox";
-
-  const [optionsText, setOptionsText] = useState<string>((field.options || []).join("\n"));
+  const [optionsText, setOptionsText] = useState<string>("");
   useEffect(() => {
-    if (isChoice) {
+    if (isChoice && field) {
       setOptionsText((field.options || []).join("\n"));
     } else {
       setOptionsText("");
     }
-  }, [field.id, isChoice, field.options]);
+  }, [field?.id, isChoice, field?.options]);
+
+  if (!field) {
+    return <div className="text-sm text-muted-foreground">左のリストからフィールドを選択、または追加してください。</div>;
+  }
   return (
     <div className="space-y-3">
       <div className="space-y-2">

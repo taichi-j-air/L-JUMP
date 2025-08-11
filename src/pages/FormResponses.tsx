@@ -77,44 +77,38 @@ export default function FormResponses() {
       setSubmissions(data || []);
       setLoading(false);
 
-      // Clear unread count for this form when opened
-      try {
-        const raw = localStorage.getItem('unreadResponses');
-        const map: Record<string, number> = raw ? JSON.parse(raw) : {};
-        if (map[selectedForm]) {
-          map[selectedForm] = 0;
-          localStorage.setItem('unreadResponses', JSON.stringify(map));
-          window.dispatchEvent(new Event('unread-responses-updated'));
-          setUnreadCounts(map);
-        }
-      } catch {}
+      // Note: 既読クリアは行いません（ユーザー操作で開くなどのタイミングに委ねます）
     };
     loadSubmissions();
   }, [selectedForm, sortOrder]);
 
-  // Realtime update: append new submission if it belongs to the selected form
+  // Realtime update: show badges immediately and append new submission
   useEffect(() => {
     const channel = supabase
       .channel('form_responses_live')
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'form_submissions' }, (payload: any) => {
         const row = payload?.new;
         if (!row) return;
+
+        // Append to list if this form is open
         if (row?.form_id === selectedForm) {
           setSubmissions(prev => [{ id: row.id, submitted_at: row.submitted_at, data: row.data, friend_id: row.friend_id, form_id: row.form_id }, ...prev])
-        } else {
-          try {
-            const enabledRaw = localStorage.getItem('formBadgeEnabled');
-            const enabledMap = enabledRaw ? JSON.parse(enabledRaw) : {};
-            if (enabledMap[row.form_id] !== false) {
-              const raw = localStorage.getItem('unreadResponses');
-              const map: Record<string, number> = raw ? JSON.parse(raw) : {};
-              map[row.form_id] = (map[row.form_id] || 0) + 1;
-              localStorage.setItem('unreadResponses', JSON.stringify(map));
-              localStorage.setItem('unreadResponsesGlobal', 'true');
-              window.dispatchEvent(new Event('unread-responses-updated'));
-            }
-          } catch {}
         }
+
+        // Always update unread counts (respect per-form enable toggle)
+        try {
+          const enabledRaw = localStorage.getItem('formBadgeEnabled');
+          const enabledMap = enabledRaw ? JSON.parse(enabledRaw) : {};
+          if (enabledMap[row.form_id] !== false) {
+            const raw = localStorage.getItem('unreadResponses');
+            const map: Record<string, number> = raw ? JSON.parse(raw) : {};
+            map[row.form_id] = (map[row.form_id] || 0) + 1;
+            localStorage.setItem('unreadResponses', JSON.stringify(map));
+            localStorage.setItem('unreadResponsesGlobal', 'true');
+            setUnreadCounts(map);
+            window.dispatchEvent(new Event('unread-responses-updated'));
+          }
+        } catch {}
       })
       .subscribe()
     const handleUnreadUpdate = () => {
