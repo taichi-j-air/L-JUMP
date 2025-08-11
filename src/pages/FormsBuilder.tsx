@@ -20,6 +20,9 @@ interface FormRow {
   success_message: string | null;
   submit_button_text?: string | null;
   submit_button_variant?: string | null;
+  require_line_friend?: boolean;
+  prevent_duplicate_per_friend?: boolean;
+  post_submit_scenario_id?: string | null;
   fields: Array<{ id: string; label: string; name: string; type: string; required?: boolean; options?: string[] }>;
   created_at: string;
   updated_at: string;
@@ -64,6 +67,7 @@ const [submitButtonText, setSubmitButtonText] = useState<string>("送信");
 const [submitButtonVariant, setSubmitButtonVariant] = useState<string>("default");
 const [newFieldType, setNewFieldType] = useState<string>("text");
 const [editingId, setEditingId] = useState<string | null>(null);
+const [selectedFieldId, setSelectedFieldId] = useState<string | null>(null);
   const loadForms = async () => {
     setLoading(true);
     const { data, error } = await (supabase as any)
@@ -92,7 +96,9 @@ const [editingId, setEditingId] = useState<string | null>(null);
   }, []);
 
 const addField = () => {
-  setFields(prev => [...prev, { id: crypto.randomUUID(), label: "", name: "", type: newFieldType, required: false }]);
+  const id = crypto.randomUUID();
+  setFields(prev => [...prev, { id, label: "", name: "", type: newFieldType, required: false }]);
+  setSelectedFieldId(id);
 };
 
   const updateField = (id: string, patch: Partial<FormRow["fields"][number]>) => {
@@ -101,7 +107,10 @@ const addField = () => {
 
   const removeField = (id: string) => {
     setFields(prev => prev.filter(f => f.id !== id));
+    setSelectedFieldId((prev) => (prev === id ? null : prev));
   };
+
+  const selectedField = useMemo(() => fields.find(f => f.id === selectedFieldId) ?? null, [fields, selectedFieldId]);
 
 const resetCreator = () => {
   setFormName("");
@@ -168,10 +177,12 @@ const startEdit = (f: FormRow) => {
   setDescription(f.description || "");
   setIsPublic(!!f.is_public);
   setSuccessMessage(f.success_message || "");
-  setFields(Array.isArray(f.fields) ? f.fields : []);
-  setRequireLineFriend(true);
-  setPreventDuplicate(false);
-  setPostScenario(null);
+  const normalized = Array.isArray(f.fields) ? f.fields : [];
+  setFields(normalized);
+  setSelectedFieldId(normalized[0]?.id ?? null);
+  setRequireLineFriend(f.require_line_friend ?? true);
+  setPreventDuplicate(f.prevent_duplicate_per_friend ?? false);
+  setPostScenario(f.post_submit_scenario_id ?? null);
   setSubmitButtonText(f.submit_button_text || "送信");
   setSubmitButtonVariant(f.submit_button_variant || "default");
 };
