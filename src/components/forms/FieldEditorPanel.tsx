@@ -58,8 +58,8 @@ export default function FieldEditorPanel({ field, onChange }: Props) {
             </SelectContent>
           </Select>
         </div>
-        <div className="flex items-end justify-between gap-3">
-          <Label className="text-xs">必須</Label>
+        <div className="flex items-center justify-end gap-2">
+          <Label className="text-xs whitespace-nowrap">回答必須：</Label>
           <Switch checked={!!field.required} onCheckedChange={(v) => onChange({ required: !!v })} />
         </div>
       </div>

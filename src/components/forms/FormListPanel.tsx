@@ -34,6 +34,7 @@ export default function FormListPanel({
   onCopyLink,
   onOpenPublic,
   onDelete,
+  unreadCounts = {},
 }: Props) {
   return (
     <Card>
@@ -61,13 +62,18 @@ export default function FormListPanel({
                 >
                   <div className="flex items-center justify-between gap-2">
                     <div className="min-w-0">
-                      <div className="text-sm font-medium truncate">{f.name}</div>
+                      <div className="text-sm font-medium truncate flex items-center gap-2">
+                        <span className="truncate">{f.name}</span>
+                        {(unreadCounts?.[f.id] || 0) > 0 && (
+                          <Badge variant="secondary" className="shrink-0">
+                            {unreadCounts?.[f.id] || 0}
+                          </Badge>
+                        )}
+                      </div>
                       {f.description && (
                         <div className="text-[10px] text-muted-foreground truncate">{f.description}</div>
                       )}
-                      <div className="text-[10px] text-muted-foreground mt-0.5">
-                        項目: {f.fields?.length || 0} / 公開: {f.is_public ? "はい" : "いいえ"}
-                      </div>
+                      <div className="text-[10px] text-muted-foreground mt-0.5">項目: {f.fields?.length || 0} / 公開: {f.is_public ? "はい" : "いいえ"}</div>
                     </div>
                     <div className="flex items-center gap-1 shrink-0">
                       <TooltipProvider>

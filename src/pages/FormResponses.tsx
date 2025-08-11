@@ -77,6 +77,37 @@ export default function FormResponses() {
       setSubmissions(data || []);
       setLoading(false);
 
+      // フェッチ時にも未読を更新（通知オンのフォームのみ）
+      try {
+        const enabledRaw = localStorage.getItem('formBadgeEnabled');
+        const enabledMap: Record<string, boolean> = enabledRaw ? JSON.parse(enabledRaw) : {};
+        if (enabledMap[selectedForm] !== false) {
+          const lastKnownRaw = localStorage.getItem('formLastKnownTs');
+          const lastKnown: Record<string, string> = lastKnownRaw ? JSON.parse(lastKnownRaw) : {};
+          const prevTs = lastKnown[selectedForm] ? new Date(lastKnown[selectedForm]) : null;
+          const latestTsStr = (data && data[0]?.submitted_at) || null;
+          const latestTs = latestTsStr ? new Date(latestTsStr) : null;
+
+          if (latestTs) {
+            if (prevTs && latestTs > prevTs) {
+              const newCount = (data || []).filter((d: any) => new Date(d.submitted_at) > prevTs).length;
+              const raw = localStorage.getItem('unreadResponses');
+              const map: Record<string, number> = raw ? JSON.parse(raw) : {};
+              map[selectedForm] = (map[selectedForm] || 0) + newCount;
+              localStorage.setItem('unreadResponses', JSON.stringify(map));
+              localStorage.setItem('unreadResponsesGlobal', 'true');
+              setUnreadCounts(map);
+              window.dispatchEvent(new Event('unread-responses-updated'));
+            }
+            // 最新既知時刻を更新
+            if (!prevTs || latestTs > prevTs) {
+              lastKnown[selectedForm] = latestTs.toISOString();
+              localStorage.setItem('formLastKnownTs', JSON.stringify(lastKnown));
+            }
+          }
+        }
+      } catch {}
+
       // Note: 既読クリアは行いません（ユーザー操作で開くなどのタイミングに委ねます）
     };
     loadSubmissions();

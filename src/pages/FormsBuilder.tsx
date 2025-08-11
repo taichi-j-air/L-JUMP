@@ -100,6 +100,20 @@ const [accentColor, setAccentColor] = useState<string>("#0cb386");
 
   useEffect(() => { loadForms(); }, []);
 
+  // 回答未読バッジ（ローカルストレージから同期）
+  const [unreadCounts, setUnreadCounts] = useState<Record<string, number>>({});
+  useEffect(() => {
+    const sync = () => {
+      try {
+        const raw = localStorage.getItem('unreadResponses');
+        setUnreadCounts(raw ? JSON.parse(raw) : {});
+      } catch {}
+    };
+    sync();
+    window.addEventListener('unread-responses-updated', sync);
+    return () => window.removeEventListener('unread-responses-updated', sync);
+  }, []);
+
   useEffect(() => {
     const loadScenarios = async () => {
       const { data, error } = await (supabase as any)
@@ -310,6 +324,7 @@ const handleUpdate = async () => {
             onCopyLink={copyLink}
             onOpenPublic={(id) => window.open(`/form/${id}`, '_blank', 'noopener,noreferrer')}
             onDelete={deleteForm}
+            unreadCounts={unreadCounts}
           />
         </div>
 
