@@ -1,122 +1,101 @@
-import { useEffect, useState } from "react";
-import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { ScrollArea } from "@/components/ui/scroll-area";
 import { Switch } from "@/components/ui/switch";
-import type { FormField } from "./FormFieldList";
 
-interface Props {
-  field: FormField | null;
-  onChange: (patch: Partial<FormField>) => void;
+export interface FormListItem {
+  id: string;
+  name: string;
+  description?: string | null;
+  fields?: Array<{ id: string }>; // minimal for count display
 }
 
-export default function FormFieldEditor({ field, onChange }: Props) {
-  const isChoice = field?.type === "select" || field?.type === "radio" || field?.type === "checkbox";
-  const [optionsText, setOptionsText] = useState<string>("");
+interface Props {
+  items: FormListItem[];
+  loading: boolean;
+  selectedId: string | null;
+  onSelect: (id: string) => void;
+  unreadCounts?: Record<string, number>;
+  badgeEnabledMap?: Record<string, boolean>;
+  onToggleBadge?: (id: string) => void;
+}
 
-  useEffect(() => {
-    if (isChoice && field) {
-      setOptionsText((field.options || []).join("\n"));
-    } else {
-      setOptionsText("");
-    }
-  }, [field?.id, isChoice, field?.options]);
-
-  if (!field) {
-    return <div className="text-sm text-muted-foreground">左のリストからフィールドを選択、または追加してください。</div>;
-  }
-
+export default function FormListTable({
+  items,
+  loading,
+  selectedId,
+  onSelect,
+  unreadCounts = {},
+  badgeEnabledMap = {},
+  onToggleBadge,
+}: Props) {
   return (
-    <div className="space-y-3">
-      <div className="space-y-2">
-        <label className="text-sm">表示ラベル</label>
-        <Input value={field.label} onChange={(e) => onChange({ label: e.target.value })} placeholder="氏名 など" />
-      </div>
-      
-      <div className="grid grid-cols-2 gap-3 items-end">
-        <div className="space-y-2">
-          <label className="text-sm">タイプ</label>
-          <Select value={field.type} onValueChange={(v) => onChange({ type: v })}>
-            <SelectTrigger>
-              <SelectValue placeholder="タイプ" />
-            </SelectTrigger>
-            <SelectContent className="bg-background z-[60]">
-              <SelectItem value="email">メール</SelectItem>
-              <SelectItem value="textarea">テキストエリア</SelectItem>
-              <SelectItem value="select">ドロップダウン</SelectItem>
-              <SelectItem value="radio">ラジオボタン</SelectItem>
-              <SelectItem value="checkbox">チェックボックス</SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
-        
-        <div className="flex items-center gap-2 justify-end">
-          <label className="text-sm whitespace-nowrap">回答必須：</label>
-          <Switch checked={!!field.required} onCheckedChange={(v) => onChange({ required: v })} />
-        </div>
-      </div>
-      
-      {(field.type === "email" || field.type === "textarea") && (
-        <div className="grid grid-cols-2 gap-3">
-          <div className="space-y-2">
-            <label className="text-sm">プレースホルダー</label>
-            <Input
-              value={field.placeholder ?? ""}
-              onChange={(e) => onChange({ placeholder: e.target.value })}
-              placeholder={field.type === "email" ? "例）example@example.com" : "例）ご質問をご記入ください"}
-            />
-          </div>
-          {field.type === "textarea" && (
+    <Card>
+      <CardHeader className="py-3">
+        <CardTitle className="text-base">フォーム一覧</CardTitle>
+      </CardHeader>
+      <CardContent>
+        {loading ? (
+          <p className="text-muted-foreground">読み込み中...</p>
+        ) : (
+          <ScrollArea className="h-[560px] pr-2">
             <div className="space-y-2">
-              <label className="text-sm">行数</label>
-              <Input
-                type="number"
-                min={1}
-                max={20}
-                value={field.rows ?? 3}
-                onChange={(e) => onChange({ rows: Math.max(1, Math.min(20, Number(e.target.value) || 1)) })}
-              />
+              {items.length === 0 && (
+                <p className="text-xs text-muted-foreground">まだフォームがありません</p>
+              )}
+              {items.map((f) => {
+                const unread = unreadCounts[f.id] || 0;
+                const enabled = badgeEnabledMap[f.id] !== false; // default true
+                return (
+                  <div
+                    key={f.id}
+                    className={
+                      "rounded-md border px-3 py-2 transition-colors cursor-pointer " +
+                      (selectedId === f.id ? "bg-muted" : "hover:bg-muted/50")
+                    }
+                    onClick={() => onSelect(f.id)}
+                  >
+                    <div className="flex items-center gap-3">
+                      <div className="min-w-0 flex-1">
+                        <div className="text-sm font-medium truncate flex items-center gap-2">
+                          <span className="truncate">{f.name}</span>
+                          {unread > 0 && enabled && (
+                            <Badge variant="secondary" className="shrink-0">
+                              {unread}
+                            </Badge>
+                          )}
+                        </div>
+                        {f.description && (
+                          <div className="text-[11px] text-muted-foreground truncate">
+                            {f.description}
+                          </div>
+                        )}
+                        <div className="text-[10px] text-muted-foreground mt-0.5">
+                          項目: {f.fields?.length || 0}
+                        </div>
+                      </div>
+                      {onToggleBadge && (
+                        <div
+                          className="flex items-center gap-2"
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          <span className="text-[10px] text-muted-foreground">通知</span>
+                          <Switch
+                            checked={enabled}
+                            onCheckedChange={() => onToggleBadge(f.id)}
+                            aria-label="通知バッジの有効/無効"
+                          />
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
             </div>
-          )}
-        </div>
-      )}
-      
-      {isChoice && (
-        <div className="space-y-2">
-          <label className="text-sm">選択肢（1行に1つ）</label>
-          <Textarea
-            rows={8}
-            placeholder={`例）\nはい\nいいえ\nその他`}
-            value={optionsText}
-            onChange={(e) => {
-              const text = e.target.value;
-              setOptionsText(text);
-              const opts = text.split(/\r?\n/).map((s) => s.trim()).filter(Boolean);
-              onChange({ options: opts });
-            }}
-            onKeyDown={(e) => {
-              // Enterキーは通常通り改行として動作させる
-              // その他のキーイベントのバブリングのみ停止
-              if (e.key !== 'Enter') {
-                e.stopPropagation();
-              }
-            }}
-            onFocus={() => {
-              console.log('Textarea focused'); // デバッグ用
-            }}
-            onBlur={() => {
-              console.log('Textarea blurred'); // デバッグ用  
-            }}
-            style={{
-              resize: 'vertical', // 縦方向のリサイズのみ許可
-              minHeight: '120px'   // 最小の高さを確保
-            }}
-          />
-          <div className="text-xs text-muted-foreground">
-            各行に1つの選択肢を入力してください。空行は無視されます。
-          </div>
-        </div>
-      )}
-    </div>
+          </ScrollArea>
+        )}
+      </CardContent>
+    </Card>
   );
 }
