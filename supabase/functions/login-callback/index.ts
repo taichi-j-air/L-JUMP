@@ -279,26 +279,29 @@ serve(async (req) => {
 
     // ── 10. ステップ1の配信スケジュールを設定（開始時間を厳密に反映） ──
     try {
-      // 友だちの追加日時
-      const { data: friendRow } = await supabase
-        .from('line_friends')
-        .select('id, added_at')
-        .eq('id', reg.friend_id)
-        .maybeSingle();
-
       // ステップ1取得
       const { data: firstStep } = await supabase
         .from('steps')
-        .select('id, delivery_type, delivery_seconds, delivery_minutes, delivery_hours, delivery_days, specific_time, delivery_time_of_day')
+        .select('id, delivery_type, delivery_seconds, delivery_minutes, delivery_hours, delivery_days, specific_time, delivery_time_of_day, delivery_relative_to_previous')
         .eq('scenario_id', reg.scenario_id)
         .order('step_order', { ascending: true })
         .limit(1)
         .maybeSingle();
 
-      if (friendRow && firstStep) {
+      if (firstStep) {
+        // 配信種別をRPCに合わせて正規化
+        let effectiveType = firstStep.delivery_type as string;
+        if (effectiveType === 'immediate') effectiveType = 'immediately';
+        if (effectiveType === 'specific') effectiveType = 'specific_time';
+        if (effectiveType === 'time_of_day') effectiveType = 'relative_to_previous';
+        if (effectiveType === 'relative' && (firstStep as any).delivery_relative_to_previous) effectiveType = 'relative_to_previous';
+
+        // 基準は「シナリオ登録時刻」（= 今）
+        const registrationAt = new Date();
+
         const { data: scheduledAt } = await supabase.rpc('calculate_scheduled_delivery_time', {
-          p_friend_added_at: friendRow.added_at,
-          p_delivery_type: firstStep.delivery_type,
+          p_friend_added_at: registrationAt.toISOString(),
+          p_delivery_type: effectiveType,
           p_delivery_seconds: firstStep.delivery_seconds || 0,
           p_delivery_minutes: firstStep.delivery_minutes || 0,
           p_delivery_hours: firstStep.delivery_hours || 0,
@@ -310,15 +313,13 @@ serve(async (req) => {
 
         if (scheduledAt) {
           const sched = new Date(scheduledAt as unknown as string);
-          const now = new Date();
-          const status = sched <= now ? 'ready' : 'waiting';
-
+          // 常に waiting から開始（即時でもスケジューラがreadyへ反映）
           await supabase
             .from('step_delivery_tracking')
             .update({
               scheduled_delivery_at: sched.toISOString(),
               next_check_at: new Date(sched.getTime() - 5000).toISOString(),
-              status
+              status: 'waiting'
             })
             .eq('scenario_id', reg.scenario_id)
             .eq('friend_id', reg.friend_id)
