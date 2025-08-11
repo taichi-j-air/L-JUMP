@@ -66,6 +66,7 @@ export default function FormsBuilder() {
   const [requireLineFriend, setRequireLineFriend] = useState(true);
   const [preventDuplicate, setPreventDuplicate] = useState(false);
   const [postScenario, setPostScenario] = useState<string | null>(null);
+const [scenarios, setScenarios] = useState<Array<{ id: string; name: string }>>([]);
 const [submitButtonText, setSubmitButtonText] = useState<string>("送信");
 const [submitButtonVariant, setSubmitButtonVariant] = useState<string>("default");
 const [editingId, setEditingId] = useState<string | null>(null);
