@@ -107,8 +107,8 @@ export default function PublicForm() {
     <div className="container mx-auto max-w-3xl p-4">
       <Card>
         <CardHeader>
-          <CardTitle asChild>
-            <h1 className="text-2xl font-bold tracking-tight">{form.name}</h1>
+          <CardTitle>
+            {form.name}
           </CardTitle>
           {form.description && <CardDescription>{form.description}</CardDescription>}
         </CardHeader>
