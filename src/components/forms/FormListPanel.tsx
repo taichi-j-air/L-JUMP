@@ -1,6 +1,7 @@
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { Copy, Link as LinkIcon, Pencil, Plus, Trash2 } from "lucide-react";
 
 export interface FormListItem {
@@ -67,33 +68,54 @@ export default function FormListPanel({
                       </div>
                     </div>
                     <div className="flex items-center gap-1 shrink-0">
-                      <Button
-                        size="icon"
-                        variant="secondary"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          onCopyLink(f.id);
-                        }}
-                        aria-label="埋め込みURLをコピー"
-                      >
-                        <Copy className="h-4 w-4" />
-                      </Button>
-                      <Button
-                        size="icon"
-                        variant="outline"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          onOpenPublic(f.id);
-                        }}
-                        aria-label="公開ページ"
-                      >
-                        <LinkIcon className="h-4 w-4" />
-                      </Button>
-                      <Button size="icon" variant="destructive" aria-label="削除"
-                        onClick={(e) => { e.stopPropagation(); onDelete(f.id); }}
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
+                      <TooltipProvider>
+                        <div className="flex items-center gap-1">
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <Button
+                                size="icon"
+                                variant="secondary"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  onCopyLink(f.id);
+                                }}
+                                aria-label="埋め込みURLをコピー"
+                              >
+                                <Copy className="h-4 w-4" />
+                              </Button>
+                            </TooltipTrigger>
+                            <TooltipContent>URLをコピー</TooltipContent>
+                          </Tooltip>
+
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <Button
+                                size="icon"
+                                variant="outline"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  onOpenPublic(f.id);
+                                }}
+                                aria-label="公開ページ"
+                              >
+                                <LinkIcon className="h-4 w-4" />
+                              </Button>
+                            </TooltipTrigger>
+                            <TooltipContent>公開ページを開く</TooltipContent>
+                          </Tooltip>
+
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <Button size="icon" variant="destructive" aria-label="削除"
+                                onClick={(e) => { e.stopPropagation(); onDelete(f.id); }}
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </Button>
+                            </TooltipTrigger>
+                            <TooltipContent>削除</TooltipContent>
+                          </Tooltip>
+                        </div>
+                      </TooltipProvider>
                     </div>
                   </div>
                 </div>

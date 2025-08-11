@@ -83,7 +83,7 @@ function SortableItem({
       </div>
       <div className="flex items-center gap-2 shrink-0">
         {field.required && (
-          <Badge variant="destructive" className="text-[10px] px-1.5 py-0.5 rounded">[必須]</Badge>
+          <Badge variant="destructive" className="text-[10px] px-1.5 py-0.5 rounded">必須</Badge>
         )}
         <Button
           size="icon"

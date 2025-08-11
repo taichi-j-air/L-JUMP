@@ -87,7 +87,7 @@ export default function FormPreviewPanel({
               <label className="text-sm">
                 {f.label || f.name || "未設定"}
                 {f.required && (
-                  <span className="ml-1 inline-flex items-center rounded px-1.5 py-0.5 text-[10px] bg-destructive text-destructive-foreground">[必須]</span>
+                  <span className="ml-1 inline-flex items-center rounded px-1.5 py-0.5 text-[10px] bg-destructive text-destructive-foreground">必須</span>
                 )}
               </label>
               {f.type === "text" || f.type === "email" ? (

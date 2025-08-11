@@ -20,7 +20,7 @@ interface PublicFormRow {
   post_submit_scenario_id?: string | null;
   submit_button_text?: string | null;
   submit_button_variant?: string | null;
-  fields: Array<{ id: string; label: string; name: string; type: string; required?: boolean; options?: string[] }>;
+  fields: Array<{ id: string; label: string; name: string; type: string; required?: boolean; options?: string[]; placeholder?: string; rows?: number }>;
 }
 
 const useSEO = (title: string, description: string, canonical?: string) => {
@@ -180,7 +180,10 @@ export default function PublicForm() {
               {form.fields.map((f) => (
                 <div key={f.id} className="space-y-2">
                   <label className="text-sm font-medium" htmlFor={f.name}>
-                    {f.label}{f.required && <span aria-hidden className="ml-1">*</span>}
+                    {f.label}
+                    {f.required && (
+                      <span className="ml-1 inline-flex items-center rounded px-1.5 py-0.5 text-[10px] bg-destructive text-destructive-foreground">必須</span>
+                    )}
                   </label>
                   {f.type === 'textarea' && (
                     <Textarea id={f.name} name={f.name} required={!!f.required} onChange={(e)=>handleChange(f.name, e.target.value)} />
