@@ -61,6 +61,42 @@ export type Database = {
           },
         ]
       }
+      cms_pages: {
+        Row: {
+          content: string | null
+          created_at: string
+          id: string
+          share_code: string
+          slug: string
+          title: string
+          updated_at: string
+          user_id: string
+          visibility: Database["public"]["Enums"]["page_visibility"]
+        }
+        Insert: {
+          content?: string | null
+          created_at?: string
+          id?: string
+          share_code?: string
+          slug: string
+          title: string
+          updated_at?: string
+          user_id: string
+          visibility?: Database["public"]["Enums"]["page_visibility"]
+        }
+        Update: {
+          content?: string | null
+          created_at?: string
+          id?: string
+          share_code?: string
+          slug?: string
+          title?: string
+          updated_at?: string
+          user_id?: string
+          visibility?: Database["public"]["Enums"]["page_visibility"]
+        }
+        Relationships: []
+      }
       flex_messages: {
         Row: {
           content: Json
@@ -1234,6 +1270,7 @@ export type Database = {
     }
     Enums: {
       message_kind: "incoming" | "outgoing"
+      page_visibility: "friends_only" | "public"
       step_message_type: "text" | "media" | "flex"
     }
     CompositeTypes: {
@@ -1363,6 +1400,7 @@ export const Constants = {
   public: {
     Enums: {
       message_kind: ["incoming", "outgoing"],
+      page_visibility: ["friends_only", "public"],
       step_message_type: ["text", "media", "flex"],
     },
   },
