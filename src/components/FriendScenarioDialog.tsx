@@ -123,6 +123,72 @@ export function FriendScenarioDialog({ open, onOpenChange, user, friend }: Frien
 
       const startOrder = (allSteps || []).find((s: any) => s.id === startStepId)?.step_order ?? 1
 
+      // 開始ステップの配信設定と友だち登録日時を取得（初回スケジュール計算用）
+      const [{ data: startStepDetail }, { data: friendRow }] = await Promise.all([
+        supabase
+          .from('steps')
+          .select('id, delivery_type, delivery_seconds, delivery_minutes, delivery_hours, delivery_days, delivery_time_of_day, specific_time, delivery_relative_to_previous')
+          .eq('id', startStepId)
+          .maybeSingle(),
+        supabase
+          .from('line_friends')
+          .select('added_at')
+          .eq('id', friend.id)
+          .maybeSingle(),
+      ])
+
+      const computeFirstScheduledAt = (): string => {
+        const now = new Date()
+        if (!startStepDetail) return now.toISOString()
+
+        // delivery_typeの正規化（Edge関数に合わせる）
+        let effectiveType = (startStepDetail as any).delivery_type as string
+        if (effectiveType === 'immediate') effectiveType = 'immediately'
+        if (effectiveType === 'specific') effectiveType = 'specific_time'
+        if (effectiveType === 'time_of_day') effectiveType = 'relative_to_previous'
+        if (effectiveType === 'relative' && (startStepDetail as any).delivery_relative_to_previous) effectiveType = 'relative_to_previous'
+
+        const addOffset = (base: Date) => {
+          const d = new Date(base)
+          d.setSeconds(d.getSeconds() + ((startStepDetail as any).delivery_seconds || 0))
+          d.setMinutes(d.getMinutes() + ((startStepDetail as any).delivery_minutes || 0))
+          d.setHours(d.getHours() + ((startStepDetail as any).delivery_hours || 0))
+          d.setDate(d.getDate() + ((startStepDetail as any).delivery_days || 0))
+          return d
+        }
+        const parseTimeOfDay = (val?: string | null) => {
+          if (!val) return null
+          const [hh, mm = '0', ss = '0'] = val.split(':')
+          return { h: Number(hh), m: Number(mm), s: Number(ss) }
+        }
+
+        // ベース時刻
+        const friendAdded = friendRow?.added_at ? new Date(friendRow.added_at) : now
+
+        if (effectiveType === 'specific_time' && (startStepDetail as any).specific_time) {
+          // 特定日時
+          return new Date((startStepDetail as any).specific_time).toISOString()
+        }
+
+        // relative / relative_to_previous の初回は friend.added_at を基準に
+        let scheduled = addOffset(friendAdded)
+
+        const tod = parseTimeOfDay((startStepDetail as any).delivery_time_of_day)
+        if (tod) {
+          const withTod = new Date(scheduled)
+          withTod.setHours(tod.h, tod.m, tod.s, 0)
+          // もしすでに過去なら翌日に
+          if (withTod.getTime() <= scheduled.getTime()) {
+            withTod.setDate(withTod.getDate() + 1)
+          }
+          scheduled = withTod
+        }
+        return scheduled.toISOString()
+      }
+
+      const firstScheduledAt = computeFirstScheduledAt()
+      const firstNextCheck = new Date(new Date(firstScheduledAt).getTime() - 5000).toISOString()
+
       // 既存のトラッキング
       const { data: existing } = await supabase
         .from('step_delivery_tracking')
@@ -139,10 +205,10 @@ export function FriendScenarioDialog({ open, onOpenChange, user, friend }: Frien
           scenario_id: scenario.id,
           step_id: s.id,
           friend_id: friend.id,
-          status: s.step_order < startOrder ? 'delivered' : s.step_order === startOrder ? 'ready' : 'waiting',
+          status: s.step_order < startOrder ? 'delivered' : s.step_order === startOrder ? 'waiting' : 'waiting',
           delivered_at: s.step_order < startOrder ? new Date().toISOString() : null,
-          scheduled_delivery_at: s.step_order === startOrder ? new Date().toISOString() : null,
-          next_check_at: s.step_order === startOrder ? new Date().toISOString() : null,
+          scheduled_delivery_at: s.step_order === startOrder ? firstScheduledAt : null,
+          next_check_at: s.step_order === startOrder ? firstNextCheck : null,
         }))
       if (missingRows.length > 0) {
         const { error: insErr } = await supabase.from('step_delivery_tracking').insert(missingRows)
@@ -153,9 +219,11 @@ export function FriendScenarioDialog({ open, onOpenChange, user, friend }: Frien
       for (const s of allSteps || []) {
         const id = existingMap.get(s.id)
         if (!id) continue
-        const target = s.step_order < startOrder ? { status: 'delivered', delivered_at: new Date().toISOString(), scheduled_delivery_at: null, next_check_at: null } :
-                       s.step_order === startOrder ? { status: 'ready', delivered_at: null, scheduled_delivery_at: new Date().toISOString(), next_check_at: new Date().toISOString() } :
-                       { status: 'waiting', delivered_at: null, scheduled_delivery_at: null, next_check_at: null }
+        const target = s.step_order < startOrder
+          ? { status: 'delivered', delivered_at: new Date().toISOString(), scheduled_delivery_at: null, next_check_at: null }
+          : s.step_order === startOrder
+            ? { status: 'waiting', delivered_at: null, scheduled_delivery_at: firstScheduledAt, next_check_at: firstNextCheck }
+            : { status: 'waiting', delivered_at: null, scheduled_delivery_at: null, next_check_at: null }
         const { error: updErr } = await supabase
           .from('step_delivery_tracking')
           .update({ ...target, updated_at: new Date().toISOString() })
@@ -163,7 +231,7 @@ export function FriendScenarioDialog({ open, onOpenChange, user, friend }: Frien
         if (updErr) throw updErr
       }
 
-      // 即時に配信処理をトリガー（この友だちのみ）
+      // スケジューラ関数をキック（この友だちのみ）。未来時刻なら送られません。
       try {
         await supabase.functions.invoke('scheduled-step-delivery', {
           body: { line_user_id: friend.line_user_id, scenario_id: scenario.id }
