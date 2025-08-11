@@ -128,6 +128,7 @@ export type Database = {
       }
       forms: {
         Row: {
+          accent_color: string
           created_at: string
           description: string | null
           fields: Json
@@ -137,11 +138,16 @@ export type Database = {
           post_submit_scenario_id: string | null
           prevent_duplicate_per_friend: boolean
           require_line_friend: boolean
+          submit_button_bg_color: string
+          submit_button_text: string | null
+          submit_button_text_color: string
+          submit_button_variant: string | null
           success_message: string | null
           updated_at: string
           user_id: string
         }
         Insert: {
+          accent_color?: string
           created_at?: string
           description?: string | null
           fields?: Json
@@ -151,11 +157,16 @@ export type Database = {
           post_submit_scenario_id?: string | null
           prevent_duplicate_per_friend?: boolean
           require_line_friend?: boolean
+          submit_button_bg_color?: string
+          submit_button_text?: string | null
+          submit_button_text_color?: string
+          submit_button_variant?: string | null
           success_message?: string | null
           updated_at?: string
           user_id: string
         }
         Update: {
+          accent_color?: string
           created_at?: string
           description?: string | null
           fields?: Json
@@ -165,6 +176,10 @@ export type Database = {
           post_submit_scenario_id?: string | null
           prevent_duplicate_per_friend?: boolean
           require_line_friend?: boolean
+          submit_button_bg_color?: string
+          submit_button_text?: string | null
+          submit_button_text_color?: string
+          submit_button_variant?: string | null
           success_message?: string | null
           updated_at?: string
           user_id?: string
