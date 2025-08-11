@@ -66,6 +66,9 @@ export default function TagsManager() {
   const [members, setMembers] = useState<MemberRow[]>([])
   const [removals, setRemovals] = useState<Set<string>>(new Set()) // friend_tags.id を保持
   const [savingRemovals, setSavingRemovals] = useState(false)
+  const [page, setPage] = useState(1)
+  const pageSize = 50
+  const [totalMembers, setTotalMembers] = useState(0)
 
   const formatYYDDMMHHMM = (iso: string) => {
     const d = new Date(iso)
@@ -182,27 +185,55 @@ export default function TagsManager() {
     setMembers([])
     setRemovals(new Set())
     setMembersOpen(true)
+    setPage(1)
 
     try {
       const { data: auth } = await supabase.auth.getUser()
       const user = auth.user
       if (!user) return
 
+      const { count, error: cntErr } = await (supabase as any)
+        .from("friend_tags")
+        .select("id", { count: "exact", head: true })
+        .eq("user_id", user.id)
+        .eq("tag_id", tag.id)
+      if (cntErr) throw cntErr
+      setTotalMembers(count || 0)
+
+      await fetchMembersPage(tag, 1, user.id)
+    } catch (e) {
+      console.error(e)
+      toast.error("メンバー取得に失敗しました")
+    }
+  }
+
+  const fetchMembersPage = async (tag: TagRow, p: number, userId?: string) => {
+    try {
+      let uid = userId
+      if (!uid) {
+        const { data: auth } = await supabase.auth.getUser()
+        uid = auth.user?.id
+        if (!uid) return
+      }
+      const from = (p - 1) * pageSize
+      const to = from + pageSize - 1
+
       const { data: ftRows, error: ftErr } = await (supabase as any)
         .from("friend_tags")
         .select("id, friend_id, created_at")
-        .eq("user_id", user.id)
+        .eq("user_id", uid)
         .eq("tag_id", tag.id)
-
+        .order("created_at", { ascending: false })
+        .range(from, to)
       if (ftErr) throw ftErr
 
-      const friendIds = (ftRows || []).map((r) => r.friend_id)
+      const friendIds = (ftRows || []).map((r: any) => r.friend_id)
       let friendsMap: Record<string, { display_name: string | null }> = {}
       if (friendIds.length) {
         const { data: frows, error: ferr } = await (supabase as any)
           .from("line_friends")
           .select("id, display_name")
-          .eq("user_id", user.id)
+          .eq("user_id", uid)
           .in("id", friendIds)
         if (ferr) throw ferr
         friendsMap = Object.fromEntries((frows || []).map((f: any) => [f.id, { display_name: f.display_name }]))
@@ -215,6 +246,7 @@ export default function TagsManager() {
         display_name: friendsMap[r.friend_id]?.display_name ?? null,
       }))
       setMembers(merged)
+      setPage(p)
     } catch (e) {
       console.error(e)
       toast.error("メンバー取得に失敗しました")
@@ -310,20 +342,20 @@ export default function TagsManager() {
           {loading ? (
             <p className="text-muted-foreground">読み込み中...</p>
           ) : (
-            <div className="w-full overflow-x-auto">
+            <div className="w-full overflow-x-auto text-sm">
               <Table>
                 <TableHeader>
-                  <TableRow>
-                    <TableHead className="w-[40%]">タグ名</TableHead>
-                    <TableHead className="w-[15%] text-right">人数</TableHead>
-                    <TableHead className="w-[25%]">作成日時</TableHead>
-                    <TableHead className="w-[20%] text-right">操作</TableHead>
+                  <TableRow className="h-9">
+                    <TableHead className="w-[40%] py-2">タグ名</TableHead>
+                    <TableHead className="w-[15%] text-right py-2">人数</TableHead>
+                    <TableHead className="w-[25%] py-2">作成日時</TableHead>
+                    <TableHead className="w-[20%] text-right py-2">操作</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {sorted.length === 0 ? (
-                    <TableRow>
-                      <TableCell colSpan={4} className="text-center text-muted-foreground">
+                    <TableRow className="h-9">
+                      <TableCell colSpan={4} className="text-center text-muted-foreground py-2">
                         まだタグがありません
                       </TableCell>
                     </TableRow>
@@ -331,16 +363,16 @@ export default function TagsManager() {
                     sorted.map((tag) => {
                       const c = counts[tag.id] || 0
                       return (
-                        <TableRow key={tag.id}>
-                          <TableCell className="truncate">{tag.name}</TableCell>
-                          <TableCell className="text-right">
-                            <Button variant="ghost" size="sm" onClick={() => openMembers(tag)}>
+                        <TableRow key={tag.id} className="h-9">
+                          <TableCell className="truncate py-2">{tag.name}</TableCell>
+                          <TableCell className="text-right py-2">
+                            <Button variant="ghost" size="sm" className="h-7 px-2" onClick={() => openMembers(tag)}>
                               {c.toLocaleString()} 名を見る
                             </Button>
                           </TableCell>
-                          <TableCell>{formatYYDDMMHHMM(tag.created_at)}</TableCell>
-                          <TableCell className="text-right">
-                            <Button variant="destructive" size="sm" onClick={() => handleDelete(tag.id)}>
+                          <TableCell className="py-2">{formatYYDDMMHHMM(tag.created_at)}</TableCell>
+                          <TableCell className="text-right py-2">
+                            <Button variant="destructive" size="sm" className="h-7 px-2" onClick={() => handleDelete(tag.id)}>
                               <Trash2 className="mr-2 h-4 w-4" /> 削除
                             </Button>
                           </TableCell>
@@ -364,29 +396,29 @@ export default function TagsManager() {
             </DialogTitle>
           </DialogHeader>
 
-          <div className="space-y-3">
-            <div className="w-full overflow-x-auto">
+          <div className="space-y-3 text-sm">
+            <div className="w-full overflow-x-auto text-sm">
               <Table>
                 <TableHeader>
-                  <TableRow>
-                    <TableHead>ユーザー名</TableHead>
-                    <TableHead>追加日時</TableHead>
-                    <TableHead className="text-right">外す</TableHead>
+                  <TableRow className="h-9">
+                    <TableHead className="py-2">ユーザー名</TableHead>
+                    <TableHead className="py-2">追加日時</TableHead>
+                    <TableHead className="text-right py-2">外す</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {members.length === 0 ? (
-                    <TableRow>
-                      <TableCell colSpan={3} className="text-center text-muted-foreground">
+                    <TableRow className="h-9">
+                      <TableCell colSpan={3} className="text-center text-muted-foreground py-2">
                         メンバーがいません
                       </TableCell>
                     </TableRow>
                   ) : (
                     members.map((m) => (
-                      <TableRow key={m.id}>
-                        <TableCell className="truncate">{m.display_name || "（名前未設定）"}</TableCell>
-                        <TableCell>{formatYYDDMMHHMM(m.created_at)}</TableCell>
-                        <TableCell className="text-right">
+                      <TableRow key={m.id} className="h-9">
+                        <TableCell className="truncate py-2">{m.display_name || "（名前未設定）"}</TableCell>
+                        <TableCell className="py-2">{formatYYDDMMHHMM(m.created_at)}</TableCell>
+                        <TableCell className="text-right py-2">
                           <Checkbox
                             checked={removals.has(m.id)}
                             onCheckedChange={(v) => toggleRemoval(m.id, Boolean(v))}
@@ -400,11 +432,38 @@ export default function TagsManager() {
               </Table>
             </div>
 
+            <div className="flex items-center justify-between">
+              <div className="text-muted-foreground">
+                表示 {Math.min((page - 1) * pageSize + 1, Math.max(totalMembers, 0))}
+                -{Math.min(page * pageSize, totalMembers)} / {totalMembers}
+              </div>
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="h-8 px-2"
+                  onClick={() => activeTag && page > 1 && fetchMembersPage(activeTag, page - 1)}
+                  disabled={page <= 1}
+                >
+                  前へ
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="h-8 px-2"
+                  onClick={() => activeTag && page * pageSize < totalMembers && fetchMembersPage(activeTag, page + 1)}
+                  disabled={page * pageSize >= totalMembers}
+                >
+                  次へ
+                </Button>
+              </div>
+            </div>
+
             <div className="flex justify-end gap-2 pt-1">
-              <Button variant="outline" onClick={() => setMembersOpen(false)}>
+              <Button variant="outline" onClick={() => setMembersOpen(false)} className="h-8 px-3">
                 <X className="mr-2 h-4 w-4" /> キャンセル
               </Button>
-              <Button onClick={saveRemovals} disabled={savingRemovals || removals.size === 0}>
+              <Button onClick={saveRemovals} disabled={savingRemovals || removals.size === 0} className="h-8 px-3">
                 <Save className="mr-2 h-4 w-4" /> 保存
               </Button>
             </div>
