@@ -136,7 +136,6 @@ Deno.serve(async (req) => {
         .select('scheduled_delivery_at')
         .eq('status', 'waiting')
         .not('friend_id', 'is', null)
-        .lte('scheduled_delivery_at', new Date(Date.now() + 60000).toISOString())
         .order('scheduled_delivery_at', { ascending: true })
         .limit(1)
       if (scenarioIdFilter) upcomingQuery = upcomingQuery.eq('scenario_id', scenarioIdFilter)
@@ -560,8 +559,9 @@ async function markStepAsDelivered(supabase: any, trackingId: string, scenarioId
       let effectiveType = (firstStep as any).delivery_type as string
       if (effectiveType === 'immediate') effectiveType = 'immediately'
       if (effectiveType === 'specific') effectiveType = 'specific_time'
-      if (effectiveType === 'time_of_day') effectiveType = 'relative_to_previous'
-      if (effectiveType === 'relative' && (firstStep as any).delivery_relative_to_previous) effectiveType = 'relative_to_previous'
+      if (effectiveType === 'time_of_day') effectiveType = 'time_of_day'
+      const hasOffset = ((firstStep as any).delivery_seconds || 0) + ((firstStep as any).delivery_minutes || 0) + ((firstStep as any).delivery_hours || 0) + ((firstStep as any).delivery_days || 0) > 0
+      if (effectiveType === 'relative' && (((firstStep as any).delivery_relative_to_previous) || hasOffset)) effectiveType = 'relative_to_previous'
 
       // 次回配信時刻を算出
       let scheduledIso: string | null = null
@@ -693,8 +693,10 @@ async function markStepAsDelivered(supabase: any, trackingId: string, scenarioId
         let effectiveType = nextStep.delivery_type as string
         if (effectiveType === 'immediate') effectiveType = 'immediately'
         if (effectiveType === 'specific') effectiveType = 'specific_time'
-        if (effectiveType === 'time_of_day') effectiveType = 'relative_to_previous'
-        if (effectiveType === 'relative' && (nextStep as any).delivery_relative_to_previous) effectiveType = 'relative_to_previous'
+        if (effectiveType === 'time_of_day') effectiveType = 'time_of_day'
+        const isNotFirstStep = (currentStepOrder + 1) >= 1 // scheduling for next step
+        const hasOffset = (nextStep.delivery_seconds || 0) + (nextStep.delivery_minutes || 0) + (nextStep.delivery_hours || 0) + (nextStep.delivery_days || 0) > 0
+        if (effectiveType === 'relative' && ((nextStep as any).delivery_relative_to_previous || isNotFirstStep)) effectiveType = 'relative_to_previous'
 
         // シナリオ登録時刻（この友だちがこのシナリオに登録された時刻 = 最初のトラッキング作成時刻）
         const { data: regBase } = await supabase
