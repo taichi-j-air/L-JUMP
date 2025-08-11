@@ -10,6 +10,7 @@ import { User } from "@supabase/supabase-js"
 
 interface Profile {
   line_channel_id?: string
+  line_bot_id?: string
   delivery_limit?: number
   delivery_count?: number
   monthly_message_limit?: number
@@ -41,7 +42,7 @@ export function AppHeader({ user }: AppHeaderProps) {
         // 1. Get profile with minimal columns
         supabase
           .from('profiles')
-          .select('line_channel_id, friends_count, monthly_message_limit, monthly_message_used')
+          .select('line_channel_id, line_bot_id, friends_count, monthly_message_limit, monthly_message_used')
           .eq('user_id', user.id)
           .single(),
         
@@ -117,6 +118,8 @@ export function AppHeader({ user }: AppHeaderProps) {
     return null
   }
 
+  const lineIdLabel = profile?.line_bot_id ? (profile.line_bot_id.startsWith('@') ? profile.line_bot_id : `@${profile.line_bot_id}`) : '未設定';
+
   return (
     <header className="fixed top-0 left-0 right-0 z-50 bg-background border-b h-14 flex items-center px-4 gap-4">
       <div className="flex items-center gap-2">
@@ -129,7 +132,7 @@ export function AppHeader({ user }: AppHeaderProps) {
           <PopoverTrigger asChild>
             <Button variant="outline" size="sm" className="flex items-center gap-2">
               <Settings className="h-4 w-4" />
-              アカウント管理
+              {lineIdLabel}
             </Button>
           </PopoverTrigger>
           <PopoverContent className="w-80">
@@ -152,9 +155,9 @@ export function AppHeader({ user }: AppHeaderProps) {
 
               <div className="text-sm text-muted-foreground">
                 <div className="flex justify-between">
-                  <span>アカウントID:</span>
+                  <span>LINE ID:</span>
                   <span className="font-mono">
-                    {profile?.line_channel_id || '未設定'}
+                    {lineIdLabel}
                   </span>
                 </div>
               </div>
