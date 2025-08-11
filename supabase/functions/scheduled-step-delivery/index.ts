@@ -40,19 +40,6 @@ Deno.serve(async (req) => {
     const now = new Date().toISOString()
     console.log(`⏰ Current time: ${now}`, { scenarioIdFilter, friendIdFilter, recentOnly, lineUserIdFilter })
 
-    // まず全てのtrackingレコードを確認
-    const { data: allTracking, error: allError } = await supabase
-      .from('step_delivery_tracking')
-      .select('*')
-      
-    console.log('📊 All tracking records:', allTracking?.length || 0)
-    if (allTracking) {
-      console.log('📋 Status breakdown:', allTracking.reduce((acc, item) => {
-        acc[item.status] = (acc[item.status] || 0) + 1
-        return acc
-      }, {}))
-    }
-
     const cutoff = new Date(Date.now() - 2 * 60 * 1000).toISOString()
 
     // Optionally resolve friend IDs from line_user_id once to reuse
@@ -117,12 +104,6 @@ Deno.serve(async (req) => {
     }
 
     console.log(`📨 Found ${stepsToDeliver?.length || 0} steps ready for delivery`)
-
-    if (stepsToDeliver) {
-      for (const step of stepsToDeliver) {
-        console.log(`⏳ Step tracking ${step.id} (step_id: ${step.step_id}) scheduled for ${step.scheduled_delivery_at}`)
-      }
-    }
 
     let deliveredCount = 0
     let errorCount = 0
@@ -212,34 +193,10 @@ async function processStepDelivery(supabase: any, stepTracking: any): Promise<vo
     // Deliver the current step
     await deliverStepMessages(supabase, stepTracking)
 
-    // After completion, attempt to cascade deliver subsequent immediate steps for the same friend/scenario
-    let guard = 0
-    const nowIso = () => new Date().toISOString()
-    while (guard < 5) { // hard cap to avoid infinite loops
-      guard++
-      const { data: nextReady, error: nextErr } = await supabase
-        .from('step_delivery_tracking')
-        .select('*')
-        .eq('scenario_id', stepTracking.scenario_id)
-        .eq('friend_id', stepTracking.friend_id)
-        .eq('status', 'ready')
-        .lte('scheduled_delivery_at', nowIso())
-        .order('scheduled_delivery_at', { ascending: true })
-        .limit(1)
-        .maybeSingle()
-      if (nextErr || !nextReady) break
+    // 修正: カスケード配信ロジックを削除
+    // 次のステップの配信は markStepAsDelivered で適切な時刻に設定し、
+    // 次回の scheduled-step-delivery 実行時に処理されるようにする
 
-      // claim
-      const { data: claimed, error: claimErr } = await supabase
-        .from('step_delivery_tracking')
-        .update({ status: 'delivering', updated_at: nowIso() })
-        .eq('id', nextReady.id)
-        .select('*')
-        .maybeSingle()
-      if (claimErr || !claimed) break
-
-      await deliverStepMessages(supabase, claimed)
-    }
   } catch (error) {
     console.error(`Error processing step ${stepTracking.id}:`, error)
 
@@ -598,7 +555,8 @@ async function markStepAsDelivered(supabase: any, trackingId: string, scenarioId
 
       const now = new Date()
       const scheduled = scheduledIso ? new Date(scheduledIso) : now
-      const isReady = scheduled <= now
+      // 修正: 将来の時刻であっても、readyにしないようにする
+      const isReady = false // 常にwaitingから始める
 
       // 既存があれば更新、なければ作成
       const { data: existing, error: exErr } = await supabase
@@ -618,9 +576,9 @@ async function markStepAsDelivered(supabase: any, trackingId: string, scenarioId
             scenario_id: transition.to_scenario_id,
             step_id: firstStep.id,
             friend_id: friendId,
-            status: isReady ? 'ready' : 'waiting',
-            scheduled_delivery_at: (isReady ? now : scheduled).toISOString(),
-            next_check_at: new Date((isReady ? now : scheduled).getTime() - 5000).toISOString(),
+            status: 'waiting',
+            scheduled_delivery_at: scheduled.toISOString(),
+            next_check_at: new Date(scheduled.getTime() - 5000).toISOString(),
             created_at: now.toISOString(),
             updated_at: now.toISOString(),
           })
@@ -628,9 +586,9 @@ async function markStepAsDelivered(supabase: any, trackingId: string, scenarioId
         await supabase
           .from('step_delivery_tracking')
           .update({
-            status: isReady ? 'ready' : 'waiting',
-            scheduled_delivery_at: (isReady ? now : scheduled).toISOString(),
-            next_check_at: new Date((isReady ? now : scheduled).getTime() - 5000).toISOString(),
+            status: 'waiting',
+            scheduled_delivery_at: scheduled.toISOString(),
+            next_check_at: new Date(scheduled.getTime() - 5000).toISOString(),
             updated_at: now.toISOString(),
           })
           .eq('id', existing.id)
@@ -697,11 +655,12 @@ async function markStepAsDelivered(supabase: any, trackingId: string, scenarioId
         .maybeSingle()
 
       if (friendErr) {
-        console.warn('Failed to fetch friend for scheduling, defaulting to ready', friendErr)
-        const now = new Date()
-        updates.status = 'ready'
-        updates.scheduled_delivery_at = now.toISOString()
-        updates.next_check_at = new Date(now.getTime() - 5000).toISOString()
+        console.warn('Failed to fetch friend for scheduling, using default timing', friendErr)
+        // 失敗した場合は30秒後に配信
+        const defaultScheduled = new Date(Date.now() + 30000)
+        updates.status = 'waiting'
+        updates.scheduled_delivery_at = defaultScheduled.toISOString()
+        updates.next_check_at = new Date(defaultScheduled.getTime() - 5000).toISOString()
       } else {
         // Map UI delivery_type to DB function expected values
         let effectiveType = nextStep.delivery_type as string
@@ -725,29 +684,28 @@ async function markStepAsDelivered(supabase: any, trackingId: string, scenarioId
         if (!calcError && newScheduledTime) {
           const scheduled = new Date(newScheduledTime)
           const now = new Date()
-          if (scheduled <= now) {
-            updates.status = 'ready'
-            updates.scheduled_delivery_at = now.toISOString()
-            updates.next_check_at = new Date(now.getTime() - 5000).toISOString()
-          } else {
-            updates.status = 'waiting'
-            updates.scheduled_delivery_at = scheduled.toISOString()
-            updates.next_check_at = new Date(scheduled.getTime() - 5000).toISOString()
-          }
+          // 修正: 即座に配信可能であっても、常にwaitingから始める
+          console.log(`Next step scheduled for: ${scheduled.toISOString()}, current time: ${now.toISOString()}`)
+          
+          updates.status = 'waiting'
+          updates.scheduled_delivery_at = scheduled.toISOString()
+          updates.next_check_at = new Date(scheduled.getTime() - 5000).toISOString()
         } else {
-          console.warn('Failed to calculate next scheduled time, defaulting to ready', calcError)
-          const now = new Date()
-          updates.status = 'ready'
-          updates.scheduled_delivery_at = now.toISOString()
-          updates.next_check_at = new Date(now.getTime() - 5000).toISOString()
+          console.warn('Failed to calculate next scheduled time, using default timing', calcError)
+          // 失敗した場合は30秒後に配信
+          const defaultScheduled = new Date(Date.now() + 30000)
+          updates.status = 'waiting'
+          updates.scheduled_delivery_at = defaultScheduled.toISOString()
+          updates.next_check_at = new Date(defaultScheduled.getTime() - 5000).toISOString()
         }
       }
     } catch (calcCatch) {
-      console.warn('Scheduling calculation error, defaulting to ready', calcCatch)
-      const now = new Date()
-      updates.status = 'ready'
-      updates.scheduled_delivery_at = now.toISOString()
-      updates.next_check_at = new Date(now.getTime() - 5000).toISOString()
+      console.warn('Scheduling calculation error, using default timing', calcCatch)
+      // 失敗した場合は30秒後に配信
+      const defaultScheduled = new Date(Date.now() + 30000)
+      updates.status = 'waiting'
+      updates.scheduled_delivery_at = defaultScheduled.toISOString()
+      updates.next_check_at = new Date(defaultScheduled.getTime() - 5000).toISOString()
     }
 
     const { error: prepErr } = await supabase
@@ -764,70 +722,5 @@ async function markStepAsDelivered(supabase: any, trackingId: string, scenarioId
   } catch (error) {
     console.error('Step completion processing error:', error)
     throw error
-  }
-}
-
-// Recalculate timing for steps that are relative to previous step
-async function recalculateRelativeStepTiming(supabase: any, stepTrackingId: string, scenarioId: string, friendId: string, previousStepDeliveredAt: string) {
-  try {
-    console.log('Recalculating relative step timing for:', stepTrackingId)
-    
-    // Get step details and friend info
-    const { data: stepData, error: stepError } = await supabase
-      .from('step_delivery_tracking')
-      .select(`
-        steps!inner(
-          delivery_type, delivery_days, delivery_hours, delivery_minutes, delivery_seconds, delivery_time_of_day
-        ),
-        line_friends!inner(added_at)
-      `)
-      .eq('id', stepTrackingId)
-      .single()
-    
-    if (stepError || !stepData) {
-      console.error('Error fetching step data for recalculation:', stepError)
-      return
-    }
-    
-    const step = stepData.steps
-    const friendAddedAt = stepData.line_friends.added_at
-    
-    // Calculate new scheduled time using the updated function
-    const { data: newScheduledTime, error: calcError } = await supabase
-      .rpc('calculate_scheduled_delivery_time', {
-        p_friend_added_at: friendAddedAt,
-        p_delivery_type: step.delivery_type,
-        p_delivery_seconds: step.delivery_seconds || 0,
-        p_delivery_minutes: step.delivery_minutes || 0,
-        p_delivery_hours: step.delivery_hours || 0,
-        p_delivery_days: step.delivery_days || 0,
-        p_specific_time: null,
-        p_previous_step_delivered_at: previousStepDeliveredAt,
-        p_delivery_time_of_day: step.delivery_time_of_day
-      })
-    
-    if (calcError) {
-      console.error('Error calculating new scheduled time:', calcError)
-      return
-    }
-    
-    // Update the scheduled delivery time
-    const { error: updateError } = await supabase
-      .from('step_delivery_tracking')
-      .update({
-        scheduled_delivery_at: newScheduledTime,
-        next_check_at: new Date(new Date(newScheduledTime).getTime() - 5000).toISOString(),
-        updated_at: new Date().toISOString()
-      })
-      .eq('id', stepTrackingId)
-    
-    if (updateError) {
-      console.error('Error updating scheduled time:', updateError)
-    } else {
-      console.log(`Updated relative step timing to: ${newScheduledTime}`)
-    }
-    
-  } catch (error) {
-    console.error('Error in recalculateRelativeStepTiming:', error)
   }
 }
