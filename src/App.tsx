@@ -19,6 +19,7 @@ import WebhookSettings from "./pages/WebhookSettings";
 import ProfileManagement from "./pages/ProfileManagement";
 import FlexMessageDesigner from "./pages/FlexMessageDesigner";
 import MediaLibrary from "./pages/MediaLibrary";
+import TagsManager from "./pages/TagsManager";
 import FriendsListPage from "./pages/FriendsListPage";
 import StepDeliveryPage from "./pages/StepDeliveryPage";
 import NotFound from "./pages/NotFound";
@@ -132,8 +133,8 @@ function AppContent() {
               <Route path="/flex-message-designer" element={<FlexMessageDesigner />} />
               <Route path="/media-library" element={<MediaLibrary />} />
               <Route path="/friends-list" element={<FriendsListPage />} />
+              <Route path="/tags" element={<TagsManager />} />
               <Route path="/step-delivery" element={<StepDeliveryPage />} />
-              <Route path="/delivery-dashboard" element={<ScenarioDeliveryDashboard />} />
               <Route path="/chat-inbox" element={<ChatInboxPage />} />
               <Route path="/chat/:friendId" element={<IndividualChatPage />} />
               <Route path="*" element={<NotFound />} />
