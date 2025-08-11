@@ -6,6 +6,8 @@ import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
+
+// Keep props same to avoid refactor ripple, but name/description editing moved to middle column
 type Field = { id: string; label: string; name: string; type: string; required?: boolean; options?: string[] };
 
 interface Props {
@@ -67,49 +69,7 @@ export default function FormPreviewPanel({
   const setValue = (name: string, v: any) => setValues((prev) => ({ ...prev, [name]: v }));
 
   return (
-    <div className="space-y-6">
-      <div className="space-y-3">
-        <h3 className="text-base font-semibold">フォーム設定</h3>
-        <div className="grid gap-3">
-          <div className="space-y-1">
-            <label className="text-sm">フォーム名</label>
-            <Input value={formName} onChange={(e) => setFormName(e.target.value)} placeholder="お問い合わせ など" />
-          </div>
-          <div className="flex items-center justify-between gap-3 text-sm">
-            <span>公開</span>
-            <Switch checked={isPublic} onCheckedChange={setIsPublic} />
-          </div>
-          <div className="space-y-1">
-            <label className="text-sm">説明（任意）</label>
-            <Textarea value={description} onChange={(e) => setDescription(e.target.value)} rows={3} />
-          </div>
-          <div className="space-y-1">
-            <label className="text-sm">送信成功メッセージ</label>
-            <Input value={successMessage} onChange={(e) => setSuccessMessage(e.target.value)} />
-          </div>
-          <div className="space-y-1">
-            <label className="text-sm">送信ボタンのテキスト</label>
-            <Input value={submitButtonText} onChange={(e) => setSubmitButtonText(e.target.value)} placeholder="送信 / 申し込み など" />
-          </div>
-          <div className="space-y-1">
-            <label className="text-sm">送信ボタンのデザイン</label>
-            <Select value={submitButtonVariant} onValueChange={setSubmitButtonVariant}>
-              <SelectTrigger>
-                <SelectValue placeholder="ボタンスタイル" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="default">標準</SelectItem>
-                <SelectItem value="secondary">セカンダリ</SelectItem>
-                <SelectItem value="outline">アウトライン</SelectItem>
-                <SelectItem value="destructive">警告</SelectItem>
-                <SelectItem value="ghost">ゴースト</SelectItem>
-                <SelectItem value="link">リンク</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-        </div>
-      </div>
-
+    <div className="space-y-4">
       <div className="space-y-1">
         <h3 className="text-base font-semibold">プレビュー</h3>
         <p className="text-xs text-muted-foreground">右側は実際の公開フォームの見た目です</p>
@@ -202,6 +162,34 @@ export default function FormPreviewPanel({
       <div className="space-y-3">
         <h4 className="text-sm font-medium">回答後の動作と制限</h4>
         <div className="grid gap-3">
+          <div className="flex items-center justify-between gap-3 text-sm">
+            <span>公開</span>
+            <Switch checked={isPublic} onCheckedChange={setIsPublic} />
+          </div>
+          <div className="space-y-1">
+            <label className="text-sm">送信成功メッセージ</label>
+            <Input value={successMessage} onChange={(e) => setSuccessMessage(e.target.value)} />
+          </div>
+          <div className="space-y-1">
+            <label className="text-sm">送信ボタンのテキスト</label>
+            <Input value={submitButtonText} onChange={(e) => setSubmitButtonText(e.target.value)} placeholder="送信 / 申し込み など" />
+          </div>
+          <div className="space-y-1">
+            <label className="text-sm">送信ボタンのデザイン</label>
+            <Select value={submitButtonVariant} onValueChange={setSubmitButtonVariant}>
+              <SelectTrigger>
+                <SelectValue placeholder="ボタンスタイル" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="default">標準</SelectItem>
+                <SelectItem value="secondary">セカンダリ</SelectItem>
+                <SelectItem value="outline">アウトライン</SelectItem>
+                <SelectItem value="destructive">警告</SelectItem>
+                <SelectItem value="ghost">ゴースト</SelectItem>
+                <SelectItem value="link">リンク</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
           <div className="flex items-center justify-between gap-3 text-sm">
             <span>LINE友だち限定</span>
             <Switch checked={requireLineFriend} onCheckedChange={setRequireLineFriend} />

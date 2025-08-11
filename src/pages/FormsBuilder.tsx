@@ -66,10 +66,8 @@ export default function FormsBuilder() {
   const [requireLineFriend, setRequireLineFriend] = useState(true);
   const [preventDuplicate, setPreventDuplicate] = useState(false);
   const [postScenario, setPostScenario] = useState<string | null>(null);
-const [scenarios, setScenarios] = useState<Array<{ id: string; name: string }>>([]);
 const [submitButtonText, setSubmitButtonText] = useState<string>("送信");
 const [submitButtonVariant, setSubmitButtonVariant] = useState<string>("default");
-const [newFieldType, setNewFieldType] = useState<string>("text");
 const [editingId, setEditingId] = useState<string | null>(null);
 const [selectedFieldId, setSelectedFieldId] = useState<string | null>(null);
   const loadForms = async () => {
@@ -101,7 +99,7 @@ const [selectedFieldId, setSelectedFieldId] = useState<string | null>(null);
 
 const addField = () => {
   const id = crypto.randomUUID();
-  setFields(prev => [...prev, { id, label: "", name: "", type: newFieldType, required: false }]);
+  setFields(prev => [...prev, { id, label: "", name: `field_${id.slice(0,8)}`, type: "text", required: false }]);
   setSelectedFieldId(id);
 };
 
@@ -270,8 +268,12 @@ const handleUpdate = async () => {
                 onSelect={setSelectedFieldId}
                 onAdd={addField}
                 onRemove={removeField}
-                newFieldType={newFieldType}
-                setNewFieldType={setNewFieldType}
+                onReorder={(orderedIds)=>{
+                  setFields((prev)=>{
+                    const map = new Map(prev.map(f=>[f.id,f] as const));
+                    return orderedIds.map(id=>map.get(id)!).filter(Boolean) as typeof prev;
+                  });
+                }}
               />
 
               <FormFieldEditor

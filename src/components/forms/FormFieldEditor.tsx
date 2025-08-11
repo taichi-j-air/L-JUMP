@@ -23,10 +23,6 @@ export default function FormFieldEditor({ field, onChange }: Props) {
         <Input value={field.label} onChange={(e) => onChange({ label: e.target.value })} placeholder="氏名 など" />
       </div>
 
-      <div className="space-y-2">
-        <label className="text-sm">保存用キー（英数字）</label>
-        <Input value={field.name} onChange={(e) => onChange({ name: e.target.value })} placeholder="name / email など" />
-      </div>
 
       <div className="grid grid-cols-2 gap-3 items-end">
         <div className="space-y-2">
@@ -45,8 +41,8 @@ export default function FormFieldEditor({ field, onChange }: Props) {
             </SelectContent>
           </Select>
         </div>
-        <div className="flex items-center justify-between gap-3">
-          <label className="text-sm">必須</label>
+        <div className="flex items-center gap-2 justify-end">
+          <label className="text-sm whitespace-nowrap">回答必須：</label>
           <Switch checked={!!field.required} onCheckedChange={(v) => onChange({ required: v })} />
         </div>
       </div>
