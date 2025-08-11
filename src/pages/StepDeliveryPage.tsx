@@ -494,6 +494,7 @@ export default function StepDeliveryPage() {
                     onDelete={deleteFolder}
                     getScenarioName={(id) => scenarios.find(s => s.id === id)?.name || ''}
                     renderScenario={renderScenarioItem}
+                    onReorder={reorderFolders}
                   />
                 </SortableContext>
               </div>

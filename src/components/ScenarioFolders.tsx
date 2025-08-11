@@ -1,11 +1,11 @@
 import { useState } from "react"
 import { useDroppable } from "@dnd-kit/core"
-import { useSortable, SortableContext, verticalListSortingStrategy } from "@dnd-kit/sortable"
+import { useSortable, SortableContext, verticalListSortingStrategy, arrayMove } from "@dnd-kit/sortable"
 import { CSS } from "@dnd-kit/utilities"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog"
-import { ChevronDown, ChevronRight, Pencil, Undo2, Trash2, GripVertical } from "lucide-react"
+import { ChevronDown, ChevronRight, Pencil, Undo2, Trash2, GripVertical, ArrowUp, ArrowDown } from "lucide-react"
 import type { ScenarioFolder } from "@/hooks/useScenarioFolders"
 import { ColorPicker as HexColorPicker } from "@/components/ui/color-picker"
 
@@ -19,6 +19,7 @@ interface ScenarioFoldersProps {
   onDelete: (id: string) => void
   getScenarioName: (id: string) => string
   renderScenario: (scenarioId: string) => JSX.Element | null
+  onReorder: (orderedIds: string[]) => void
 }
 
 export function ScenarioFolders({
@@ -31,13 +32,14 @@ export function ScenarioFolders({
   onDelete,
   getScenarioName,
   renderScenario,
+  onReorder,
 }: ScenarioFoldersProps) {
   const [editingId, setEditingId] = useState<string | null>(null)
   const [tempName, setTempName] = useState('')
 
   return (
     <div className="space-y-2">
-      {folders.map(folder => (
+      {folders.map((folder, idx) => (
         <FolderRow
           key={folder.id}
           folder={folder}
@@ -53,6 +55,10 @@ export function ScenarioFolders({
           onDelete={() => onDelete(folder.id)}
           getScenarioName={getScenarioName}
           renderScenario={renderScenario}
+          canMoveUp={idx > 0}
+          canMoveDown={idx < folders.length - 1}
+          onMoveUp={() => onReorder(arrayMove(folders.map(f => f.id), idx, idx - 1))}
+          onMoveDown={() => onReorder(arrayMove(folders.map(f => f.id), idx, idx + 1))}
         />
       ))}
     </div>
@@ -73,6 +79,10 @@ function FolderRow({
   onDelete,
   getScenarioName,
   renderScenario,
+  canMoveUp,
+  canMoveDown,
+  onMoveUp,
+  onMoveDown,
 }: {
   folder: ScenarioFolder
   editing: boolean
@@ -87,6 +97,10 @@ function FolderRow({
   onDelete: () => void
   getScenarioName: (id: string) => string
   renderScenario: (scenarioId: string) => JSX.Element | null
+  canMoveUp: boolean
+  canMoveDown: boolean
+  onMoveUp: () => void
+  onMoveDown: () => void
 }) {
   const { setNodeRef, isOver } = useDroppable({ id: `folder:${folder.id}` })
   const { attributes, listeners, setNodeRef: setSortableRef, transform, transition, isDragging } = useSortable({ id: `folderItem:${folder.id}` })
@@ -98,7 +112,7 @@ function FolderRow({
   }
 
   return (
-    <Card ref={(node) => { setSortableRef(node as any) }} {...attributes} {...listeners} style={style} className="border-2 border-solid cursor-grab active:cursor-grabbing">
+    <Card ref={(node) => { setSortableRef(node as any) }} style={style} className="border-2 border-solid">
       <CardContent className="p-2">
         <div ref={setNodeRef} className={`${isOver ? 'ring-2 ring-primary rounded-md' : ''}`}>
           <div className="flex items-center gap-2">
@@ -126,6 +140,8 @@ function FolderRow({
             )}
             <span className="text-xs text-muted-foreground">{folder.scenarioIds.length}件</span>
             <div className="ml-auto flex items-center gap-1">
+              <Button variant="ghost" size="icon" onClick={onMoveUp} disabled={!canMoveUp} className="h-6 w-6" title="上へ"><ArrowUp className="h-3 w-3"/></Button>
+              <Button variant="ghost" size="icon" onClick={onMoveDown} disabled={!canMoveDown} className="h-6 w-6" title="下へ"><ArrowDown className="h-3 w-3"/></Button>
               <Button variant="ghost" size="icon" onClick={onStartEdit} className="h-6 w-6"><Pencil className="h-3 w-3"/></Button>
               <DeleteFolderButton onDelete={onDelete} folderName={folder.name} scenarioNames={folder.scenarioIds.map(getScenarioName)} />
             </div>
