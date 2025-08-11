@@ -31,6 +31,7 @@ import {
   useSensor,
   useSensors,
   DragEndEvent,
+  useDroppable,
 } from '@dnd-kit/core'
 import {
   arrayMove,
@@ -76,6 +77,8 @@ export default function StepDeliveryPage() {
       coordinateGetter: sortableKeyboardCoordinates,
     })
   )
+
+  const { setNodeRef: setRootDropRef, isOver: isOverRoot } = useDroppable({ id: 'root' })
 
   useEffect(() => {
     // Get user session
@@ -331,10 +334,11 @@ export default function StepDeliveryPage() {
     if (!over) return
 
     const activeId = String(active.id)
-    const overId = String(over.id)
+    const overIdOriginal = String(over.id)
 
-    // フォルダの並び替え
-    if (activeId.startsWith('folderItem:') && overId.startsWith('folderItem:')) {
+    // フォルダの並び替え（overがフォルダ本体でも許容）
+    if (activeId.startsWith('folderItem:') && (overIdOriginal.startsWith('folderItem:') || overIdOriginal.startsWith('folder:'))) {
+      const overId = overIdOriginal.startsWith('folder:') ? `folderItem:${overIdOriginal.replace('folder:', '')}` : overIdOriginal
       const folderIds = folders.map(f => `folderItem:${f.id}`)
       const oldIndex = folderIds.indexOf(activeId)
       const newIndex = folderIds.indexOf(overId)
@@ -345,24 +349,34 @@ export default function StepDeliveryPage() {
       return
     }
 
+    // ルート（未分類）ドロップゾーンにドロップ → フォルダから外す
+    if (overIdOriginal === 'root' && !activeId.startsWith('folderItem:')) {
+      const root = scenarios.filter(s => !getFolderIdByScenario(s.id))
+      const alreadyInRoot = root.some(r => r.id === activeId)
+      if (!alreadyInRoot) {
+        removeFromFolder(activeId)
+        reorderScenarios([...root.map(s => s.id), activeId])
+      }
+      return
+    }
+
     // フォルダへのドロップ（シナリオ→フォルダ）
-    if (overId.startsWith('folder:')) {
-      // Prevent nesting folders inside folders
-      if (activeId.startsWith('folderItem:')) return
-      const folderId = overId.replace('folder:', '')
+    if (overIdOriginal.startsWith('folder:')) {
+      if (activeId.startsWith('folderItem:')) return // フォルダ自体は入れない
+      const folderId = overIdOriginal.replace('folder:', '')
       moveToFolder(activeId, folderId)
       return
     }
 
     const activeFolderId = getFolderIdByScenario(activeId)
-    const overFolderId = getFolderIdByScenario(overId)
+    const overFolderId = getFolderIdByScenario(overIdOriginal)
 
     // 同一フォルダ内での並び替え
     if (activeFolderId && overFolderId && activeFolderId === overFolderId) {
       const folder = folders.find(f => f.id === activeFolderId)
       if (folder) {
         const oldIndex = folder.scenarioIds.indexOf(activeId)
-        const newIndex = folder.scenarioIds.indexOf(overId)
+        const newIndex = folder.scenarioIds.indexOf(overIdOriginal)
         if (oldIndex !== -1 && newIndex !== -1) {
           const newOrder = arrayMove(folder.scenarioIds, oldIndex, newIndex)
           reorderFolderItems(activeFolderId, newOrder)
@@ -371,20 +385,20 @@ export default function StepDeliveryPage() {
       return
     }
 
-    // フォルダ間の移動（シナリオ→シナリオを基準にフォルダ検出）
+    // フォルダ間の移動
     if (activeFolderId && overFolderId && activeFolderId !== overFolderId) {
       moveToFolder(activeId, overFolderId)
       return
     }
 
-    // ルート内での移動（またはフォルダからルートへ）
+    // ルート内での並び替え（またはフォルダからルートへ）
     const root = scenarios.filter(s => !getFolderIdByScenario(s.id))
-    if (activeId !== overId) {
+    if (activeId !== overIdOriginal) {
       const inRoot = root.some(r => r.id === activeId)
-      const overIndex = root.findIndex((item) => item.id === overId)
+      const overIndex = root.findIndex((item) => item.id === overIdOriginal)
 
       if (!inRoot) {
-        // フォルダからルートに出す
+        // フォルダからルートに出す（指定位置）
         removeFromFolder(activeId)
         const targetScenario = scenarios.find(s => s.id === activeId)
         if (targetScenario) {
@@ -482,6 +496,14 @@ export default function StepDeliveryPage() {
                     renderScenario={renderScenarioItem}
                   />
                 </SortableContext>
+              </div>
+
+              {/* ルートのドロップゾーン（未分類に戻す） */}
+              <div
+                ref={setRootDropRef}
+                className={`mb-2 h-8 rounded-md border border-dashed border-border text-xs flex items-center justify-center ${isOverRoot ? 'bg-muted ring-2 ring-primary' : 'bg-transparent'}`}
+              >
+                ここにドロップで「未分類」に戻す
               </div>
 
               {/* ルートのシナリオ */}
