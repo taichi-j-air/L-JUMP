@@ -145,9 +145,14 @@ Deno.serve(async (req) => {
       const { data: upcoming } = await upcomingQuery
       if (upcoming && upcoming.length > 0) {
         const dueAt = new Date(upcoming[0].scheduled_delivery_at)
-        const delay = Math.max(1, Math.min(55, Math.ceil((dueAt.getTime() - Date.now()) / 1000) + 1))
-        console.log(`⏭️ Scheduling next check in ${delay}s for upcoming delivery at ${dueAt.toISOString()}`)
-        EdgeRuntime.waitUntil(scheduleNextCheck(supabase, delay))
+        const nowDate = new Date()
+        if (dueAt.getTime() > nowDate.getTime()) {
+          const delay = Math.max(1, Math.min(55, Math.ceil((dueAt.getTime() - Date.now()) / 1000) + 1))
+          console.log(`⏭️ Scheduling next check in ${delay}s for upcoming delivery at ${dueAt.toISOString()}`)
+          EdgeRuntime.waitUntil(scheduleNextCheck(supabase, delay))
+        } else {
+          console.log(`⏹️ Upcoming delivery time is in the past (${dueAt.toISOString()}), not self-triggering`)
+        }
       }
     }
 
@@ -187,6 +192,17 @@ async function processStepDelivery(supabase: any, stepTracking: any): Promise<vo
         .update({ status: 'failed', last_error: 'Missing friend_id', updated_at: new Date().toISOString() })
         .eq('id', stepTracking.id)
       console.warn('Skipped tracking without friend_id:', stepTracking.id)
+      return
+    }
+
+    // Re-check current status to allow cancellation and avoid duplicates
+    const { data: current } = await supabase
+      .from('step_delivery_tracking')
+      .select('status')
+      .eq('id', stepTracking.id)
+      .maybeSingle()
+    if (!current || current.status !== 'delivering') {
+      console.warn('Skipping processing due to status change:', current?.status)
       return
     }
 
@@ -341,6 +357,17 @@ async function deliverStepMessages(supabase: any, stepTracking: any) {
         } catch {
           console.warn('Invalid flex content JSON for message', message.id)
         }
+      }
+
+      // Cancellation check mid-flight
+      const { data: curStatus } = await supabase
+        .from('step_delivery_tracking')
+        .select('status')
+        .eq('id', stepTracking.id)
+        .maybeSingle()
+      if (!curStatus || curStatus.status === 'exited') {
+        console.warn('Delivery canceled mid-flight, stopping further messages')
+        return
       }
 
       try {
