@@ -98,11 +98,11 @@ function FolderRow({
   }
 
   return (
-    <Card ref={(node) => { setSortableRef(node as any) }} style={style} className="border-2 border-solid">
+    <Card ref={(node) => { setSortableRef(node as any) }} {...attributes} {...listeners} style={style} className="border-2 border-solid cursor-grab active:cursor-grabbing">
       <CardContent className="p-2">
         <div ref={setNodeRef} className={`${isOver ? 'ring-2 ring-primary rounded-md' : ''}`}>
           <div className="flex items-center gap-2">
-            <div {...attributes} {...listeners} className="cursor-grab active:cursor-grabbing p-1 hover:bg-muted rounded h-6 w-6 flex items-center justify-center">
+            <div className="cursor-grab p-1 hover:bg-muted rounded h-6 w-6 flex items-center justify-center">
               <GripVertical className="h-4 w-4 text-muted-foreground" />
             </div>
             <Button variant="ghost" size="icon" onClick={onToggle} className="h-6 w-6">

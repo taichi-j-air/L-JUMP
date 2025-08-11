@@ -29,7 +29,7 @@ export const ColorPicker = ({ color, onChange, className }: ColorPickerProps) =>
         </Button>
       </PopoverTrigger>
       <PopoverContent className="w-auto p-2" side="bottom" align="start">
-        <HexColorPicker color={color} onChange={onChange} style={{ width: 160, height: 160 }} />
+        <HexColorPicker color={color} onChange={onChange} style={{ width: 140, height: 140 }} />
       </PopoverContent>
     </Popover>
   );

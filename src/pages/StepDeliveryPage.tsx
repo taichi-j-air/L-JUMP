@@ -25,7 +25,7 @@ import { useStepScenarios, StepScenario, Step, StepMessage } from "@/hooks/useSt
 import { toast } from "sonner"
 import {
   DndContext,
-  closestCenter,
+  rectIntersection,
   KeyboardSensor,
   PointerSensor,
   useSensor,
@@ -72,7 +72,7 @@ export default function StepDeliveryPage() {
   // rootScenarios はデータ取得後に計算
 
   const sensors = useSensors(
-    useSensor(PointerSensor),
+    useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
     useSensor(KeyboardSensor, {
       coordinateGetter: sortableKeyboardCoordinates,
     })
@@ -475,7 +475,7 @@ export default function StepDeliveryPage() {
             
             <DndContext
               sensors={sensors}
-              collisionDetection={closestCenter}
+              collisionDetection={rectIntersection}
               onDragEnd={handleScenarioDragEnd}
             >
               {/* フォルダ一覧 */}
