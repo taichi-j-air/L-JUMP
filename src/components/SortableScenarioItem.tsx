@@ -11,7 +11,7 @@ interface SortableScenarioItemProps {
   scenarioSteps: number
   deliveryTime: string
   transitionDestinations: string[]
-  stats?: { registered: number; exited: number; blocked: number }
+  stats?: { registered: number; exited: number; blocked: number; total?: number }
   onSelect: () => void
   onDelete: () => void
 }
@@ -61,35 +61,20 @@ export function SortableScenarioItem({
           </div>
           
           <div className="flex-1 min-w-0">
-            <h3 className="font-medium">{scenario.name}</h3>
-            <p className="text-sm text-muted-foreground">{scenarioSteps} ステップ・配信: {deliveryTime}</p>
+            <h3 className="text-sm font-medium truncate">{scenario.name}</h3>
+            <div className="mt-0.5 flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
+              <span>{scenarioSteps} ステップ</span>
+              <span>配信: {deliveryTime}</span>
+              {transitionDestinations.length > 0 && (
+                <span className="truncate">→ {transitionDestinations.join(' / ')}</span>
+              )}
+            </div>
             {stats && (
-              <div className="mt-1 flex items-center gap-3 text-xs text-muted-foreground">
-                <span className="flex items-center gap-1"><Users className="h-3 w-3" />{stats.registered}</span>
-                <span className="flex items-center gap-1"><UserX className="h-3 w-3" />{stats.exited}</span>
-                <span className="flex items-center gap-1"><Ban className="h-3 w-3" />{stats.blocked}</span>
-              </div>
-            )}
-            {transitionDestinations.length > 0 && (
-              <div className="mt-1">
-                {transitionDestinations.length === 1 ? (
-                  <p className="text-xs text-blue-600">
-                    → {transitionDestinations[0]}
-                  </p>
-                ) : (
-                  <div className="space-y-1">
-                    <p className="text-xs text-orange-600 font-medium">
-                      ABテスト設定
-                    </p>
-                    <div className="flex flex-wrap gap-2">
-                      {transitionDestinations.map((dest, index) => (
-                        <span key={index} className="text-xs text-blue-600 bg-blue-50 px-2 py-1 rounded">
-                          → {dest}
-                        </span>
-                      ))}
-                    </div>
-                  </div>
-                )}
+              <div className="mt-1 flex flex-wrap items-center gap-3 text-[11px] text-muted-foreground">
+                <span className="flex items-center gap-1"><Users className="h-3 w-3" />累計 {stats.total ?? 0}</span>
+                <span>現在 {stats.registered}</span>
+                <span className="flex items-center gap-1"><UserX className="h-3 w-3" />離脱 {stats.exited}</span>
+                <span className="flex items-center gap-1"><Ban className="h-3 w-3" />失敗 {stats.blocked}</span>
               </div>
             )}
           </div>

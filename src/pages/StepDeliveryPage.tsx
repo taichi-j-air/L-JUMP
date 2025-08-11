@@ -47,7 +47,7 @@ export default function StepDeliveryPage() {
   const [loading, setLoading] = useState(true)
   const [isMessageCreationCollapsed, setIsMessageCreationCollapsed] = useState(false)
   const [collapsedMessages, setCollapsedMessages] = useState<Set<string>>(new Set())
-  const [scenarioStats, setScenarioStats] = useState<Record<string, { registered: number; exited: number; blocked: number }>>({})
+  const [scenarioStats, setScenarioStats] = useState<Record<string, { registered: number; exited: number; blocked: number; total: number }>>({})
   const [statsRefreshToken, setStatsRefreshToken] = useState(0)
   // IME対応のため、メッセージ本文はローカルドラフトで保持し、保存はonBlurで行う
   const [draftMessageContents, setDraftMessageContents] = useState<Record<string, string>>({})
@@ -184,7 +184,7 @@ export default function StepDeliveryPage() {
     return () => window.removeEventListener('scenario-stats-updated', handler)
   }, [])
 
-  // シナリオ統計の読み込み（現在参加中・離脱・ブロック）
+  // シナリオ統計の読み込み（現在参加中・離脱・ブロック・累計）
   useEffect(() => {
     if (!user || scenarios.length === 0) {
       setScenarioStats({})
@@ -193,16 +193,18 @@ export default function StepDeliveryPage() {
     const scenarioIds = scenarios.map(s => s.id)
     const load = async () => {
       try {
-        const [activeRes, exitRes, failRes] = await Promise.all([
+        const [activeRes, exitRes, failRes, totalRes] = await Promise.all([
           // 現在参加中（離脱を除く）
           supabase.from('step_delivery_tracking').select('scenario_id, friend_id, status').in('scenario_id', scenarioIds).neq('status', 'exited'),
           // 離脱
           supabase.from('step_delivery_tracking').select('scenario_id, friend_id, status').in('scenario_id', scenarioIds).eq('status','exited'),
           // ブロック（配信失敗）
           supabase.from('step_delivery_logs').select('scenario_id, friend_id, delivery_status').in('scenario_id', scenarioIds).eq('delivery_status','failed'),
+          // 累計登録（重複なし）
+          supabase.from('scenario_friend_logs').select('scenario_id, friend_id').in('scenario_id', scenarioIds),
         ])
-        const stats: Record<string, { registered: number; exited: number; blocked: number }> = {}
-        for (const id of scenarioIds) stats[id] = { registered: 0, exited: 0, blocked: 0 }
+        const stats: Record<string, { registered: number; exited: number; blocked: number; total: number }> = {}
+        for (const id of scenarioIds) stats[id] = { registered: 0, exited: 0, blocked: 0, total: 0 }
 
         // 現在参加中 = シナリオ内で status != exited の友だち数（重複排除）
         const activeMap: Record<string, Set<string>> = {}
@@ -233,6 +235,16 @@ export default function StepDeliveryPage() {
           blockMap[sid].add(fid)
         })
         Object.keys(blockMap).forEach(sid => { stats[sid].blocked = blockMap[sid].size })
+
+        // 累計登録 = scenario_friend_logs の distinct friend_id 数
+        const totalMap: Record<string, Set<string>> = {}
+        ;(totalRes.data || []).forEach((r: any) => {
+          const sid = r.scenario_id; const fid = r.friend_id
+          if (!sid || !fid) return
+          totalMap[sid] = totalMap[sid] || new Set<string>()
+          totalMap[sid].add(fid)
+        })
+        Object.keys(totalMap).forEach(sid => { stats[sid].total = totalMap[sid].size })
 
         setScenarioStats(stats)
       } catch (e) {
