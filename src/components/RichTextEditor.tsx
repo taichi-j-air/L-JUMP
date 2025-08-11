@@ -82,12 +82,10 @@ export function RichTextEditor({ value, onChange, className }: RichTextEditorPro
           <button className="ql-underline" />
         </span>
         <span className="ql-formats">
-          <select className="ql-align">
-            <option defaultValue="" />
-            <option value="center" />
-            <option value="right" />
-            <option value="justify" />
-          </select>
+          <button className="ql-align" value="" />
+          <button className="ql-align" value="center" />
+          <button className="ql-align" value="right" />
+          <button className="ql-align" value="justify" />
           <button className="ql-list" value="ordered" />
           <button className="ql-list" value="bullet" />
           <button className="ql-blockquote" />
