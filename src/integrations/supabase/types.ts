@@ -63,33 +63,72 @@ export type Database = {
       }
       cms_pages: {
         Row: {
+          allowed_tag_ids: string[]
+          blocked_tag_ids: string[]
           content: string | null
+          content_blocks: Json
           created_at: string
+          expire_action: string
           id: string
+          internal_name: string | null
+          internal_timer: boolean
+          passcode: string | null
+          require_passcode: boolean
           share_code: string
           slug: string
+          tag_label: string | null
+          timer_deadline: string | null
+          timer_display_mode: string
+          timer_enabled: boolean
+          timer_text: string | null
           title: string
           updated_at: string
           user_id: string
           visibility: Database["public"]["Enums"]["page_visibility"]
         }
         Insert: {
+          allowed_tag_ids?: string[]
+          blocked_tag_ids?: string[]
           content?: string | null
+          content_blocks?: Json
           created_at?: string
+          expire_action?: string
           id?: string
+          internal_name?: string | null
+          internal_timer?: boolean
+          passcode?: string | null
+          require_passcode?: boolean
           share_code?: string
           slug: string
+          tag_label?: string | null
+          timer_deadline?: string | null
+          timer_display_mode?: string
+          timer_enabled?: boolean
+          timer_text?: string | null
           title: string
           updated_at?: string
           user_id: string
           visibility?: Database["public"]["Enums"]["page_visibility"]
         }
         Update: {
+          allowed_tag_ids?: string[]
+          blocked_tag_ids?: string[]
           content?: string | null
+          content_blocks?: Json
           created_at?: string
+          expire_action?: string
           id?: string
+          internal_name?: string | null
+          internal_timer?: boolean
+          passcode?: string | null
+          require_passcode?: boolean
           share_code?: string
           slug?: string
+          tag_label?: string | null
+          timer_deadline?: string | null
+          timer_display_mode?: string
+          timer_enabled?: boolean
+          timer_text?: string | null
           title?: string
           updated_at?: string
           user_id?: string
