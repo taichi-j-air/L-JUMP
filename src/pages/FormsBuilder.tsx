@@ -14,6 +14,7 @@ import { Copy, Link as LinkIcon, Plus, Save, Trash2, Pencil } from "lucide-react
 import FormFieldList from "@/components/forms/FormFieldList";
 import FormFieldEditor from "@/components/forms/FormFieldEditor";
 import FormPreviewPanel from "@/components/forms/FormPreviewPanel";
+import FormListPanel from "@/components/forms/FormListPanel";
 
 interface FormRow {
   id: string;
@@ -234,151 +235,93 @@ const handleUpdate = async () => {
         <p className="text-muted-foreground">公開フォームを作成し、CMSへ埋め込みできます。</p>
       </header>
 
-      <Card>
-        <CardHeader className="flex items-center justify-between">
-          <div>
-            <CardTitle>新規フォーム</CardTitle>
-            <CardDescription>必要なフィールドを追加して保存します</CardDescription>
-          </div>
-          <Button size="sm" variant={creating ? "secondary" : "default"} onClick={()=> setCreating(v=>!v)}>
-            {creating ? '閉じる' : '作成'}
-          </Button>
-        </CardHeader>
-        {creating && (
-          <CardContent className="space-y-6">
-            {/* 基本情報 */}
-            <div className="grid gap-4 sm:grid-cols-2">
-              <div className="space-y-2">
-                <label className="text-sm">フォーム名</label>
-                <Input value={formName} onChange={(e)=>setFormName(e.target.value)} placeholder="お問い合わせ など" />
-              </div>
-              <div className="space-y-2">
-                <label className="text-sm">公開設定</label>
-                <div className="flex items-center gap-3">
-                  <Switch checked={isPublic} onCheckedChange={setIsPublic} />
-                  <span className="text-sm text-muted-foreground">公開（URLで閲覧可）</span>
-                </div>
-              </div>
-              <div className="space-y-2 sm:col-span-2">
-                <label className="text-sm">説明（任意）</label>
-                <Textarea value={description} onChange={(e)=>setDescription(e.target.value)} />
-              </div>
-              <div className="space-y-2 sm:col-span-2">
-                <label className="text-sm">送信成功メッセージ</label>
-                <Input value={successMessage} onChange={(e)=>setSuccessMessage(e.target.value)} />
-              </div>
-              <div className="space-y-2">
-                <label className="text-sm">送信ボタンのテキスト</label>
-                <Input value={submitButtonText} onChange={(e)=>setSubmitButtonText(e.target.value)} placeholder="送信 / 申し込み など" />
-              </div>
-              <div className="space-y-2">
-                <label className="text-sm">送信ボタンのデザイン</label>
-                <Select value={submitButtonVariant} onValueChange={setSubmitButtonVariant}>
-                  <SelectTrigger><SelectValue placeholder="ボタンスタイル" /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="default">標準</SelectItem>
-                    <SelectItem value="secondary">セカンダリ</SelectItem>
-                    <SelectItem value="outline">アウトライン</SelectItem>
-                    <SelectItem value="destructive">警告</SelectItem>
-                    <SelectItem value="ghost">ゴースト</SelectItem>
-                    <SelectItem value="link">リンク</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
+      <div className="grid gap-4 lg:grid-cols-12">
+        {/* 左: フォーム一覧 */}
+        <div className="lg:col-span-3">
+          <FormListPanel
+            items={forms as any}
+            loading={loading}
+            selectedId={editingId}
+            onSelect={(id) => {
+              const f = forms.find((x) => x.id === id);
+              if (f) startEdit(f);
+            }}
+            onAddNew={() => {
+              resetCreator();
+              setEditingId(null);
+            }}
+            onCopyLink={copyLink}
+            onOpenPublic={(id) => window.open(`/form/${id}`, '_blank', 'noopener,noreferrer')}
+            onDelete={deleteForm}
+          />
+        </div>
 
-            {/* 3カラムレイアウト */}
-            <div className="grid gap-6 lg:grid-cols-3">
-              {/* 左：フィールド一覧＋追加 */}
-              <div>
-                <FormFieldList
-                  fields={fields as any}
-                  selectedId={selectedFieldId}
-                  onSelect={setSelectedFieldId}
-                  onAdd={addField}
-                  onRemove={removeField}
-                  newFieldType={newFieldType}
-                  setNewFieldType={setNewFieldType}
-                />
-              </div>
+        {/* 中央: 項目設定 */}
+        <div className="lg:col-span-5">
+          <Card>
+            <CardHeader>
+              <CardTitle>項目設定</CardTitle>
+              <CardDescription>テキスト/選択肢/タイトルなどのフィールドを管理します</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-6">
+              <FormFieldList
+                fields={fields as any}
+                selectedId={selectedFieldId}
+                onSelect={setSelectedFieldId}
+                onAdd={addField}
+                onRemove={removeField}
+                newFieldType={newFieldType}
+                setNewFieldType={setNewFieldType}
+              />
 
-              {/* 中央：フィールド編集 */}
-              <div>
-                <FormFieldEditor
-                  field={selectedField as any}
-                  onChange={(patch) => selectedField && updateField(selectedField.id, patch)}
-                />
-              </div>
+              <FormFieldEditor
+                field={selectedField as any}
+                onChange={(patch) => selectedField && updateField(selectedField.id, patch)}
+              />
+            </CardContent>
+          </Card>
+        </div>
 
-              {/* 右：プレビュー＋設定 */}
-              <div>
-                <FormPreviewPanel
-                  name={formName}
-                  description={description}
-                  fields={fields as any}
-                  submitButtonText={submitButtonText}
-                  submitButtonVariant={submitButtonVariant}
-                  requireLineFriend={requireLineFriend}
-                  setRequireLineFriend={setRequireLineFriend}
-                  preventDuplicate={preventDuplicate}
-                  setPreventDuplicate={setPreventDuplicate}
-                  postScenario={postScenario}
-                  setPostScenario={setPostScenario}
-                  scenarios={scenarios}
-                />
-              </div>
-            </div>
+        {/* 右: プレビュー + 設定 */}
+        <div className="lg:col-span-4">
+          <Card>
+            <CardHeader>
+              <CardTitle>プレビューと設定</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <FormPreviewPanel
+                formName={formName}
+                setFormName={setFormName}
+                description={description}
+                setDescription={setDescription}
+                fields={fields as any}
+                submitButtonText={submitButtonText}
+                setSubmitButtonText={setSubmitButtonText}
+                submitButtonVariant={submitButtonVariant}
+                setSubmitButtonVariant={setSubmitButtonVariant}
+                successMessage={successMessage}
+                setSuccessMessage={setSuccessMessage}
+                isPublic={isPublic}
+                setIsPublic={setIsPublic}
+                requireLineFriend={requireLineFriend}
+                setRequireLineFriend={setRequireLineFriend}
+                preventDuplicate={preventDuplicate}
+                setPreventDuplicate={setPreventDuplicate}
+                postScenario={postScenario}
+                setPostScenario={setPostScenario}
+                scenarios={scenarios}
+              />
+            </CardContent>
+          </Card>
+        </div>
+      </div>
 
-            <div className="flex gap-2 justify-end">
-              <Button onClick={editingId ? handleUpdate : handleCreate}>
-                <Save className="mr-2 h-4 w-4" /> {editingId ? '更新' : '保存'}
-              </Button>
-              <Button variant="outline" onClick={resetCreator}>クリア</Button>
-            </div>
-          </CardContent>
-        )}
-      </Card>
-
-      <Card>
-        <CardHeader>
-          <CardTitle>フォーム一覧</CardTitle>
-          <CardDescription>作成済みフォームのリンクをコピー・編集・削除できます</CardDescription>
-        </CardHeader>
-        <CardContent>
-          {loading ? (
-            <p className="text-muted-foreground">読み込み中...</p>
-          ) : (
-            <div className="space-y-3">
-              {forms.length === 0 && <p className="text-muted-foreground">まだフォームがありません</p>}
-              {forms.map((f) => (
-                <div key={f.id} className="rounded-md border p-3 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-                  <div className="space-y-1">
-                    <h3 className="font-medium">{f.name}</h3>
-                    {f.description && <p className="text-sm text-muted-foreground">{f.description}</p>}
-                    <p className="text-xs text-muted-foreground">フィールド数: {f.fields?.length || 0} / 公開: {f.is_public ? 'はい' : 'いいえ'}</p>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <Button size="sm" variant="secondary" onClick={()=>copyLink(f.id)}>
-                      <Copy className="mr-2 h-4 w-4" /> 埋め込みURL
-                    </Button>
-                    <a href={`/form/${f.id}`} target="_blank" rel="noopener noreferrer">
-                      <Button size="sm" variant="outline">
-                        <LinkIcon className="mr-2 h-4 w-4" /> 公開ページ
-                      </Button>
-                    </a>
-                    <Button size="sm" variant="outline" onClick={() => startEdit(f)}>
-                      <Pencil className="mr-2 h-4 w-4" /> 編集
-                    </Button>
-                    <Button size="sm" variant="destructive" onClick={() => deleteForm(f.id)}>
-                      <Trash2 className="mr-2 h-4 w-4" /> 削除
-                    </Button>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-        </CardContent>
-      </Card>
+      <div className="flex gap-2 justify-end">
+        <Button onClick={editingId ? handleUpdate : handleCreate}>
+          <Save className="mr-2 h-4 w-4" /> {editingId ? '更新' : '保存'}
+        </Button>
+        <Button variant="outline" onClick={resetCreator}>クリア</Button>
+      </div>
 
       <div className="text-xs text-muted-foreground">
         削除するとフォームと回答データは完全に削除され、元に戻せません。
