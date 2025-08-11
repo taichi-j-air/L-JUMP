@@ -1,90 +1,122 @@
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Button } from "@/components/ui/button";
-import { Bell, BellOff } from "lucide-react";
-export interface FormListTableItem {
-  id: string;
-  name: string;
-  description?: string | null;
-}
+import { useEffect, useState } from "react";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Switch } from "@/components/ui/switch";
+import type { FormField } from "./FormFieldList";
 
 interface Props {
-  items: FormListTableItem[];
-  loading: boolean;
-  selectedId: string | null;
-  onSelect: (id: string) => void;
-  unreadCounts?: Record<string, number>;
-  badgeEnabledMap?: Record<string, boolean>;
-  onToggleBadge?: (id: string) => void;
+  field: FormField | null;
+  onChange: (patch: Partial<FormField>) => void;
 }
 
-export default function FormListTable({ items, loading, selectedId, onSelect, unreadCounts, badgeEnabledMap, onToggleBadge }: Props) {
+export default function FormFieldEditor({ field, onChange }: Props) {
+  const isChoice = field?.type === "select" || field?.type === "radio" || field?.type === "checkbox";
+  const [optionsText, setOptionsText] = useState<string>("");
+
+  useEffect(() => {
+    if (isChoice && field) {
+      setOptionsText((field.options || []).join("\n"));
+    } else {
+      setOptionsText("");
+    }
+  }, [field?.id, isChoice, field?.options]);
+
+  if (!field) {
+    return <div className="text-sm text-muted-foreground">左のリストからフィールドを選択、または追加してください。</div>;
+  }
+
   return (
-    <Card>
-      <CardHeader className="py-0.5">
-        <CardTitle className="text-base">フォーム一覧</CardTitle>
-      </CardHeader>
-      <CardContent className="pt-0 pb-2">
-        {loading ? (
-          <p className="text-muted-foreground">読み込み中...</p>
-        ) : (
-          <div className="rounded-md border">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead className="w-10 py-0.5"></TableHead>
-                  <TableHead className="py-0.5">フォーム名</TableHead>
-                  <TableHead className="w-12 text-right py-0.5"></TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {items.length === 0 && (
-                  <TableRow>
-                    <TableCell colSpan={3} className="text-xs text-muted-foreground py-0.5">まだフォームがありません</TableCell>
-                  </TableRow>
-                )}
-                {items.map((f) => (
-                  <TableRow
-                    key={f.id}
-                    className={(selectedId === f.id ? "bg-muted/50" : "cursor-pointer hover:bg-muted/40") + " py-1"}
-                    onClick={() => onSelect(f.id)}
-                  >
-                    <TableCell className="align-middle py-0.5">
-                      {unreadCounts && (badgeEnabledMap?.[f.id] !== false) && (unreadCounts[f.id] > 0) && (
-                        <span className="inline-block h-2 w-2 rounded-full bg-destructive" aria-label="新着" />
-                      )}
-                    </TableCell>
-                    <TableCell className="align-middle py-0.5">
-                      <div className="min-w-0">
-                        <div className="truncate text-sm font-semibold" title={f.name}>{f.name}</div>
-                        {f.description && (
-                          <div className="truncate text-[11px] text-muted-foreground" title={f.description || undefined}>{f.description}</div>
-                        )}
-                      </div>
-                    </TableCell>
-                    <TableCell className="align-middle text-right py-0.5">
-                      {onToggleBadge && (
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          aria-label="通知バッジ切替"
-                          onClick={(e) => { e.stopPropagation(); onToggleBadge(f.id); }}
-                        >
-                          {(badgeEnabledMap?.[f.id] !== false) ? (
-                            <Bell className="h-4 w-4" />
-                          ) : (
-                            <BellOff className="h-4 w-4 text-muted-foreground" />
-                          )}
-                        </Button>
-                      )}
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
+    <div className="space-y-3">
+      <div className="space-y-2">
+        <label className="text-sm">表示ラベル</label>
+        <Input value={field.label} onChange={(e) => onChange({ label: e.target.value })} placeholder="氏名 など" />
+      </div>
+      
+      <div className="grid grid-cols-2 gap-3 items-end">
+        <div className="space-y-2">
+          <label className="text-sm">タイプ</label>
+          <Select value={field.type} onValueChange={(v) => onChange({ type: v })}>
+            <SelectTrigger>
+              <SelectValue placeholder="タイプ" />
+            </SelectTrigger>
+            <SelectContent className="bg-background z-[60]">
+              <SelectItem value="email">メール</SelectItem>
+              <SelectItem value="textarea">テキストエリア</SelectItem>
+              <SelectItem value="select">ドロップダウン</SelectItem>
+              <SelectItem value="radio">ラジオボタン</SelectItem>
+              <SelectItem value="checkbox">チェックボックス</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+        
+        <div className="flex items-center gap-2 justify-end">
+          <label className="text-sm whitespace-nowrap">回答必須：</label>
+          <Switch checked={!!field.required} onCheckedChange={(v) => onChange({ required: v })} />
+        </div>
+      </div>
+      
+      {(field.type === "email" || field.type === "textarea") && (
+        <div className="grid grid-cols-2 gap-3">
+          <div className="space-y-2">
+            <label className="text-sm">プレースホルダー</label>
+            <Input
+              value={field.placeholder ?? ""}
+              onChange={(e) => onChange({ placeholder: e.target.value })}
+              placeholder={field.type === "email" ? "例）example@example.com" : "例）ご質問をご記入ください"}
+            />
           </div>
-        )}
-      </CardContent>
-    </Card>
+          {field.type === "textarea" && (
+            <div className="space-y-2">
+              <label className="text-sm">行数</label>
+              <Input
+                type="number"
+                min={1}
+                max={20}
+                value={field.rows ?? 3}
+                onChange={(e) => onChange({ rows: Math.max(1, Math.min(20, Number(e.target.value) || 1)) })}
+              />
+            </div>
+          )}
+        </div>
+      )}
+      
+      {isChoice && (
+        <div className="space-y-2">
+          <label className="text-sm">選択肢（1行に1つ）</label>
+          <Textarea
+            rows={8}
+            placeholder={`例）\nはい\nいいえ\nその他`}
+            value={optionsText}
+            onChange={(e) => {
+              const text = e.target.value;
+              setOptionsText(text);
+              const opts = text.split(/\r?\n/).map((s) => s.trim()).filter(Boolean);
+              onChange({ options: opts });
+            }}
+            onKeyDown={(e) => {
+              // Enterキーは通常通り改行として動作させる
+              // その他のキーイベントのバブリングのみ停止
+              if (e.key !== 'Enter') {
+                e.stopPropagation();
+              }
+            }}
+            onFocus={() => {
+              console.log('Textarea focused'); // デバッグ用
+            }}
+            onBlur={() => {
+              console.log('Textarea blurred'); // デバッグ用  
+            }}
+            style={{
+              resize: 'vertical', // 縦方向のリサイズのみ許可
+              minHeight: '120px'   // 最小の高さを確保
+            }}
+          />
+          <div className="text-xs text-muted-foreground">
+            各行に1つの選択肢を入力してください。空行は無視されます。
+          </div>
+        </div>
+      )}
+    </div>
   );
 }
