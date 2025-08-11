@@ -122,11 +122,11 @@ export default function FormPreviewPanel({
                   <SelectTrigger className="px-3">
                     <SelectValue placeholder="選択してください" />
                   </SelectTrigger>
-                  <SelectContent className="bg-background z-[60]">
-                    {(f.options || []).map((o, i) => (
-                      <SelectItem key={i} value={o}>{o}</SelectItem>
-                    ))}
-                  </SelectContent>
+                    <SelectContent className="bg-background z-[60]">
+                      {((f.options || []).map((o) => (o ?? "").trim()).filter(Boolean)).map((o, i) => (
+                        <SelectItem key={`${o}-${i}`} value={o}>{o}</SelectItem>
+                      ))}
+                    </SelectContent>
                 </Select>
               ) : f.type === "radio" ? (
                 <RadioGroup value={values[f.name] || ""} onValueChange={(v) => setValue(f.name, v)}>

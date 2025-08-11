@@ -200,8 +200,8 @@ export default function PublicForm() {
                     <Select onValueChange={(v)=>handleChange(f.name, v)}>
                       <SelectTrigger className="px-3"><SelectValue placeholder="選択してください" /></SelectTrigger>
                       <SelectContent className="bg-background z-[60]">
-                        {f.options.map((opt)=> (
-                          <SelectItem key={opt} value={opt}>{opt}</SelectItem>
+                        {(f.options || []).map((opt) => (opt ?? "").trim()).filter(Boolean).map((opt, i) => (
+                          <SelectItem key={`${opt}-${i}`} value={opt}>{opt}</SelectItem>
                         ))}
                       </SelectContent>
                     </Select>
