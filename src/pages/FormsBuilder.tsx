@@ -154,7 +154,7 @@ const resetCreator = () => {
     if (!user) { toast.error('ログインが必要です'); return; }
 
 const cleanFields = fields.map(f => ({ id: f.id, label: f.label.trim(), name: f.name.trim(), type: f.type, required: !!f.required, options: Array.isArray(f.options) ? f.options : undefined, placeholder: f.placeholder?.trim() || undefined, rows: f.rows ? Number(f.rows) : undefined }));
-const { error } = await (supabase as any).from('forms').insert({
+const { data: created, error } = await (supabase as any).from('forms').insert({
   user_id: user.id,
   name: formName.trim(),
   description: description.trim() || null,
@@ -169,15 +169,14 @@ const { error } = await (supabase as any).from('forms').insert({
   submit_button_bg_color: submitButtonBgColor,
   submit_button_text_color: submitButtonTextColor,
   accent_color: accentColor,
-});
+}).select('id').single();
     if (error) {
       console.error(error);
       toast.error('作成に失敗しました');
     } else {
       toast.success('フォームを作成しました');
-      resetCreator();
-      setCreating(false);
-      loadForms();
+      if (created?.id) setEditingId(created.id);
+      await loadForms();
     }
   };
 
@@ -246,9 +245,7 @@ const handleUpdate = async () => {
     toast.error('更新に失敗しました');
   } else {
     toast.success('フォームを更新しました');
-    resetCreator();
-    setCreating(false);
-    loadForms();
+    await loadForms();
   }
 };
 

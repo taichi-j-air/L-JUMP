@@ -95,9 +95,15 @@ export function AppSidebar({ user }: AppSidebarProps) {
           const map: Record<string, number> = raw ? JSON.parse(raw) : {}
           map[formId] = (map[formId] || 0) + 1
           localStorage.setItem('unreadResponses', JSON.stringify(map))
-          // set global flag
-          localStorage.setItem('unreadResponsesGlobal', 'true')
-          setResponsesHasNew(true)
+
+          const enabledRaw = localStorage.getItem('formBadgeEnabled')
+          const enabledMap: Record<string, boolean> = enabledRaw ? JSON.parse(enabledRaw) : {}
+          const enabled = enabledMap[formId] !== false
+
+          if (enabled) {
+            localStorage.setItem('unreadResponsesGlobal', 'true')
+            setResponsesHasNew(true)
+          }
           window.dispatchEvent(new Event('unread-responses-updated'))
         } catch (e) {
           console.error('Failed to update unread responses', e)
@@ -107,16 +113,19 @@ export function AppSidebar({ user }: AppSidebarProps) {
 
     // Listen to storage updates from other parts of the app
     const handleUnreadUpdate = () => {
-      const flag = localStorage.getItem('unreadResponsesGlobal') === 'true'
-      setResponsesHasNew(flag)
+      try {
+        const raw = localStorage.getItem('unreadResponses')
+        const enabledRaw = localStorage.getItem('formBadgeEnabled')
+        const counts: Record<string, number> = raw ? JSON.parse(raw) : {}
+        const enabledMap: Record<string, boolean> = enabledRaw ? JSON.parse(enabledRaw) : {}
+        const anyEnabledUnread = Object.entries(counts).some(([id, cnt]) => (enabledMap[id] !== false) && ((cnt || 0) > 0))
+        setResponsesHasNew(anyEnabledUnread)
+      } catch {
+        setResponsesHasNew(false)
+      }
     }
     window.addEventListener('unread-responses-updated', handleUnreadUpdate)
-
-    return () => {
-      supabase.removeChannel(messageSubscription)
-      supabase.removeChannel(formSubSubscription)
-      window.removeEventListener('unread-responses-updated', handleUnreadUpdate)
-    }
+    handleUnreadUpdate()
   }, [user.id])
 
   const loadFriends = async () => {
@@ -194,14 +203,14 @@ export function AppSidebar({ user }: AppSidebarProps) {
                   <SidebarMenuSub>
                     <SidebarMenuSubItem>
                       <SidebarMenuSubButton asChild>
-                        <NavLink to="/friends-list" end className={({ isActive }) => (isActive ? "bg-sidebar-accent text-sidebar-accent-foreground focus-visible:outline-none focus-visible:ring-0" : "focus-visible:outline-none focus-visible:ring-0")}> 
+                        <NavLink to="/friends-list" end className={({ isActive }) => getNavClass({ isActive })}> 
                           <span>友だち一覧</span>
                         </NavLink>
                       </SidebarMenuSubButton>
                     </SidebarMenuSubItem>
                     <SidebarMenuSubItem>
                       <SidebarMenuSubButton asChild>
-                        <NavLink to="/tags" end className={({ isActive }) => (isActive ? "bg-sidebar-accent text-sidebar-accent-foreground" : "")}> 
+                        <NavLink to="/tags" end className={({ isActive }) => getNavClass({ isActive })}> 
                           <span>タグ一覧/設定</span>
                         </NavLink>
                       </SidebarMenuSubButton>
@@ -225,14 +234,14 @@ export function AppSidebar({ user }: AppSidebarProps) {
                   <SidebarMenuSub>
                     <SidebarMenuSubItem>
                       <SidebarMenuSubButton asChild>
-                        <NavLink to="/forms" end className={({ isActive }) => (isActive ? "bg-sidebar-accent text-sidebar-accent-foreground focus-visible:outline-none focus-visible:ring-0" : "focus-visible:outline-none focus-visible:ring-0")}> 
-                          <span>フォーム作成/一覧</span>
-                        </NavLink>
+                          <NavLink to="/forms" end className={({ isActive }) => getNavClass({ isActive })}> 
+                            <span>フォーム作成/一覧</span>
+                          </NavLink>
                       </SidebarMenuSubButton>
                     </SidebarMenuSubItem>
                     <SidebarMenuSubItem>
                       <SidebarMenuSubButton asChild>
-                    <NavLink to="/forms/responses" end className={({ isActive }) => (isActive ? "bg-sidebar-accent text-sidebar-accent-foreground" : "")}> 
+                        <NavLink to="/forms/responses" end className={({ isActive }) => getNavClass({ isActive })}> 
                           <span className="flex items-center gap-2">回答結果{responsesHasNew && <span className="inline-block h-2 w-2 rounded-full bg-destructive" aria-label="新着" />}</span>
                         </NavLink>
                       </SidebarMenuSubButton>

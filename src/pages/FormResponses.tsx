@@ -1,10 +1,11 @@
 import { useEffect, useMemo, useState } from "react";
-import { useNavigate } from "react-router-dom";
+
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { toast } from "sonner";
 import FormListTable from "@/components/forms/FormListTable";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 
 interface FormRow {
   id: string;
@@ -23,7 +24,7 @@ export default function FormResponses() {
   const [submissions, setSubmissions] = useState<Array<{ id: string; submitted_at: string; data: any; friend_id: string | null; form_id?: string }>>([]);
   const [loading, setLoading] = useState(false);
   const [unreadCounts, setUnreadCounts] = useState<Record<string, number>>({});
-  const navigate = useNavigate();
+  const [badgeEnabledMap, setBadgeEnabledMap] = useState<Record<string, boolean>>({});
   useEffect(() => {
     const loadForms = async () => {
       const { data: { user } } = await supabase.auth.getUser();
@@ -47,6 +48,8 @@ export default function FormResponses() {
       try {
         const raw = localStorage.getItem('unreadResponses');
         setUnreadCounts(raw ? JSON.parse(raw) : {});
+        const enabledRaw = localStorage.getItem('formBadgeEnabled');
+        setBadgeEnabledMap(enabledRaw ? JSON.parse(enabledRaw) : {});
         // clear global badge when opening page
         localStorage.setItem('unreadResponsesGlobal', 'false');
         window.dispatchEvent(new Event('unread-responses-updated'));
@@ -135,6 +138,16 @@ export default function FormResponses() {
             selectedId={selectedForm || null}
             onSelect={setSelectedForm}
             unreadCounts={unreadCounts}
+            badgeEnabledMap={badgeEnabledMap}
+            onToggleBadge={(id) => {
+              setBadgeEnabledMap((prev) => {
+                const enabled = prev[id] !== false
+                const next = { ...prev, [id]: !enabled }
+                localStorage.setItem('formBadgeEnabled', JSON.stringify(next))
+                window.dispatchEvent(new Event('unread-responses-updated'))
+                return next
+              })
+            }}
           />
         </div>
 
@@ -150,33 +163,33 @@ export default function FormResponses() {
               ) : submissions.length === 0 ? (
                 <p className="text-muted-foreground">まだ回答はありません</p>
               ) : (
-                <div className="rounded-md border overflow-x-auto">
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead className="whitespace-nowrap">提出日時</TableHead>
-                        <TableHead className="whitespace-nowrap">友だち</TableHead>
-                        {fieldOrder.map((f) => (
-                          <TableHead key={f.id} className="whitespace-nowrap">{f.label}</TableHead>
-                        ))}
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {submissions.map((s) => (
-                        <TableRow key={s.id}>
-                          <TableCell className="align-top whitespace-nowrap text-xs text-muted-foreground">{new Date(s.submitted_at).toLocaleString()}</TableCell>
-                          <TableCell className="align-top whitespace-nowrap text-xs text-muted-foreground">{s.friend_id ? s.friend_id : '匿名'}</TableCell>
-                          {fieldOrder.map((f) => {
-                            const val = s.data?.[f.name]
-                            const text = renderValue(f.type, val)
-                            return (
-                              <TableCell key={f.id} className="align-top text-sm break-words max-w-[320px]">{text}</TableCell>
-                            )
-                          })}
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
+                <div className="rounded-md border">
+                  <Accordion type="multiple" className="w-full">
+                    {submissions.map((s) => (
+                      <AccordionItem key={s.id} value={s.id}>
+                        <AccordionTrigger className="text-left">
+                          <div className="flex items-center gap-3">
+                            <span className="text-xs text-muted-foreground whitespace-nowrap">{new Date(s.submitted_at).toLocaleString()}</span>
+                            <span className="text-xs text-muted-foreground">{s.friend_id ? s.friend_id : '匿名'}</span>
+                          </div>
+                        </AccordionTrigger>
+                        <AccordionContent>
+                          <div className="grid gap-3 sm:grid-cols-2">
+                            {fieldOrder.map((f) => {
+                              const val = s.data?.[f.name]
+                              const text = renderValue(f.type, val)
+                              return (
+                                <div key={f.id} className="space-y-1">
+                                  <div className="text-xs text-muted-foreground">{f.label}</div>
+                                  <div className="text-sm break-words">{text}</div>
+                                </div>
+                              )
+                            })}
+                          </div>
+                        </AccordionContent>
+                      </AccordionItem>
+                    ))}
+                  </Accordion>
                 </div>
               )}
             </CardContent>

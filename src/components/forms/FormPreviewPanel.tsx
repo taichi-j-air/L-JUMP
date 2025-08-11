@@ -130,21 +130,21 @@ export default function FormPreviewPanel({
                 </Select>
               ) : f.type === "radio" ? (
                 <RadioGroup value={values[f.name] || ""} onValueChange={(v) => setValue(f.name, v)}>
-                  <div className="flex flex-wrap gap-3">
+                  <div className="flex flex-col gap-2">
                     {(f.options || []).map((o, i) => (
-                      <label key={i} className="flex items-center gap-2 text-sm">
-                        <RadioGroupItem value={o} />
+                      <label key={i} className="inline-flex items-center gap-2 text-sm">
+                        <RadioGroupItem value={o} className="border-[var(--form-accent)] data-[state=checked]:bg-[var(--form-accent)] data-[state=checked]:text-white" />
                         {o}
                       </label>
                     ))}
                   </div>
                 </RadioGroup>
               ) : f.type === "checkbox" ? (
-                <div className="flex flex-wrap gap-3">
+                <div className="flex flex-col gap-2">
                   {(f.options || []).map((o, i) => {
                     const checked = Array.isArray(values[f.name]) && values[f.name].includes(o);
                     return (
-                      <label key={i} className="flex items-center gap-2 text-sm">
+                      <label key={i} className="inline-flex items-center gap-2 text-sm">
                         <Checkbox
                           className="border-[var(--form-accent)] data-[state=checked]:bg-[var(--form-accent)] data-[state=checked]:text-white"
                           checked={checked}
