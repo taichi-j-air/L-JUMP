@@ -55,7 +55,7 @@ export default function CMSFriendsPageBuilder() {
   const [tagLabel, setTagLabel] = useState("");
   const [slug, setSlug] = useState("");
   const [title, setTitle] = useState("");
-  const [contentBlocks, setContentBlocks] = useState<ContentBlock[]>([]);
+  const [contentHtml, setContentHtml] = useState<string>("");
 
   // Right settings
   const [tags, setTags] = useState<TagRow[]>([]);
@@ -64,8 +64,13 @@ export default function CMSFriendsPageBuilder() {
   const [requirePass, setRequirePass] = useState(false);
   const [passcode, setPasscode] = useState("");
   const [timerEnabled, setTimerEnabled] = useState(false);
+  const [timerMode, setTimerMode] = useState<"absolute" | "per_access">("absolute");
   const [timerDeadline, setTimerDeadline] = useState("");
-  const [timerDisplay, setTimerDisplay] = useState<"dhms" | "hms" | "ms">("dhms");
+  const [durationSeconds, setDurationSeconds] = useState<number>(0);
+  const [showMilliseconds, setShowMilliseconds] = useState<boolean>(false);
+  const [timerStyle, setTimerStyle] = useState<"solid" | "glass" | "outline">("solid");
+  const [timerBgColor, setTimerBgColor] = useState<string>("#0cb386");
+  const [timerTextColor, setTimerTextColor] = useState<string>("#ffffff");
   const [internalTimer, setInternalTimer] = useState(false);
   const [timerText, setTimerText] = useState("");
   const [expireAction, setExpireAction] = useState<"hide" | "keep_public">("keep_public");
@@ -119,15 +124,19 @@ export default function CMSFriendsPageBuilder() {
     setTagLabel(selected.tag_label || "");
     setSlug(selected.slug || "");
     setTitle(selected.title || "");
-    const blocks = Array.isArray(selected.content_blocks) ? selected.content_blocks : [];
-    setContentBlocks(blocks as ContentBlock[]);
+    setContentHtml((selected as any).content || "");
     setAllowedTags(selected.allowed_tag_ids || []);
     setBlockedTags(selected.blocked_tag_ids || []);
     setRequirePass(!!selected.require_passcode);
     setPasscode(selected.passcode || "");
     setTimerEnabled(!!selected.timer_enabled);
+    setTimerMode(((selected as any).timer_mode as any) || "absolute");
     setTimerDeadline(selected.timer_deadline ? selected.timer_deadline.slice(0, 16) : ""); // yyyy-MM-ddTHH:mm
-    setTimerDisplay(((selected.timer_display_mode as any) || "dhms") as any);
+    setDurationSeconds((selected as any).timer_duration_seconds || 0);
+    setShowMilliseconds(!!(selected as any).show_milliseconds);
+    setTimerStyle(((selected as any).timer_style as any) || "solid");
+    setTimerBgColor(((selected as any).timer_bg_color as any) || "#0cb386");
+    setTimerTextColor(((selected as any).timer_text_color as any) || "#ffffff");
     setInternalTimer(!!selected.internal_timer);
     setTimerText(selected.timer_text || "");
     setExpireAction(((selected.expire_action as any) || "keep_public") as any);
@@ -149,14 +158,19 @@ export default function CMSFriendsPageBuilder() {
           internal_name: defaultTitle,
           slug: defaultSlug,
           visibility: 'friends_only',
-          content_blocks: [],
+          content: "",
           allowed_tag_ids: [],
           blocked_tag_ids: [],
           require_passcode: false,
           passcode: null,
           timer_enabled: false,
           timer_deadline: null,
-          timer_display_mode: 'dhms',
+          timer_mode: 'absolute',
+          timer_duration_seconds: null,
+          show_milliseconds: false,
+          timer_style: 'solid',
+          timer_bg_color: '#0cb386',
+          timer_text_color: '#ffffff',
           internal_timer: false,
           timer_text: null,
           expire_action: 'keep_public'
@@ -188,16 +202,25 @@ export default function CMSFriendsPageBuilder() {
         slug,
         internal_name: internalName,
         tag_label: tagLabel,
-        content_blocks: contentBlocks,
+        content: contentHtml,
         allowed_tag_ids: allowedTags,
         blocked_tag_ids: blockedTags,
         require_passcode: requirePass,
         passcode: requirePass ? (passcode || null) : null,
         timer_enabled: timerEnabled,
-        timer_deadline: timerEnabled && timerDeadline ? new Date(timerDeadline).toISOString() : null,
-        timer_display_mode: timerDisplay,
+        timer_deadline:
+          timerEnabled && timerMode === 'absolute' && timerDeadline
+            ? new Date(timerDeadline).toISOString()
+            : null,
+        timer_mode: timerMode,
+        timer_duration_seconds:
+          timerEnabled && timerMode === 'per_access' ? Number(durationSeconds || 0) : null,
+        show_milliseconds: showMilliseconds,
+        timer_style: timerStyle,
+        timer_bg_color: timerBgColor,
+        timer_text_color: timerTextColor,
         internal_timer: internalTimer,
-        timer_text: internalTimer ? (timerText || null) : (timerText || null),
+        timer_text: timerText || null,
         expire_action: expireAction,
       };
 
@@ -238,19 +261,11 @@ export default function CMSFriendsPageBuilder() {
     });
   };
 
-  const addBlock = () => {
-    const id = `blk-${Date.now()}`;
-    setContentBlocks(prev => [...prev, { id, title: "新規ブロック", body: "" }]);
+  // Preview open
+  const openPreview = () => {
+    if (!selected) return;
+    window.open(`/cms/preview/${selected.id}`, '_blank');
   };
-
-  const updateBlock = (id: string, patch: Partial<ContentBlock>) => {
-    setContentBlocks(prev => prev.map(b => (b.id === id ? { ...b, ...patch } : b)));
-  };
-
-  const removeBlock = (id: string) => {
-    setContentBlocks(prev => prev.filter(b => b.id !== id));
-  };
-
   return (
     <div className="container mx-auto max-w-[1200px] space-y-4">
       <header>
@@ -333,35 +348,31 @@ export default function CMSFriendsPageBuilder() {
             <CardHeader className="py-3">
               <div className="flex items-center justify-between">
                 <CardTitle className="text-base">ページ用コンテンツ作成ビルダー</CardTitle>
-                <Button size="sm" variant="secondary" onClick={addBlock}>コンテンツを追加</Button>
+                <Button size="sm" variant="secondary" onClick={openPreview} disabled={!selected}>プレビュー</Button>
               </div>
             </CardHeader>
-            <CardContent>
+            <CardContent className="space-y-4">
               {!selected ? (
                 <p className="text-sm text-muted-foreground">ページを選択してください。</p>
-              ) : contentBlocks.length === 0 ? (
-                <p className="text-sm text-muted-foreground">コンテンツがありません。「コンテンツを追加」を押してください。</p>
               ) : (
-                <Accordion type="multiple" className="w-full">
-                  {contentBlocks.map((blk) => (
-                    <AccordionItem key={blk.id} value={blk.id}>
-                      <AccordionTrigger className="px-3 py-2">{blk.title || '無題コンテンツ'}</AccordionTrigger>
-                      <AccordionContent className="px-3 py-2 space-y-3">
-                        <div className="space-y-2">
-                          <Label>見出し</Label>
-                          <Input value={blk.title} onChange={(e) => updateBlock(blk.id, { title: e.target.value })} />
-                        </div>
-                        <div className="space-y-2">
-                          <Label>本文</Label>
-                          <Textarea rows={5} value={blk.body} onChange={(e) => updateBlock(blk.id, { body: e.target.value })} placeholder="本文を入力" />
-                        </div>
-                        <div className="flex justify-end">
-                          <Button variant="destructive" size="sm" onClick={() => removeBlock(blk.id)}>このコンテンツを削除</Button>
-                        </div>
-                      </AccordionContent>
-                    </AccordionItem>
-                  ))}
-                </Accordion>
+                <>
+                  {timerEnabled && (
+                    <TimerPreview
+                      mode={timerMode}
+                      deadline={timerDeadline || undefined}
+                      durationSeconds={durationSeconds || undefined}
+                      showMilliseconds={showMilliseconds}
+                      styleVariant={timerStyle}
+                      bgColor={timerBgColor}
+                      textColor={timerTextColor}
+                      shareCode={selected.share_code}
+                    />
+                  )}
+                  <div className="space-y-2">
+                    <Label>本文（リッチテキスト）</Label>
+                    <RichTextEditor value={contentHtml} onChange={setContentHtml} />
+                  </div>
+                </>
               )}
             </CardContent>
           </Card>
@@ -432,21 +443,58 @@ export default function CMSFriendsPageBuilder() {
                   {timerEnabled && (
                     <>
                       <div className="space-y-2">
-                        <Label>表示期限（締切）</Label>
-                        <Input type="datetime-local" value={timerDeadline} onChange={(e) => setTimerDeadline(e.target.value)} />
-                      </div>
-                      <div className="space-y-2">
-                        <Label>タイマー表示方法</Label>
-                        <Select value={timerDisplay} onValueChange={(v) => setTimerDisplay(v as any)}>
+                        <Label>表示期限タイプ</Label>
+                        <Select value={timerMode} onValueChange={(v) => setTimerMode(v as any)}>
                           <SelectTrigger>
-                            <SelectValue placeholder="表示方法" />
+                            <SelectValue placeholder="タイプ" />
                           </SelectTrigger>
                           <SelectContent className="bg-background">
-                            <SelectItem value="dhms">残り（日・時・分・秒）</SelectItem>
-                            <SelectItem value="hms">残り（時・分・秒）</SelectItem>
-                            <SelectItem value="ms">残り（分・秒）</SelectItem>
+                            <SelectItem value="absolute">日時時間指定</SelectItem>
+                            <SelectItem value="per_access">アクセス後カウント</SelectItem>
                           </SelectContent>
                         </Select>
+                      </div>
+
+                      {timerMode === 'absolute' ? (
+                        <div className="space-y-2">
+                          <Label>表示期限（締切）</Label>
+                          <Input type="datetime-local" value={timerDeadline} onChange={(e) => setTimerDeadline(e.target.value)} />
+                        </div>
+                      ) : (
+                        <div className="space-y-2">
+                          <Label>カウント時間（秒）</Label>
+                          <Input type="number" min={0} value={durationSeconds} onChange={(e) => setDurationSeconds(Number(e.target.value || 0))} />
+                        </div>
+                      )}
+
+                      <div className="flex items-center justify-between">
+                        <Label>ミリ秒を表示</Label>
+                        <Switch checked={showMilliseconds} onCheckedChange={(v) => setShowMilliseconds(!!v)} />
+                      </div>
+
+                      <div className="space-y-2">
+                        <Label>タイマーデザイン</Label>
+                        <Select value={timerStyle} onValueChange={(v) => setTimerStyle(v as any)}>
+                          <SelectTrigger>
+                            <SelectValue placeholder="デザイン" />
+                          </SelectTrigger>
+                          <SelectContent className="bg-background">
+                            <SelectItem value="solid">ソリッド</SelectItem>
+                            <SelectItem value="glass">グラス</SelectItem>
+                            <SelectItem value="outline">アウトライン</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-3">
+                        <div className="space-y-2">
+                          <Label>背景色</Label>
+                          <ColorPicker color={timerBgColor} onChange={setTimerBgColor} />
+                        </div>
+                        <div className="space-y-2">
+                          <Label>文字色</Label>
+                          <ColorPicker color={timerTextColor} onChange={setTimerTextColor} />
+                        </div>
                       </div>
                     </>
                   )}
