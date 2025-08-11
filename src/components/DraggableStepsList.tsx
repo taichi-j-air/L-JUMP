@@ -149,7 +149,7 @@ function SortableStepCard({ step, index, isSelected, onClick, onDelete, onUpdate
             </p>
           </div>
           <div className="flex items-center gap-2">
-            <span className="text-xs flex items-center gap-1" title="このステップにいる人数"><Users className="h-3 w-3" /> {readyCount ?? 0}</span>
+            <span className="text-xs flex items-center gap-1" title="このステップの登録ユーザー数"><Users className="h-3 w-3" /> {readyCount ?? 0}</span>
             <Button
               variant="ghost"
               size="sm"
@@ -214,7 +214,6 @@ export function DraggableStepsList({
         .from('step_delivery_tracking')
         .select('step_id')
         .in('step_id', ids)
-        .eq('status', 'ready')
       if (error) {
         console.error('ステップ人数取得失敗:', error)
         setReadyCounts({})
@@ -239,7 +238,6 @@ export function DraggableStepsList({
             .from('step_delivery_tracking')
             .select('step_id')
             .in('step_id', ids)
-            .eq('status', 'ready')
           if (error) { setReadyCounts({}); return }
           const counts: Record<string, number> = {}
           ;(data || []).forEach((row: any) => {

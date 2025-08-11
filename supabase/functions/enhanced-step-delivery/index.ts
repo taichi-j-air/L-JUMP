@@ -35,6 +35,9 @@ serve(async (req) => {
         case 'get_delivery_stats':
           return await getDeliveryStats(supabase, data);
         
+        case 'apply_transition_to_completed':
+          return await applyTransitionToCompleted(supabase, data);
+        
         default:
           throw new Error('Invalid action');
       }
@@ -265,6 +268,141 @@ async function getDeliveryStats(supabase: any, data: any) {
     }),
     { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
   );
+}
+
+// Apply a newly-created scenario transition to friends who already completed the source scenario
+async function applyTransitionToCompleted(supabase: any, data: any) {
+  const { fromScenarioId, toScenarioId } = data || {}
+  if (!fromScenarioId || !toScenarioId) {
+    return new Response(JSON.stringify({ success: false, error: 'fromScenarioId and toScenarioId are required' }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
+  }
+  console.log('Applying transition to completed friends', { fromScenarioId, toScenarioId })
+
+  // Load steps for both scenarios
+  const [{ data: fromSteps, error: fromStepsErr }, { data: toSteps, error: toStepsErr }] = await Promise.all([
+    supabase.from('steps').select('id').eq('scenario_id', fromScenarioId),
+    supabase.from('steps').select('id, step_order, delivery_type, delivery_days, delivery_hours, delivery_minutes, delivery_seconds, specific_time, delivery_time_of_day').eq('scenario_id', toScenarioId).order('step_order', { ascending: true })
+  ])
+  if (fromStepsErr) throw new Error(`Failed to load from-steps: ${fromStepsErr.message}`)
+  if (toStepsErr) throw new Error(`Failed to load to-steps: ${toStepsErr.message}`)
+  const totalFromSteps = (fromSteps || []).length
+  if (totalFromSteps === 0 || (toSteps || []).length === 0) {
+    return new Response(JSON.stringify({ success: true, moved: 0, skipped: 0, reason: 'No steps to process' }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
+  }
+
+  // Fetch tracking rows for the source scenario
+  const { data: trackingRows, error: trErr } = await supabase
+    .from('step_delivery_tracking')
+    .select('friend_id, status')
+    .eq('scenario_id', fromScenarioId)
+  if (trErr) throw new Error(`Failed to load tracking for from-scenario: ${trErr.message}`)
+
+  // Determine friends who completed all steps (all delivered; ignore exited here)
+  const byFriend: Record<string, { delivered: number; hasWaitingOrReady: boolean }> = {}
+  for (const r of trackingRows || []) {
+    const fid = (r as any).friend_id as string
+    const st = (r as any).status as string
+    if (!byFriend[fid]) byFriend[fid] = { delivered: 0, hasWaitingOrReady: false }
+    if (st === 'delivered') byFriend[fid].delivered++
+    if (st === 'waiting' || st === 'ready') byFriend[fid].hasWaitingOrReady = true
+  }
+  const completedFriendIds = Object.entries(byFriend)
+    .filter(([_, v]) => v.delivered >= totalFromSteps && !v.hasWaitingOrReady)
+    .map(([fid]) => fid)
+
+  if (completedFriendIds.length === 0) {
+    return new Response(JSON.stringify({ success: true, moved: 0, skipped: 0 }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
+  }
+
+  // Exclude friends already registered to destination scenario
+  const { data: existingTo, error: existErr } = await supabase
+    .from('step_delivery_tracking')
+    .select('friend_id')
+    .eq('scenario_id', toScenarioId)
+    .in('friend_id', completedFriendIds)
+  if (existErr) throw new Error(`Failed to check existing destination: ${existErr.message}`)
+  const alreadySet = new Set((existingTo || []).map((r: any) => r.friend_id))
+  const targets = completedFriendIds.filter(fid => !alreadySet.has(fid))
+
+  if (targets.length === 0) {
+    return new Response(JSON.stringify({ success: true, moved: 0, skipped: completedFriendIds.length }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
+  }
+
+  // Get line_user_id for logs
+  const { data: friends, error: friendErr } = await supabase
+    .from('line_friends')
+    .select('id, line_user_id')
+    .in('id', targets)
+  if (friendErr) throw new Error(`Failed to load friends: ${friendErr.message}`)
+  const lineIdByFriend = new Map<string, string>()
+  for (const f of friends || []) lineIdByFriend.set((f as any).id, (f as any).line_user_id)
+
+  // Mark source scenario rows as exited
+  const { error: exitErr } = await supabase
+    .from('step_delivery_tracking')
+    .update({ status: 'exited', updated_at: new Date().toISOString() })
+    .eq('scenario_id', fromScenarioId)
+    .in('friend_id', targets)
+  if (exitErr) throw new Error(`Failed to mark exited: ${exitErr.message}`)
+
+  // Prepare destination tracking inserts
+  function computeFirstSchedule(now: Date, step: any): string {
+    const type = step.delivery_type
+    const days = step.delivery_days || 0
+    const hours = step.delivery_hours || 0
+    const minutes = step.delivery_minutes || 0
+    const seconds = step.delivery_seconds || 0
+    if (type === 'specific_time' && step.specific_time) return step.specific_time
+    if (type === 'time_of_day' && step.delivery_time_of_day) {
+      const base = new Date(now)
+      base.setHours(parseInt(step.delivery_time_of_day.split(':')[0] || '0', 10), parseInt(step.delivery_time_of_day.split(':')[1] || '0', 10), 0, 0)
+      if (base <= now) base.setDate(base.getDate() + 1)
+      return base.toISOString()
+    }
+    // relative or relative_to_previous: base on now for first step
+    const ms = (((days * 24 + hours) * 60 + minutes) * 60 + seconds) * 1000
+    const when = new Date(now.getTime() + ms)
+    return when.toISOString()
+  }
+
+  const now = new Date()
+  const firstStep = (toSteps || [])[0]
+  const firstScheduled = computeFirstSchedule(now, firstStep)
+
+  const inserts: any[] = []
+  for (const fid of targets) {
+    for (const s of toSteps || []) {
+      const isFirst = (s as any).step_order === 0
+      inserts.push({
+        scenario_id: toScenarioId,
+        step_id: (s as any).id,
+        friend_id: fid,
+        status: isFirst ? 'ready' : 'waiting',
+        scheduled_delivery_at: isFirst ? firstScheduled : null,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString()
+      })
+    }
+  }
+
+  const { error: insErr } = await supabase.from('step_delivery_tracking').insert(inserts)
+  if (insErr) throw new Error(`Failed to insert destination tracking: ${insErr.message}`)
+
+  // Write scenario_friend_logs with placeholder invite_code
+  const logs: any[] = []
+  for (const fid of targets) {
+    logs.push({
+      scenario_id: toScenarioId,
+      friend_id: fid,
+      line_user_id: lineIdByFriend.get(fid) || null,
+      invite_code: 'system_transition',
+      added_at: new Date().toISOString()
+    })
+  }
+  const { error: logErr } = await supabase.from('scenario_friend_logs').insert(logs)
+  if (logErr) console.warn('Failed to insert scenario_friend_logs for transition:', logErr?.message)
+
+  return new Response(JSON.stringify({ success: true, moved: targets.length, skipped: completedFriendIds.length - targets.length }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
 }
 
 // Send LINE message

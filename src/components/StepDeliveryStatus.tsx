@@ -28,30 +28,41 @@ export function StepDeliveryStatus({ step }: StepDeliveryStatusProps) {
   const loadStats = async () => {
     setLoading(true)
     try {
-      // 配信統計を取得（readyはwaitingに加算）
-      const { data: deliveryData, error } = await supabase
+      // 配信統計（waiting/ready/exited は tracking、delivered はログで集計）
+      const { data: trackingRows, error: trErr } = await supabase
         .from('step_delivery_tracking')
         .select('status')
         .eq('step_id', step.id)
 
-      if (error) {
-        console.error('配信統計取得失敗:', error)
+      if (trErr) {
+        console.error('配信統計取得失敗:', trErr)
         setStats({ waiting: 0, ready: 0, delivered: 0, exited: 0, blocked: 0 })
         return
       }
 
       let statsCount: DeliveryStats = { waiting: 0, ready: 0, delivered: 0, exited: 0, blocked: 0 }
-      for (const item of deliveryData || []) {
+      for (const item of trackingRows || []) {
         const s = (item as any).status
         if (s === 'ready') {
           statsCount.waiting += 1 // 準備中も「待機」に含める
           statsCount.ready += 1
-        } else if (s === 'waiting' || s === 'delivered' || s === 'exited') {
+        } else if (s === 'waiting' || s === 'exited') {
           ;(statsCount as any)[s] = ((statsCount as any)[s] || 0) + 1
         }
       }
 
-      // 当該ステップでの配信失敗（ブロック等）数を取得（友だち重複排除）
+      // 当該ステップでの配信完了人数（ログ基準、友だち重複排除）
+      const { data: deliveredLogs, error: delErr } = await supabase
+        .from('step_delivery_logs')
+        .select('friend_id')
+        .eq('step_id', step.id)
+        .eq('delivery_status', 'delivered')
+      if (!delErr) {
+        const uniq = new Set<string>((deliveredLogs || []).map((r: any) => r.friend_id).filter(Boolean))
+        statsCount.delivered = uniq.size
+      }
+
+      // 当該ステップでの配信失敗（ブロック等）数（ログ基準、重複排除）
       const { data: failedLogs, error: logErr } = await supabase
         .from('step_delivery_logs')
         .select('friend_id')
@@ -100,7 +111,36 @@ export function StepDeliveryStatus({ step }: StepDeliveryStatusProps) {
         } else {
           setDetailUsers([])
         }
+      } else if (type === 'delivered') {
+        // 配信完了はログ基準で取得（離脱後も残る）
+        const { data: logs, error: dErr } = await supabase
+          .from('step_delivery_logs')
+          .select('friend_id, delivered_at')
+          .eq('step_id', step.id)
+          .eq('delivery_status', 'delivered')
+        if (dErr) throw dErr
+        // 友だちごとに最新の delivered_at を採用
+        const latestByFriend = new Map<string, string>()
+        for (const r of logs || []) {
+          const fid = (r as any).friend_id
+          const ts = (r as any).delivered_at
+          if (!fid || !ts) continue
+          const current = latestByFriend.get(fid)
+          if (!current || new Date(ts) > new Date(current)) latestByFriend.set(fid, ts)
+        }
+        const friendIds = Array.from(latestByFriend.keys())
+        if (friendIds.length > 0) {
+          const { data: friends, error: fErr } = await supabase
+            .from('line_friends')
+            .select('id, display_name, picture_url, line_user_id')
+            .in('id', friendIds)
+          if (fErr) throw fErr
+          setDetailUsers((friends || []).map((f: any) => ({ ...f, ts: latestByFriend.get(f.id) || null })))
+        } else {
+          setDetailUsers([])
+        }
       } else {
+        // waiting / exited は tracking 基準
         let trackingQuery = supabase
           .from('step_delivery_tracking')
           .select('friend_id, scheduled_delivery_at, delivered_at, updated_at, status')
@@ -116,19 +156,16 @@ export function StepDeliveryStatus({ step }: StepDeliveryStatusProps) {
 
         const friendIds = (trackingRows || []).map((r: any) => r.friend_id).filter(Boolean)
         if (friendIds.length > 0) {
-          // 友だち情報
           const { data: friends, error: fErr } = await supabase
             .from('line_friends')
             .select('id, display_name, picture_url, line_user_id')
             .in('id', friendIds)
           if (fErr) throw fErr
 
-          // 友だちごとの表示用時刻を決定
           const timeByFriend = new Map<string, string | null>()
           ;(trackingRows || []).forEach((r: any) => {
             let ts: string | null = null
             if (type === 'waiting') ts = r.scheduled_delivery_at
-            else if (type === 'delivered') ts = r.delivered_at
             else if (type === 'exited') ts = r.updated_at
             timeByFriend.set(r.friend_id, ts)
           })
@@ -235,7 +272,7 @@ export function StepDeliveryStatus({ step }: StepDeliveryStatusProps) {
                     <span className="text-xs">
                       {u.display_name || u.line_user_id}
                       {showDetails && u.ts ? (
-                        <span className="ml-2 text-muted-foreground">{format(new Date(u.ts), 'yyyy/MM/dd HH:mm')}</span>
+                        <span className="ml-2 text-muted-foreground">{u.ts ? format(new Date(u.ts), 'yyyy/MM/dd HH:mm') : ''}</span>
                       ) : null}
                     </span>
                   </li>

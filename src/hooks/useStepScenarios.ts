@@ -399,6 +399,26 @@ export const useStepScenarios = (userId: string | undefined) => {
 
       setTransitions(prev => [...prev, data])
       toast.success('シナリオ移動を設定しました')
+
+      // 完走済みユーザーにも後付けで適用
+      try {
+        const { data: applyRes, error: fnErr } = await supabase.functions.invoke('enhanced-step-delivery', {
+          body: {
+            action: 'apply_transition_to_completed',
+            data: { fromScenarioId, toScenarioId }
+          }
+        })
+        if (fnErr) throw fnErr
+        // 統計更新を促す
+        window.dispatchEvent(new Event('scenario-stats-updated'))
+        const moved = (applyRes as any)?.moved ?? 0
+        if (moved > 0) {
+          toast.success(`完走ユーザー ${moved} 人を新シナリオへ移動しました`)
+        }
+      } catch (e) {
+        console.warn('完走ユーザーの後付け移動に失敗:', e)
+      }
+
       return data
     } catch (error) {
       console.error('シナリオ移動の設定に失敗しました:', error)
