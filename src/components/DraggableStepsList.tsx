@@ -214,6 +214,7 @@ export function DraggableStepsList({
         .from('step_delivery_tracking')
         .select('step_id')
         .in('step_id', ids)
+        .neq('status','exited')
       if (error) {
         console.error('ステップ人数取得失敗:', error)
         setReadyCounts({})
@@ -238,6 +239,7 @@ export function DraggableStepsList({
             .from('step_delivery_tracking')
             .select('step_id')
             .in('step_id', ids)
+            .neq('status','exited')
           if (error) { setReadyCounts({}); return }
           const counts: Record<string, number> = {}
           ;(data || []).forEach((row: any) => {
