@@ -12,7 +12,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { toast } from "sonner";
 import { Copy, Link as LinkIcon, Plus, Save, Trash2, Pencil } from "lucide-react";
 import FormFieldList from "@/components/forms/FormFieldList";
-import FormFieldEditor from "@/components/forms/FormFieldEditor";
+import FieldEditorPanel from "@/components/forms/FieldEditorPanel";
 import FormPreviewPanel from "@/components/forms/FormPreviewPanel";
 import FormListPanel from "@/components/forms/FormListPanel";
 
@@ -345,7 +345,7 @@ const handleUpdate = async () => {
                 }
               />
 
-              <FormFieldEditor
+              <FieldEditorPanel
                 field={selectedField as any}
                 onChange={(patch) => selectedField && updateField(selectedField.id, patch)}
               />
