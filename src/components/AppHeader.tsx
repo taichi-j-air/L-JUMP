@@ -24,6 +24,7 @@ interface AppHeaderProps {
 
 export function AppHeader({ user }: AppHeaderProps) {
   const [profile, setProfile] = useState<Profile | null>(null)
+  const [activeAccount, setActiveAccount] = useState<{ account_name: string; line_bot_id: string | null } | null>(null)
   const [loading, setLoading] = useState(true)
   const navigate = useNavigate()
 
@@ -72,6 +73,15 @@ export function AppHeader({ user }: AppHeaderProps) {
         console.error('Error loading profile:', profileResult.error)
       } else {
         setProfile(profileResult.data)
+
+        // 現在のアクティブLINEアカウントを取得
+        const { data: acc } = await supabase
+          .from('line_accounts')
+          .select('account_name, line_bot_id')
+          .eq('user_id', user.id)
+          .eq('is_active', true)
+          .maybeSingle()
+        setActiveAccount(acc ?? null)
       }
 
       // 友だち数（最新）をカウントして更新
@@ -118,7 +128,9 @@ export function AppHeader({ user }: AppHeaderProps) {
     return null
   }
 
-  const lineIdLabel = profile?.line_bot_id ? (profile.line_bot_id.startsWith('@') ? profile.line_bot_id : `@${profile.line_bot_id}`) : '未設定';
+  const currentLineId = activeAccount?.line_bot_id ?? profile?.line_bot_id ?? null;
+  const lineIdLabel = currentLineId ? (currentLineId.startsWith('@') ? currentLineId : `@${currentLineId}`) : '未設定';
+  const accountLabel = activeAccount?.account_name ?? lineIdLabel;
 
   return (
     <header className="fixed top-0 left-0 right-0 z-50 bg-background border-b h-14 flex items-center px-4 gap-4">
@@ -132,7 +144,7 @@ export function AppHeader({ user }: AppHeaderProps) {
           <PopoverTrigger asChild>
             <Button variant="outline" size="sm" className="flex items-center gap-2">
               <Settings className="h-4 w-4" />
-              {lineIdLabel}
+              {accountLabel}
             </Button>
           </PopoverTrigger>
           <PopoverContent className="w-80">

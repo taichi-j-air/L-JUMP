@@ -142,6 +142,48 @@ export type Database = {
         }
         Relationships: []
       }
+      line_accounts: {
+        Row: {
+          access_token: string | null
+          account_name: string
+          channel_id: string | null
+          channel_secret: string | null
+          created_at: string
+          id: string
+          is_active: boolean
+          line_bot_id: string | null
+          status: string | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          access_token?: string | null
+          account_name?: string
+          channel_id?: string | null
+          channel_secret?: string | null
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          line_bot_id?: string | null
+          status?: string | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          access_token?: string | null
+          account_name?: string
+          channel_id?: string | null
+          channel_secret?: string | null
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          line_bot_id?: string | null
+          status?: string | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       line_api_credentials: {
         Row: {
           created_at: string | null
