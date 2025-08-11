@@ -128,15 +128,15 @@ export function AppSidebar({ user }: AppSidebarProps) {
   }
 
 
-  const isActive = (path: string) => currentPath === path
   const getNavClass = ({ isActive }: { isActive: boolean }) =>
-    isActive ? "bg-sidebar-accent text-sidebar-accent-foreground font-medium ring-1 ring-sidebar-border" : "hover:bg-sidebar-accent"
-
+    isActive
+      ? "bg-sidebar-accent text-sidebar-accent-foreground font-medium focus-visible:outline-none focus-visible:ring-0"
+      : "hover:bg-sidebar-accent focus-visible:outline-none focus-visible:ring-0"
   return (
     <Sidebar className={(collapsed ? "w-14" : "w-64") + " border-r border-sidebar-border bg-sidebar text-sidebar-foreground"} collapsible="icon">
       <SidebarTrigger className="m-2 self-end" />
       
-      <SidebarContent className="px-2">
+      <SidebarContent className="px-2 pt-4 md:pt-6">
         <SidebarGroup>
           <SidebarGroupLabel className="text-sm font-semibold">メインメニュー</SidebarGroupLabel>
           <SidebarGroupContent>
@@ -148,7 +148,6 @@ export function AppSidebar({ user }: AppSidebarProps) {
                   {!collapsed && (
                     <span className="flex items-center gap-1">
                       友達メニュー
-                      <ChevronRight className="h-3 w-3" />
                       <ChevronDown className="h-3 w-3" />
                     </span>
                   )}
@@ -157,7 +156,7 @@ export function AppSidebar({ user }: AppSidebarProps) {
                   <SidebarMenuSub>
                     <SidebarMenuSubItem>
                       <SidebarMenuSubButton asChild>
-                        <NavLink to="/friends-list" end className={({ isActive }) => (isActive ? "bg-sidebar-accent text-sidebar-accent-foreground" : "")}> 
+                        <NavLink to="/friends-list" end className={({ isActive }) => (isActive ? "bg-sidebar-accent text-sidebar-accent-foreground focus-visible:outline-none focus-visible:ring-0" : "focus-visible:outline-none focus-visible:ring-0")}> 
                           <span>友だち一覧</span>
                         </NavLink>
                       </SidebarMenuSubButton>
