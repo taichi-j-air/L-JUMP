@@ -118,6 +118,11 @@ export default function TagsManager() {
     load()
   }, [])
 
+  useEffect(() => {
+    const handler = () => load()
+    window.addEventListener("refreshFriendTags", handler as any)
+    return () => window.removeEventListener("refreshFriendTags", handler as any)
+  }, [])
   const sorted = useMemo(() => {
     const arr = [...tags]
     switch (sortKey) {

@@ -10,6 +10,7 @@ import { ChatWindow } from "./ChatWindow"
 import { Input } from "./ui/input"
 import { useToast } from "./ui/use-toast"
 import { FriendScenarioDialog } from "./FriendScenarioDialog"
+import FriendTagDialog from "./FriendTagDialog"
 
 interface Friend {
   id: string
@@ -29,8 +30,8 @@ export function FriendsList({ user }: FriendsListProps) {
   const [selectedFriend, setSelectedFriend] = useState<Friend | null>(null)
   const [searchTerm, setSearchTerm] = useState("")
   const [scenarioDialogFriend, setScenarioDialogFriend] = useState<Friend | null>(null)
+  const [tagDialogFriend, setTagDialogFriend] = useState<Friend | null>(null)
   const { toast } = useToast()
-
   useEffect(() => {
     loadFriends()
   }, [user.id])
@@ -129,7 +130,7 @@ export function FriendsList({ user }: FriendsListProps) {
                   <Button 
                     size="sm" 
                     variant="outline"
-                    onClick={() => toast({ title: 'タグ設定', description: 'この機能は近日追加予定です。' })}
+                    onClick={() => setTagDialogFriend(friend)}
                     className="flex items-center gap-2"
                   >
                     <TagIcon className="h-4 w-4" />
@@ -168,6 +169,15 @@ export function FriendsList({ user }: FriendsListProps) {
           onOpenChange={(open) => { if (!open) setScenarioDialogFriend(null) }}
           user={user}
           friend={scenarioDialogFriend}
+        />
+      )}
+
+      {tagDialogFriend && (
+        <FriendTagDialog
+          open={!!tagDialogFriend}
+          onOpenChange={(open) => { if (!open) setTagDialogFriend(null) }}
+          user={user}
+          friend={{ id: tagDialogFriend.id, display_name: tagDialogFriend.display_name }}
         />
       )}
     </div>
