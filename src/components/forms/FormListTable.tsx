@@ -21,10 +21,10 @@ interface Props {
 export default function FormListTable({ items, loading, selectedId, onSelect, unreadCounts, badgeEnabledMap, onToggleBadge }: Props) {
   return (
     <Card>
-      <CardHeader className="py-2">
+      <CardHeader className="py-1">
         <CardTitle className="text-base">フォーム一覧</CardTitle>
       </CardHeader>
-      <CardContent>
+      <CardContent className="pt-0 pb-2">
         {loading ? (
           <p className="text-muted-foreground">読み込み中...</p>
         ) : (
@@ -32,15 +32,15 @@ export default function FormListTable({ items, loading, selectedId, onSelect, un
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead className="w-10"></TableHead>
-                  <TableHead>フォーム名</TableHead>
-                  <TableHead className="w-12 text-right"></TableHead>
+                  <TableHead className="w-10 py-1"></TableHead>
+                  <TableHead className="py-1">フォーム名</TableHead>
+                  <TableHead className="w-12 text-right py-1"></TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {items.length === 0 && (
                   <TableRow>
-                    <TableCell colSpan={3} className="text-xs text-muted-foreground">まだフォームがありません</TableCell>
+                    <TableCell colSpan={3} className="text-xs text-muted-foreground py-1">まだフォームがありません</TableCell>
                   </TableRow>
                 )}
                 {items.map((f) => (
@@ -49,12 +49,12 @@ export default function FormListTable({ items, loading, selectedId, onSelect, un
                     className={(selectedId === f.id ? "bg-muted/50" : "cursor-pointer hover:bg-muted/40") + " py-1.5"}
                     onClick={() => onSelect(f.id)}
                   >
-                    <TableCell className="align-middle">
+                    <TableCell className="align-middle py-1">
                       {unreadCounts && (badgeEnabledMap?.[f.id] !== false) && (unreadCounts[f.id] > 0) && (
                         <span className="inline-block h-2 w-2 rounded-full bg-destructive" aria-label="新着" />
                       )}
                     </TableCell>
-                    <TableCell className="align-middle">
+                    <TableCell className="align-middle py-1">
                       <div className="min-w-0">
                         <div className="truncate text-sm font-semibold" title={f.name}>{f.name}</div>
                         {f.description && (
@@ -62,7 +62,7 @@ export default function FormListTable({ items, loading, selectedId, onSelect, un
                         )}
                       </div>
                     </TableCell>
-                    <TableCell className="align-middle text-right">
+                    <TableCell className="align-middle text-right py-1">
                       {onToggleBadge && (
                         <Button
                           variant="ghost"

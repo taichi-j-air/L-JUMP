@@ -220,7 +220,7 @@ export default function FormPreviewPanel({
               <SelectTrigger>
                 <SelectValue placeholder="シナリオを選択" />
               </SelectTrigger>
-              <SelectContent>
+              <SelectContent className="bg-background z-[60]">
                 <SelectItem value="none">なし</SelectItem>
                 {scenarios.map((s) => (
                   <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>

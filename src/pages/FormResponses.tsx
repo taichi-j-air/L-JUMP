@@ -6,6 +6,7 @@ import { toast } from "sonner";
 import FormListTable from "@/components/forms/FormListTable";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 interface FormRow {
   id: string;
@@ -25,6 +26,8 @@ export default function FormResponses() {
   const [loading, setLoading] = useState(false);
   const [unreadCounts, setUnreadCounts] = useState<Record<string, number>>({});
   const [badgeEnabledMap, setBadgeEnabledMap] = useState<Record<string, boolean>>({});
+  const [sortOrder, setSortOrder] = useState<"asc" | "desc">("desc");
+  const [filterMode, setFilterMode] = useState<"all" | "friend" | "anonymous">("all");
   useEffect(() => {
     const loadForms = async () => {
       const { data: { user } } = await supabase.auth.getUser();
@@ -66,7 +69,7 @@ export default function FormResponses() {
         .from('form_submissions')
         .select('id, submitted_at, data, friend_id, form_id')
         .eq('form_id', selectedForm)
-        .order('submitted_at', { ascending: false });
+        .order('submitted_at', { ascending: sortOrder === 'asc' });
       if (error) {
         console.error(error);
         toast.error('回答の取得に失敗しました');
@@ -87,16 +90,30 @@ export default function FormResponses() {
       } catch {}
     };
     loadSubmissions();
-  }, [selectedForm]);
+  }, [selectedForm, sortOrder]);
 
   // Realtime update: append new submission if it belongs to the selected form
   useEffect(() => {
     const channel = supabase
       .channel('form_responses_live')
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'form_submissions' }, (payload: any) => {
-        const row = payload?.new
+        const row = payload?.new;
+        if (!row) return;
         if (row?.form_id === selectedForm) {
           setSubmissions(prev => [{ id: row.id, submitted_at: row.submitted_at, data: row.data, friend_id: row.friend_id, form_id: row.form_id }, ...prev])
+        } else {
+          try {
+            const enabledRaw = localStorage.getItem('formBadgeEnabled');
+            const enabledMap = enabledRaw ? JSON.parse(enabledRaw) : {};
+            if (enabledMap[row.form_id] !== false) {
+              const raw = localStorage.getItem('unreadResponses');
+              const map: Record<string, number> = raw ? JSON.parse(raw) : {};
+              map[row.form_id] = (map[row.form_id] || 0) + 1;
+              localStorage.setItem('unreadResponses', JSON.stringify(map));
+              localStorage.setItem('unreadResponsesGlobal', 'true');
+              window.dispatchEvent(new Event('unread-responses-updated'));
+            }
+          } catch {}
         }
       })
       .subscribe()
@@ -117,6 +134,12 @@ export default function FormResponses() {
 
   const fieldOrder = selectedFormObj?.fields || [];
 
+  const displayedSubmissions = useMemo(() => {
+    if (filterMode === "friend") return submissions.filter(s => !!s.friend_id);
+    if (filterMode === "anonymous") return submissions.filter(s => !s.friend_id);
+    return submissions;
+  }, [submissions, filterMode]);
+  
   const renderValue = (type: string | undefined, value: any) => {
     if (Array.isArray(value)) return value.join(', ');
     if (value === null || value === undefined) return '';
@@ -154,8 +177,33 @@ export default function FormResponses() {
         <div className="col-span-12 md:col-span-7 lg:col-span-8 space-y-4">
           <Card>
             <CardHeader>
-              <CardTitle>{selectedFormObj?.name || 'フォーム選択'}</CardTitle>
-              {selectedFormObj?.description && <CardDescription>{selectedFormObj.description}</CardDescription>}
+              <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                <div>
+                  <CardTitle>{selectedFormObj?.name || 'フォーム選択'}</CardTitle>
+                  {selectedFormObj?.description && <CardDescription>{selectedFormObj.description}</CardDescription>}
+                </div>
+                <div className="flex gap-2">
+                  <Select value={sortOrder} onValueChange={(v) => setSortOrder(v as 'asc' | 'desc')}>
+                    <SelectTrigger className="w-[140px]">
+                      <SelectValue placeholder="並び順" />
+                    </SelectTrigger>
+                    <SelectContent className="bg-background z-[60]">
+                      <SelectItem value="desc">受信の遅い順</SelectItem>
+                      <SelectItem value="asc">受信の早い順</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <Select value={filterMode} onValueChange={(v) => setFilterMode(v as any)}>
+                    <SelectTrigger className="w-[160px]">
+                      <SelectValue placeholder="表示" />
+                    </SelectTrigger>
+                    <SelectContent className="bg-background z-[60]">
+                      <SelectItem value="all">全体</SelectItem>
+                      <SelectItem value="friend">LINE友だち</SelectItem>
+                      <SelectItem value="anonymous">匿名/外部</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
             </CardHeader>
             <CardContent>
               {loading ? (
@@ -163,25 +211,25 @@ export default function FormResponses() {
               ) : submissions.length === 0 ? (
                 <p className="text-muted-foreground">まだ回答はありません</p>
               ) : (
-                <div className="rounded-md border">
+                <div className="rounded-md border p-2">
                   <Accordion type="multiple" className="w-full">
-                    {submissions.map((s) => (
+                    {displayedSubmissions.map((s) => (
                       <AccordionItem key={s.id} value={s.id}>
-                        <AccordionTrigger className="text-left">
+                        <AccordionTrigger className="px-3 py-2 text-left">
                           <div className="flex items-center gap-3">
                             <span className="text-xs text-muted-foreground whitespace-nowrap">{new Date(s.submitted_at).toLocaleString()}</span>
                             <span className="text-xs text-muted-foreground">{s.friend_id ? s.friend_id : '匿名'}</span>
                           </div>
                         </AccordionTrigger>
-                        <AccordionContent>
-                          <div className="grid gap-3 sm:grid-cols-2">
+                        <AccordionContent className="px-3 py-2">
+                          <div className="grid gap-3 grid-cols-1">
                             {fieldOrder.map((f) => {
                               const val = s.data?.[f.name]
                               const text = renderValue(f.type, val)
                               return (
                                 <div key={f.id} className="space-y-1">
                                   <div className="text-xs text-muted-foreground">{f.label}</div>
-                                  <div className="text-sm break-words">{text}</div>
+                                  <div className="text-sm whitespace-pre-wrap break-words">{text}</div>
                                 </div>
                               )
                             })}

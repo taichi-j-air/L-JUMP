@@ -111,6 +111,12 @@ const [accentColor, setAccentColor] = useState<string>("#0cb386");
     loadScenarios();
   }, []);
 
+  useEffect(() => {
+    if (!requireLineFriend && preventDuplicate) {
+      setPreventDuplicate(false);
+    }
+  }, [requireLineFriend]);
+
 const addField = () => {
   const id = crypto.randomUUID();
   setFields(prev => [...prev, { id, label: "", name: `field_${id.slice(0,8)}`, type: "textarea", required: false }]);
