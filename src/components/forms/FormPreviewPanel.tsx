@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 
 // Keep props same to avoid refactor ripple, but name/description editing moved to middle column
-type Field = { id: string; label: string; name: string; type: string; required?: boolean; options?: string[] };
+type Field = { id: string; label: string; name: string; type: string; required?: boolean; options?: string[]; placeholder?: string; rows?: number };
 
 interface Props {
   formName: string;
@@ -86,26 +86,30 @@ export default function FormPreviewPanel({
             <div key={f.id} className="space-y-1">
               <label className="text-sm">
                 {f.label || f.name || "未設定"}
-                {f.required && <span className="ml-1 text-destructive">*</span>}
+                {f.required && (
+                  <span className="ml-1 inline-flex items-center rounded px-1.5 py-0.5 text-[10px] bg-destructive text-destructive-foreground">[必須]</span>
+                )}
               </label>
               {f.type === "text" || f.type === "email" ? (
                 <Input
                   type={f.type === "email" ? "email" : "text"}
                   value={values[f.name] || ""}
                   onChange={(e) => setValue(f.name, e.target.value)}
+                  placeholder={f.placeholder || undefined}
                 />
               ) : f.type === "textarea" ? (
                 <Textarea
                   value={values[f.name] || ""}
                   onChange={(e) => setValue(f.name, e.target.value)}
-                  rows={3}
+                  rows={f.rows || 3}
+                  placeholder={f.placeholder || undefined}
                 />
               ) : f.type === "select" ? (
                 <Select value={values[f.name] || ""} onValueChange={(v) => setValue(f.name, v)}>
                   <SelectTrigger>
                     <SelectValue placeholder="選択してください" />
                   </SelectTrigger>
-                  <SelectContent>
+                  <SelectContent className="bg-background z-[60]">
                     {(f.options || []).map((o, i) => (
                       <SelectItem key={i} value={o}>{o}</SelectItem>
                     ))}

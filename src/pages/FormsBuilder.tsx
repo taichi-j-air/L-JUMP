@@ -27,7 +27,7 @@ interface FormRow {
   require_line_friend?: boolean;
   prevent_duplicate_per_friend?: boolean;
   post_submit_scenario_id?: string | null;
-  fields: Array<{ id: string; label: string; name: string; type: string; required?: boolean; options?: string[] }>;
+  fields: Array<{ id: string; label: string; name: string; type: string; required?: boolean; options?: string[]; placeholder?: string; rows?: number }>;
   created_at: string;
   updated_at: string;
 }
@@ -100,7 +100,7 @@ const [selectedFieldId, setSelectedFieldId] = useState<string | null>(null);
 
 const addField = () => {
   const id = crypto.randomUUID();
-  setFields(prev => [...prev, { id, label: "", name: `field_${id.slice(0,8)}`, type: "text", required: false }]);
+  setFields(prev => [...prev, { id, label: "", name: `field_${id.slice(0,8)}`, type: "textarea", required: false }]);
   setSelectedFieldId(id);
 };
 
@@ -137,7 +137,7 @@ const resetCreator = () => {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) { toast.error('ログインが必要です'); return; }
 
-const cleanFields = fields.map(f => ({ id: f.id, label: f.label.trim(), name: f.name.trim(), type: f.type, required: !!f.required, options: Array.isArray(f.options) ? f.options : undefined }));
+const cleanFields = fields.map(f => ({ id: f.id, label: f.label.trim(), name: f.name.trim(), type: f.type, required: !!f.required, options: Array.isArray(f.options) ? f.options : undefined, placeholder: f.placeholder?.trim() || undefined, rows: f.rows ? Number(f.rows) : undefined }));
 const { error } = await (supabase as any).from('forms').insert({
   user_id: user.id,
   name: formName.trim(),
@@ -202,7 +202,7 @@ const handleUpdate = async () => {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) { toast.error('ログインが必要です'); return; }
 
-  const cleanFields = fields.map(f => ({ id: f.id, label: f.label.trim(), name: f.name.trim(), type: f.type, required: !!f.required, options: Array.isArray(f.options) ? f.options : undefined }));
+  const cleanFields = fields.map(f => ({ id: f.id, label: f.label.trim(), name: f.name.trim(), type: f.type, required: !!f.required, options: Array.isArray(f.options) ? f.options : undefined, placeholder: f.placeholder?.trim() || undefined, rows: f.rows ? Number(f.rows) : undefined }));
   const { error } = await (supabase as any).from('forms').update({
     name: formName.trim(),
     description: description.trim() || null,
@@ -256,13 +256,18 @@ const handleUpdate = async () => {
         </div>
 
         {/* 中央: 項目設定 */}
-        <div className="lg:col-span-5">
+        <div className="lg:col-span-4">
           <Card>
             <CardHeader>
-              <CardTitle>項目設定</CardTitle>
-              <CardDescription>テキスト/選択肢/タイトルなどのフィールドを管理します</CardDescription>
+              <CardTitle className="text-sm font-semibold">項目設定</CardTitle>
+              <CardDescription className="text-xs">テキストエリア/選択肢/タイトルなどのフィールドを管理します</CardDescription>
             </CardHeader>
-            <CardContent className="space-y-6">
+            <CardContent className="space-y-4">
+              <div className="space-y-2">
+                <Label className="text-xs">フォーム名</Label>
+                <Input value={formName} onChange={(e) => setFormName(e.target.value)} placeholder="フォーム名を入力" />
+              </div>
+
               <FormFieldList
                 fields={fields as any}
                 selectedId={selectedFieldId}
@@ -275,6 +280,11 @@ const handleUpdate = async () => {
                     return orderedIds.map(id=>map.get(id)!).filter(Boolean) as typeof prev;
                   });
                 }}
+                rightActions={
+                  <Button size="sm" onClick={editingId ? handleUpdate : handleCreate}>
+                    <Save className="mr-2 h-4 w-4" /> 保存
+                  </Button>
+                }
               />
 
               <FormFieldEditor
@@ -286,10 +296,10 @@ const handleUpdate = async () => {
         </div>
 
         {/* 右: プレビュー + 設定 */}
-        <div className="lg:col-span-4">
+        <div className="lg:col-span-5">
           <Card>
             <CardHeader>
-              <CardTitle>プレビューと設定</CardTitle>
+              <CardTitle className="text-sm font-semibold">プレビューと設定</CardTitle>
             </CardHeader>
             <CardContent>
               <FormPreviewPanel
@@ -319,12 +329,6 @@ const handleUpdate = async () => {
         </div>
       </div>
 
-      <div className="flex gap-2 justify-end">
-        <Button onClick={editingId ? handleUpdate : handleCreate}>
-          <Save className="mr-2 h-4 w-4" /> {editingId ? '更新' : '保存'}
-        </Button>
-        <Button variant="outline" onClick={resetCreator}>クリア</Button>
-      </div>
 
       <div className="text-xs text-muted-foreground">
         削除するとフォームと回答データは完全に削除され、元に戻せません。

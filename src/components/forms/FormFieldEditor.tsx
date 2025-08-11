@@ -31,8 +31,8 @@ export default function FormFieldEditor({ field, onChange }: Props) {
             <SelectTrigger>
               <SelectValue placeholder="タイプ" />
             </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="text">テキスト</SelectItem>
+            <SelectContent className="bg-background z-[60]">
+              
               <SelectItem value="email">メール</SelectItem>
               <SelectItem value="textarea">テキストエリア</SelectItem>
               <SelectItem value="select">ドロップダウン</SelectItem>
@@ -47,6 +47,31 @@ export default function FormFieldEditor({ field, onChange }: Props) {
         </div>
       </div>
 
+      {(field.type === "email" || field.type === "textarea") && (
+        <div className="grid grid-cols-2 gap-3">
+          <div className="space-y-2">
+            <label className="text-sm">プレースホルダー</label>
+            <Input
+              value={field.placeholder ?? ""}
+              onChange={(e) => onChange({ placeholder: e.target.value })}
+              placeholder={field.type === "email" ? "例）example@example.com" : "例）ご質問をご記入ください"}
+            />
+          </div>
+          {field.type === "textarea" && (
+            <div className="space-y-2">
+              <label className="text-sm">行数</label>
+              <Input
+                type="number"
+                min={1}
+                max={20}
+                value={field.rows ?? 3}
+                onChange={(e) => onChange({ rows: Math.max(1, Math.min(20, Number(e.target.value) || 1)) })}
+              />
+            </div>
+          )}
+        </div>
+      )}
+
       {isChoice && (
         <div className="space-y-2">
           <label className="text-sm">選択肢（1行に1つ）</label>
@@ -54,7 +79,7 @@ export default function FormFieldEditor({ field, onChange }: Props) {
             rows={8}
             placeholder={`例）\nはい\nいいえ\nその他`}
             value={(field.options || []).join("\n")}
-            onChange={(e) => onChange({ options: e.target.value.split(/\r?\n/) })}
+            onChange={(e) => onChange({ options: e.target.value.split(/\r?\n/).map((s) => s.trim()).filter(Boolean) })}
           />
         </div>
       )}

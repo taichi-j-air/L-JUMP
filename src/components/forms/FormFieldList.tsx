@@ -25,6 +25,8 @@ export type FormField = {
   type: string;
   required?: boolean;
   options?: string[];
+  placeholder?: string;
+  rows?: number;
 };
 
 interface Props {
@@ -34,6 +36,7 @@ interface Props {
   onAdd: () => void;
   onRemove: (id: string) => void;
   onReorder: (orderedIds: string[]) => void;
+  rightActions?: any;
 }
 
 function SortableItem({
@@ -79,7 +82,9 @@ function SortableItem({
         </div>
       </div>
       <div className="flex items-center gap-2 shrink-0">
-        <Badge variant="secondary" className="text-[10px] px-1 py-0">{field.required ? "必須" : "任意"}</Badge>
+        {field.required && (
+          <Badge variant="destructive" className="text-[10px] px-1.5 py-0.5 rounded">[必須]</Badge>
+        )}
         <Button
           size="icon"
           variant="destructive"
@@ -103,6 +108,7 @@ export default function FormFieldList({
   onAdd,
   onRemove,
   onReorder,
+  rightActions,
 }: Props) {
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 4 } })
@@ -120,10 +126,13 @@ export default function FormFieldList({
   return (
     <div className="space-y-2">
       <div className="flex items-center justify-between">
-        <div className="text-sm font-medium">フィールド</div>
-        <Button variant="outline" size="sm" onClick={onAdd}>
-          <Plus className="mr-2 h-4 w-4" /> 追加
-        </Button>
+        <div className="text-xs font-medium">フィールド</div>
+        <div className="flex items-center gap-2">
+          {rightActions}
+          <Button variant="outline" size="sm" onClick={onAdd}>
+            <Plus className="mr-2 h-4 w-4" /> 追加
+          </Button>
+        </div>
       </div>
 
       <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
