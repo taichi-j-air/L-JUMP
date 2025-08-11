@@ -5,7 +5,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Button } from "@/components/ui/button";
-
+import { Switch } from "@/components/ui/switch";
 type Field = { id: string; label: string; name: string; type: string; required?: boolean; options?: string[] };
 
 interface Props {
@@ -140,24 +140,14 @@ export default function FormPreviewPanel({
       <div className="space-y-3">
         <h4 className="text-sm font-medium">回答後の動作と制限</h4>
         <div className="grid gap-3">
-          <label className="flex items-center justify-between gap-3 text-sm">
+          <div className="flex items-center justify-between gap-3 text-sm">
             <span>LINE友だち限定</span>
-            <input
-              type="checkbox"
-              className="scale-125"
-              checked={requireLineFriend}
-              onChange={(e) => setRequireLineFriend(e.target.checked)}
-            />
-          </label>
-          <label className="flex items-center justify-between gap-3 text-sm">
+            <Switch checked={requireLineFriend} onCheckedChange={setRequireLineFriend} />
+          </div>
+          <div className="flex items-center justify-between gap-3 text-sm">
             <span>同一友だちの重複回答を禁止</span>
-            <input
-              type="checkbox"
-              className="scale-125"
-              checked={preventDuplicate}
-              onChange={(e) => setPreventDuplicate(e.target.checked)}
-            />
-          </label>
+            <Switch checked={preventDuplicate} onCheckedChange={setPreventDuplicate} />
+          </div>
           <div className="space-y-2">
             <label className="text-sm">回答後のシナリオ遷移（任意）</label>
             <Select value={postScenario ?? "none"} onValueChange={(v) => setPostScenario(v === "none" ? null : v)}>

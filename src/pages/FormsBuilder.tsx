@@ -56,7 +56,7 @@ export default function FormsBuilder() {
 
   const [forms, setForms] = useState<FormRow[]>([]);
   const [loading, setLoading] = useState(true);
-  const [creating, setCreating] = useState(false);
+  const [creating, setCreating] = useState(true);
   const [formName, setFormName] = useState("");
   const [description, setDescription] = useState("");
   const [isPublic, setIsPublic] = useState(true);
