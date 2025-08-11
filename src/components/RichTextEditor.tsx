@@ -25,16 +25,11 @@ export function RichTextEditor({ value, onChange, className }: RichTextEditorPro
   const [draftHtml, setDraftHtml] = useState(value);
   const quillRef = useRef<ReactQuill | null>(null);
   const [currentSize, setCurrentSize] = useState<number>(16);
+  const toolbarId = useRef(`rte-toolbar-${Math.random().toString(36).slice(2)}`).current;
 
   const modules = useMemo(() => ({
-    toolbar: [
-      ["bold", "italic", "underline"],
-      [{ align: "" }, { align: "center" }, { align: "right" }, { align: "justify" }],
-      [{ list: "ordered" }, { list: "bullet" }],
-      ["link", "blockquote"],
-      ["clean"],
-    ],
-  }), []);
+    toolbar: { container: `#${toolbarId}` },
+  }), [toolbarId]);
 
   const formats = [
     "bold",
@@ -53,8 +48,12 @@ export function RichTextEditor({ value, onChange, className }: RichTextEditorPro
   const applySizeDelta = (delta: number) => {
     const editor = quillRef.current?.getEditor();
     if (!editor) return;
-    const range = editor.getSelection(true);
-    if (!range) return;
+    let range = editor.getSelection(true);
+    if (!range) {
+      editor.setSelection(editor.getLength(), 0);
+      range = editor.getSelection(true);
+      if (!range) return;
+    }
     const current = editor.getFormat(range).size as string | undefined;
     const base = current?.endsWith("px") ? parseInt(current) : 16;
     const next = Math.max(8, Math.min(96, base + delta));
@@ -65,31 +64,56 @@ export function RichTextEditor({ value, onChange, className }: RichTextEditorPro
   const applyColor = (type: "color" | "background", color: string) => {
     const editor = quillRef.current?.getEditor();
     if (!editor) return;
-    const range = editor.getSelection();
-    if (!range) return;
+    let range = editor.getSelection(true);
+    if (!range) {
+      editor.setSelection(editor.getLength(), 0);
+      range = editor.getSelection(true);
+      if (!range) return;
+    }
     editor.format(type, color);
   };
 
   return (
     <div className={className}>
-      <div className="flex items-center gap-3 mb-2">
-        <div className="flex items-center gap-2">
-          <Button type="button" size="sm" variant="secondary" onClick={() => applySizeDelta(-2)}>A-</Button>
-          <Button type="button" size="sm" variant="secondary" onClick={() => applySizeDelta(2)}>A+</Button>
+      <div id={toolbarId} className="ql-toolbar ql-snow">
+        <span className="ql-formats">
+          <button className="ql-bold" />
+          <button className="ql-italic" />
+          <button className="ql-underline" />
+        </span>
+        <span className="ql-formats">
+          <select className="ql-align">
+            <option defaultValue="" />
+            <option value="center" />
+            <option value="right" />
+            <option value="justify" />
+          </select>
+          <button className="ql-list" value="ordered" />
+          <button className="ql-list" value="bullet" />
+          <button className="ql-blockquote" />
+          <button className="ql-link" />
+          <button className="ql-clean" />
+        </span>
+        <span className="ql-formats">
+          <button type="button" onClick={() => applySizeDelta(-2)}>A-</button>
+          <button type="button" onClick={() => applySizeDelta(2)}>A+</button>
           <span className="text-xs text-muted-foreground tabular-nums">{currentSize}px</span>
-        </div>
-        <div className="flex items-center gap-2">
-          <label className="text-xs text-muted-foreground">文字色
+        </span>
+        <span className="ql-formats">
+          <label className="text-xs text-muted-foreground">
+            文字色
             <input type="color" className="ml-2 h-6 w-10 p-0 border rounded" onChange={(e) => applyColor("color", e.target.value)} />
           </label>
-          <label className="text-xs text-muted-foreground">背景色
+          <label className="text-xs text-muted-foreground">
+            背景色
             <input type="color" className="ml-2 h-6 w-10 p-0 border rounded" onChange={(e) => applyColor("background", e.target.value)} />
           </label>
-        </div>
-        <div className="ml-auto" />
-        <Button type="button" size="sm" onClick={() => { setHtmlMode(!htmlMode); setDraftHtml(value); }}>
-          {htmlMode ? "リッチテキストに戻る" : "HTML編集"}
-        </Button>
+        </span>
+        <span className="ql-formats ms-auto">
+          <button type="button" onClick={() => { setHtmlMode(!htmlMode); setDraftHtml(value); }}>
+            {htmlMode ? "リッチテキストに戻る" : "HTML編集"}
+          </button>
+        </span>
       </div>
 
       {htmlMode ? (

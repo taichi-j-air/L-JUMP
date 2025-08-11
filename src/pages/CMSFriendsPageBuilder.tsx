@@ -516,8 +516,28 @@ export default function CMSFriendsPageBuilder() {
                           <ColorPicker color={timerTextColor} onChange={setTimerTextColor} />
                         </div>
                       </div>
+
+                      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                        <div className="space-y-1">
+                          <Label>日ラベル</Label>
+                          <Input value={dayLabel} onChange={(e) => setDayLabel(e.target.value)} placeholder="日" />
+                        </div>
+                        <div className="space-y-1">
+                          <Label>時間ラベル</Label>
+                          <Input value={hourLabel} onChange={(e) => setHourLabel(e.target.value)} placeholder="時間" />
+                        </div>
+                        <div className="space-y-1">
+                          <Label>分ラベル</Label>
+                          <Input value={minuteLabel} onChange={(e) => setMinuteLabel(e.target.value)} placeholder="分" />
+                        </div>
+                        <div className="space-y-1">
+                          <Label>秒ラベル</Label>
+                          <Input value={secondLabel} onChange={(e) => setSecondLabel(e.target.value)} placeholder="秒" />
+                        </div>
+                      </div>
                     </>
                   )}
+
 
                   <div className="flex items-center justify-between">
                     <Label>タイマーは表示せず内部タイマーにする</Label>

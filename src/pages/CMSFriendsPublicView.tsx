@@ -165,7 +165,14 @@ if (!data) return null;
       ) : (
         <article className="prose max-w-none dark:prose-invert">
           <h1>{data.title}</h1>
-          <div dangerouslySetInnerHTML={{ __html: sanitized }} />
+          {Array.isArray(data.content_blocks) && data.content_blocks.length > 0 ? (
+            data.content_blocks.map((block, idx) => {
+              const html = DOMPurify.sanitize(block || "");
+              return <div key={idx} className="mt-4 first:mt-0" dangerouslySetInnerHTML={{ __html: html }} />;
+            })
+          ) : (
+            <div dangerouslySetInnerHTML={{ __html: sanitized }} />
+          )}
         </article>
       )}
     </div>
