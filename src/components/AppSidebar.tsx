@@ -175,10 +175,18 @@ export function AppSidebar({ user }: AppSidebarProps) {
       ? "bg-sidebar-accent text-sidebar-accent-foreground font-medium focus-visible:outline-none focus-visible:ring-0"
       : "hover:bg-sidebar-accent focus-visible:outline-none focus-visible:ring-0"
 
-  // Clear global responses badge when opening responses page
+  // Clear global and per-form unread when opening responses page
   useEffect(() => {
     if (currentPath.startsWith('/forms/responses')) {
-      localStorage.setItem('unreadResponsesGlobal', 'false')
+      try {
+        const raw = localStorage.getItem('unreadResponses')
+        const map: Record<string, number> = raw ? JSON.parse(raw) : {}
+        const cleared = Object.fromEntries(Object.keys(map).map((k) => [k, 0]))
+        localStorage.setItem('unreadResponses', JSON.stringify(cleared))
+        localStorage.setItem('unreadResponsesGlobal', 'false')
+        // Also clear unread submission ids to avoid lingering dots
+        localStorage.setItem('unreadSubmissionIds', JSON.stringify({}))
+      } catch {}
       setResponsesHasNew(false)
       window.dispatchEvent(new Event('unread-responses-updated'))
     }
