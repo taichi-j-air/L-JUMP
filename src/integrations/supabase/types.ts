@@ -79,11 +79,15 @@ export type Database = {
           slug: string
           tag_label: string | null
           timer_bg_color: string
+          timer_day_label: string | null
           timer_deadline: string | null
           timer_display_mode: string
           timer_duration_seconds: number | null
           timer_enabled: boolean
+          timer_hour_label: string | null
+          timer_minute_label: string | null
           timer_mode: string
+          timer_second_label: string | null
           timer_style: string
           timer_text: string | null
           timer_text_color: string
@@ -109,11 +113,15 @@ export type Database = {
           slug: string
           tag_label?: string | null
           timer_bg_color?: string
+          timer_day_label?: string | null
           timer_deadline?: string | null
           timer_display_mode?: string
           timer_duration_seconds?: number | null
           timer_enabled?: boolean
+          timer_hour_label?: string | null
+          timer_minute_label?: string | null
           timer_mode?: string
+          timer_second_label?: string | null
           timer_style?: string
           timer_text?: string | null
           timer_text_color?: string
@@ -139,11 +147,15 @@ export type Database = {
           slug?: string
           tag_label?: string | null
           timer_bg_color?: string
+          timer_day_label?: string | null
           timer_deadline?: string | null
           timer_display_mode?: string
           timer_duration_seconds?: number | null
           timer_enabled?: boolean
+          timer_hour_label?: string | null
+          timer_minute_label?: string | null
           timer_mode?: string
+          timer_second_label?: string | null
           timer_style?: string
           timer_text?: string | null
           timer_text_color?: string

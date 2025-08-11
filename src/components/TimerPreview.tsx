@@ -49,6 +49,10 @@ export const TimerPreview = ({
   shareCode,
   uid,
   className,
+  dayLabel = "日",
+  hourLabel = "時間",
+  minuteLabel = "分",
+  secondLabel = "秒",
 }: TimerPreviewProps) => {
   const [remainingMs, setRemainingMs] = useState<number>(0);
   const intervalRef = useRef<number | null>(null);
@@ -81,7 +85,12 @@ export const TimerPreview = ({
     };
   }, [targetTime, showMilliseconds]);
 
-  const text = formatRemaining(remainingMs, showMilliseconds);
+const text = formatRemaining(remainingMs, showMilliseconds, {
+  dayLabel,
+  hourLabel,
+  minuteLabel,
+  secondLabel,
+});
 
   const styleClasses = {
     solid: "rounded-md p-3",
