@@ -73,6 +73,17 @@ export function AppHeader({ user }: AppHeaderProps) {
         setProfile(profileResult.data)
       }
 
+      // 友だち数（最新）をカウントして更新
+      try {
+        const { count: friendsCount } = await supabase
+          .from('line_friends')
+          .select('id', { count: 'exact', head: true })
+          .eq('user_id', user.id)
+        setProfile(prev => ({ ...(prev ?? {}), friends_count: friendsCount ?? (prev?.friends_count ?? 0) }))
+      } catch (e) {
+        console.warn('Failed to refresh friends count:', e)
+      }
+
       // Update profile with quota data if successful
       if (!quotaResult.error && quotaResult.data && !quotaResult.data.error) {
         console.log('Received quota data:', quotaResult.data)
@@ -168,7 +179,7 @@ export function AppHeader({ user }: AppHeaderProps) {
         <div className="flex items-center gap-2 text-sm">
           <Users className="h-4 w-4 text-muted-foreground" />
           <Badge variant="outline">
-            {profile?.friends_count || 0} 友達
+            {(profile?.friends_count ?? 0).toLocaleString()}/人
           </Badge>
         </div>
       </div>

@@ -48,6 +48,10 @@ export default function StepDeliveryPage() {
   const [collapsedMessages, setCollapsedMessages] = useState<Set<string>>(new Set())
   const [scenarioStats, setScenarioStats] = useState<Record<string, { registered: number; exited: number; blocked: number }>>({})
   const [statsRefreshToken, setStatsRefreshToken] = useState(0)
+  // IME対応のため、メッセージ本文はローカルドラフトで保持し、保存はonBlurで行う
+  const [draftMessageContents, setDraftMessageContents] = useState<Record<string, string>>({})
+  // シナリオ名もIME対応のためドラフト管理
+  const [scenarioNameDraft, setScenarioNameDraft] = useState<string>("")
 
   const { 
     folders,
@@ -113,6 +117,19 @@ export default function StepDeliveryPage() {
   const selectedStepMessages = selectedStep 
     ? messages.filter(m => m.step_id === selectedStep.id).sort((a, b) => a.message_order - b.message_order)
     : []
+
+  // メッセージ一覧の変化に応じてローカルドラフトを初期化（存在しないIDは削除）
+  useEffect(() => {
+    setDraftMessageContents((prev) => {
+      const next: Record<string, string> = { ...prev }
+      selectedStepMessages.forEach((m) => {
+        if (next[m.id] === undefined) next[m.id] = m.content || ''
+      })
+      const ids = new Set(selectedStepMessages.map((m) => m.id))
+      Object.keys(next).forEach((id) => { if (!ids.has(id)) delete next[id] })
+      return next
+    })
+  }, [selectedStep?.id, selectedStepMessages.length])
 
   // 最初のメッセージ配信時刻を計算
   const getFirstMessageDeliveryTime = (scenario: StepScenario) => {
@@ -750,15 +767,21 @@ export default function StepDeliveryPage() {
                                 <div>
                                   <Label>メッセージ内容</Label>
                                   <Textarea
-                                    value={message.content}
-                                    onChange={(e) => handleUpdateMessage(message.id, { content: e.target.value })}
+                                    value={draftMessageContents[message.id] ?? ''}
+                                    onChange={(e) => setDraftMessageContents(prev => ({ ...prev, [message.id]: e.target.value }))}
+                                    onBlur={() => {
+                                      const draft = draftMessageContents[message.id] ?? ''
+                                      if (draft !== message.content) {
+                                        handleUpdateMessage(message.id, { content: draft })
+                                      }
+                                    }}
                                     placeholder="メッセージを入力してください..."
                                     rows={5}
-                                    className="resize-none ime-enabled"
+                                    className="resize-none"
                                     lang="ja"
                                   />
                                   <div className="text-xs text-muted-foreground mt-1">
-                                    {message.content.length} / 5000 文字
+                                    {(draftMessageContents[message.id] ?? '').length} / 5000 文字
                                   </div>
                                 </div>
                               )}
