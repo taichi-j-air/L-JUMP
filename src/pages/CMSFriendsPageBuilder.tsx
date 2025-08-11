@@ -10,6 +10,9 @@ import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/
 import { Checkbox } from "@/components/ui/checkbox";
 import { Switch } from "@/components/ui/switch";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { ColorPicker } from "@/components/ui/color-picker";
+import RichTextEditor from "@/components/RichTextEditor";
+import { TimerPreview } from "@/components/TimerPreview";
 
 // Type helpers (loosened to avoid tight coupling with generated types)
 interface CmsPageRow {

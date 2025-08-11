@@ -39,6 +39,7 @@ import FormResponses from "./pages/FormResponses";
 
 const CMSFriendsPageBuilder = lazy(() => import('./pages/CMSFriendsPageBuilder'));
 const CMSPublicPageBuilder = lazy(() => import('./pages/CMSPublicPageBuilder'));
+const CMSFriendsPublicView = lazy(() => import('./pages/CMSFriendsPublicView'));
 const queryClient = new QueryClient();
 
 function AppContent() {
@@ -74,9 +75,10 @@ function AppContent() {
   const isLoginPage = window.location.pathname === '/login'
   const hasLineLoginSuccess = window.location.search.includes('line_login=success')
   const isPublicFormPage = window.location.pathname.startsWith('/form/')
+  const isCMSPublicPath = window.location.pathname.startsWith('/cms/f/')
 
   // Show auth pages without sidebar/header  
-  if (isAuthPage || (!user && !isInvitePage && !isLoginPage && !hasLineLoginSuccess && !isPublicFormPage)) {
+  if (isAuthPage || (!user && !isInvitePage && !isLoginPage && !hasLineLoginSuccess && !isPublicFormPage && !isCMSPublicPath)) {
     return (
       <div className="min-h-screen">
         <Routes>
@@ -91,6 +93,7 @@ function AppContent() {
           <Route path="/verify" element={<EmailVerify />} />
           <Route path="/reset-password" element={<ResetPassword />} />
           <Route path="/form/:id" element={<PublicForm />} />
+          <Route path="/cms/f/:shareCode" element={<CMSFriendsPublicView />} />
           <Route path="/error" element={<ErrorPage />} />
           <Route path="*" element={<Auth />} />
         </Routes>
@@ -150,6 +153,8 @@ function AppContent() {
               <Route path="/forms/responses" element={<FormResponses />} />
               <Route path="/cms/friends-page" element={<CMSFriendsPageBuilder />} />
               <Route path="/cms/public-page" element={<CMSPublicPageBuilder />} />
+              <Route path="/cms/f/:shareCode" element={<CMSFriendsPublicView />} />
+              <Route path="/cms/preview/:pageId" element={<CMSFriendsPublicView />} />
               <Route path="*" element={<NotFound />} />
               </Routes>
             </Suspense>

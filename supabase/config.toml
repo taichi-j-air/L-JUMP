@@ -60,3 +60,6 @@ verify_jwt = false
 
 [functions.delete-form]
 verify_jwt = true
+
+[functions.cms-page-view]
+verify_jwt = false

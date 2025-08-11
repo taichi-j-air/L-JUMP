@@ -75,12 +75,18 @@ export type Database = {
           passcode: string | null
           require_passcode: boolean
           share_code: string
+          show_milliseconds: boolean
           slug: string
           tag_label: string | null
+          timer_bg_color: string
           timer_deadline: string | null
           timer_display_mode: string
+          timer_duration_seconds: number | null
           timer_enabled: boolean
+          timer_mode: string
+          timer_style: string
           timer_text: string | null
+          timer_text_color: string
           title: string
           updated_at: string
           user_id: string
@@ -99,12 +105,18 @@ export type Database = {
           passcode?: string | null
           require_passcode?: boolean
           share_code?: string
+          show_milliseconds?: boolean
           slug: string
           tag_label?: string | null
+          timer_bg_color?: string
           timer_deadline?: string | null
           timer_display_mode?: string
+          timer_duration_seconds?: number | null
           timer_enabled?: boolean
+          timer_mode?: string
+          timer_style?: string
           timer_text?: string | null
+          timer_text_color?: string
           title: string
           updated_at?: string
           user_id: string
@@ -123,12 +135,18 @@ export type Database = {
           passcode?: string | null
           require_passcode?: boolean
           share_code?: string
+          show_milliseconds?: boolean
           slug?: string
           tag_label?: string | null
+          timer_bg_color?: string
           timer_deadline?: string | null
           timer_display_mode?: string
+          timer_duration_seconds?: number | null
           timer_enabled?: boolean
+          timer_mode?: string
+          timer_style?: string
           timer_text?: string | null
+          timer_text_color?: string
           title?: string
           updated_at?: string
           user_id?: string
