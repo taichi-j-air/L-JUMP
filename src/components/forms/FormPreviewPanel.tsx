@@ -118,8 +118,8 @@ export default function FormPreviewPanel({
                   placeholder={f.placeholder || undefined}
                 />
               ) : f.type === "select" ? (
-                <Select value={values[f.name] || ""} onValueChange={(v) => setValue(f.name, v)}>
-                  <SelectTrigger>
+                <Select value={values[f.name] ?? undefined} onValueChange={(v) => setValue(f.name, v)}>
+                  <SelectTrigger className="px-3">
                     <SelectValue placeholder="選択してください" />
                   </SelectTrigger>
                   <SelectContent className="bg-background z-[60]">
@@ -212,12 +212,12 @@ export default function FormPreviewPanel({
           </div>
           <div className="flex items-center justify-between gap-3 text-sm">
             <span>同一友だちの重複回答を禁止</span>
-            <Switch checked={preventDuplicate} onCheckedChange={setPreventDuplicate} />
+            <Switch disabled={!requireLineFriend} checked={preventDuplicate} onCheckedChange={setPreventDuplicate} />
           </div>
           <div className="space-y-2">
             <label className="text-sm">回答後のシナリオ遷移（任意）</label>
             <Select value={postScenario ?? "none"} onValueChange={(v) => setPostScenario(v === "none" ? null : v)}>
-              <SelectTrigger>
+              <SelectTrigger className="px-3">
                 <SelectValue placeholder="シナリオを選択" />
               </SelectTrigger>
               <SelectContent className="bg-background z-[60]">

@@ -116,10 +116,11 @@ export function AppSidebar({ user }: AppSidebarProps) {
       try {
         const raw = localStorage.getItem('unreadResponses')
         const enabledRaw = localStorage.getItem('formBadgeEnabled')
+        const global = localStorage.getItem('unreadResponsesGlobal') === 'true'
         const counts: Record<string, number> = raw ? JSON.parse(raw) : {}
         const enabledMap: Record<string, boolean> = enabledRaw ? JSON.parse(enabledRaw) : {}
         const anyEnabledUnread = Object.entries(counts).some(([id, cnt]) => (enabledMap[id] !== false) && ((cnt || 0) > 0))
-        setResponsesHasNew(anyEnabledUnread)
+        setResponsesHasNew(global || anyEnabledUnread)
       } catch {
         setResponsesHasNew(false)
       }

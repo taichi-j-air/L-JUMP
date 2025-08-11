@@ -1,3 +1,4 @@
+import { useEffect, useState } from "react";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -16,6 +17,14 @@ export default function FormFieldEditor({ field, onChange }: Props) {
 
   const isChoice = field.type === "select" || field.type === "radio" || field.type === "checkbox";
 
+  const [optionsText, setOptionsText] = useState<string>((field.options || []).join("\n"));
+  useEffect(() => {
+    if (isChoice) {
+      setOptionsText((field.options || []).join("\n"));
+    } else {
+      setOptionsText("");
+    }
+  }, [field.id, isChoice, field.options]);
   return (
     <div className="space-y-3">
       <div className="space-y-2">
@@ -78,8 +87,13 @@ export default function FormFieldEditor({ field, onChange }: Props) {
           <Textarea
             rows={8}
             placeholder={`例）\nはい\nいいえ\nその他`}
-            value={(field.options || []).join("\n")}
-            onChange={(e) => onChange({ options: e.target.value.split(/\r?\n/).map((s) => s.trim()).filter(Boolean) })}
+            value={optionsText}
+            onChange={(e) => {
+              const text = e.target.value;
+              setOptionsText(text);
+              const opts = text.split(/\r?\n/).map((s) => s.trim()).filter(Boolean);
+              onChange({ options: opts });
+            }}
             onKeyDown={(e) => e.stopPropagation()}
           />
         </div>
