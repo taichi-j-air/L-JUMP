@@ -162,16 +162,16 @@ export function FriendScenarioDialog({ open, onOpenChange, user, friend }: Frien
           return { h: Number(hh), m: Number(mm), s: Number(ss) }
         }
 
-        // ベース時刻
-        const friendAdded = friendRow?.added_at ? new Date(friendRow.added_at) : now
+        // ベース時刻（シナリオ登録時刻 = 今）
+        const registrationAt = now
 
         if (effectiveType === 'specific_time' && (startStepDetail as any).specific_time) {
           // 特定日時
           return new Date((startStepDetail as any).specific_time).toISOString()
         }
 
-        // relative / relative_to_previous の初回は friend.added_at を基準に
-        let scheduled = addOffset(friendAdded)
+        // relative / relative_to_previous の初回は「シナリオ登録時刻」を基準に
+        let scheduled = addOffset(registrationAt)
 
         const tod = parseTimeOfDay((startStepDetail as any).delivery_time_of_day)
         if (tod) {

@@ -567,7 +567,7 @@ async function markStepAsDelivered(supabase: any, trackingId: string, scenarioId
       let scheduledIso: string | null = null
       try {
         const { data: sched } = await supabase.rpc('calculate_scheduled_delivery_time', {
-          p_friend_added_at: friendRow?.added_at || null,
+          p_friend_added_at: deliveredAt, // 遷移時の登録時刻 = 直前の配信完了時刻
           p_delivery_type: effectiveType,
           p_delivery_seconds: (firstStep as any).delivery_seconds || 0,
           p_delivery_minutes: (firstStep as any).delivery_minutes || 0,
@@ -696,8 +696,19 @@ async function markStepAsDelivered(supabase: any, trackingId: string, scenarioId
         if (effectiveType === 'time_of_day') effectiveType = 'relative_to_previous'
         if (effectiveType === 'relative' && (nextStep as any).delivery_relative_to_previous) effectiveType = 'relative_to_previous'
 
+        // シナリオ登録時刻（この友だちがこのシナリオに登録された時刻 = 最初のトラッキング作成時刻）
+        const { data: regBase } = await supabase
+          .from('step_delivery_tracking')
+          .select('created_at')
+          .eq('scenario_id', scenarioId)
+          .eq('friend_id', friendId)
+          .order('created_at', { ascending: true })
+          .limit(1)
+          .maybeSingle()
+        const baseTime = regBase?.created_at || deliveredAt
+
         const { data: newScheduledTime, error: calcError } = await supabase.rpc('calculate_scheduled_delivery_time', {
-          p_friend_added_at: friend?.added_at || null,
+          p_friend_added_at: baseTime,
           p_delivery_type: effectiveType,
           p_delivery_seconds: nextStep.delivery_seconds || 0,
           p_delivery_minutes: nextStep.delivery_minutes || 0,
