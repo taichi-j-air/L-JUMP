@@ -14,9 +14,17 @@ interface TimerPreviewProps {
   shareCode?: string; // for per_access local storage keying
   uid?: string; // for per_access local storage keying
   className?: string;
+  dayLabel?: string;
+  hourLabel?: string;
+  minuteLabel?: string;
+  secondLabel?: string;
 }
 
-function formatRemaining(ms: number, withMs: boolean) {
+function formatRemaining(
+  ms: number,
+  withMs: boolean,
+  labels: { dayLabel: string; hourLabel: string; minuteLabel: string; secondLabel: string }
+) {
   const totalSeconds = Math.max(0, Math.floor(ms / 1000));
   const days = Math.floor(totalSeconds / 86400);
   const hours = Math.floor((totalSeconds % 86400) / 3600);
@@ -24,7 +32,8 @@ function formatRemaining(ms: number, withMs: boolean) {
   const seconds = totalSeconds % 60;
   const milli = Math.max(0, ms % 1000);
 
-  const base = `残り${days}日${hours}時間${minutes}分${seconds}秒`;
+  const { dayLabel, hourLabel, minuteLabel, secondLabel } = labels;
+  const base = `残り${days}${dayLabel}${hours}${hourLabel}${minutes}${minuteLabel}${seconds}${secondLabel}`;
   if (!withMs) return base;
   return `${base}${milli.toString().padStart(3, "0")}`;
 }
