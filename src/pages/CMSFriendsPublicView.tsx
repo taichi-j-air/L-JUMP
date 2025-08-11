@@ -147,6 +147,10 @@ if (!data) return null;
           textColor={data.timer_text_color || "#ffffff"}
           shareCode={shareCode}
           uid={uid}
+          dayLabel={data.timer_day_label || "日"}
+          hourLabel={data.timer_hour_label || "時間"}
+          minuteLabel={data.timer_minute_label || "分"}
+          secondLabel={data.timer_second_label || "秒"}
         />
       )}
 

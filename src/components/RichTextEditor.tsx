@@ -1,8 +1,17 @@
 import { useMemo, useRef, useState } from "react";
 import ReactQuill from "react-quill";
+import Quill from "quill";
 import "react-quill/dist/quill.snow.css";
 import { Button } from "./ui/button";
 import { Textarea } from "./ui/textarea";
+
+// Enable px-based sizing and color/background via style attributors
+const SizeStyle = (Quill as any).import("attributors/style/size");
+const ColorStyle = (Quill as any).import("attributors/style/color");
+const BackgroundStyle = (Quill as any).import("attributors/style/background");
+(Quill as any).register(SizeStyle, true);
+(Quill as any).register(ColorStyle, true);
+(Quill as any).register(BackgroundStyle, true);
 
 interface RichTextEditorProps {
   value: string;
@@ -15,6 +24,7 @@ export function RichTextEditor({ value, onChange, className }: RichTextEditorPro
   const [htmlMode, setHtmlMode] = useState(false);
   const [draftHtml, setDraftHtml] = useState(value);
   const quillRef = useRef<ReactQuill | null>(null);
+  const [currentSize, setCurrentSize] = useState<number>(16);
 
   const modules = useMemo(() => ({
     toolbar: [
@@ -43,12 +53,13 @@ export function RichTextEditor({ value, onChange, className }: RichTextEditorPro
   const applySizeDelta = (delta: number) => {
     const editor = quillRef.current?.getEditor();
     if (!editor) return;
-    const range = editor.getSelection();
+    const range = editor.getSelection(true);
     if (!range) return;
     const current = editor.getFormat(range).size as string | undefined;
     const base = current?.endsWith("px") ? parseInt(current) : 16;
     const next = Math.max(8, Math.min(96, base + delta));
     editor.format("size", `${next}px`);
+    setCurrentSize(next);
   };
 
   const applyColor = (type: "color" | "background", color: string) => {
@@ -65,6 +76,7 @@ export function RichTextEditor({ value, onChange, className }: RichTextEditorPro
         <div className="flex items-center gap-2">
           <Button type="button" size="sm" variant="secondary" onClick={() => applySizeDelta(-2)}>A-</Button>
           <Button type="button" size="sm" variant="secondary" onClick={() => applySizeDelta(2)}>A+</Button>
+          <span className="text-xs text-muted-foreground tabular-nums">{currentSize}px</span>
         </div>
         <div className="flex items-center gap-2">
           <label className="text-xs text-muted-foreground">文字色
@@ -89,7 +101,24 @@ export function RichTextEditor({ value, onChange, className }: RichTextEditorPro
           </div>
         </div>
       ) : (
-        <ReactQuill ref={quillRef as any} theme="snow" value={value} onChange={onChange} modules={modules} formats={formats} />
+        <ReactQuill
+          ref={quillRef as any}
+          theme="snow"
+          value={value}
+          onChange={onChange}
+          modules={modules}
+          formats={formats}
+          onChangeSelection={(range: any, _source: any, editor: any) => {
+            try {
+              const fmt = editor?.getFormat(range) || {};
+              const s = fmt.size as string | undefined;
+              const px = s && s.endsWith("px") ? parseInt(s) : 16;
+              setCurrentSize(px);
+            } catch {
+              // noop
+            }
+          }}
+        />
       )}
     </div>
   );

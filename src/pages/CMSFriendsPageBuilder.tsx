@@ -76,6 +76,10 @@ export default function CMSFriendsPageBuilder() {
   const [internalTimer, setInternalTimer] = useState(false);
   const [timerText, setTimerText] = useState("");
   const [expireAction, setExpireAction] = useState<"hide" | "keep_public">("keep_public");
+  const [dayLabel, setDayLabel] = useState<string>("日");
+  const [hourLabel, setHourLabel] = useState<string>("時間");
+  const [minuteLabel, setMinuteLabel] = useState<string>("分");
+  const [secondLabel, setSecondLabel] = useState<string>("秒");
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
@@ -143,6 +147,10 @@ export default function CMSFriendsPageBuilder() {
     setInternalTimer(!!selected.internal_timer);
     setTimerText(selected.timer_text || "");
     setExpireAction(((selected.expire_action as any) || "keep_public") as any);
+    setDayLabel(((selected as any).timer_day_label as any) || "日");
+    setHourLabel(((selected as any).timer_hour_label as any) || "時間");
+    setMinuteLabel(((selected as any).timer_minute_label as any) || "分");
+    setSecondLabel(((selected as any).timer_second_label as any) || "秒");
   }, [selectedId]);
 
   const handleAddPage = async () => {
@@ -226,6 +234,10 @@ export default function CMSFriendsPageBuilder() {
         internal_timer: internalTimer,
         timer_text: timerText || null,
         expire_action: expireAction,
+        timer_day_label: dayLabel,
+        timer_hour_label: hourLabel,
+        timer_minute_label: minuteLabel,
+        timer_second_label: secondLabel,
       };
 
       const { data, error } = await (supabase as any)
@@ -370,6 +382,10 @@ export default function CMSFriendsPageBuilder() {
                       bgColor={timerBgColor}
                       textColor={timerTextColor}
                       shareCode={selected.share_code}
+                      dayLabel={dayLabel}
+                      hourLabel={hourLabel}
+                      minuteLabel={minuteLabel}
+                      secondLabel={secondLabel}
                     />
                   )}
                   <div className="space-y-2">
