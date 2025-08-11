@@ -195,10 +195,10 @@ export default function FormsBuilder() {
                 </div>
                 <div className="space-y-2">
                   <label className="text-sm">回答後のシナリオ遷移（任意）</label>
-                  <Select value={postScenario ?? ''} onValueChange={(v)=> setPostScenario(v || null)}>
+                  <Select value={postScenario ?? 'none'} onValueChange={(v)=> setPostScenario(v === 'none' ? null : v)}>
                     <SelectTrigger><SelectValue placeholder="シナリオを選択" /></SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="">なし</SelectItem>
+                      <SelectItem value="none">なし</SelectItem>
                       {scenarios.map(s => (
                         <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>
                       ))}
