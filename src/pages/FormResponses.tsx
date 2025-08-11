@@ -268,7 +268,33 @@ export default function FormResponses() {
                   <Accordion type="multiple" className="w-full">
                     {displayedSubmissions.map((s) => (
                       <AccordionItem key={s.id} value={s.id}>
-                        <AccordionTrigger className="px-3 py-2 text-left">
+                        <AccordionTrigger className="px-3 py-2 text-left" onClick={() => {
+                          try {
+                            const idsRaw = localStorage.getItem('unreadSubmissionIds');
+                            const idsMap: Record<string, string[]> = idsRaw ? JSON.parse(idsRaw) : {};
+                            const formIds = Array.isArray(idsMap[selectedForm]) ? idsMap[selectedForm] : [];
+                            if (formIds.includes(s.id)) {
+                              const nextIds = formIds.filter((id) => id !== s.id);
+                              idsMap[selectedForm] = nextIds;
+                              localStorage.setItem('unreadSubmissionIds', JSON.stringify(idsMap));
+                              setUnreadSubmissionIds(idsMap);
+
+                              const raw = localStorage.getItem('unreadResponses');
+                              const map: Record<string, number> = raw ? JSON.parse(raw) : {};
+                              const curr = map[selectedForm] || 0;
+                              map[selectedForm] = Math.max(0, curr - 1);
+                              localStorage.setItem('unreadResponses', JSON.stringify(map));
+                              setUnreadCounts(map);
+
+                              // Update global indicator if needed
+                              const enabledRaw = localStorage.getItem('formBadgeEnabled');
+                              const enabledMap: Record<string, boolean> = enabledRaw ? JSON.parse(enabledRaw) : {};
+                              const anyEnabledUnread = Object.entries(map).some(([fid, cnt]) => (enabledMap[fid] !== false) && ((cnt || 0) > 0));
+                              localStorage.setItem('unreadResponsesGlobal', anyEnabledUnread ? 'true' : 'false');
+                              window.dispatchEvent(new Event('unread-responses-updated'));
+                            }
+                          } catch {}
+                        }}>
                           <div className="flex items-center gap-3">
                             <span className="text-xs text-muted-foreground whitespace-nowrap">{new Date(s.submitted_at).toLocaleString()}</span>
                             <span className="text-xs text-muted-foreground">{s.friend_id ? s.friend_id : '匿名'}</span>

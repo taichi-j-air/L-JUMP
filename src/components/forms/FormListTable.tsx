@@ -61,7 +61,7 @@ export default function FormListTable({
                         <div className="text-sm font-medium truncate flex items-center gap-2">
                           <span className="truncate">{f.name}</span>
                           {unread > 0 && enabled && (
-                            <Badge variant="secondary" className="shrink-0">
+                            <Badge variant="destructive" className="shrink-0">
                               {unread}
                             </Badge>
                           )}

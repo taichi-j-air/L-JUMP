@@ -60,14 +60,17 @@ export function AppSidebar({ user }: AppSidebarProps) {
   const [friendsOpen, setFriendsOpen] = useState(false)
   const [formsOpen, setFormsOpen] = useState(false)
   const [responsesHasNew, setResponsesHasNew] = useState(false)
+  const [cmsOpen, setCmsOpen] = useState(false)
   const collapsed = state === "collapsed"
   const groupActiveFriends = currentPath.startsWith('/friends-list') || currentPath.startsWith('/tags')
   const groupActiveForms = currentPath.startsWith('/forms')
+  const groupActiveCMS = currentPath.startsWith('/cms')
 
   useEffect(() => {
     setFriendsOpen(groupActiveFriends)
     setFormsOpen(groupActiveForms)
-  }, [groupActiveFriends, groupActiveForms])
+    setCmsOpen(groupActiveCMS)
+  }, [groupActiveFriends, groupActiveForms, groupActiveCMS])
 
   useEffect(() => {
     loadFriends()
@@ -244,6 +247,37 @@ export function AppSidebar({ user }: AppSidebarProps) {
                       <SidebarMenuSubButton asChild>
                         <NavLink to="/forms/responses" end className={({ isActive }) => getNavClass({ isActive })}> 
                           <span className="flex items-center gap-2">回答結果{responsesHasNew && <span className="inline-block h-2 w-2 rounded-full bg-destructive" aria-label="新着" />}</span>
+                        </NavLink>
+                      </SidebarMenuSubButton>
+                    </SidebarMenuSubItem>
+                  </SidebarMenuSub>
+                )}
+              </SidebarMenuItem>
+
+              {/* CMS dropdown */}
+              <SidebarMenuItem>
+                <SidebarMenuButton onClick={() => setCmsOpen((v) => !v)} isActive={groupActiveCMS}>
+                  <BarChart3 className="h-4 w-4" />
+                  {!collapsed && (
+                    <span className="flex items-center gap-1">
+                      ブラウザ一覧
+                      <ChevronDown className="h-3 w-3" />
+                    </span>
+                  )}
+                </SidebarMenuButton>
+                {cmsOpen && (
+                  <SidebarMenuSub>
+                    <SidebarMenuSubItem>
+                      <SidebarMenuSubButton asChild>
+                        <NavLink to="/cms/friends-page" end className={({ isActive }) => getNavClass({ isActive })}>
+                          <span>LINE友達ページ作成</span>
+                        </NavLink>
+                      </SidebarMenuSubButton>
+                    </SidebarMenuSubItem>
+                    <SidebarMenuSubItem>
+                      <SidebarMenuSubButton asChild>
+                        <NavLink to="/cms/public-page" end className={({ isActive }) => getNavClass({ isActive })}>
+                          <span>外部WEBページ作成</span>
                         </NavLink>
                       </SidebarMenuSubButton>
                     </SidebarMenuSubItem>

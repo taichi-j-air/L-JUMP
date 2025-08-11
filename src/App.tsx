@@ -145,6 +145,8 @@ function AppContent() {
               <Route path="/form/:id" element={<PublicForm />} />
               <Route path="/forms" element={<FormsBuilder />} />
               <Route path="/forms/responses" element={<FormResponses />} />
+              <Route path="/cms/friends-page" element={<(await import('./pages/CMSFriendsPageBuilder')).default />} />
+              <Route path="/cms/public-page" element={<(await import('./pages/CMSPublicPageBuilder')).default />} />
               <Route path="*" element={<NotFound />} />
             </Routes>
           </main>
