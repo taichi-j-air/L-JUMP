@@ -7,6 +7,7 @@ import FormListTable from "@/components/forms/FormListTable";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Badge } from "@/components/ui/badge";
 
 interface FormRow {
   id: string;
@@ -26,6 +27,7 @@ export default function FormResponses() {
   const [loading, setLoading] = useState(false);
   const [unreadCounts, setUnreadCounts] = useState<Record<string, number>>({});
   const [badgeEnabledMap, setBadgeEnabledMap] = useState<Record<string, boolean>>({});
+  const [unreadSubmissionIds, setUnreadSubmissionIds] = useState<Record<string, string[]>>({});
   const [sortOrder, setSortOrder] = useState<"asc" | "desc">("desc");
   const [filterMode, setFilterMode] = useState<"all" | "friend" | "anonymous">("all");
   useEffect(() => {
@@ -53,6 +55,8 @@ export default function FormResponses() {
         setUnreadCounts(raw ? JSON.parse(raw) : {});
         const enabledRaw = localStorage.getItem('formBadgeEnabled');
         setBadgeEnabledMap(enabledRaw ? JSON.parse(enabledRaw) : {});
+        const idsRaw = localStorage.getItem('unreadSubmissionIds');
+        setUnreadSubmissionIds(idsRaw ? JSON.parse(idsRaw) : {});
         // clear global badge when opening page
         localStorage.setItem('unreadResponsesGlobal', 'false');
         window.dispatchEvent(new Event('unread-responses-updated'));
@@ -90,13 +94,24 @@ export default function FormResponses() {
 
           if (latestTs) {
             if (prevTs && latestTs > prevTs) {
-              const newCount = (data || []).filter((d: any) => new Date(d.submitted_at) > prevTs).length;
+              const newOnes = (data || []).filter((d: any) => new Date(d.submitted_at) > prevTs);
+              const newCount = newOnes.length;
               const raw = localStorage.getItem('unreadResponses');
               const map: Record<string, number> = raw ? JSON.parse(raw) : {};
               map[selectedForm] = (map[selectedForm] || 0) + newCount;
               localStorage.setItem('unreadResponses', JSON.stringify(map));
               localStorage.setItem('unreadResponsesGlobal', 'true');
               setUnreadCounts(map);
+
+              // 受信した回答IDも保存
+              const idsRaw = localStorage.getItem('unreadSubmissionIds');
+              const idsMap: Record<string, string[]> = idsRaw ? JSON.parse(idsRaw) : {};
+              const prevIds = Array.isArray(idsMap[selectedForm]) ? idsMap[selectedForm] : [];
+              const addIds = newOnes.map((d: any) => d.id);
+              idsMap[selectedForm] = Array.from(new Set([...prevIds, ...addIds]));
+              localStorage.setItem('unreadSubmissionIds', JSON.stringify(idsMap));
+              setUnreadSubmissionIds(idsMap);
+
               window.dispatchEvent(new Event('unread-responses-updated'));
             }
             // 最新既知時刻を更新
@@ -137,6 +152,17 @@ export default function FormResponses() {
             localStorage.setItem('unreadResponses', JSON.stringify(map));
             localStorage.setItem('unreadResponsesGlobal', 'true');
             setUnreadCounts(map);
+
+            // Save unread submission IDs too
+            const idsRaw = localStorage.getItem('unreadSubmissionIds');
+            const idsMap: Record<string, string[]> = idsRaw ? JSON.parse(idsRaw) : {};
+            const arr = Array.isArray(idsMap[row.form_id]) ? idsMap[row.form_id] : [];
+            if (!arr.includes(row.id)) {
+              idsMap[row.form_id] = [...arr, row.id];
+              localStorage.setItem('unreadSubmissionIds', JSON.stringify(idsMap));
+              setUnreadSubmissionIds(idsMap);
+            }
+
             window.dispatchEvent(new Event('unread-responses-updated'));
           }
         } catch {}
@@ -144,8 +170,10 @@ export default function FormResponses() {
       .subscribe()
     const handleUnreadUpdate = () => {
       try {
-        const raw = localStorage.getItem('unreadResponses')
-        setUnreadCounts(raw ? JSON.parse(raw) : {})
+        const raw = localStorage.getItem('unreadResponses');
+        setUnreadCounts(raw ? JSON.parse(raw) : {});
+        const idsRaw = localStorage.getItem('unreadSubmissionIds');
+        setUnreadSubmissionIds(idsRaw ? JSON.parse(idsRaw) : {});
       } catch {}
     }
     window.addEventListener('unread-responses-updated', handleUnreadUpdate)
@@ -244,6 +272,9 @@ export default function FormResponses() {
                           <div className="flex items-center gap-3">
                             <span className="text-xs text-muted-foreground whitespace-nowrap">{new Date(s.submitted_at).toLocaleString()}</span>
                             <span className="text-xs text-muted-foreground">{s.friend_id ? s.friend_id : '匿名'}</span>
+                            {(unreadSubmissionIds[selectedForm] || []).includes(s.id) && (
+                              <span className="inline-block h-2 w-2 rounded-full bg-destructive" aria-label="未読" />
+                            )}
                           </div>
                         </AccordionTrigger>
                         <AccordionContent className="px-3 py-2">
