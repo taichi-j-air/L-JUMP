@@ -80,6 +80,7 @@ export default function FormFieldEditor({ field, onChange }: Props) {
             placeholder={`例）\nはい\nいいえ\nその他`}
             value={(field.options || []).join("\n")}
             onChange={(e) => onChange({ options: e.target.value.split(/\r?\n/).map((s) => s.trim()).filter(Boolean) })}
+            onKeyDown={(e) => e.stopPropagation()}
           />
         </div>
       )}

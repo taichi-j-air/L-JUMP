@@ -24,6 +24,9 @@ interface FormRow {
   success_message: string | null;
   submit_button_text?: string | null;
   submit_button_variant?: string | null;
+  submit_button_bg_color?: string | null;
+  submit_button_text_color?: string | null;
+  accent_color?: string | null;
   require_line_friend?: boolean;
   prevent_duplicate_per_friend?: boolean;
   post_submit_scenario_id?: string | null;
@@ -71,6 +74,9 @@ const [submitButtonText, setSubmitButtonText] = useState<string>("送信");
 const [submitButtonVariant, setSubmitButtonVariant] = useState<string>("default");
 const [editingId, setEditingId] = useState<string | null>(null);
 const [selectedFieldId, setSelectedFieldId] = useState<string | null>(null);
+const [submitButtonBgColor, setSubmitButtonBgColor] = useState<string>("#0cb386");
+const [submitButtonTextColor, setSubmitButtonTextColor] = useState<string>("#ffffff");
+const [accentColor, setAccentColor] = useState<string>("#0cb386");
   const loadForms = async () => {
     setLoading(true);
     const { data: { user } } = await supabase.auth.getUser();
@@ -133,6 +139,9 @@ const resetCreator = () => {
   setPostScenario(null);
   setSubmitButtonText("送信");
   setSubmitButtonVariant("default");
+  setSubmitButtonBgColor("#0cb386");
+  setSubmitButtonTextColor("#ffffff");
+  setAccentColor("#0cb386");
   setEditingId(null);
 };
 
@@ -156,7 +165,10 @@ const { error } = await (supabase as any).from('forms').insert({
   prevent_duplicate_per_friend: preventDuplicate,
   post_submit_scenario_id: postScenario,
   submit_button_text: submitButtonText,
-  submit_button_variant: submitButtonVariant,
+  submit_button_variant: 'default',
+  submit_button_bg_color: submitButtonBgColor,
+  submit_button_text_color: submitButtonTextColor,
+  accent_color: accentColor,
 });
     if (error) {
       console.error(error);
@@ -194,7 +206,10 @@ const startEdit = (f: FormRow) => {
   setPreventDuplicate(f.prevent_duplicate_per_friend ?? false);
   setPostScenario(f.post_submit_scenario_id ?? null);
   setSubmitButtonText(f.submit_button_text || "送信");
-  setSubmitButtonVariant(f.submit_button_variant || "default");
+  setSubmitButtonVariant('default');
+  setSubmitButtonBgColor(f.submit_button_bg_color || "#0cb386");
+  setSubmitButtonTextColor(f.submit_button_text_color || "#ffffff");
+  setAccentColor(f.accent_color || "#0cb386");
 };
 
   const copyLink = (id: string) => {
@@ -220,7 +235,10 @@ const handleUpdate = async () => {
     prevent_duplicate_per_friend: preventDuplicate,
     post_submit_scenario_id: postScenario,
     submit_button_text: submitButtonText,
-    submit_button_variant: submitButtonVariant,
+    submit_button_variant: 'default',
+    submit_button_bg_color: submitButtonBgColor,
+    submit_button_text_color: submitButtonTextColor,
+    accent_color: accentColor,
   }).eq('id', editingId);
 
   if (error) {
@@ -243,7 +261,7 @@ const handleUpdate = async () => {
 
       <div className="grid gap-4 lg:grid-cols-12">
         {/* 左: フォーム一覧 */}
-        <div className="lg:col-span-5">
+        <div className="lg:col-span-4">
           <FormListPanel
             items={forms as any}
             loading={loading}
@@ -270,6 +288,9 @@ const handleUpdate = async () => {
                   post_submit_scenario_id: null,
                   submit_button_text: '送信',
                   submit_button_variant: 'default',
+                  submit_button_bg_color: '#0cb386',
+                  submit_button_text_color: '#ffffff',
+                  accent_color: '#0cb386',
                 })
                 .select('*')
                 .single();
@@ -290,7 +311,7 @@ const handleUpdate = async () => {
         </div>
 
         {/* 中央: 項目設定 */}
-        <div className="lg:col-span-2">
+        <div className="lg:col-span-4">
           <Card>
             <CardHeader>
               <CardTitle className="text-sm font-semibold">項目設定</CardTitle>
@@ -330,7 +351,7 @@ const handleUpdate = async () => {
         </div>
 
         {/* 右: プレビュー + 設定 */}
-        <div className="lg:col-span-5">
+        <div className="lg:col-span-4">
           <Card>
             <CardHeader>
               <CardTitle className="text-sm font-semibold">プレビューと設定</CardTitle>
@@ -346,6 +367,12 @@ const handleUpdate = async () => {
                 setSubmitButtonText={setSubmitButtonText}
                 submitButtonVariant={submitButtonVariant}
                 setSubmitButtonVariant={setSubmitButtonVariant}
+                submitButtonBgColor={submitButtonBgColor}
+                setSubmitButtonBgColor={setSubmitButtonBgColor}
+                submitButtonTextColor={submitButtonTextColor}
+                setSubmitButtonTextColor={setSubmitButtonTextColor}
+                accentColor={accentColor}
+                setAccentColor={setAccentColor}
                 successMessage={successMessage}
                 setSuccessMessage={setSuccessMessage}
                 isPublic={isPublic}

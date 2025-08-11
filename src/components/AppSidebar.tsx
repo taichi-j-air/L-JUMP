@@ -65,6 +65,11 @@ export function AppSidebar({ user }: AppSidebarProps) {
   const groupActiveForms = currentPath.startsWith('/forms')
 
   useEffect(() => {
+    setFriendsOpen(groupActiveFriends)
+    setFormsOpen(groupActiveForms)
+  }, [groupActiveFriends, groupActiveForms])
+
+  useEffect(() => {
     loadFriends()
     loadUnreadCount()
 

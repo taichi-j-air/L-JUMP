@@ -6,6 +6,7 @@ import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
+import { ColorPicker } from "@/components/ui/color-picker";
 
 // Keep props same to avoid refactor ripple, but name/description editing moved to middle column
 type Field = { id: string; label: string; name: string; type: string; required?: boolean; options?: string[]; placeholder?: string; rows?: number };
@@ -20,6 +21,12 @@ interface Props {
   setSubmitButtonText: (v: string) => void;
   submitButtonVariant: string;
   setSubmitButtonVariant: (v: string) => void;
+  submitButtonBgColor: string;
+  setSubmitButtonBgColor: (v: string) => void;
+  submitButtonTextColor: string;
+  setSubmitButtonTextColor: (v: string) => void;
+  accentColor: string;
+  setAccentColor: (v: string) => void;
   successMessage: string;
   setSuccessMessage: (v: string) => void;
   isPublic: boolean;
@@ -43,6 +50,12 @@ export default function FormPreviewPanel({
   setSubmitButtonText,
   submitButtonVariant,
   setSubmitButtonVariant,
+  submitButtonBgColor,
+  setSubmitButtonBgColor,
+  submitButtonTextColor,
+  setSubmitButtonTextColor,
+  accentColor,
+  setAccentColor,
   successMessage,
   setSuccessMessage,
   isPublic,
@@ -75,7 +88,7 @@ export default function FormPreviewPanel({
         <p className="text-xs text-muted-foreground">右側は実際の公開フォームの見た目です</p>
       </div>
 
-      <div className="rounded-md border p-3 space-y-3">
+      <div className="rounded-md border p-3 space-y-3" style={{ ['--form-accent' as any]: accentColor }}>
         <div className="space-y-1">
           <h4 className="text-lg font-medium">{formName || "フォーム名"}</h4>
           {description && <p className="text-sm text-muted-foreground whitespace-pre-wrap">{description}</p>}
@@ -133,6 +146,7 @@ export default function FormPreviewPanel({
                     return (
                       <label key={i} className="flex items-center gap-2 text-sm">
                         <Checkbox
+                          className="border-[var(--form-accent)] data-[state=checked]:bg-[var(--form-accent)] data-[state=checked]:text-white"
                           checked={checked}
                           onCheckedChange={(v) => {
                             const checkedVal = v === true;
@@ -156,8 +170,8 @@ export default function FormPreviewPanel({
           ))}
         </div>
 
-        <div className="pt-2">
-          <Button disabled={!canSubmit} variant={submitButtonVariant as any}>
+        <div className="pt-2 flex justify-center">
+          <Button disabled={!canSubmit} variant="default" style={{ backgroundColor: submitButtonBgColor, color: submitButtonTextColor }}>
             {submitButtonText || "送信"}
           </Button>
         </div>
@@ -178,21 +192,19 @@ export default function FormPreviewPanel({
             <label className="text-sm">送信ボタンのテキスト</label>
             <Input value={submitButtonText} onChange={(e) => setSubmitButtonText(e.target.value)} placeholder="送信 / 申し込み など" />
           </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-1">
+              <label className="text-sm">送信ボタン 背景色</label>
+              <ColorPicker color={submitButtonBgColor} onChange={setSubmitButtonBgColor} />
+            </div>
+            <div className="space-y-1">
+              <label className="text-sm">送信ボタン テキスト色</label>
+              <ColorPicker color={submitButtonTextColor} onChange={setSubmitButtonTextColor} />
+            </div>
+          </div>
           <div className="space-y-1">
-            <label className="text-sm">送信ボタンのデザイン</label>
-            <Select value={submitButtonVariant} onValueChange={setSubmitButtonVariant}>
-              <SelectTrigger>
-                <SelectValue placeholder="ボタンスタイル" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="default">標準</SelectItem>
-                <SelectItem value="secondary">セカンダリ</SelectItem>
-                <SelectItem value="outline">アウトライン</SelectItem>
-                <SelectItem value="destructive">警告</SelectItem>
-                <SelectItem value="ghost">ゴースト</SelectItem>
-                <SelectItem value="link">リンク</SelectItem>
-              </SelectContent>
-            </Select>
+            <label className="text-sm">アクセントカラー（ラジオ/チェック）</label>
+            <ColorPicker color={accentColor} onChange={setAccentColor} />
           </div>
           <div className="flex items-center justify-between gap-3 text-sm">
             <span>LINE友だち限定</span>

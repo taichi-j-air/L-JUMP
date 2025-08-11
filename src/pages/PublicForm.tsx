@@ -6,6 +6,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectTrigger, SelectContent, SelectItem, SelectValue } from "@/components/ui/select";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
+import { Checkbox } from "@/components/ui/checkbox";
 import { toast } from "sonner";
 
 interface PublicFormRow {
@@ -20,6 +22,9 @@ interface PublicFormRow {
   post_submit_scenario_id?: string | null;
   submit_button_text?: string | null;
   submit_button_variant?: string | null;
+  submit_button_bg_color?: string | null;
+  submit_button_text_color?: string | null;
+  accent_color?: string | null;
   fields: Array<{ id: string; label: string; name: string; type: string; required?: boolean; options?: string[]; placeholder?: string; rows?: number }>;
 }
 
@@ -62,7 +67,7 @@ export default function PublicForm() {
       setLoading(true);
       const { data, error } = await (supabase as any)
         .from('forms')
-        .select('id,name,description,fields,success_message,is_public,user_id,require_line_friend,prevent_duplicate_per_friend,post_submit_scenario_id,submit_button_text,submit_button_variant')
+        .select('id,name,description,fields,success_message,is_public,user_id,require_line_friend,prevent_duplicate_per_friend,post_submit_scenario_id,submit_button_text,submit_button_variant,submit_button_bg_color,submit_button_text_color,accent_color')
         .eq('id', formId)
         .maybeSingle();
       if (error) {
@@ -171,7 +176,7 @@ export default function PublicForm() {
               <p className="text-center text-muted-foreground">{form.success_message || '送信ありがとうございました。'}</p>
             </div>
           ) : (
-            <form className="space-y-4" onSubmit={handleSubmit}>
+            <form className="space-y-4" onSubmit={handleSubmit} style={{ ['--form-accent' as any]: form.accent_color || '#0cb386' }}>
               {form.require_line_friend && (
                 <p className="text-xs text-muted-foreground">
                   このフォームはLINE友だち限定です。LINEから開くと自動で認証されます。
@@ -188,9 +193,9 @@ export default function PublicForm() {
                   {f.type === 'textarea' && (
                     <Textarea id={f.name} name={f.name} required={!!f.required} onChange={(e)=>handleChange(f.name, e.target.value)} />
                   )}
-                  {f.type === 'text' || f.type === 'email' ? (
+                  {(f.type === 'text' || f.type === 'email') && (
                     <Input id={f.name} name={f.name} type={f.type || 'text'} required={!!f.required} onChange={(e)=>handleChange(f.name, e.target.value)} />
-                  ) : null}
+                  )}
                   {f.type === 'select' && Array.isArray(f.options) && (
                     <Select onValueChange={(v)=>handleChange(f.name, v)}>
                       <SelectTrigger><SelectValue placeholder="選択してください" /></SelectTrigger>
@@ -202,14 +207,16 @@ export default function PublicForm() {
                     </Select>
                   )}
                   {f.type === 'radio' && Array.isArray(f.options) && (
-                    <div className="flex flex-col gap-2">
-                      {f.options.map((opt)=> (
-                        <label key={opt} className="inline-flex items-center gap-2">
-                          <input type="radio" name={f.name} value={opt} onChange={(e)=>handleChange(f.name, e.target.value)} />
-                          <span>{opt}</span>
-                        </label>
-                      ))}
-                    </div>
+                    <RadioGroup value={values[f.name] || ""} onValueChange={(v)=>handleChange(f.name, v)}>
+                      <div className="flex flex-col gap-2">
+                        {f.options.map((opt)=> (
+                          <label key={opt} className="inline-flex items-center gap-2">
+                            <RadioGroupItem value={opt} className="border-[var(--form-accent)] data-[state=checked]:bg-[var(--form-accent)] data-[state=checked]:text-white" />
+                            <span>{opt}</span>
+                          </label>
+                        ))}
+                      </div>
+                    </RadioGroup>
                   )}
                   {f.type === 'checkbox' && Array.isArray(f.options) && (
                     <div className="flex flex-col gap-2">
@@ -217,15 +224,15 @@ export default function PublicForm() {
                         const checked = Array.isArray(values[f.name]) && values[f.name].includes(opt);
                         return (
                           <label key={opt} className="inline-flex items-center gap-2">
-                            <input
-                              type="checkbox"
+                            <Checkbox
+                              className="border-[var(--form-accent)] data-[state=checked]:bg-[var(--form-accent)] data-[state=checked]:text-white"
                               checked={!!checked}
-                              onChange={(e)=>{
+                              onCheckedChange={(v)=>{
                                 const prev: string[] = Array.isArray(values[f.name]) ? values[f.name] : [];
-                                if (e.target.checked) {
+                                if (v === true) {
                                   handleChange(f.name, Array.from(new Set([...prev, opt])));
                                 } else {
-                                  handleChange(f.name, prev.filter(v => v !== opt));
+                                  handleChange(f.name, prev.filter((x)=> x !== opt));
                                 }
                               }}
                             />
@@ -237,7 +244,7 @@ export default function PublicForm() {
                   )}
                 </div>
               ))}
-              <Button type="submit" className="w-full" variant={(form.submit_button_variant || 'default') as any}>{form.submit_button_text || '送信'}</Button>
+              <Button type="submit" className="w-full" variant="default" style={{ backgroundColor: form.submit_button_bg_color || '#0cb386', color: form.submit_button_text_color || '#ffffff' }}>{form.submit_button_text || '送信'}</Button>
             </form>
           )}
         </CardContent>
