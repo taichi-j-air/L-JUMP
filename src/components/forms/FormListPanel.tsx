@@ -2,6 +2,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import { Badge } from "@/components/ui/badge";
 import { Copy, Link as LinkIcon, Pencil, Plus, Trash2 } from "lucide-react";
 
 export interface FormListItem {
@@ -21,6 +22,7 @@ interface Props {
   onCopyLink: (id: string) => void;
   onOpenPublic: (id: string) => void;
   onDelete: (id: string) => void;
+  unreadCounts?: Record<string, number>;
 }
 
 export default function FormListPanel({

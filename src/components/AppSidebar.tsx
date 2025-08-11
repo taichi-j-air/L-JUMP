@@ -59,13 +59,14 @@ export function AppSidebar({ user }: AppSidebarProps) {
   const [unreadCount, setUnreadCount] = useState(0)
   const [friendsOpen, setFriendsOpen] = useState(false)
   const [formsOpen, setFormsOpen] = useState(false)
+  const [responsesHasNew, setResponsesHasNew] = useState(false)
   const collapsed = state === "collapsed"
 
   useEffect(() => {
     loadFriends()
     loadUnreadCount()
-    
-    // リアルタイムでメッセージの変更を監視
+
+    // Chat messages realtime subscription
     const messageSubscription = supabase
       .channel('chat_messages_changes')
       .on('postgres_changes', 
@@ -76,16 +77,38 @@ export function AppSidebar({ user }: AppSidebarProps) {
       )
       .subscribe()
 
-    // カスタムイベントで未読数更新を監視
-    const handleRefreshUnread = () => {
-      loadUnreadCount()
+    // Form submissions realtime subscription for notifications
+    const formSubSubscription = supabase
+      .channel('form_submissions_changes')
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'form_submissions' }, (payload: any) => {
+        try {
+          const formId = payload?.new?.form_id
+          if (!formId) return
+          const raw = localStorage.getItem('unreadResponses')
+          const map: Record<string, number> = raw ? JSON.parse(raw) : {}
+          map[formId] = (map[formId] || 0) + 1
+          localStorage.setItem('unreadResponses', JSON.stringify(map))
+          // set global flag
+          localStorage.setItem('unreadResponsesGlobal', 'true')
+          setResponsesHasNew(true)
+          window.dispatchEvent(new Event('unread-responses-updated'))
+        } catch (e) {
+          console.error('Failed to update unread responses', e)
+        }
+      })
+      .subscribe()
+
+    // Listen to storage updates from other parts of the app
+    const handleUnreadUpdate = () => {
+      const flag = localStorage.getItem('unreadResponsesGlobal') === 'true'
+      setResponsesHasNew(flag)
     }
-    
-    window.addEventListener('refreshUnreadCount', handleRefreshUnread)
+    window.addEventListener('unread-responses-updated', handleUnreadUpdate)
 
     return () => {
       supabase.removeChannel(messageSubscription)
-      window.removeEventListener('refreshUnreadCount', handleRefreshUnread)
+      supabase.removeChannel(formSubSubscription)
+      window.removeEventListener('unread-responses-updated', handleUnreadUpdate)
     }
   }, [user.id])
 
@@ -127,12 +150,19 @@ export function AppSidebar({ user }: AppSidebarProps) {
       console.error('Error loading unread count:', error)
     }
   }
-
-
   const getNavClass = ({ isActive }: { isActive: boolean }) =>
     isActive
       ? "bg-sidebar-accent text-sidebar-accent-foreground font-medium focus-visible:outline-none focus-visible:ring-0"
       : "hover:bg-sidebar-accent focus-visible:outline-none focus-visible:ring-0"
+
+  // Clear global responses badge when opening responses page
+  useEffect(() => {
+    if (currentPath.startsWith('/forms/responses')) {
+      localStorage.setItem('unreadResponsesGlobal', 'false')
+      setResponsesHasNew(false)
+      window.dispatchEvent(new Event('unread-responses-updated'))
+    }
+  }, [currentPath])
   return (
     <Sidebar className={(collapsed ? "w-14" : "w-64") + " border-r border-sidebar-border bg-sidebar text-sidebar-foreground"} collapsible="icon">
       <SidebarTrigger className="m-2 self-end" />
@@ -195,8 +225,8 @@ export function AppSidebar({ user }: AppSidebarProps) {
                     </SidebarMenuSubItem>
                     <SidebarMenuSubItem>
                       <SidebarMenuSubButton asChild>
-                        <NavLink to="/forms/responses" end className={({ isActive }) => (isActive ? "bg-sidebar-accent text-sidebar-accent-foreground" : "")}> 
-                          <span>回答結果</span>
+                    <NavLink to="/forms/responses" end className={({ isActive }) => (isActive ? "bg-sidebar-accent text-sidebar-accent-foreground" : "")}> 
+                          <span className="flex items-center gap-2">回答結果{responsesHasNew && <span className="inline-block h-2 w-2 rounded-full bg-destructive" aria-label="新着" />}</span>
                         </NavLink>
                       </SidebarMenuSubButton>
                     </SidebarMenuSubItem>
