@@ -1,8 +1,22 @@
 import { Button } from "@/components/ui/button";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Trash2, Plus } from "lucide-react";
+import { Trash2, Plus, GripVertical } from "lucide-react";
+import {
+  DndContext,
+  closestCenter,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  DragEndEvent,
+} from "@dnd-kit/core";
+import {
+  arrayMove,
+  SortableContext,
+  verticalListSortingStrategy,
+  useSortable,
+} from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
 
 export type FormField = {
   id: string;
@@ -19,8 +33,67 @@ interface Props {
   onSelect: (id: string) => void;
   onAdd: () => void;
   onRemove: (id: string) => void;
-  newFieldType: string;
-  setNewFieldType: (v: string) => void;
+  onReorder: (orderedIds: string[]) => void;
+}
+
+function SortableItem({
+  field,
+  isSelected,
+  onSelect,
+  onRemove,
+}: {
+  field: FormField;
+  isSelected: boolean;
+  onSelect: (id: string) => void;
+  onRemove: (id: string) => void;
+}) {
+  const { attributes, listeners, setNodeRef, transform, transition } = useSortable({ id: field.id });
+  const style: React.CSSProperties = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+  };
+
+  return (
+    <div
+      ref={setNodeRef}
+      style={style}
+      className={
+        "flex items-center justify-between rounded-md border px-2 py-1 cursor-pointer select-none " +
+        (isSelected ? "bg-muted" : "hover:bg-muted/50")
+      }
+      onClick={() => onSelect(field.id)}
+    >
+      <div className="flex items-center gap-2 min-w-0">
+        <button
+          {...attributes}
+          {...listeners}
+          className="shrink-0 p-1 rounded hover:bg-muted"
+          aria-label="並び替え"
+          onClick={(e) => e.stopPropagation()}
+        >
+          <GripVertical className="h-4 w-4" />
+        </button>
+        <div className="min-w-0">
+          <div className="text-xs font-medium truncate">{field.label || "未設定"}</div>
+          <div className="text-[10px] text-muted-foreground truncate">{field.type}</div>
+        </div>
+      </div>
+      <div className="flex items-center gap-2 shrink-0">
+        <Badge variant="secondary" className="text-[10px] px-1 py-0">{field.required ? "必須" : "任意"}</Badge>
+        <Button
+          size="icon"
+          variant="destructive"
+          onClick={(e) => {
+            e.stopPropagation();
+            onRemove(field.id);
+          }}
+          aria-label="フィールド削除"
+        >
+          <Trash2 className="h-4 w-4" />
+        </Button>
+      </div>
+    </div>
+  );
 }
 
 export default function FormFieldList({
@@ -29,66 +102,50 @@ export default function FormFieldList({
   onSelect,
   onAdd,
   onRemove,
-  newFieldType,
-  setNewFieldType,
+  onReorder,
 }: Props) {
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 4 } })
+  );
+
+  const handleDragEnd = (event: DragEndEvent) => {
+    const { active, over } = event;
+    if (!over || active.id === over.id) return;
+    const oldIndex = fields.findIndex((f) => f.id === active.id);
+    const newIndex = fields.findIndex((f) => f.id === over.id);
+    const newOrder = arrayMove(fields.map((f) => f.id), oldIndex, newIndex);
+    onReorder(newOrder);
+  };
+
   return (
-    <div className="space-y-3">
-      <div className="flex items-center gap-2">
-        <Select value={newFieldType} onValueChange={setNewFieldType}>
-          <SelectTrigger className="flex-1">
-            <SelectValue placeholder="タイプを選択" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="text">テキスト</SelectItem>
-            <SelectItem value="email">メール</SelectItem>
-            <SelectItem value="textarea">テキストエリア</SelectItem>
-            <SelectItem value="select">ドロップダウン</SelectItem>
-            <SelectItem value="radio">ラジオボタン</SelectItem>
-            <SelectItem value="checkbox">チェックボックス</SelectItem>
-          </SelectContent>
-        </Select>
+    <div className="space-y-2">
+      <div className="flex items-center justify-between">
+        <div className="text-sm font-medium">フィールド</div>
         <Button variant="outline" size="sm" onClick={onAdd}>
           <Plus className="mr-2 h-4 w-4" /> 追加
         </Button>
       </div>
 
-      <ScrollArea className="h-[360px] rounded-md border">
-        <div className="p-2 space-y-2">
-          {fields.length === 0 && (
-            <p className="text-sm text-muted-foreground">フィールドがありません</p>
-          )}
-          {fields.map((f, idx) => (
-            <div
-              key={f.id}
-              className={
-                "flex items-center justify-between rounded-md border p-2 cursor-pointer transition-colors " +
-                (selectedId === f.id ? "bg-muted" : "hover:bg-muted/50")
-              }
-              onClick={() => onSelect(f.id)}
-            >
-              <div className="min-w-0">
-                <div className="text-sm font-medium truncate">{idx + 1}. {f.label || "未設定"}</div>
-                <div className="text-xs text-muted-foreground truncate">{f.name || "キー未設定"}</div>
-              </div>
-              <div className="flex items-center gap-2">
-                <Badge variant="secondary">{f.type}</Badge>
-                <Button
-                  size="icon"
-                  variant="destructive"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    onRemove(f.id);
-                  }}
-                  aria-label="フィールド削除"
-                >
-                  <Trash2 className="h-4 w-4" />
-                </Button>
-              </div>
-            </div>
-          ))}
-        </div>
-      </ScrollArea>
+      <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+        <ScrollArea className="h-[360px] rounded-md border">
+          <div className="p-2 space-y-1">
+            {fields.length === 0 && (
+              <p className="text-xs text-muted-foreground">フィールドがありません</p>
+            )}
+            <SortableContext items={fields.map((f) => f.id)} strategy={verticalListSortingStrategy}>
+              {fields.map((f) => (
+                <SortableItem
+                  key={f.id}
+                  field={f}
+                  isSelected={selectedId === f.id}
+                  onSelect={onSelect}
+                  onRemove={onRemove}
+                />
+              ))}
+            </SortableContext>
+          </div>
+        </ScrollArea>
+      </DndContext>
     </div>
   );
 }
