@@ -1,0 +1,67 @@
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Switch } from "@/components/ui/switch";
+import type { FormField } from "./FormFieldList";
+
+interface Props {
+  field: FormField | null;
+  onChange: (patch: Partial<FormField>) => void;
+}
+
+export default function FormFieldEditor({ field, onChange }: Props) {
+  if (!field) {
+    return <div className="text-sm text-muted-foreground">左のリストからフィールドを選択、または追加してください。</div>;
+  }
+
+  const isChoice = field.type === "select" || field.type === "radio" || field.type === "checkbox";
+
+  return (
+    <div className="space-y-3">
+      <div className="space-y-2">
+        <label className="text-sm">表示ラベル</label>
+        <Input value={field.label} onChange={(e) => onChange({ label: e.target.value })} placeholder="氏名 など" />
+      </div>
+
+      <div className="space-y-2">
+        <label className="text-sm">保存用キー（英数字）</label>
+        <Input value={field.name} onChange={(e) => onChange({ name: e.target.value })} placeholder="name / email など" />
+      </div>
+
+      <div className="grid grid-cols-2 gap-3 items-end">
+        <div className="space-y-2">
+          <label className="text-sm">タイプ</label>
+          <Select value={field.type} onValueChange={(v) => onChange({ type: v })}>
+            <SelectTrigger>
+              <SelectValue placeholder="タイプ" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="text">テキスト</SelectItem>
+              <SelectItem value="email">メール</SelectItem>
+              <SelectItem value="textarea">テキストエリア</SelectItem>
+              <SelectItem value="select">ドロップダウン</SelectItem>
+              <SelectItem value="radio">ラジオボタン</SelectItem>
+              <SelectItem value="checkbox">チェックボックス</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+        <div className="flex items-center justify-between gap-3">
+          <label className="text-sm">必須</label>
+          <Switch checked={!!field.required} onCheckedChange={(v) => onChange({ required: v })} />
+        </div>
+      </div>
+
+      {isChoice && (
+        <div className="space-y-2">
+          <label className="text-sm">選択肢（1行に1つ）</label>
+          <Textarea
+            rows={8}
+            placeholder={`例）\nはい\nいいえ\nその他`}
+            value={(field.options || []).join("\n")}
+            onChange={(e) => onChange({ options: e.target.value.split(/\r?\n/) })}
+          />
+        </div>
+      )}
+    </div>
+  );
+}

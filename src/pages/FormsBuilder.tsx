@@ -11,6 +11,9 @@ import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Checkbox } from "@/components/ui/checkbox";
 import { toast } from "sonner";
 import { Copy, Link as LinkIcon, Plus, Save, Trash2, Pencil } from "lucide-react";
+import FormFieldList from "@/components/forms/FormFieldList";
+import FormFieldEditor from "@/components/forms/FormFieldEditor";
+import FormPreviewPanel from "@/components/forms/FormPreviewPanel";
 
 interface FormRow {
   id: string;
@@ -225,7 +228,7 @@ const handleUpdate = async () => {
 };
 
   return (
-    <div className="container mx-auto max-w-4xl space-y-4">
+    <div className="container mx-auto max-w-6xl space-y-4">
       <header className="space-y-1">
         <h1 className="text-2xl font-bold tracking-tight">フォーム作成</h1>
         <p className="text-muted-foreground">公開フォームを作成し、CMSへ埋め込みできます。</p>
@@ -242,7 +245,8 @@ const handleUpdate = async () => {
           </Button>
         </CardHeader>
         {creating && (
-          <CardContent className="space-y-4">
+          <CardContent className="space-y-6">
+            {/* 基本情報 */}
             <div className="grid gap-4 sm:grid-cols-2">
               <div className="space-y-2">
                 <label className="text-sm">フォーム名</label>
@@ -281,86 +285,55 @@ const handleUpdate = async () => {
                   </SelectContent>
                 </Select>
               </div>
-              <div className="grid gap-4 sm:grid-cols-3 sm:col-span-2">
-                <div className="space-y-2">
-                  <label className="text-sm">LINE友だち限定</label>
-                  <div className="flex items-center gap-3">
-                    <Switch checked={requireLineFriend} onCheckedChange={setRequireLineFriend} />
-                    <span className="text-sm text-muted-foreground">有効化するとLINE友だちのみ回答可能</span>
-                  </div>
-                </div>
-                <div className="space-y-2">
-                  <label className="text-sm">同一友だちの重複回答を禁止</label>
-                  <div className="flex items-center gap-3">
-                    <Switch checked={preventDuplicate} onCheckedChange={setPreventDuplicate} />
-                  </div>
-                </div>
-                <div className="space-y-2">
-                  <label className="text-sm">回答後のシナリオ遷移（任意）</label>
-                  <Select value={postScenario ?? 'none'} onValueChange={(v)=> setPostScenario(v === 'none' ? null : v)}>
-                    <SelectTrigger><SelectValue placeholder="シナリオを選択" /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="none">なし</SelectItem>
-                      {scenarios.map(s => (
-                        <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
+            </div>
+
+            {/* 3カラムレイアウト */}
+            <div className="grid gap-6 lg:grid-cols-3">
+              {/* 左：フィールド一覧＋追加 */}
+              <div>
+                <FormFieldList
+                  fields={fields as any}
+                  selectedId={selectedFieldId}
+                  onSelect={setSelectedFieldId}
+                  onAdd={addField}
+                  onRemove={removeField}
+                  newFieldType={newFieldType}
+                  setNewFieldType={setNewFieldType}
+                />
+              </div>
+
+              {/* 中央：フィールド編集 */}
+              <div>
+                <FormFieldEditor
+                  field={selectedField as any}
+                  onChange={(patch) => selectedField && updateField(selectedField.id, patch)}
+                />
+              </div>
+
+              {/* 右：プレビュー＋設定 */}
+              <div>
+                <FormPreviewPanel
+                  name={formName}
+                  description={description}
+                  fields={fields as any}
+                  submitButtonText={submitButtonText}
+                  submitButtonVariant={submitButtonVariant}
+                  requireLineFriend={requireLineFriend}
+                  setRequireLineFriend={setRequireLineFriend}
+                  preventDuplicate={preventDuplicate}
+                  setPreventDuplicate={setPreventDuplicate}
+                  postScenario={postScenario}
+                  setPostScenario={setPostScenario}
+                  scenarios={scenarios}
+                />
               </div>
             </div>
 
-            <div className="space-y-3">
-              <div className="flex items-center justify-between">
-                <h3 className="font-medium">フィールド</h3>
-                <Button size="sm" variant="outline" onClick={addField}>
-                  <Plus className="mr-2 h-4 w-4" /> 追加
-                </Button>
-              </div>
-
-              <div className="space-y-3">
-                {fields.length === 0 && <p className="text-sm text-muted-foreground">フィールドがありません</p>}
-                {fields.map((f) => (
-                  <div key={f.id} className="rounded-md border p-2 grid gap-2 sm:grid-cols-4">
-                    <Input className="sm:col-span-1" placeholder="表示ラベル" value={f.label} onChange={(e)=>updateField(f.id,{label:e.target.value})} />
-                    <Input className="sm:col-span-1" placeholder="保存用キー（英数字）" value={f.name} onChange={(e)=>updateField(f.id,{name:e.target.value})} />
-                    <Select value={f.type} onValueChange={(v)=>updateField(f.id,{type:v})}>
-                      <SelectTrigger className="sm:col-span-1"><SelectValue placeholder="タイプ" /></SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="text">テキスト</SelectItem>
-                        <SelectItem value="email">メール</SelectItem>
-                        <SelectItem value="textarea">テキストエリア</SelectItem>
-                        <SelectItem value="select">ドロップダウン</SelectItem>
-                        <SelectItem value="radio">ラジオボタン</SelectItem>
-                        <SelectItem value="checkbox">チェックボックス</SelectItem>
-                      </SelectContent>
-                    </Select>
-                    <div className="flex items-center justify-between sm:col-span-1 gap-2">
-                      <label className="text-sm">必須</label>
-                      <Switch checked={!!f.required} onCheckedChange={(v)=>updateField(f.id,{required:v})} />
-                      <Button size="icon" variant="destructive" onClick={()=>removeField(f.id)} aria-label="フィールド削除">
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
-                    </div>
-{(f.type === 'select' || f.type === 'radio' || f.type === 'checkbox') && (
-  <div className="sm:col-span-4">
-    <label className="text-xs text-muted-foreground">選択肢（1行に1つ）</label>
-    <Textarea
-      placeholder={`例）\nはい\nいいえ\nその他`}
-      value={(f.options || []).join('\n')}
-      onChange={(e)=>updateField(f.id,{ options: e.target.value.split(/\r?\n/).map(s=>s.trim()) })}
-      className="min-h-[96px]"
-    />
-  </div>
-)}
-                  </div>
-                ))}
-              </div>
-
-              <div className="flex gap-2">
-                <Button onClick={editingId ? handleUpdate : handleCreate}><Save className="mr-2 h-4 w-4" /> {editingId ? '更新' : '保存'}</Button>
-                <Button variant="outline" onClick={resetCreator}>クリア</Button>
-              </div>
+            <div className="flex gap-2 justify-end">
+              <Button onClick={editingId ? handleUpdate : handleCreate}>
+                <Save className="mr-2 h-4 w-4" /> {editingId ? '更新' : '保存'}
+              </Button>
+              <Button variant="outline" onClick={resetCreator}>クリア</Button>
             </div>
           </CardContent>
         )}
@@ -407,12 +380,9 @@ const handleUpdate = async () => {
         </CardContent>
       </Card>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>削除について</CardTitle>
-          <CardDescription>削除するとフォームと回答データは完全に削除され、元に戻せません。</CardDescription>
-        </CardHeader>
-      </Card>
+      <div className="text-xs text-muted-foreground">
+        削除するとフォームと回答データは完全に削除され、元に戻せません。
+      </div>
     </div>
   );
 }
