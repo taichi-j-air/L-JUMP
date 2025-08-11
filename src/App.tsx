@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, lazy, Suspense } from "react";
 import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -37,6 +37,8 @@ import FormsBuilder from "./pages/FormsBuilder";
 import PublicForm from "./pages/PublicForm";
 import FormResponses from "./pages/FormResponses";
 
+const CMSFriendsPageBuilder = lazy(() => import('./pages/CMSFriendsPageBuilder'));
+const CMSPublicPageBuilder = lazy(() => import('./pages/CMSPublicPageBuilder'));
 const queryClient = new QueryClient();
 
 function AppContent() {
@@ -122,7 +124,8 @@ function AppContent() {
         {user && <AppSidebar user={user} />}
         <div className="flex-1 flex flex-col pt-14">
           <main className="flex-1 p-2">
-            <Routes>
+            <Suspense fallback={<div className="flex items-center justify-center p-8">読み込み中...</div>}>
+              <Routes>
               <Route path="/" element={<Index />} />
               <Route path="/liff" element={<LiffAuth />} />
               <Route path="/liff-handler" element={<LiffHandler />} />
@@ -145,10 +148,11 @@ function AppContent() {
               <Route path="/form/:id" element={<PublicForm />} />
               <Route path="/forms" element={<FormsBuilder />} />
               <Route path="/forms/responses" element={<FormResponses />} />
-              <Route path="/cms/friends-page" element={<(await import('./pages/CMSFriendsPageBuilder')).default />} />
-              <Route path="/cms/public-page" element={<(await import('./pages/CMSPublicPageBuilder')).default />} />
+              <Route path="/cms/friends-page" element={<CMSFriendsPageBuilder />} />
+              <Route path="/cms/public-page" element={<CMSPublicPageBuilder />} />
               <Route path="*" element={<NotFound />} />
-            </Routes>
+              </Routes>
+            </Suspense>
           </main>
         </div>
       </div>

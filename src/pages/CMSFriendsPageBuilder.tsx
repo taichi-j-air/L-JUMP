@@ -32,7 +32,7 @@ export default function CMSFriendsPageBuilder() {
         toast.error("ログインが必要です");
         return;
       }
-      const { data, error } = await supabase
+      const { data, error } = await (supabase as any)
         .from('cms_pages')
         .insert({
           user_id: user.id,
