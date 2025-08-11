@@ -49,12 +49,12 @@ export function SortableScenarioItem({
         isSelected ? 'bg-primary/10 border-primary' : 'hover:bg-muted/50'
       }`}
       onClick={onSelect}
+      {...attributes}
+      {...listeners}
     >
       <CardContent className="p-3">
         <div className="flex items-start gap-2">
           <div 
-            {...attributes} 
-            {...listeners}
             className="cursor-grab active:cursor-grabbing p-1 hover:bg-muted rounded flex-shrink-0"
           >
             <GripVertical className="h-4 w-4 text-muted-foreground" />

@@ -501,7 +501,7 @@ export default function StepDeliveryPage() {
               {/* ルートのドロップゾーン（未分類に戻す） */}
               <div
                 ref={setRootDropRef}
-                className={`mb-2 h-8 rounded-md border border-dashed border-border text-xs flex items-center justify-center ${isOverRoot ? 'bg-muted ring-2 ring-primary' : 'bg-transparent'}`}
+                className={`mb-2 h-12 rounded-md border border-dashed border-border text-xs flex items-center justify-center ${isOverRoot ? 'bg-muted ring-2 ring-primary' : 'bg-transparent'} animate-fade-in`}
               >
                 ここにドロップで「未分類」に戻す
               </div>
