@@ -295,7 +295,11 @@ export default function CMSFriendsPageBuilder() {
   // Preview open
   const openPreview = () => {
     if (!selected) return;
-    window.open(`/cms/preview/${selected.id}`, '_blank');
+    const w = window.open(`/cms/preview/${selected.id}`, '_blank');
+    if (!w) {
+      // ポップアップブロック時は同一タブで遷移
+      window.location.href = `/cms/preview/${selected.id}`;
+    }
   };
   return (
     <div className="container mx-auto max-w-[1200px] space-y-4">

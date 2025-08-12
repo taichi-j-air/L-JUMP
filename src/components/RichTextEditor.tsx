@@ -4,7 +4,8 @@ import Quill from "quill";
 import "react-quill/dist/quill.snow.css";
 import { Button } from "./ui/button";
 import { Textarea } from "./ui/textarea";
-
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "./ui/dialog";
+import { MediaSelector } from "./MediaSelector";
 // Enable px-based sizing and color/background via style attributors
 const SizeStyle = (Quill as any).import("attributors/style/size");
 const ColorStyle = (Quill as any).import("attributors/style/color");
@@ -26,6 +27,7 @@ export function RichTextEditor({ value, onChange, className }: RichTextEditorPro
   const quillRef = useRef<ReactQuill | null>(null);
   const [currentSize, setCurrentSize] = useState<number>(16);
   const toolbarId = useRef(`rte-toolbar-${Math.random().toString(36).slice(2)}`).current;
+  const [mediaOpen, setMediaOpen] = useState(false);
 
   const modules = useMemo(() => ({
     toolbar: { container: `#${toolbarId}` },
@@ -44,6 +46,31 @@ export function RichTextEditor({ value, onChange, className }: RichTextEditorPro
     "color",
     "background",
   ];
+
+  const insertMedia = (url: string) => {
+    if (!url) return;
+    const editor = quillRef.current?.getEditor();
+    if (!editor) return;
+    let range = editor.getSelection(true);
+    if (!range) {
+      editor.setSelection(editor.getLength(), 0);
+      range = editor.getSelection(true);
+      if (!range) return;
+    }
+    const lower = url.toLowerCase();
+    const isImage = /(\.png|\.jpg|\.jpeg|\.gif|\.webp|\.svg)(\?.*)?$/.test(lower);
+    const isVideo = /(\.mp4|\.webm|\.mov|\.m4v)(\?.*)?$/.test(lower);
+    if (isImage) {
+      editor.insertEmbed(range.index, 'image', url, 'user');
+      editor.setSelection(range.index + 1, 0);
+    } else if (isVideo) {
+      editor.insertEmbed(range.index, 'video', url, 'user');
+      editor.setSelection(range.index + 1, 0);
+    } else {
+      editor.insertText(range.index, url, 'link', url);
+      editor.setSelection(range.index + url.length, 0);
+    }
+  };
 
   const applySizeDelta = (delta: number) => {
     const editor = quillRef.current?.getEditor();
@@ -100,11 +127,11 @@ export function RichTextEditor({ value, onChange, className }: RichTextEditorPro
         <span className="ql-formats">
           <label className="text-xs text-muted-foreground">
             文字色
-            <input type="color" className="ml-2 h-6 w-6 p-0 border rounded-none" onChange={(e) => applyColor("color", e.target.value)} />
+            <input type="color" className="ml-2 h-6 w-6 p-0 border rounded-none aspect-square" onChange={(e) => applyColor("color", e.target.value)} />
           </label>
           <label className="text-xs text-muted-foreground">
             背景色
-            <input type="color" className="ml-2 h-6 w-6 p-0 border rounded-none" onChange={(e) => applyColor("background", e.target.value)} />
+            <input type="color" className="ml-2 h-6 w-6 p-0 border rounded-none aspect-square" onChange={(e) => applyColor("background", e.target.value)} />
           </label>
         </span>
         <span className="ql-formats ms-auto">
@@ -112,8 +139,17 @@ export function RichTextEditor({ value, onChange, className }: RichTextEditorPro
             type="button"
             size="sm"
             variant="outline"
+            onClick={() => setMediaOpen(true)}
+            title="ライブラリ"
+          >
+            ライブラリ
+          </Button>
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
             className={htmlMode ? "bg-muted" : ""}
-            onClick={() => { setHtmlMode(!htmlMode); setDraftHtml(value); }}
+            onClick={() => { setHtmlMode(!htmlMode); if (!htmlMode) setDraftHtml(value); }}
             title="HTML"
           >
             HTML
@@ -121,13 +157,18 @@ export function RichTextEditor({ value, onChange, className }: RichTextEditorPro
         </span>
       </div>
 
+      <Dialog open={mediaOpen} onOpenChange={setMediaOpen}>
+        <DialogContent className="max-w-3xl">
+          <DialogHeader>
+            <DialogTitle>メディアライブラリ</DialogTitle>
+          </DialogHeader>
+          <MediaSelector onSelect={(url) => { insertMedia(url); setMediaOpen(false); }} />
+        </DialogContent>
+      </Dialog>
+
       {htmlMode ? (
         <div className="space-y-2">
-          <Textarea value={draftHtml} onChange={(e) => setDraftHtml(e.target.value)} rows={8} />
-          <div className="flex gap-2">
-            <Button type="button" onClick={() => { onChange(draftHtml); setHtmlMode(false); }}>適用</Button>
-            <Button type="button" variant="secondary" onClick={() => setHtmlMode(false)}>キャンセル</Button>
-          </div>
+          <Textarea value={draftHtml} onChange={(e) => { setDraftHtml(e.target.value); onChange(e.target.value); }} rows={10} />
         </div>
       ) : (
         <ReactQuill

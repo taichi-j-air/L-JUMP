@@ -48,6 +48,8 @@ const [friendInfo, setFriendInfo] = useState<{ account_name: string | null; line
     document.title = data?.title ? `${data.title} | ページ` : "ページ";
     const meta = document.querySelector('meta[name="description"]');
     if (meta && data?.tag_label) meta.setAttribute("content", data.tag_label);
+    const link = document.querySelector('link[rel="canonical"]') as HTMLLinkElement | null;
+    if (link) link.href = window.location.href;
   }, [data?.title, data?.tag_label]);
 
   const fetchData = async (withPasscode?: string) => {
