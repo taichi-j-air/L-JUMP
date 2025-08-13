@@ -61,6 +61,7 @@ export function FriendsList({ user }: FriendsListProps) {
   const [bulkTagAddId, setBulkTagAddId] = useState<string>("")
   const [bulkTagRemoveId, setBulkTagRemoveId] = useState<string>("")
   const [confirmMoveOpen, setConfirmMoveOpen] = useState(false)
+  const [confirmRegisterOpen, setConfirmRegisterOpen] = useState(false)
   const [confirmUnenrollOpen, setConfirmUnenrollOpen] = useState(false)
   const [confirmTagOpen, setConfirmTagOpen] = useState(false)
 
@@ -304,10 +305,10 @@ export function FriendsList({ user }: FriendsListProps) {
                     {scenarios.map(s => <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>)}
                   </SelectContent>
                 </Select>
-                <Button className="w-full h-9" onClick={async ()=>{
-                  if (!bulkScenarioId) { toast({ title:'シナリオ未選択', description:'登録するシナリオを選択してください' }); return }
-                  setConfirmMoveOpen(true)
-                }}>一斉登録</Button>
+                 <Button className="w-full h-9" onClick={async ()=>{
+                   if (!bulkScenarioId) { toast({ title:'シナリオ未選択', description:'登録するシナリオを選択してください' }); return }
+                   setConfirmRegisterOpen(true)
+                 }}>一斉登録</Button>
                     <Button variant="destructive" className="w-full h-9" onClick={async ()=>{
                       if (!bulkScenarioId) { toast({ title:'解除対象未選択', description:'解除するシナリオを選択してください' }); return }
                       setConfirmUnenrollOpen(true)
@@ -508,7 +509,7 @@ export function FriendsList({ user }: FriendsListProps) {
       </Dialog>
 
       {/* Confirm dialogs */}
-      <AlertDialog open={confirmMoveOpen} onOpenChange={setConfirmMoveOpen}>
+      <AlertDialog open={confirmRegisterOpen} onOpenChange={setConfirmRegisterOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>一斉登録の確認</AlertDialogTitle>
@@ -546,7 +547,7 @@ export function FriendsList({ user }: FriendsListProps) {
                 console.error('Bulk registration error:', e)
                 toast({ title:'登録失敗', description:e.message||'不明なエラー', variant:'destructive' })
               } finally { 
-                setConfirmMoveOpen(false) 
+                setConfirmRegisterOpen(false) 
               }
             }}>実行</AlertDialogAction>
           </AlertDialogFooter>
