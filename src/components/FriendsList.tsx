@@ -237,6 +237,9 @@ export function FriendsList({ user }: FriendsListProps) {
                           numberOfMonths={2}
                           initialFocus
                           className={cn("p-3 pointer-events-auto")}
+                          formatters={{
+                            formatCaption: (date) => `${date.getFullYear()}年${date.getMonth() + 1}月`
+                          }}
                         />
                       </PopoverContent>
                     </Popover>
@@ -349,7 +352,26 @@ export function FriendsList({ user }: FriendsListProps) {
           <div className="space-y-0 divide-y rounded-md border">
             {pagedFriends.map((friend) => (
               <div key={friend.line_user_id} className="hover:bg-muted/50 transition-colors">
-                <div className="p-1">
+                <div 
+                  className="p-1 cursor-pointer"
+                  onClick={async ()=>{
+                    setDetailFriend(friend)
+                    setDetailOpen(true)
+                    try {
+                      const [{ data: forms }, { data: logs }, { data: exitLogs }] = await Promise.all([
+                        supabase.from('form_submissions').select('id, submitted_at, data').eq('user_id', user.id).eq('friend_id', friend.id).order('submitted_at',{ascending:false}).limit(50),
+                        supabase.from('scenario_friend_logs').select('added_at, scenario_id').eq('line_user_id', friend.line_user_id).order('added_at',{ascending:false}).limit(100),
+                        supabase.from('step_delivery_tracking').select('updated_at, scenario_id, status').eq('friend_id', friend.id).eq('status','exited').order('updated_at',{ascending:false}).limit(100)
+                      ])
+                      setDetailForms(forms||[])
+                      const combined = [
+                        ...((logs||[]).map((l:any)=>({ type:'registered', date:l.added_at, scenario_id:l.scenario_id }))),
+                        ...((exitLogs||[]).map((l:any)=>({ type:'exited', date:l.updated_at, scenario_id:l.scenario_id }))),
+                      ].sort((a:any,b:any)=> new Date(b.date).getTime() - new Date(a.date).getTime())
+                      setDetailLogs(combined)
+                    } catch(e) { setDetailForms([]); setDetailLogs([]) }
+                  }}
+                >
                   <div className="flex items-center gap-2">
                     <Avatar className="h-8 w-8">
                       <AvatarImage src={friend.picture_url || ""} alt={friend.display_name || ""} />
@@ -360,25 +382,9 @@ export function FriendsList({ user }: FriendsListProps) {
 
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2">
-                        <button className="font-medium truncate text-left" onClick={async ()=>{
-                          setDetailFriend(friend)
-                          setDetailOpen(true)
-                          try {
-                            const [{ data: forms }, { data: logs }, { data: exitLogs }] = await Promise.all([
-                              supabase.from('form_submissions').select('id, submitted_at, data').eq('user_id', user.id).eq('friend_id', friend.id).order('submitted_at',{ascending:false}).limit(50),
-                              supabase.from('scenario_friend_logs').select('added_at, scenario_id').eq('line_user_id', friend.line_user_id).order('added_at',{ascending:false}).limit(100),
-                              supabase.from('step_delivery_tracking').select('updated_at, scenario_id, status').eq('friend_id', friend.id).eq('status','exited').order('updated_at',{ascending:false}).limit(100)
-                            ])
-                            setDetailForms(forms||[])
-                            const combined = [
-                              ...((logs||[]).map((l:any)=>({ type:'registered', date:l.added_at, scenario_id:l.scenario_id }))),
-                              ...((exitLogs||[]).map((l:any)=>({ type:'exited', date:l.updated_at, scenario_id:l.scenario_id }))),
-                            ].sort((a:any,b:any)=> new Date(b.date).getTime() - new Date(a.date).getTime())
-                            setDetailLogs(combined)
-                          } catch(e) { setDetailForms([]); setDetailLogs([]) }
-                        }}>
+                        <span className="font-medium truncate">
                           {friend.display_name || "名前未設定"}
-                        </button>
+                        </span>
                         <Badge variant="secondary" className="text-xs">
                           {format(new Date(friend.added_at), "yyyy/MM/dd HH:mm")}
                         </Badge>
@@ -391,7 +397,7 @@ export function FriendsList({ user }: FriendsListProps) {
                       </p>
                     </div>
 
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
                       <Button size="sm" variant="outline" onClick={() => setTagDialogFriend(friend)} className="gap-1 h-8 px-2">
                         <TagIcon className="h-4 w-4" />
                         タグ
@@ -474,12 +480,27 @@ export function FriendsList({ user }: FriendsListProps) {
               <h4 className="text-sm font-medium mb-2">シナリオ遷移ログ</h4>
               <div className="space-y-2 text-xs">
                 {detailLogs.length === 0 && <div className="text-muted-foreground">履歴なし</div>}
-                {detailLogs.map((l:any, idx:number)=> (
-                  <div key={idx} className="p-2 border rounded">
-                    <div className="text-muted-foreground">{format(new Date(l.date), "yyyy/MM/dd HH:mm")}</div>
-                    <div className="mt-1">[{l.type === 'registered' ? '登録' : '解除'}] scenario_id: {l.scenario_id}</div>
-                  </div>
-                ))}
+                {detailLogs.map((l:any, idx:number)=> {
+                  const scenarioName = scenarios.find(s => s.id === l.scenario_id)?.name || 'Unknown'
+                  return (
+                    <div key={idx} className="p-2 border rounded">
+                      <div className="text-muted-foreground">{format(new Date(l.date), "yyyy/MM/dd HH:mm")}</div>
+                      <div className="mt-1 flex items-center gap-2">
+                        <Badge 
+                          className={cn(
+                            "text-white text-xs rounded",
+                            l.type === 'registered' 
+                              ? "bg-[rgb(12,179,134)]" 
+                              : "bg-red-500"
+                          )}
+                        >
+                          {l.type === 'registered' ? '登録' : '解除'}
+                        </Badge>
+                        <span>{scenarioName}</span>
+                      </div>
+                    </div>
+                  )
+                })}
               </div>
             </div>
           </div>
@@ -500,14 +521,33 @@ export function FriendsList({ user }: FriendsListProps) {
             <AlertDialogAction onClick={async ()=>{
               try {
                 const target = scenarios.find(s=>s.id===bulkScenarioId)
-                if (!target) return
-                for (const f of filteredFriends) {
-                  await supabase.rpc('register_friend_with_scenario', { p_line_user_id: f.line_user_id, p_display_name: f.display_name, p_picture_url: f.picture_url, p_scenario_name: target.name })
+                if (!target) {
+                  toast({ title:'エラー', description:'シナリオが見つかりません', variant:'destructive' })
+                  return
                 }
+                
+                // Register each friend to the scenario
+                for (const f of filteredFriends) {
+                  const result = await supabase.rpc('register_friend_with_scenario', { 
+                    p_line_user_id: f.line_user_id, 
+                    p_display_name: f.display_name, 
+                    p_picture_url: f.picture_url, 
+                    p_scenario_name: target.name 
+                  })
+                  
+                  if (result.error || (result.data && typeof result.data === 'object' && !JSON.stringify(result.data).includes('success'))) {
+                    console.error('Registration failed for friend:', f.line_user_id, result.error || result.data)
+                  }
+                }
+                
                 toast({ title:'登録完了', description:`${filteredFriends.length}名を登録しました` })
+                loadFriends() // Reload to update scenario mappings
               } catch (e:any) {
+                console.error('Bulk registration error:', e)
                 toast({ title:'登録失敗', description:e.message||'不明なエラー', variant:'destructive' })
-              } finally { setConfirmMoveOpen(false) }
+              } finally { 
+                setConfirmMoveOpen(false) 
+              }
             }}>実行</AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
