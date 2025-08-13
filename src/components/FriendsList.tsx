@@ -11,7 +11,10 @@ import { Input } from "./ui/input"
 import { useToast } from "./ui/use-toast"
 import { FriendScenarioDialog } from "./FriendScenarioDialog"
 import FriendTagDialog from "./FriendTagDialog"
-
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "./ui/select"
+import { Checkbox } from "./ui/checkbox"
+import { Label } from "./ui/label"
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "./ui/dialog"
 interface Friend {
   id: string
   line_user_id: string

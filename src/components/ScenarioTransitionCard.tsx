@@ -7,6 +7,9 @@ import { Button } from "@/components/ui/button"
 import { Label } from "@/components/ui/label"
 import { ArrowRight, Plus, X, TestTube } from "lucide-react"
 import { StepScenario, ScenarioTransition } from "@/hooks/useStepScenarios"
+import { Input } from "@/components/ui/input"
+import { Checkbox } from "@/components/ui/checkbox"
+import { useToast } from "@/components/ui/use-toast"
 
 interface ScenarioTransitionCardProps {
   currentScenario: StepScenario
