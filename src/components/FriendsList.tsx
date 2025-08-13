@@ -292,8 +292,20 @@ export function FriendsList({ user }: FriendsListProps) {
               try {
                 const ids = filteredFriends.map(f=>f.id)
                 if (bulkTagAddId) {
-                  const rows = ids.map(fid => ({ user_id: user.id, friend_id: fid, tag_id: bulkTagAddId }))
-                  await supabase.from('friend_tags').insert(rows, { upsert: true })
+                  // 既存を確認してから不足分のみ追加
+                  const { data: existing } = await supabase
+                    .from('friend_tags')
+                    .select('friend_id')
+                    .eq('user_id', user.id)
+                    .eq('tag_id', bulkTagAddId)
+                    .in('friend_id', ids)
+                  const existingSet = new Set((existing||[]).map((r:any)=>r.friend_id))
+                  const rowsToInsert = ids
+                    .filter(fid => !existingSet.has(fid))
+                    .map(fid => ({ user_id: user.id, friend_id: fid, tag_id: bulkTagAddId }))
+                  if (rowsToInsert.length) {
+                    await supabase.from('friend_tags').insert(rowsToInsert)
+                  }
                 }
                 if (bulkTagRemoveId) {
                   await supabase.from('friend_tags').delete().in('friend_id', ids).eq('tag_id', bulkTagRemoveId)
