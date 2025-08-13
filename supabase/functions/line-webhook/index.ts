@@ -215,8 +215,8 @@ async function handleMessage(event: LineEvent, supabase: any, req: Request) {
         console.log('INVITE registration result:', reg)
         await sendReplyMessage(replyToken, 'ご登録ありがとうございます。ステップ配信を開始します。', supabase)
 
-        // 修正：即時配信をやめて、スケジュール配信システムに完全に任せる
-        console.log('シナリオ登録完了。全てのステップ配信はスケジュールシステムが処理します。')
+        // 即時配信をサーバ側で開始
+        await startStepDelivery(supabase, reg.scenario_id, reg.friend_id)
         return
 
       } catch (e) {
@@ -391,8 +391,10 @@ async function handleFollow(event: LineEvent, supabase: any, req: Request) {
             if (registrationResult && registrationResult.success) {
               console.log('友達をシナリオに正常に登録しました')
               
-              // 修正：即時配信を削除
-              console.log('シナリオ登録完了。全てのステップ配信はスケジュールシステムが処理します。')
+              // Start step delivery process in background
+              EdgeRuntime.waitUntil(
+                startStepDelivery(supabase, registrationResult.scenario_id, registrationResult.friend_id)
+              )
             } else {
               console.error('シナリオ登録に失敗:', registrationResult?.error)
             }
@@ -459,12 +461,189 @@ async function handleFollow(event: LineEvent, supabase: any, req: Request) {
   }
 }
 
-// 修正：削除された関数
-// startStepDelivery関数は完全に削除
-// deliverStepMessages関数は完全に削除
-// sendLineMessage関数は完全に削除
+// Step delivery process for scenario-based friend additions
+async function startStepDelivery(supabase: any, scenarioId: string, friendId: string) {
+  try {
+    console.log('ステップ配信プロセスを開始:', { scenarioId, friendId })
+    
+    // Get steps that are ready for immediate delivery (scheduled time has passed or is immediate)
+    const { data: readySteps, error: stepsError } = await supabase
+      .from('step_delivery_tracking')
+      .select(`
+        *,
+        steps!inner (
+          id, step_order, delivery_type, delivery_seconds, delivery_minutes, delivery_hours, delivery_days,
+          step_messages (
+            id, content, message_type, media_url, message_order,
+            flex_messages (content)
+          )
+        )
+      `)
+      .eq('scenario_id', scenarioId)
+      .eq('friend_id', friendId)
+      .eq('status', 'ready')
+      .order('step_order', { foreignTable: 'steps', ascending: true })
+      .limit(1)
+    
+    if (stepsError) {
+      console.error('配信準備完了ステップの取得エラー:', stepsError)
+      return
+    }
+    
+    if (!readySteps || readySteps.length === 0) {
+      console.log('即座に配信可能なステップが見つかりません（スケジュール配信システムが処理します）')
+      return
+    }
+    
+    const firstStep = readySteps[0]
+    console.log('即座に配信するステップ:', firstStep.steps.step_order)
+    
+    // Deliver immediately eligible steps
+    await deliverStepMessages(supabase, firstStep)
+    
+  } catch (error) {
+    console.error('ステップ配信プロセスエラー:', error)
+  }
+}
 
-// Mark step as delivered and prepare the next step（次ステップ準備ロジックも修正）
+// Deliver messages for a specific step
+async function deliverStepMessages(supabase: any, stepTracking: any) {
+  try {
+    console.log('ステップメッセージを配信中:', stepTracking.step_id)
+    
+    const messages = stepTracking.steps.step_messages || []
+    if (messages.length === 0) {
+      console.log('配信するメッセージがありません')
+      
+      // Mark as delivered even without messages
+      await markStepAsDelivered(supabase, stepTracking.id, stepTracking.scenario_id, stepTracking.friend_id, stepTracking.steps.step_order)
+      return
+    }
+    
+    // Sort messages by order
+    const sortedMessages = messages.sort((a: any, b: any) => a.message_order - b.message_order)
+    
+    // Get LINE user ID and access token for sending
+    const { data: friendInfo, error: friendError } = await supabase
+      .from('line_friends')
+      .select('line_user_id, profiles!inner(line_channel_access_token)')
+      .eq('id', stepTracking.friend_id)
+      .single()
+    
+    if (friendError || !friendInfo) {
+      console.error('友達情報の取得に失敗:', friendError)
+      return
+    }
+    
+    const lineUserId = friendInfo.line_user_id
+    const accessToken = friendInfo.profiles.line_channel_access_token
+    
+    if (!accessToken) {
+      console.error('LINE アクセストークンが見つかりません')
+      return
+    }
+    
+    // Send each message
+    for (const message of sortedMessages) {
+      try {
+        await sendLineMessage(accessToken, lineUserId, message)
+        console.log('メッセージ送信完了:', message.id)
+        
+        // Add small delay between messages to avoid rate limiting
+        await new Promise(resolve => setTimeout(resolve, 500))
+      } catch (error) {
+        console.error('メッセージ送信エラー:', message.id, error)
+      }
+    }
+    
+    // Mark step as delivered and prepare next step
+    await markStepAsDelivered(supabase, stepTracking.id, stepTracking.scenario_id, stepTracking.friend_id, stepTracking.steps.step_order)
+    
+  } catch (error) {
+    console.error('ステップメッセージ配信エラー:', error)
+  }
+}
+
+// Send a single message via LINE API
+async function sendLineMessage(accessToken: string, userId: string, message: any) {
+  try {
+    let lineMessage: any
+    
+    switch (message.message_type) {
+      case 'text':
+        lineMessage = {
+          type: 'text',
+          text: message.content
+        }
+        break
+        
+      case 'media':
+        // Handle media messages
+        if (message.media_url) {
+          // For images
+          if (message.media_url.match(/\.(jpg|jpeg|png|gif)$/i)) {
+            lineMessage = {
+              type: 'image',
+              originalContentUrl: message.media_url,
+              previewImageUrl: message.media_url
+            }
+          } else {
+            // For other media, send as text with URL
+            lineMessage = {
+              type: 'text',
+              text: `メディア: ${message.media_url}`
+            }
+          }
+        } else {
+          lineMessage = {
+            type: 'text',
+            text: message.content
+          }
+        }
+        break
+        
+      case 'flex':
+        lineMessage = {
+          type: 'flex',
+          altText: 'フレックスメッセージ',
+          contents: message.flex_messages?.content || JSON.parse(message.content || '{}')
+        }
+        break
+        
+      default:
+        lineMessage = {
+          type: 'text',
+          text: message.content
+        }
+    }
+    
+    const response = await fetch('https://api.line.me/v2/bot/message/push', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${accessToken}`
+      },
+      body: JSON.stringify({
+        to: userId,
+        messages: [lineMessage]
+      })
+    })
+    
+    if (!response.ok) {
+      const errorText = await response.text()
+      console.error('LINE API エラー:', response.status, errorText)
+      throw new Error(`LINE API error: ${response.status}`)
+    }
+    
+    console.log('LINE メッセージ送信成功')
+    
+  } catch (error) {
+    console.error('LINE メッセージ送信エラー:', error)
+    throw error
+  }
+}
+
+// Mark step as delivered and prepare the next step
 async function markStepAsDelivered(supabase: any, trackingId: string, scenarioId: string, friendId: string, currentStepOrder: number) {
   try {
     const deliveredAt = new Date().toISOString()
@@ -549,7 +728,6 @@ async function markStepAsDelivered(supabase: any, trackingId: string, scenarioId
 
       if (exErr) console.warn('遷移先トラッキング確認エラー:', exErr)
 
-      // 修正：遷移先の最初のステップも必ず waiting 状態で開始
       if (!existing) {
         await supabase
           .from('step_delivery_tracking')
@@ -557,7 +735,7 @@ async function markStepAsDelivered(supabase: any, trackingId: string, scenarioId
             scenario_id: transition.to_scenario_id,
             step_id: firstStep.id,
             friend_id: friendId,
-            status: 'waiting', // 修正：必ず waiting から開始
+            status: 'ready',
             scheduled_delivery_at: now.toISOString(),
             next_check_at: new Date(now.getTime() - 5000).toISOString(),
             created_at: now.toISOString(),
@@ -567,7 +745,7 @@ async function markStepAsDelivered(supabase: any, trackingId: string, scenarioId
         await supabase
           .from('step_delivery_tracking')
           .update({
-            status: 'waiting', // 修正：必ず waiting から開始
+            status: 'ready',
             scheduled_delivery_at: now.toISOString(),
             next_check_at: new Date(now.getTime() - 5000).toISOString(),
             updated_at: now.toISOString(),
@@ -601,7 +779,7 @@ async function markStepAsDelivered(supabase: any, trackingId: string, scenarioId
           scenario_id: scenarioId,
           step_id: nextStep.id,
           friend_id: friendId,
-          status: 'waiting', // 修正：新規ステップは必ず waiting から開始
+          status: 'waiting',
           campaign_id: prevTracking?.campaign_id || null,
           registration_source: prevTracking?.registration_source || null,
           created_at: baseNow,
@@ -614,11 +792,7 @@ async function markStepAsDelivered(supabase: any, trackingId: string, scenarioId
     }
 
     // スケジュール時間を計算
-    let updates: any = { 
-      updated_at: new Date().toISOString(),
-      status: 'waiting' // 修正：必ず waiting 状態に設定
-    }
-    
+    let updates: any = { updated_at: new Date().toISOString() }
     try {
       const { data: friend, error: friendErr } = await supabase
         .from('line_friends')
@@ -627,11 +801,11 @@ async function markStepAsDelivered(supabase: any, trackingId: string, scenarioId
         .maybeSingle()
 
       if (friendErr) {
-        console.warn('スケジュール計算用の友達取得に失敗。デフォルトスケジュールを使用', friendErr)
+        console.warn('スケジュール計算用の友達取得に失敗。即時配信にフォールバック', friendErr)
         const now = new Date()
-        // 修正：即座に配信せず、必ずスケジュール通りに待機
-        updates.scheduled_delivery_at = new Date(now.getTime() + 60000).toISOString() // 1分後にデフォルト設定
-        updates.next_check_at = new Date(now.getTime() + 55000).toISOString()
+        updates.status = 'ready'
+        updates.scheduled_delivery_at = now.toISOString()
+        updates.next_check_at = new Date(now.getTime() - 5000).toISOString()
       } else {
         const { data: newScheduledTime, error: calcError } = await supabase.rpc('calculate_scheduled_delivery_time', {
           p_friend_added_at: friend?.added_at || null,
@@ -647,23 +821,30 @@ async function markStepAsDelivered(supabase: any, trackingId: string, scenarioId
 
         if (!calcError && newScheduledTime) {
           const scheduled = new Date(newScheduledTime)
-          // 修正：常に waiting 状態で、スケジュール通りに設定
-          updates.scheduled_delivery_at = scheduled.toISOString()
-          updates.next_check_at = new Date(scheduled.getTime() - 5000).toISOString()
-        } else {
-          console.warn('次回スケジュールの計算に失敗。デフォルトスケジュールを使用', calcError)
           const now = new Date()
-          // 修正：即座に配信せず、デフォルトで1分後に設定
-          updates.scheduled_delivery_at = new Date(now.getTime() + 60000).toISOString()
-          updates.next_check_at = new Date(now.getTime() + 55000).toISOString()
+          if (scheduled <= now) {
+            updates.status = 'ready'
+            updates.scheduled_delivery_at = now.toISOString()
+            updates.next_check_at = new Date(now.getTime() - 5000).toISOString()
+          } else {
+            updates.status = 'waiting'
+            updates.scheduled_delivery_at = scheduled.toISOString()
+            updates.next_check_at = new Date(scheduled.getTime() - 5000).toISOString()
+          }
+        } else {
+          console.warn('次回スケジュールの計算に失敗。即時配信にフォールバック', calcError)
+          const now = new Date()
+          updates.status = 'ready'
+          updates.scheduled_delivery_at = now.toISOString()
+          updates.next_check_at = new Date(now.getTime() - 5000).toISOString()
         }
       }
     } catch (calcCatch) {
-      console.warn('スケジュール計算処理でエラー。デフォルトスケジュールを使用', calcCatch)
+      console.warn('スケジュール計算処理でエラー。即時配信にフォールバック', calcCatch)
       const now = new Date()
-      // 修正：即座に配信せず、デフォルトで1分後に設定
-      updates.scheduled_delivery_at = new Date(now.getTime() + 60000).toISOString()
-      updates.next_check_at = new Date(now.getTime() + 55000).toISOString()
+      updates.status = 'ready'
+      updates.scheduled_delivery_at = now.toISOString()
+      updates.next_check_at = new Date(now.getTime() - 5000).toISOString()
     }
 
     const { error: prepErr } = await supabase
@@ -674,7 +855,7 @@ async function markStepAsDelivered(supabase: any, trackingId: string, scenarioId
     if (prepErr) {
       console.error('次ステップ準備エラー:', prepErr)
     } else {
-      console.log('次のステップを準備（waiting状態）:', currentStepOrder + 1, updates)
+      console.log('次のステップを準備:', currentStepOrder + 1, updates)
     }
 
   } catch (error) {
