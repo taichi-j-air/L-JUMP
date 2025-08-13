@@ -103,8 +103,9 @@ function SortableStepCard({ step, index, isSelected, onClick, onDelete, onUpdate
     }
 
     if (step.delivery_type === 'relative') {
-      if (!duration) return '登録後：即時配信'
-      return `登録後：${duration}後`
+      const isAfterFirst = (step.step_order ?? 0) > 0
+      if (!duration) return isAfterFirst ? '前ステップ後：即時配信' : '登録後：即時配信'
+      return isAfterFirst ? `前ステップ後：${duration}後` : `登録後：${duration}後`
     }
 
     // relative_to_previous

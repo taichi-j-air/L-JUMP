@@ -82,8 +82,8 @@ Deno.serve(async (req) => {
           .maybeSingle()
         if (!curStep) continue
 
-        // First step: allow promotion
-        if ((curStep as any).step_order === 0) {
+        // First step: allow promotion (support 0-based or 1-based)
+        if ((curStep as any).step_order <= 1) {
           eligibleIds.push(row.id)
           continue
         }
@@ -129,7 +129,7 @@ Deno.serve(async (req) => {
       .update({ status: 'delivering', updated_at: now })
       .eq('status', 'ready')
       .not('friend_id', 'is', null)
-      .lte('scheduled_delivery_at', now)
+      .or(`scheduled_delivery_at.is.null,scheduled_delivery_at.lte.${now}`)
 
     if (recentOnly) {
       query = query.gte('updated_at', cutoff)
