@@ -536,61 +536,68 @@ const FlexMessageDesigner = () => {
   };
 
   const generateFlexJson = () => {
-    const contents = design.body.contents.map((element, index) => {
+    // sanitize elements
+    const raw = design.body.contents.map((element, index) => {
       const props = element.properties;
       const isFirst = index === 0;
-      const isLast = index === design.body.contents.length - 1;
-      
       switch (element.type) {
-        case 'text':
+        case 'text': {
+          const text = (props.text || '').trim();
+          if (!text) return null; // remove empty texts
           return {
             type: 'text',
-            text: (props.text || '').replace(/\n/g, '\n'),
+            text: text.replace(/\n/g, '\n'),
             ...(props.size && { size: props.size }),
             ...(props.weight && props.weight !== 'normal' && { weight: props.weight }),
             ...(props.color && props.color !== '#000000' && { color: props.color }),
             ...(props.backgroundColor && props.backgroundColor !== '#ffffff' && { backgroundColor: props.backgroundColor }),
             ...(props.align && props.align !== 'start' && { align: props.align }),
             ...(!isFirst && { margin: "15px" }),
-            wrap: true
+            wrap: true,
           };
-        
-        case 'image':
+        }
+        case 'image': {
+          const url = (props.url || '').trim();
+          if (!url) return null; // remove empty images
           return {
             type: 'image',
-            url: props.url || '',
+            url,
             ...(props.size && { size: props.size }),
             ...(props.aspectRatio && { aspectRatio: props.aspectRatio }),
             ...(props.aspectMode && { aspectMode: props.aspectMode }),
             ...(!isFirst && { margin: "15px" }),
             ...(props.action && { action: props.action })
           };
-        
-        case 'button':
+        }
+        case 'button': {
+          const action = props.action || { type: 'uri', uri: 'https://line.me/' };
           return {
             type: 'button',
             ...(props.style && { style: props.style }),
             ...(props.color && { color: props.color }),
             ...(props.height && { height: props.height }),
             ...(!isFirst && { margin: "15px" }),
-            action: props.action || { type: 'uri', uri: 'https://line.me/' }
+            action,
           };
-        
+        }
         default:
           return null;
       }
-    }).filter(Boolean);
+    }).filter(Boolean) as any[];
 
+    if (raw.length === 0) return null;
+
+    const altText = (design.name || 'Flexメッセージ').slice(0, 400);
     return {
       type: "flex",
-      altText: design.name || "Flexメッセージ",
+      altText,
       contents: {
         type: "bubble",
         body: {
           type: "box",
           layout: "vertical",
           spacing: "none",
-          contents
+          contents: raw
         },
         ...(design.styles && { styles: design.styles })
       }
@@ -700,11 +707,7 @@ const FlexMessageDesigner = () => {
 
   const sendMessage = async () => {
     if (design.body.contents.length === 0) {
-      toast({
-        title: "入力エラー",
-        description: "少なくとも1つの要素を追加してください",
-        variant: "destructive",
-      });
+      toast({ title: "入力エラー", description: "少なくとも1つの要素を追加してください", variant: "destructive" });
       return;
     }
 
@@ -712,15 +715,15 @@ const FlexMessageDesigner = () => {
     try {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) {
-        toast({
-          title: "認証エラー",
-          description: "ログインが必要です",
-          variant: "destructive",
-        });
+        toast({ title: "認証エラー", description: "ログインが必要です", variant: "destructive" });
         return;
       }
 
       const flexJson = generateFlexJson();
+      if (!flexJson) {
+        toast({ title: "検証エラー", description: "空のテキストやURL未設定の画像は送信できません", variant: "destructive" });
+        return;
+      }
       
       const { data, error } = await supabase.functions.invoke('send-flex-message', {
         body: {
@@ -729,22 +732,13 @@ const FlexMessageDesigner = () => {
         }
       });
 
-      if (error) {
-        throw error;
-      }
+      if (error) { throw error; }
 
-      toast({
-        title: "送信完了",
-        description: "Flexメッセージを送信しました",
-      });
+      toast({ title: "送信完了", description: "Flexメッセージを送信しました" });
       
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error sending message:', error);
-      toast({
-        title: "送信エラー",
-        description: error.message || "メッセージの送信に失敗しました",
-        variant: "destructive",
-      });
+      toast({ title: "送信エラー", description: error.message || "メッセージの送信に失敗しました", variant: "destructive" });
     } finally {
       setLoading(false);
     }

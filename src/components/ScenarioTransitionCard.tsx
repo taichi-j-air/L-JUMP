@@ -9,7 +9,7 @@ import { ArrowRight, Plus, X, TestTube } from "lucide-react"
 import { StepScenario, ScenarioTransition } from "@/hooks/useStepScenarios"
 import { Input } from "@/components/ui/input"
 import { Checkbox } from "@/components/ui/checkbox"
-import { useToast } from "@/components/ui/use-toast"
+import { useToast } from "@/hooks/use-toast"
 
 interface ScenarioTransitionCardProps {
   currentScenario: StepScenario
@@ -32,8 +32,15 @@ export function ScenarioTransitionCard({
   const [accumOpen, setAccumOpen] = useState(false)
   const [accumPage, setAccumPage] = useState(1)
   const [accumFriendIds, setAccumFriendIds] = useState<string[]>([])
-  const [accumUsers, setAccumUsers] = useState<Array<{ id: string; display_name: string | null; picture_url: string | null; line_user_id: string }>>([])
+  const [accumUsers, setAccumUsers] = useState<Array<{ id: string; display_name: string | null; picture_url: string | null; line_user_id: string; added_at?: string }>>([])
   const pageSize = 30
+
+  // Popup filters & selection
+  const [search, setSearch] = useState("")
+  const [sort, setSort] = useState<"date_desc" | "date_asc" | "name_asc">("date_desc")
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
+  const [selectAll, setSelectAll] = useState(false)
+  const { toast } = useToast()
   
   const currentTransitions = transitions.filter(t => t.from_scenario_id === currentScenario.id)
   const hasMultipleTransitions = currentTransitions.length >= 2
@@ -89,10 +96,25 @@ export function ScenarioTransitionCard({
     if (ids.length === 0) { setAccumUsers([]); return }
     const { data: friends, error } = await supabase
       .from('line_friends')
-      .select('id, display_name, picture_url, line_user_id')
+      .select('id, display_name, picture_url, line_user_id, added_at')
       .in('id', ids)
     if (error) { setAccumUsers([]); return }
-    setAccumUsers((friends || []) as any)
+    let list = (friends || []) as any[]
+    // sort
+    list = list.sort((a,b) => {
+      if (sort === 'date_desc') return new Date(b.added_at).getTime() - new Date(a.added_at).getTime()
+      if (sort === 'date_asc') return new Date(a.added_at).getTime() - new Date(b.added_at).getTime()
+      return (a.display_name||'').localeCompare(b.display_name||'')
+    })
+    // filter by search
+    const q = search.trim().toLowerCase()
+    if (q) {
+      list = list.filter(u => (u.display_name||'').toLowerCase().includes(q) || (u.line_user_id||'').toLowerCase().includes(q))
+    }
+    setAccumUsers(list as any)
+    // selection state refresh
+    setSelectAll(false)
+    setSelectedIds(new Set())
   }
 
   useEffect(() => {
