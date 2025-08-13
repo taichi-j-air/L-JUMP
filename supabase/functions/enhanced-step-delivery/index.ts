@@ -113,10 +113,23 @@ async function processReadySteps(supabase: any) {
         continue;
       }
 
+      // Get friend's short_uid for UID parameter
+      const { data: friendData } = await supabase
+        .from('line_friends')
+        .select('short_uid')
+        .eq('id', tracking.friend_id)
+        .single()
+
       for (const message of messages || []) {
+        // Process message to add UID parameters to form links
+        const processedMessage = { ...message };
+        if (message.message_type === 'text' && friendData?.short_uid) {
+          processedMessage.content = addUidToFormLinks(message.content, friendData.short_uid);
+        }
+        
         await sendLineMessage(
           tracking.line_friends.line_user_id,
-          message,
+          processedMessage,
           accessToken
         );
       }
@@ -403,6 +416,25 @@ async function applyTransitionToCompleted(supabase: any, data: any) {
   if (logErr) console.warn('Failed to insert scenario_friend_logs for transition:', logErr?.message)
 
   return new Response(JSON.stringify({ success: true, moved: targets.length, skipped: completedFriendIds.length - targets.length }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
+}
+
+// UIDパラメーター付与処理
+function addUidToFormLinks(message: string, friendShortUid: string | null): string {
+  if (!friendShortUid) return message;
+  
+  // フォームリンクのパターンを検出
+  const formLinkPattern = /(https?:\/\/[^\/]+\/form\/[a-f0-9\-]+)/gi;
+  
+  return message.replace(formLinkPattern, (match) => {
+    try {
+      const url = new URL(match);
+      url.searchParams.set('uid', friendShortUid);
+      return url.toString();
+    } catch (error) {
+      console.error('Error processing form URL:', error);
+      return match; // Return original URL if parsing fails
+    }
+  });
 }
 
 // Send LINE message

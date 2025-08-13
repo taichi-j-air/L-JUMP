@@ -94,13 +94,38 @@ serve(async (req) => {
       })
     }
 
+    // Get friend's short_uid for UID parameter
+    const { data: friendData } = await supabase
+      .from('line_friends')
+      .select('short_uid')
+      .eq('line_user_id', to)
+      .eq('user_id', user.id)
+      .single()
+
+    // UIDパラメーター付与処理
+    const addUidToFormLinks = (message: string, friendShortUid: string | null): string => {
+      if (!friendShortUid) return message
+      
+      // フォームリンクのパターンを検出
+      const formLinkPattern = /(https?:\/\/[^\/]+\/form\/[a-f0-9\-]+)/gi
+      
+      return message.replace(formLinkPattern, (match) => {
+        const url = new URL(match)
+        url.searchParams.set('uid', friendShortUid)
+        return url.toString()
+      })
+    }
+
+    // Process message to add UID parameters to form links
+    const processedMessage = addUidToFormLinks(message, friendData?.short_uid || null)
+
     // Send message via LINE API
     const lineApiData = {
       to: to,
       messages: [
         {
           type: 'text',
-          text: message
+          text: processedMessage
         }
       ]
     }

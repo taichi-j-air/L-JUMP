@@ -91,6 +91,20 @@ export function ChatWindow({ user, friend, onClose }: ChatWindowProps) {
     }
   }
 
+  // UIDパラメーター付与関数
+  const addUidToFormLinks = (message: string, friendShortUid: string | null): string => {
+    if (!friendShortUid) return message
+    
+    // フォームリンクのパターンを検出
+    const formLinkPattern = /(https?:\/\/[^\/]+\/form\/[a-f0-9\-]+)/gi
+    
+    return message.replace(formLinkPattern, (match) => {
+      const url = new URL(match)
+      url.searchParams.set('uid', friendShortUid)
+      return url.toString()
+    })
+  }
+
   const sendMessage = async () => {
     if (!newMessage.trim() || sending) return
 
@@ -112,13 +126,24 @@ export function ChatWindow({ user, friend, onClose }: ChatWindowProps) {
         setSending(false)
         return
       }
+
+      // 友達のshort_uidを取得
+      const { data: friendData } = await supabase
+        .from('line_friends')
+        .select('short_uid')
+        .eq('id', friend.id)
+        .single()
+
+      // UIDパラメーター付与処理
+      const processedMessage = addUidToFormLinks(newMessage, friendData?.short_uid || null)
+
       // Save message to database first
       const { data: savedMessage, error: saveError } = await supabase
         .from('chat_messages')
         .insert({
           user_id: user.id,
           friend_id: friend.id,
-          message_text: newMessage,
+          message_text: processedMessage,
           message_type: 'outgoing'
         })
         .select('id, message_text, message_type, sent_at')
@@ -163,11 +188,11 @@ export function ChatWindow({ user, friend, onClose }: ChatWindowProps) {
       // Add message to local state
       setMessages(prev => [...prev, savedMessage as ChatMessage])
 
-      // Send message via LINE API
+      // Send message via LINE API (処理済みメッセージを使用)
       const { error: sendError } = await supabase.functions.invoke('send-line-message', {
         body: {
           to: friend.line_user_id,
-          message: newMessage
+          message: processedMessage
         }
       })
 
