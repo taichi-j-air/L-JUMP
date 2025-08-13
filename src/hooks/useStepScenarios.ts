@@ -267,7 +267,7 @@ export const useStepScenarios = (userId: string | undefined) => {
           scenario_id: scenarioId,
           name,
           step_order: stepOrder,
-          delivery_type: stepOrder > 0 ? 'relative_to_previous' : 'relative',
+          delivery_type: 'relative',
           delivery_days: 0,
           delivery_hours: 0,
           delivery_minutes: 0,

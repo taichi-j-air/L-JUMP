@@ -103,9 +103,8 @@ function SortableStepCard({ step, index, isSelected, onClick, onDelete, onUpdate
     }
 
     if (step.delivery_type === 'relative') {
-      const isAfterFirst = (step.step_order ?? 0) > 0
-      if (!duration) return isAfterFirst ? '前ステップ後：即時配信' : '登録後：即時配信'
-      return isAfterFirst ? `前ステップ後：${duration}後` : `登録後：${duration}後`
+      if (!duration) return '登録後：即時配信'
+      return `登録後：${duration}後`
     }
 
     // relative_to_previous
@@ -224,7 +223,7 @@ export function DraggableStepsList({
         .from('step_delivery_tracking')
         .select('step_id')
         .in('step_id', ids)
-        .in('status', ['ready','delivering'])
+        .neq('status','exited')
       if (error) {
         console.error('ステップ人数取得失敗:', error)
         setReadyCounts({})
@@ -249,7 +248,7 @@ export function DraggableStepsList({
             .from('step_delivery_tracking')
             .select('step_id')
             .in('step_id', ids)
-            .in('status', ['ready','delivering'])
+            .neq('status','exited')
           if (error) { setReadyCounts({}); return }
           const counts: Record<string, number> = {}
           ;(data || []).forEach((row: any) => {
