@@ -109,11 +109,19 @@ serve(async (req) => {
       // フォームリンクのパターンを検出
       const formLinkPattern = /(https?:\/\/[^\/]+\/form\/[a-f0-9\-]+)/gi
       
-      return message.replace(formLinkPattern, (match) => {
-        const url = new URL(match)
+  return message.replace(formLinkPattern, (match) => {
+    try {
+      const url = new URL(match)
+      // Check if uid parameter already exists to prevent duplication
+      if (!url.searchParams.has('uid')) {
         url.searchParams.set('uid', friendShortUid)
-        return url.toString()
-      })
+      }
+      return url.toString()
+    } catch (error) {
+      console.error('Error processing form URL:', error)
+      return match // Return original URL if parsing fails
+    }
+  })
     }
 
     // Process message to add UID parameters to form links

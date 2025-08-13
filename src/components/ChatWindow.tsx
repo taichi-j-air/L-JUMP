@@ -98,11 +98,19 @@ export function ChatWindow({ user, friend, onClose }: ChatWindowProps) {
     // フォームリンクのパターンを検出
     const formLinkPattern = /(https?:\/\/[^\/]+\/form\/[a-f0-9\-]+)/gi
     
-    return message.replace(formLinkPattern, (match) => {
+  return message.replace(formLinkPattern, (match) => {
+    try {
       const url = new URL(match)
-      url.searchParams.set('uid', friendShortUid)
+      // Check if uid parameter already exists to prevent duplication
+      if (!url.searchParams.has('uid')) {
+        url.searchParams.set('uid', friendShortUid)
+      }
       return url.toString()
-    })
+    } catch (error) {
+      console.error('Error processing form URL:', error)
+      return match // Return original URL if parsing fails
+    }
+  })
   }
 
   const sendMessage = async () => {

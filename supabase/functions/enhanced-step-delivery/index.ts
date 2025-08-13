@@ -428,7 +428,10 @@ function addUidToFormLinks(message: string, friendShortUid: string | null): stri
   return message.replace(formLinkPattern, (match) => {
     try {
       const url = new URL(match);
-      url.searchParams.set('uid', friendShortUid);
+      // Check if uid parameter already exists to prevent duplication
+      if (!url.searchParams.has('uid')) {
+        url.searchParams.set('uid', friendShortUid);
+      }
       return url.toString();
     } catch (error) {
       console.error('Error processing form URL:', error);
