@@ -394,12 +394,9 @@ export function FriendsList({ user }: FriendsListProps) {
                           <Badge variant="destructive" className="text-xs">ブロック中</Badge>
                         )}
                       </div>
-                      <div className="text-xs text-muted-foreground space-y-1">
+                      <div className="text-xs text-muted-foreground">
                         <p className="font-mono font-bold text-primary">
-                          短縮UID: {friend.short_uid || '生成中...'}
-                        </p>
-                        <p className="font-mono">
-                          ID: {friend.line_user_id}
+                          User ID: {friend.short_uid || '生成中...'}
                         </p>
                       </div>
                     </div>
