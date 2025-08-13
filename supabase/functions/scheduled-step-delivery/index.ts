@@ -56,18 +56,72 @@ Deno.serve(async (req) => {
       }
     }
 
-    // 1) Flip waiting -> ready where scheduled time has arrived
-    let waitingToReady = supabase
+    // 1) Promote waiting -> ready only when due AND previous step is delivered (or no previous step)
+    //    This prevents duplicate scheduling relative to registration time.
+    let candidatesQuery = supabase
       .from('step_delivery_tracking')
-      .update({ status: 'ready', updated_at: now })
+      .select('id, step_id, friend_id, scenario_id, scheduled_delivery_at')
       .eq('status', 'waiting')
       .not('friend_id', 'is', null)
       .lte('scheduled_delivery_at', now)
-    if (recentOnly) waitingToReady = waitingToReady.gte('updated_at', cutoff)
-    if (scenarioIdFilter) waitingToReady = waitingToReady.eq('scenario_id', scenarioIdFilter)
-    if (friendIdFilter) waitingToReady = waitingToReady.eq('friend_id', friendIdFilter)
-    if (friendIdsFilter) waitingToReady = waitingToReady.in('friend_id', friendIdsFilter)
-    await waitingToReady.select('id')
+    if (recentOnly) candidatesQuery = candidatesQuery.gte('updated_at', cutoff)
+    if (scenarioIdFilter) candidatesQuery = candidatesQuery.eq('scenario_id', scenarioIdFilter)
+    if (friendIdFilter) candidatesQuery = candidatesQuery.eq('friend_id', friendIdFilter)
+    if (friendIdsFilter) candidatesQuery = candidatesQuery.in('friend_id', friendIdsFilter)
+
+    const { data: waitingCandidates } = await candidatesQuery
+
+    const eligibleIds: string[] = []
+    if (waitingCandidates && waitingCandidates.length > 0) {
+      for (const row of waitingCandidates) {
+        // Load current step info
+        const { data: curStep } = await supabase
+          .from('steps')
+          .select('id, step_order, scenario_id')
+          .eq('id', row.step_id)
+          .maybeSingle()
+        if (!curStep) continue
+
+        // First step: allow promotion
+        if ((curStep as any).step_order === 0) {
+          eligibleIds.push(row.id)
+          continue
+        }
+
+        // Find previous step in the same scenario
+        const { data: prevStep } = await supabase
+          .from('steps')
+          .select('id')
+          .eq('scenario_id', (curStep as any).scenario_id)
+          .eq('step_order', (curStep as any).step_order - 1)
+          .maybeSingle()
+
+        if (!prevStep) {
+          // No previous step record, promote just in case
+          eligibleIds.push(row.id)
+          continue
+        }
+
+        // Check if previous step is delivered for this friend
+        const { data: prevTrack } = await supabase
+          .from('step_delivery_tracking')
+          .select('status')
+          .eq('friend_id', row.friend_id)
+          .eq('step_id', (prevStep as any).id)
+          .maybeSingle()
+
+        if (prevTrack && (prevTrack as any).status === 'delivered') {
+          eligibleIds.push(row.id)
+        }
+      }
+    }
+
+    if (eligibleIds.length > 0) {
+      await supabase
+        .from('step_delivery_tracking')
+        .update({ status: 'ready', updated_at: now })
+        .in('id', eligibleIds)
+    }
 
     // 2) Claim ready rows for delivery
     let query = supabase
@@ -379,6 +433,21 @@ async function deliverStepMessages(supabase: any, stepTracking: any) {
         console.error('Message send error:', message.id, error)
         throw error
       }
+    }
+
+    // Write delivery log for analytics/status UI
+    try {
+      await supabase
+        .from('step_delivery_logs')
+        .insert({
+          step_id: step.id,
+          friend_id: stepTracking.friend_id,
+          scenario_id: stepTracking.scenario_id,
+          delivery_status: 'delivered',
+          delivered_at: new Date().toISOString()
+        })
+    } catch (e) {
+      console.warn('Failed to insert delivery log:', (e as any)?.message)
     }
 
     await markStepAsDelivered(supabase, stepTracking.id, stepTracking.scenario_id, stepTracking.friend_id, step.step_order)
