@@ -63,7 +63,7 @@ Deno.serve(async (req) => {
       .select('id, step_id, friend_id, scenario_id, scheduled_delivery_at')
       .eq('status', 'waiting')
       .not('friend_id', 'is', null)
-      .lte('scheduled_delivery_at', now)
+      .or(`scheduled_delivery_at.is.null,scheduled_delivery_at.lte.${now}`)
     if (recentOnly) candidatesQuery = candidatesQuery.gte('updated_at', cutoff)
     if (scenarioIdFilter) candidatesQuery = candidatesQuery.eq('scenario_id', scenarioIdFilter)
     if (friendIdFilter) candidatesQuery = candidatesQuery.eq('friend_id', friendIdFilter)
@@ -82,11 +82,27 @@ Deno.serve(async (req) => {
           .maybeSingle()
         if (!curStep) continue
 
-        // First step: allow promotion (support 0-based or 1-based)
-        if ((curStep as any).step_order <= 1) {
+        // First step detection:
+        // - 0-based: step_order === 0
+        // - 1-based: step_order === 1 AND there is no step with order 0 in the scenario
+        if ((curStep as any).step_order === 0) {
           eligibleIds.push(row.id)
           continue
         }
+
+        if ((curStep as any).step_order === 1) {
+          const { data: zeroStep } = await supabase
+            .from('steps')
+            .select('id')
+            .eq('scenario_id', (curStep as any).scenario_id)
+            .eq('step_order', 0)
+            .maybeSingle()
+          if (!zeroStep) {
+            eligibleIds.push(row.id)
+            continue
+          }
+        }
+
 
         // Find previous step in the same scenario
         const { data: prevStep } = await supabase
