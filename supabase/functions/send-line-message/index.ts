@@ -106,7 +106,10 @@ serve(async (req) => {
     const addUidToFormLinks = (message: string, friendShortUid: string | null): string => {
       if (!friendShortUid) return message
       
-      // フォームリンクのパターンを検出
+      // [UID]変数をshort_uidで置換
+      message = message.replace(/\[UID\]/g, friendShortUid);
+      
+      // レガシー対応：既存のformリンクのパターンも検出してuidパラメーターを付与
       const formLinkPattern = /(https?:\/\/[^\/]+\/form\/[a-f0-9\-]+(?:\?[^?\s]*)?)/gi
       
       return message.replace(formLinkPattern, (match) => {

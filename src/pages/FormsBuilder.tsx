@@ -235,9 +235,9 @@ const startEdit = (f: FormRow) => {
 };
 
   const copyLink = (id: string) => {
-    const url = `${window.location.origin}/form/${id}`;
+    const url = `${window.location.origin}/form/${id}?uid=[UID]`;
     navigator.clipboard.writeText(url);
-    toast.success('埋め込みURLをコピーしました');
+    toast.success('パラメーター付きURLをコピーしました');
 };
 
 const handleUpdate = async () => {
