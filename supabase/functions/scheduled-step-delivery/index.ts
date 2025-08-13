@@ -332,6 +332,13 @@ async function deliverStepMessages(supabase: any, stepTracking: any) {
       return
     }
     
+    // Get friend's short_uid for UID parameter
+    const { data: friendData } = await supabase
+      .from('line_friends')
+      .select('short_uid')
+      .eq('id', stepTracking.friend_id)
+      .single()
+
     for (let i = 0; i < messages.length; i++) {
       const message = messages[i]
 
@@ -356,6 +363,12 @@ async function deliverStepMessages(supabase: any, stepTracking: any) {
         } catch {
           console.warn('Invalid flex content JSON for message', message.id)
         }
+      }
+
+      // Process message to add UID parameters to form links
+      if (message.message_type === 'text' && friendData?.short_uid) {
+        preparedMessage.content = addUidToFormLinks(message.content, friendData.short_uid);
+        console.log(`UID変換実行: ${message.content} -> ${preparedMessage.content}`);
       }
 
       // Cancellation check mid-flight
@@ -387,6 +400,49 @@ async function deliverStepMessages(supabase: any, stepTracking: any) {
     console.error('Step message delivery error:', error)
     throw error
   }
+}
+
+// UIDパラメーター付与処理
+function addUidToFormLinks(message: string, friendShortUid: string | null): string {
+  console.log(`addUidToFormLinks called with: "${message}", UID: ${friendShortUid}`);
+  
+  if (!friendShortUid) {
+    console.log('No friendShortUid provided, returning original message');
+    return message;
+  }
+  
+  // [UID]変数をshort_uidで置換（これが最優先）
+  let result = message.replace(/\[UID\]/g, friendShortUid);
+  console.log(`After [UID] replacement: "${result}"`);
+  
+  // レガシー対応：既存のformリンクのパターンも検出してuidパラメーターを付与
+  // ただし、[UID]置換済みの場合は重複処理しない
+  if (result === message) {
+    // [UID]変数がなかった場合のみ、レガシー処理を実行
+    const formLinkPattern = /(https?:\/\/[^\/]+\/form\/[a-f0-9\-]+(?:\?[^?\s]*)?)/gi;
+    
+    result = result.replace(formLinkPattern, (match) => {
+      console.log(`Processing form link: ${match}`);
+      try {
+        const url = new URL(match);
+        // Check if uid parameter already exists to prevent duplication
+        if (!url.searchParams.has('uid')) {
+          url.searchParams.set('uid', friendShortUid);
+          console.log(`Added UID parameter: ${url.toString()}`);
+          return url.toString();
+        } else {
+          console.log(`UID parameter already exists: ${match}`);
+          return match;
+        }
+      } catch (error) {
+        console.error('Error processing form URL:', error);
+        return match; // Return original URL if parsing fails
+      }
+    });
+  }
+  
+  console.log(`Final result: "${result}"`);
+  return result;
 }
 
 // Send a single message via LINE API
