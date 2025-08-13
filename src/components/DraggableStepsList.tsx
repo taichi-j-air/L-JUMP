@@ -84,7 +84,11 @@ function SortableStepCard({ step, index, isSelected, onClick, onDelete, onUpdate
     if (seconds > 0) parts.push(`${seconds}秒`)
     const duration = parts.join('')
 
-    if (step.delivery_type === 'specific_time') {
+    // Display rule: step 1 uses 登録後, step 2+ uses 前ステップ後 even if type is 'relative'
+    const isFirst = index === 0
+    const type = step.delivery_type
+
+    if (type === 'specific_time') {
       if (step.specific_time) {
         try {
           const dt = new Date(step.specific_time)
@@ -102,9 +106,19 @@ function SortableStepCard({ step, index, isSelected, onClick, onDelete, onUpdate
       return '日時指定'
     }
 
-    if (step.delivery_type === 'relative') {
-      if (!duration) return '登録後：即時配信'
-      return `登録後：${duration}後`
+    if (type === 'relative') {
+      if (isFirst) {
+        if (!duration) return '登録後：即時配信'
+        return `登録後：${duration}後`
+      }
+      // For 2nd+ steps, show as relative to previous step
+      if (step.delivery_time_of_day) {
+        const t = step.delivery_time_of_day
+        if (days > 0) return `前ステップ後：${days}日後の ${t}`
+        return `前ステップ後：指定時刻 ${t}`
+      }
+      if (!duration) return '前ステップ後：即時配信'
+      return `前ステップ後：${duration}後`
     }
 
     // relative_to_previous
@@ -223,7 +237,7 @@ export function DraggableStepsList({
         .from('step_delivery_tracking')
         .select('step_id')
         .in('step_id', ids)
-        .neq('status','exited')
+        .in('status', ['waiting','ready','delivering'])
       if (error) {
         console.error('ステップ人数取得失敗:', error)
         setReadyCounts({})
@@ -248,7 +262,7 @@ export function DraggableStepsList({
             .from('step_delivery_tracking')
             .select('step_id')
             .in('step_id', ids)
-            .neq('status','exited')
+            .in('status', ['waiting','ready','delivering'])
           if (error) { setReadyCounts({}); return }
           const counts: Record<string, number> = {}
           ;(data || []).forEach((row: any) => {
