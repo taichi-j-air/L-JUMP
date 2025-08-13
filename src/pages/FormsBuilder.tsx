@@ -116,9 +116,12 @@ const [accentColor, setAccentColor] = useState<string>("#0cb386");
 
   useEffect(() => {
     const loadScenarios = async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) { setScenarios([]); return; }
       const { data, error } = await (supabase as any)
         .from('step_scenarios')
         .select('id,name')
+        .eq('user_id', user.id)
         .order('created_at', { ascending: true });
       if (!error) setScenarios(data || []);
     };

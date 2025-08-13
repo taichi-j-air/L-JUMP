@@ -14,7 +14,7 @@ import FriendTagDialog from "./FriendTagDialog"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "./ui/select"
 import { Checkbox } from "./ui/checkbox"
 import { Label } from "./ui/label"
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "./ui/dialog"
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "./ui/dialog"
 import { Calendar } from "./ui/calendar"
 import { Popover, PopoverContent, PopoverTrigger } from "./ui/popover"
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "./ui/accordion"
@@ -286,20 +286,25 @@ export function FriendsList({ user }: FriendsListProps) {
             </AccordionItem>
 
             <AccordionItem value="bulk-scenario">
-              <AccordionTrigger>一括シナリオ操作（表示中のユーザーに適用）</AccordionTrigger>
+              <AccordionTrigger>
+                <div className="text-sm">
+                  一括シナリオ操作
+                  <span className="block text-xs text-muted-foreground">（表示中のユーザーに適用）</span>
+                </div>
+              </AccordionTrigger>
               <AccordionContent>
                 <div className="p-3 border rounded-md space-y-2">
-                  <div className="grid grid-cols-1 gap-2">
-                    <Select value={bulkScenarioId} onValueChange={setBulkScenarioId}>
-                      <SelectTrigger className="h-9"><SelectValue placeholder="移動先シナリオを選択" /></SelectTrigger>
-                      <SelectContent>
-                        {scenarios.map(s => <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>)}
-                      </SelectContent>
-                    </Select>
-                    <Button className="w-full h-9" onClick={async ()=>{
-                      if (!bulkScenarioId) { toast({ title:'シナリオ未選択', description:'移動先シナリオを選択してください' }); return }
-                      setConfirmMoveOpen(true)
-                    }}>一斉移動</Button>
+              <div className="grid grid-cols-1 gap-2">
+                <Select value={bulkScenarioId} onValueChange={setBulkScenarioId}>
+                  <SelectTrigger className="h-9"><SelectValue placeholder="登録するシナリオを選択" /></SelectTrigger>
+                  <SelectContent>
+                    {scenarios.map(s => <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+                <Button className="w-full h-9" onClick={async ()=>{
+                  if (!bulkScenarioId) { toast({ title:'シナリオ未選択', description:'登録するシナリオを選択してください' }); return }
+                  setConfirmMoveOpen(true)
+                }}>一斉登録</Button>
                     <Button variant="destructive" className="w-full h-9" onClick={async ()=>{
                       if (!bulkScenarioId) { toast({ title:'解除対象未選択', description:'解除するシナリオを選択してください' }); return }
                       setConfirmUnenrollOpen(true)
@@ -310,7 +315,12 @@ export function FriendsList({ user }: FriendsListProps) {
             </AccordionItem>
 
             <AccordionItem value="bulk-tag">
-              <AccordionTrigger>一括タグ操作（表示中のユーザーに適用）</AccordionTrigger>
+              <AccordionTrigger>
+                <div className="text-sm">
+                  一括タグ操作
+                  <span className="block text-xs text-muted-foreground">（表示中のユーザーに適用）</span>
+                </div>
+              </AccordionTrigger>
               <AccordionContent>
                 <div className="p-3 border rounded-md space-y-2">
                   <Select value={bulkTagAddId} onValueChange={setBulkTagAddId}>
@@ -437,6 +447,7 @@ export function FriendsList({ user }: FriendsListProps) {
         <DialogContent className="max-w-2xl">
           <DialogHeader>
             <DialogTitle>{detailFriend?.display_name || detailFriend?.line_user_id}</DialogTitle>
+            <DialogDescription>フォーム回答やシナリオ履歴を確認できます。</DialogDescription>
           </DialogHeader>
           <div className="grid grid-cols-2 gap-4 max-h-[70vh] overflow-y-auto">
             <div>
@@ -479,9 +490,9 @@ export function FriendsList({ user }: FriendsListProps) {
       <AlertDialog open={confirmMoveOpen} onOpenChange={setConfirmMoveOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>一斉移動の確認</AlertDialogTitle>
+            <AlertDialogTitle>一斉登録の確認</AlertDialogTitle>
             <AlertDialogDescription>
-              現在の表示ユーザー {filteredFriends.length} 名を選択シナリオに移動しますか？
+              現在の表示ユーザー {filteredFriends.length} 名を選択シナリオに登録しますか？
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -493,9 +504,9 @@ export function FriendsList({ user }: FriendsListProps) {
                 for (const f of filteredFriends) {
                   await supabase.rpc('register_friend_with_scenario', { p_line_user_id: f.line_user_id, p_display_name: f.display_name, p_picture_url: f.picture_url, p_scenario_name: target.name })
                 }
-                toast({ title:'移動完了', description:`${filteredFriends.length}名を移動しました` })
+                toast({ title:'登録完了', description:`${filteredFriends.length}名を登録しました` })
               } catch (e:any) {
-                toast({ title:'移動失敗', description:e.message||'不明なエラー', variant:'destructive' })
+                toast({ title:'登録失敗', description:e.message||'不明なエラー', variant:'destructive' })
               } finally { setConfirmMoveOpen(false) }
             }}>実行</AlertDialogAction>
           </AlertDialogFooter>

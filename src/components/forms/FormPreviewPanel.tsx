@@ -180,9 +180,9 @@ export default function FormPreviewPanel({
       <div className="space-y-3">
         <h4 className="text-sm font-medium">回答後の動作と制限</h4>
         <div className="grid gap-3">
-          <div className="flex items-center justify-between gap-3 text-sm">
-            <span>公開</span>
-            <Switch checked={isPublic} onCheckedChange={setIsPublic} />
+          <div className="flex items-center gap-2 text-sm">
+            <Switch id="is-public" checked={isPublic} onCheckedChange={setIsPublic} />
+            <label htmlFor="is-public">公開</label>
           </div>
           <div className="space-y-1">
             <label className="text-sm">送信成功メッセージ</label>

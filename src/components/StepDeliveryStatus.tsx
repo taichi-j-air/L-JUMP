@@ -60,10 +60,10 @@ export function StepDeliveryStatus({ step }: StepDeliveryStatusProps) {
         .select('friend_id')
         .eq('step_id', step.id)
         .eq('delivery_status', 'delivered')
-      if (!delErr) {
-        const uniq = new Set<string>((deliveredLogs || []).map((r: any) => r.friend_id).filter(Boolean))
-        statsCount.delivered = uniq.size
-      }
+  if (!delErr) {
+    const uniq = new Set<string>((deliveredLogs || []).map((r: any) => r.friend_id).filter(Boolean))
+    statsCount.delivered = Math.max(statsCount.delivered, uniq.size)
+  }
 
       // 当該ステップでの配信失敗（ブロック等）数（ログ基準、重複排除）
       const { data: failedLogs, error: logErr } = await supabase
