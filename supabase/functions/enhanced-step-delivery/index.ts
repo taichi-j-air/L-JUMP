@@ -125,6 +125,7 @@ async function processReadySteps(supabase: any) {
         const processedMessage = { ...message };
         if (message.message_type === 'text' && friendData?.short_uid) {
           processedMessage.content = addUidToFormLinks(message.content, friendData.short_uid);
+          console.log(`UID変換実行: ${message.content} -> ${processedMessage.content}`);
         }
         
         await sendLineMessage(
@@ -420,27 +421,41 @@ async function applyTransitionToCompleted(supabase: any, data: any) {
 
 // UIDパラメーター付与処理
 function addUidToFormLinks(message: string, friendShortUid: string | null): string {
-  if (!friendShortUid) return message;
+  console.log(`addUidToFormLinks called with: "${message}", UID: ${friendShortUid}`);
+  
+  if (!friendShortUid) {
+    console.log('No friendShortUid provided, returning original message');
+    return message;
+  }
   
   // [UID]変数をshort_uidで置換
-  message = message.replace(/\[UID\]/g, friendShortUid);
+  const step1 = message.replace(/\[UID\]/g, friendShortUid);
+  console.log(`After [UID] replacement: "${step1}"`);
   
   // レガシー対応：既存のformリンクのパターンも検出してuidパラメーターを付与
   const formLinkPattern = /(https?:\/\/[^\/]+\/form\/[a-f0-9\-]+(?:\?[^?\s]*)?)/gi;
   
-  return message.replace(formLinkPattern, (match) => {
+  const finalResult = step1.replace(formLinkPattern, (match) => {
+    console.log(`Processing form link: ${match}`);
     try {
       const url = new URL(match);
       // Check if uid parameter already exists to prevent duplication
       if (!url.searchParams.has('uid')) {
         url.searchParams.set('uid', friendShortUid);
+        console.log(`Added UID parameter: ${url.toString()}`);
+        return url.toString();
+      } else {
+        console.log(`UID parameter already exists: ${match}`);
+        return match;
       }
-      return url.toString();
     } catch (error) {
       console.error('Error processing form URL:', error);
       return match; // Return original URL if parsing fails
     }
   });
+  
+  console.log(`Final result: "${finalResult}"`);
+  return finalResult;
 }
 
 // Send LINE message
