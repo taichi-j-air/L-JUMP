@@ -69,74 +69,41 @@ Deno.serve(async (req) => {
     if (friendIdsFilter) waitingToReady = waitingToReady.in('friend_id', friendIdsFilter)
     await waitingToReady.select('id')
 
-    // 2) Claim ready rows for delivery (respect step order)
-    // Fetch candidates first with step order info
-    let candidatesQuery = supabase
+    // 2) Claim ready rows for delivery
+    let query = supabase
       .from('step_delivery_tracking')
-      .select('*, steps!inner(step_order)')
+      .update({ status: 'delivering', updated_at: now })
       .eq('status', 'ready')
       .not('friend_id', 'is', null)
       .lte('scheduled_delivery_at', now)
-    if (recentOnly) candidatesQuery = candidatesQuery.gte('updated_at', cutoff)
-    if (scenarioIdFilter) candidatesQuery = candidatesQuery.eq('scenario_id', scenarioIdFilter)
-    if (friendIdFilter) candidatesQuery = candidatesQuery.eq('friend_id', friendIdFilter)
-    if (friendIdsFilter) candidatesQuery = candidatesQuery.in('friend_id', friendIdsFilter)
 
-    const { data: readyCandidates, error: candErr } = await candidatesQuery
+    if (recentOnly) {
+      query = query.gte('updated_at', cutoff)
+    }
+    if (scenarioIdFilter) {
+      query = query.eq('scenario_id', scenarioIdFilter)
+    }
+    if (friendIdFilter) {
+      query = query.eq('friend_id', friendIdFilter)
+    }
+    if (friendIdsFilter) {
+      query = query.in('friend_id', friendIdsFilter)
+    }
+
+    const { data: stepsToDeliver, error: fetchError } = await query
       .order('scheduled_delivery_at', { ascending: true })
-      .limit(200)
-    
-    if (candErr) {
-      console.error('❌ Error fetching ready candidates:', candErr)
-      return new Response(JSON.stringify({ error: candErr.message }), {
+      .limit(100)
+      .select('*')
+
+    if (fetchError) {
+      console.error('❌ Error fetching steps to deliver:', fetchError)
+      return new Response(JSON.stringify({ error: fetchError.message }), {
         status: 500,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' }
       })
     }
 
-    // Keep only the earliest pending step per (scenario, friend)
-    const toClaim: any[] = []
-    if (readyCandidates && readyCandidates.length > 0) {
-      // Process sequentially to avoid races
-      for (const cand of readyCandidates) {
-        const scenarioId = cand.scenario_id
-        const friendId = cand.friend_id
-        const currentOrder = (cand as any).steps?.step_order ?? 0
-        
-        // Is there any earlier step for the same pair that is not delivered yet?
-        const { data: earlier } = await supabase
-          .from('step_delivery_tracking')
-          .select('id, steps!inner(step_order), status')
-          .eq('scenario_id', scenarioId)
-          .eq('friend_id', friendId)
-          .neq('status', 'delivered')
-          .lt('steps.step_order', currentOrder)
-          .limit(1)
-        
-        if (earlier && earlier.length > 0) {
-          // Skip until the earlier step is delivered
-          continue
-        }
-        toClaim.push(cand)
-        if (toClaim.length >= 100) break
-      }
-    }
-
-    // Claim allowed rows (set to delivering)
-    const stepsToDeliver: any[] = []
-    if (toClaim.length > 0) {
-      await Promise.allSettled(toClaim.map(async (row) => {
-        const { error: updErr } = await supabase
-          .from('step_delivery_tracking')
-          .update({ status: 'delivering', updated_at: now })
-          .eq('id', row.id)
-        if (!updErr) {
-          stepsToDeliver.push(row)
-        } else {
-          console.warn('Failed to claim row for delivery:', row.id, updErr)
-        }
-      }))
-    }
+    console.log(`📨 Found ${stepsToDeliver?.length || 0} steps ready for delivery`)
 
     let deliveredCount = 0
     let errorCount = 0

@@ -807,17 +807,9 @@ async function markStepAsDelivered(supabase: any, trackingId: string, scenarioId
         updates.scheduled_delivery_at = now.toISOString()
         updates.next_check_at = new Date(now.getTime() - 5000).toISOString()
       } else {
-        // Normalize delivery type to respect sequential scheduling
-        let effectiveType = nextStep.delivery_type as string
-        if (effectiveType === 'immediate') effectiveType = 'immediately'
-        if (effectiveType === 'specific') effectiveType = 'specific_time'
-        if (effectiveType === 'time_of_day') effectiveType = 'time_of_day'
-        // Always treat subsequent steps as relative_to_previous when relative
-        if (effectiveType === 'relative') effectiveType = 'relative_to_previous'
-
         const { data: newScheduledTime, error: calcError } = await supabase.rpc('calculate_scheduled_delivery_time', {
           p_friend_added_at: friend?.added_at || null,
-          p_delivery_type: effectiveType,
+          p_delivery_type: nextStep.delivery_type,
           p_delivery_seconds: nextStep.delivery_seconds || 0,
           p_delivery_minutes: nextStep.delivery_minutes || 0,
           p_delivery_hours: nextStep.delivery_hours || 0,
