@@ -107,30 +107,33 @@ export function ScenarioTransitionCard({
   }
 
   return (
-    <Card className="mt-4">
-      <CardHeader>
+    <Card className="mt-3">
+      <CardHeader className="py-2">
         <CardTitle className="text-sm flex items-center gap-2">
           <ArrowRight className="h-4 w-4" />
           別シナリオへの移動
         </CardTitle>
         {currentTransitions.length === 0 && (
-          <p className="text-xs text-muted-foreground mt-2">
+          <p className="text-xs text-muted-foreground mt-1">
             遷移シナリオを2個以上追加するとABテストが可能になります
           </p>
         )}
         {hasMultipleTransitions && (
-          <p className="text-xs text-green-600 mt-2">
+          <p className="text-xs text-green-600 mt-1">
             <TestTube className="h-3 w-3 inline mr-1" />
             ABテスト有効：各シナリオに均等分配されます
           </p>
         )}
       </CardHeader>
-      <CardContent className="space-y-4">
+      <CardContent className="space-y-3 pt-0">
         {currentTransitions.length === 0 && (
           <div className="p-3 rounded-md bg-muted/50 text-xs flex items-center justify-between">
-            <span>このシナリオに滞留中</span>
+            <div className="flex flex-col">
+              <span>このシナリオに滞留中</span>
+              <span className="text-muted-foreground mt-1">※全ステップ送信後に解除されていない人</span>
+            </div>
             <Button
-              variant="secondary"
+              variant="success"
               size="sm"
               onClick={async () => {
                 await computeAccumulated()
@@ -147,7 +150,7 @@ export function ScenarioTransitionCard({
         {currentTransitions.map((transition) => {
           const targetScenario = availableScenarios.find(s => s.id === transition.to_scenario_id)
           return (
-            <div key={transition.id} className="flex items-center justify-between p-3 border rounded-lg">
+            <div key={transition.id} className="flex items-center justify-between p-2 border rounded-lg">
               <div className="flex items-center gap-2">
                 <ArrowRight className="h-4 w-4 text-muted-foreground" />
                 <span className="text-sm">{targetScenario?.name || '不明なシナリオ'}</span>
@@ -200,6 +203,50 @@ export function ScenarioTransitionCard({
           </p>
         )}
       </CardContent>
+
+      <Dialog open={accumOpen} onOpenChange={setAccumOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>滞留ユーザー一覧</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3">
+            <div className="text-xs text-muted-foreground">合計 {(accumCount ?? 0)} 人</div>
+            <div className="max-h-[60vh] overflow-y-auto space-y-2">
+              {accumUsers.map((u) => (
+                <div key={u.id} className="flex items-center gap-3">
+                  <img
+                    src={u.picture_url ?? '/placeholder.svg'}
+                    alt={`${u.display_name ?? '未設定'}のアイコン`}
+                    className="h-8 w-8 rounded-full"
+                  />
+                  <div className="text-sm">{u.display_name ?? u.line_user_id}</div>
+                </div>
+              ))}
+            </div>
+            <div className="flex items-center justify-between">
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={() => loadAccumPage(Math.max(1, accumPage - 1))}
+                disabled={accumPage <= 1}
+              >
+                前へ
+              </Button>
+              <div className="text-xs text-muted-foreground">
+                ページ {accumPage} / {Math.max(1, Math.ceil((accumCount ?? 0) / pageSize))}
+              </div>
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={() => loadAccumPage(accumPage + 1)}
+                disabled={accumPage >= Math.max(1, Math.ceil((accumCount ?? 0) / pageSize))}
+              >
+                次へ
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </Card>
   )
 }
