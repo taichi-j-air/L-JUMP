@@ -1,5 +1,7 @@
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
+import { supabase } from "@/integrations/supabase/client"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Button } from "@/components/ui/button"
 import { Label } from "@/components/ui/label"
@@ -23,12 +25,79 @@ export function ScenarioTransitionCard({
 }: ScenarioTransitionCardProps) {
   const [selectedScenario, setSelectedScenario] = useState<string>("")
   
+  const [accumCount, setAccumCount] = useState<number | null>(null)
+  const [accumOpen, setAccumOpen] = useState(false)
+  const [accumPage, setAccumPage] = useState(1)
+  const [accumFriendIds, setAccumFriendIds] = useState<string[]>([])
+  const [accumUsers, setAccumUsers] = useState<Array<{ id: string; display_name: string | null; picture_url: string | null; line_user_id: string }>>([])
+  const pageSize = 30
+  
   const currentTransitions = transitions.filter(t => t.from_scenario_id === currentScenario.id)
   const hasMultipleTransitions = currentTransitions.length >= 2
   const availableOptions = availableScenarios.filter(s => 
     s.id !== currentScenario.id && 
     !currentTransitions.some(t => t.to_scenario_id === s.id)
   )
+
+  const computeAccumulated = async () => {
+    try {
+      const { data: stepRows, error: stepErr } = await supabase
+        .from('steps')
+        .select('id')
+        .eq('scenario_id', currentScenario.id)
+      if (stepErr) throw stepErr
+      const stepIds = (stepRows || []).map((r: any) => r.id)
+      if (stepIds.length === 0) { setAccumCount(0); setAccumFriendIds([]); return }
+      const { data: trackRows, error: tErr } = await supabase
+        .from('step_delivery_tracking')
+        .select('friend_id, step_id, status')
+        .in('step_id', stepIds)
+      if (tErr) throw tErr
+      const totalSteps = stepIds.length
+      const map = new Map<string, { delivered: number; total: number; hasNonDelivered: boolean }>()
+      for (const r of trackRows || []) {
+        const fid = (r as any).friend_id
+        const status = (r as any).status
+        const rec = map.get(fid) || { delivered: 0, total: 0, hasNonDelivered: false }
+        rec.total += 1
+        if (status === 'delivered') rec.delivered += 1
+        else rec.hasNonDelivered = true
+        map.set(fid, rec)
+      }
+      const completed: string[] = []
+      for (const [fid, rec] of map) {
+        if (rec.delivered === totalSteps && rec.total >= totalSteps) {
+          completed.push(fid)
+        }
+      }
+      setAccumFriendIds(completed)
+      setAccumCount(completed.length)
+    } catch (e) {
+      console.error('滞留ユーザー数取得失敗:', e)
+      setAccumCount(0)
+      setAccumFriendIds([])
+    }
+  }
+
+  const loadAccumPage = async (p: number) => {
+    setAccumPage(p)
+    const start = (p - 1) * pageSize
+    const ids = accumFriendIds.slice(start, start + pageSize)
+    if (ids.length === 0) { setAccumUsers([]); return }
+    const { data: friends, error } = await supabase
+      .from('line_friends')
+      .select('id, display_name, picture_url, line_user_id')
+      .in('id', ids)
+    if (error) { setAccumUsers([]); return }
+    setAccumUsers((friends || []) as any)
+  }
+
+  useEffect(() => {
+    if (currentTransitions.length === 0) {
+      computeAccumulated()
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentScenario.id, currentTransitions.length])
 
   const handleAddTransition = () => {
     if (selectedScenario) {
@@ -57,6 +126,23 @@ export function ScenarioTransitionCard({
         )}
       </CardHeader>
       <CardContent className="space-y-4">
+        {currentTransitions.length === 0 && (
+          <div className="p-3 rounded-md bg-muted/50 text-xs flex items-center justify-between">
+            <span>このシナリオに滞留中</span>
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={async () => {
+                await computeAccumulated()
+                setAccumOpen(true)
+                await loadAccumPage(1)
+              }}
+            >
+              {(accumCount ?? 0)}人を表示
+            </Button>
+          </div>
+        )}
+
         {/* 既存の移動設定 */}
         {currentTransitions.map((transition) => {
           const targetScenario = availableScenarios.find(s => s.id === transition.to_scenario_id)

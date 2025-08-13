@@ -90,6 +90,27 @@ export function StepDeliveryStatus({ step }: StepDeliveryStatusProps) {
     }
   }, [step.id])
 
+  // Realtime updates
+  useEffect(() => {
+    const channel = supabase
+      .channel(`step-delivery-status-${step.id}`)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'step_delivery_tracking', filter: `step_id=eq.${step.id}` }, () => {
+        loadStats()
+        if (showDetails) {
+          loadDetailsFor(showDetails)
+        }
+      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'step_delivery_logs', filter: `step_id=eq.${step.id}` }, () => {
+        loadStats()
+        if (showDetails) {
+          loadDetailsFor(showDetails)
+        }
+      })
+      .subscribe()
+
+    return () => { supabase.removeChannel(channel) }
+  }, [step.id])
+
   const loadDetailsFor = async (type: string) => {
     setLoading(true)
     try {

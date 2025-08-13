@@ -102,12 +102,15 @@ function SortableStepCard({ step, index, isSelected, onClick, onDelete, onUpdate
       return '日時指定'
     }
 
+    // 相対指定
     if (step.delivery_type === 'relative') {
-      if (!duration) return '登録後：即時配信'
-      return `登録後：${duration}後`
+      // 2通目以降は「前ステップ後」表記に変更
+      const prefix = index > 0 ? '前ステップ後' : '登録後'
+      if (!duration) return `${prefix}：即時配信`
+      return `${prefix}：${duration}後`
     }
 
-    // relative_to_previous
+    // 前ステップ基準（time_of_day等を含む）
     if (step.delivery_time_of_day) {
       const t = step.delivery_time_of_day
       if (days > 0) return `前ステップ後：${days}日後の ${t}`
@@ -158,7 +161,7 @@ function SortableStepCard({ step, index, isSelected, onClick, onDelete, onUpdate
             </p>
           </div>
           <div className="flex items-center gap-1.5">
-            <span className="text-[11px] flex items-center gap-1" title="このステップの登録ユーザー数"><Users className="h-3 w-3" /> {readyCount ?? 0}</span>
+            <span className="text-[11px] flex items-center gap-1" title="このステップの配信待機数"><Users className="h-3 w-3" /> {readyCount ?? 0}</span>
             <Button
               variant="ghost"
               size="sm"
@@ -223,7 +226,7 @@ export function DraggableStepsList({
         .from('step_delivery_tracking')
         .select('step_id')
         .in('step_id', ids)
-        .neq('status','exited')
+        .eq('status','ready')
       if (error) {
         console.error('ステップ人数取得失敗:', error)
         setReadyCounts({})
@@ -248,7 +251,7 @@ export function DraggableStepsList({
             .from('step_delivery_tracking')
             .select('step_id')
             .in('step_id', ids)
-            .neq('status','exited')
+            .eq('status','ready')
           if (error) { setReadyCounts({}); return }
           const counts: Record<string, number> = {}
           ;(data || []).forEach((row: any) => {
