@@ -27,6 +27,7 @@ interface Friend {
   display_name: string | null
   picture_url: string | null
   added_at: string
+  short_uid?: string | null
 }
 
 interface FriendsListProps {
@@ -393,9 +394,14 @@ export function FriendsList({ user }: FriendsListProps) {
                           <Badge variant="destructive" className="text-xs">ブロック中</Badge>
                         )}
                       </div>
-                      <p className="text-xs text-muted-foreground font-mono">
-                        ID: {friend.line_user_id}
-                      </p>
+                      <div className="text-xs text-muted-foreground space-y-1">
+                        <p className="font-mono font-bold text-primary">
+                          短縮UID: {friend.short_uid || '生成中...'}
+                        </p>
+                        <p className="font-mono">
+                          ID: {friend.line_user_id}
+                        </p>
+                      </div>
                     </div>
 
                     <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>

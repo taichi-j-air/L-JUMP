@@ -110,20 +110,28 @@ export default function PublicForm() {
                        url.searchParams.get('lu') || 
                        url.searchParams.get('uid') ||
                        url.searchParams.get('user_id');
+    const shortUid = url.searchParams.get('suid') || url.searchParams.get('s');
 
     let friendId: string | null = null;
     if (form.require_line_friend) {
-      if (!lineUserId) {
+      if (!lineUserId && !shortUid) {
         toast.error('LINEアプリから開いてください（友だち限定フォーム）');
         return;
       }
-      // Check friend existence for the form owner
-      const { data: friend, error: fErr } = await (supabase as any)
+      
+      // Check friend existence for the form owner (by LINE User ID or Short UID)
+      let friendQuery = (supabase as any)
         .from('line_friends')
-        .select('id')
-        .eq('line_user_id', lineUserId)
-        .eq('user_id', form.user_id)
-        .maybeSingle();
+        .select('id, line_user_id')
+        .eq('user_id', form.user_id);
+      
+      if (shortUid) {
+        friendQuery = friendQuery.eq('short_uid', shortUid);
+      } else {
+        friendQuery = friendQuery.eq('line_user_id', lineUserId);
+      }
+      
+      const { data: friend, error: fErr } = await friendQuery.maybeSingle();
       if (fErr || !friend) {
         toast.error('このフォームはLINE友だち限定です。先に友だち追加してください。');
         return;
@@ -142,22 +150,38 @@ export default function PublicForm() {
           return;
         }
       }
-    }
-
-    const { error } = await (supabase as any).from('form_submissions').insert({
-      form_id: form.id,
-      data: values,
-      friend_id: friendId,
-      line_user_id: lineUserId || null,
-    });
-    if (error) {
-      console.error(error);
-      toast.error('送信に失敗しました');
+      
+      // Store friend data for later use
+      const actualLineUserId = friend.line_user_id || lineUserId;
+      
+      const { error } = await (supabase as any).from('form_submissions').insert({
+        form_id: form.id,
+        data: values,
+        friend_id: friendId,
+        line_user_id: actualLineUserId,
+      });
+      if (error) {
+        console.error(error);
+        toast.error('送信に失敗しました');
+        return;
+      }
     } else {
-      setSubmitted(true);
-      toast.success('送信しました');
-      // TODO: 回答後シナリオ遷移の実行（安全な関数を用意してサーバー側で切替）
+      const { error } = await (supabase as any).from('form_submissions').insert({
+        form_id: form.id,
+        data: values,
+        friend_id: null,
+        line_user_id: lineUserId || null,
+      });
+      if (error) {
+        console.error(error);
+        toast.error('送信に失敗しました');
+        return;
+      }
     }
+    
+    setSubmitted(true);
+    toast.success('送信しました');
+    // TODO: 回答後シナリオ遷移の実行（安全な関数を用意してサーバー側で切替）
   };
 
   if (loading) return <div className="container mx-auto max-w-3xl p-4">読み込み中...</div>;

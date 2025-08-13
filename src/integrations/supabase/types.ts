@@ -485,6 +485,7 @@ export type Database = {
           picture_url: string | null
           registration_source: string | null
           scenario_name: string | null
+          short_uid: string | null
           updated_at: string
           user_id: string
         }
@@ -498,6 +499,7 @@ export type Database = {
           picture_url?: string | null
           registration_source?: string | null
           scenario_name?: string | null
+          short_uid?: string | null
           updated_at?: string
           user_id: string
         }
@@ -511,6 +513,7 @@ export type Database = {
           picture_url?: string | null
           registration_source?: string | null
           scenario_name?: string | null
+          short_uid?: string | null
           updated_at?: string
           user_id?: string
         }
@@ -1265,6 +1268,10 @@ export type Database = {
         Returns: boolean
       }
       generate_invite_code: {
+        Args: Record<PropertyKey, never>
+        Returns: string
+      }
+      generate_short_uid: {
         Args: Record<PropertyKey, never>
         Returns: string
       }
