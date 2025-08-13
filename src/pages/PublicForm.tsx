@@ -111,7 +111,9 @@ export default function PublicForm() {
                        url.searchParams.get('user_id');
     const shortUid = url.searchParams.get('uid') || url.searchParams.get('suid') || url.searchParams.get('s');
 
+    console.log(`フォーム送信 - URL: ${window.location.href}`);
     console.log(`フォーム送信パラメーター: lineUserId=${lineUserId}, shortUid=${shortUid}`);
+    console.log(`フォーム設定: require_line_friend=${form.require_line_friend}, user_id=${form.user_id}`);
 
     let friendId: string | null = null;
     let actualLineUserId: string | null = lineUserId;
