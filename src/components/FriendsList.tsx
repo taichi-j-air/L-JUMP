@@ -530,59 +530,26 @@ export function FriendsList({ user }: FriendsListProps) {
                 let successCount = 0;
                 let errorCount = 0;
                 
-                // Register each friend to the scenario
+                // Register each friend to the scenario using RPC function
                 for (const f of filteredFriends) {
                   try {
-                    // First check if friend already registered to this scenario
-                    const { data: existing } = await supabase
-                      .from('scenario_friend_logs')
-                      .select('id')
-                      .eq('line_user_id', f.line_user_id)
-                      .eq('scenario_id', bulkScenarioId)
-                      .maybeSingle()
+                    console.log('Registering friend:', f.line_user_id, 'to scenario:', target.name)
                     
-                    if (existing) {
-                      console.log(`Friend ${f.line_user_id} already registered to scenario`)
-                      continue;
-                    }
+                    const result = await supabase.rpc('register_friend_with_scenario', { 
+                      p_line_user_id: f.line_user_id, 
+                      p_display_name: f.display_name, 
+                      p_picture_url: f.picture_url, 
+                      p_scenario_name: target.name 
+                    })
                     
-                    // Register to scenario
-                    const { error: regError } = await supabase
-                      .from('scenario_friend_logs')
-                      .insert({
-                        scenario_id: bulkScenarioId,
-                        friend_id: f.id,
-                        line_user_id: f.line_user_id,
-                        invite_code: 'bulk_register'
-                      })
+                    console.log('Registration result:', result)
                     
-                    if (regError) {
-                      console.error('Registration failed for friend:', f.line_user_id, regError)
+                    if (result.error) {
+                      console.error('Registration failed for friend:', f.line_user_id, result.error)
                       errorCount++;
-                      continue;
+                    } else {
+                      successCount++;
                     }
-                    
-                    // Set up step delivery tracking for this scenario
-                    const { data: steps } = await supabase
-                      .from('steps')
-                      .select('id, step_order')
-                      .eq('scenario_id', bulkScenarioId)
-                      .order('step_order')
-                    
-                    if (steps) {
-                      for (const step of steps) {
-                        await supabase
-                          .from('step_delivery_tracking')
-                          .insert({
-                            scenario_id: bulkScenarioId,
-                            step_id: step.id,
-                            friend_id: f.id,
-                            status: step.step_order === 1 ? 'ready' : 'waiting'
-                          })
-                      }
-                    }
-                    
-                    successCount++;
                   } catch (e: any) {
                     console.error('Registration error for friend:', f.line_user_id, e)
                     errorCount++;

@@ -106,7 +106,10 @@ export default function PublicForm() {
     }
 
     const url = new URL(window.location.href);
-    const lineUserId = url.searchParams.get('line_user_id') || url.searchParams.get('lu');
+    const lineUserId = url.searchParams.get('line_user_id') || 
+                       url.searchParams.get('lu') || 
+                       url.searchParams.get('uid') ||
+                       url.searchParams.get('user_id');
 
     let friendId: string | null = null;
     if (form.require_line_friend) {
