@@ -84,7 +84,6 @@ export function FlexMessageSelector({ onSelect, selectedFlexMessageId }: FlexMes
               作成日: {new Date(selectedMessage.created_at).toLocaleString('ja-JP')}
             </div>
             <div className="mt-2 p-2 bg-muted/50 rounded text-xs">
-              <strong>プレビューはFlexメッセージデザイナーで確認してください</strong>
             </div>
           </CardContent>
         </Card>

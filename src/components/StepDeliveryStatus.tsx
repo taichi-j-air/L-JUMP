@@ -48,6 +48,9 @@ export function StepDeliveryStatus({ step }: StepDeliveryStatusProps) {
           statsCount.ready += 1
         } else if (s === 'waiting' || s === 'exited') {
           ;(statsCount as any)[s] = ((statsCount as any)[s] || 0) + 1
+        } else if (s === 'delivered') {
+          // トラッキング上で配信完了になっているものもカウント
+          statsCount.delivered += 1
         }
       }
 

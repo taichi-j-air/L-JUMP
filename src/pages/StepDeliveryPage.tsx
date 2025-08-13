@@ -876,7 +876,6 @@ export default function StepDeliveryPage() {
 
                                {message.message_type === 'flex' && (
                                   <div>
-                                    <Label>Flexメッセージ選択</Label>
                                     <FlexMessageSelector
                                       onSelect={(flexMessageId) => handleUpdateMessage(message.id, { flex_message_id: flexMessageId })}
                                       selectedFlexMessageId={message.flex_message_id}

@@ -549,6 +549,7 @@ const FlexMessageDesigner = () => {
             ...(props.size && { size: props.size }),
             ...(props.weight && props.weight !== 'normal' && { weight: props.weight }),
             ...(props.color && props.color !== '#000000' && { color: props.color }),
+            ...(props.backgroundColor && props.backgroundColor !== '#ffffff' && { backgroundColor: props.backgroundColor }),
             ...(props.align && props.align !== 'start' && { align: props.align }),
             ...(!isFirst && { margin: "15px" }),
             wrap: true
@@ -964,7 +965,7 @@ const FlexMessageDesigner = () => {
                   <div className="flex gap-3 pt-4">
                     <Button onClick={saveMessage} disabled={loading} className="flex-1">
                       <Save className="w-4 h-4 mr-2" />
-                      {loading ? "保存中..." : currentMessageId ? "上書き保存" : "新規保存"}
+                      {loading ? "保存中..." : currentMessageId ? "上書き保存" : "保存する"}
                     </Button>
                     <Button 
                       onClick={sendMessage} 
@@ -972,7 +973,7 @@ const FlexMessageDesigner = () => {
                       className="bg-[#06c755] hover:bg-[#05b84c] text-white border-[#06c755]"
                     >
                       <Send className="w-4 h-4 mr-2" />
-                      {loading ? "送信中..." : "LINE配信"}
+                      {loading ? "送信中..." : "全体配信"}
                     </Button>
                   </div>
                 </div>
