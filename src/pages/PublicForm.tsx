@@ -87,23 +87,33 @@ export default function PublicForm() {
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
+    console.log('=== フォーム送信開始 ===');
     e.preventDefault();
-    if (!form) return;
+    console.log('=== バリデーション開始 ===');
+    if (!form) {
+      console.log('フォームが存在しません');
+      return;
+    }
 
+    console.log('=== 必須項目チェック開始 ===');
     for (const f of form.fields) {
       const val = values[f.name];
+      console.log(`フィールド ${f.name}: ${JSON.stringify(val)} (必須: ${f.required})`);
       if (f.required) {
         if (f.type === 'checkbox') {
           if (!Array.isArray(val) || val.length === 0) {
+            console.log(`必須チェックボックスが未入力: ${f.label}`);
             toast.error(`${f.label} は必須です`);
             return;
           }
         } else if (!val) {
+          console.log(`必須項目が未入力: ${f.label}`);
           toast.error(`${f.label} は必須です`);
           return;
         }
       }
     }
+    console.log('=== 必須項目チェック完了 ===');
 
     const url = new URL(window.location.href);
     const lineUserId = url.searchParams.get('line_user_id') || 
