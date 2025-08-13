@@ -422,8 +422,8 @@ async function applyTransitionToCompleted(supabase: any, data: any) {
 function addUidToFormLinks(message: string, friendShortUid: string | null): string {
   if (!friendShortUid) return message;
   
-  // フォームリンクのパターンを検出
-  const formLinkPattern = /(https?:\/\/[^\/]+\/form\/[a-f0-9\-]+)/gi;
+  // フォームリンクのパターンを検出（既存のクエリパラメータがあっても検出）
+  const formLinkPattern = /(https?:\/\/[^\/]+\/form\/[a-f0-9\-]+(?:\?[^?\s]*)?)/gi;
   
   return message.replace(formLinkPattern, (match) => {
     try {

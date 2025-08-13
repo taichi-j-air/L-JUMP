@@ -95,22 +95,22 @@ export function ChatWindow({ user, friend, onClose }: ChatWindowProps) {
   const addUidToFormLinks = (message: string, friendShortUid: string | null): string => {
     if (!friendShortUid) return message
     
-    // フォームリンクのパターンを検出
-    const formLinkPattern = /(https?:\/\/[^\/]+\/form\/[a-f0-9\-]+)/gi
+    // フォームリンクのパターンを検出（既存のクエリパラメータがあっても検出）
+    const formLinkPattern = /(https?:\/\/[^\/]+\/form\/[a-f0-9\-]+(?:\?[^?\s]*)?)/gi
     
-  return message.replace(formLinkPattern, (match) => {
-    try {
-      const url = new URL(match)
-      // Check if uid parameter already exists to prevent duplication
-      if (!url.searchParams.has('uid')) {
-        url.searchParams.set('uid', friendShortUid)
+    return message.replace(formLinkPattern, (match) => {
+      try {
+        const url = new URL(match)
+        // Check if uid parameter already exists to prevent duplication
+        if (!url.searchParams.has('uid')) {
+          url.searchParams.set('uid', friendShortUid)
+        }
+        return url.toString()
+      } catch (error) {
+        console.error('Error processing form URL:', error)
+        return match // Return original URL if parsing fails
       }
-      return url.toString()
-    } catch (error) {
-      console.error('Error processing form URL:', error)
-      return match // Return original URL if parsing fails
-    }
-  })
+    })
   }
 
   const sendMessage = async () => {
