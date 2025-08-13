@@ -428,34 +428,38 @@ function addUidToFormLinks(message: string, friendShortUid: string | null): stri
     return message;
   }
   
-  // [UID]変数をshort_uidで置換
-  const step1 = message.replace(/\[UID\]/g, friendShortUid);
-  console.log(`After [UID] replacement: "${step1}"`);
+  // [UID]変数をshort_uidで置換（これが最優先）
+  let result = message.replace(/\[UID\]/g, friendShortUid);
+  console.log(`After [UID] replacement: "${result}"`);
   
   // レガシー対応：既存のformリンクのパターンも検出してuidパラメーターを付与
-  const formLinkPattern = /(https?:\/\/[^\/]+\/form\/[a-f0-9\-]+(?:\?[^?\s]*)?)/gi;
-  
-  const finalResult = step1.replace(formLinkPattern, (match) => {
-    console.log(`Processing form link: ${match}`);
-    try {
-      const url = new URL(match);
-      // Check if uid parameter already exists to prevent duplication
-      if (!url.searchParams.has('uid')) {
-        url.searchParams.set('uid', friendShortUid);
-        console.log(`Added UID parameter: ${url.toString()}`);
-        return url.toString();
-      } else {
-        console.log(`UID parameter already exists: ${match}`);
-        return match;
+  // ただし、[UID]置換済みの場合は重複処理しない
+  if (result === message) {
+    // [UID]変数がなかった場合のみ、レガシー処理を実行
+    const formLinkPattern = /(https?:\/\/[^\/]+\/form\/[a-f0-9\-]+(?:\?[^?\s]*)?)/gi;
+    
+    result = result.replace(formLinkPattern, (match) => {
+      console.log(`Processing form link: ${match}`);
+      try {
+        const url = new URL(match);
+        // Check if uid parameter already exists to prevent duplication
+        if (!url.searchParams.has('uid')) {
+          url.searchParams.set('uid', friendShortUid);
+          console.log(`Added UID parameter: ${url.toString()}`);
+          return url.toString();
+        } else {
+          console.log(`UID parameter already exists: ${match}`);
+          return match;
+        }
+      } catch (error) {
+        console.error('Error processing form URL:', error);
+        return match; // Return original URL if parsing fails
       }
-    } catch (error) {
-      console.error('Error processing form URL:', error);
-      return match; // Return original URL if parsing fails
-    }
-  });
+    });
+  }
   
-  console.log(`Final result: "${finalResult}"`);
-  return finalResult;
+  console.log(`Final result: "${result}"`);
+  return result;
 }
 
 // Send LINE message
