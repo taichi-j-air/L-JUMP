@@ -111,11 +111,14 @@ export default function PublicForm() {
                        url.searchParams.get('user_id');
     const shortUid = url.searchParams.get('uid') || url.searchParams.get('suid') || url.searchParams.get('s');
     
-    console.log('フォーム送信 - URL パラメーター:', {
-      url: window.location.href,
+    console.log('フォーム送信開始 - URL パラメーター詳細:', {
+      fullUrl: window.location.href,
+      searchParams: Object.fromEntries(url.searchParams.entries()),
       lineUserId,
       shortUid,
-      requireLineFriend: form.require_line_friend
+      requireLineFriend: form.require_line_friend,
+      hasLineUserId: !!lineUserId,
+      hasShortUid: !!shortUid
     });
 
     let friendId: string | null = null;
