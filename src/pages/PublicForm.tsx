@@ -59,7 +59,7 @@ export default function PublicForm() {
   useSEO(
     form ? `${form.name} | フォーム` : 'フォーム',
     form?.description || '埋め込みフォーム',
-    window.location.href
+    typeof window !== "undefined" ? window.location.href : undefined
   );
 
   useEffect(() => {
@@ -71,7 +71,7 @@ export default function PublicForm() {
         .eq('id', formId)
         .maybeSingle();
       if (error) {
-        console.error(error);
+        console.error('[forms.load] error:', error);
         toast.error('フォームの取得に失敗しました');
       }
       if (data) {
@@ -90,6 +90,7 @@ export default function PublicForm() {
     e.preventDefault();
     if (!form) return;
 
+    // 必須チェック（checkbox/radioは上で制御）
     for (const f of form.fields) {
       const val = values[f.name];
       if (f.required) {
@@ -105,150 +106,125 @@ export default function PublicForm() {
       }
     }
 
+    // URLパラメータ取得 & 正規化
     const url = new URL(window.location.href);
-    const lineUserId = url.searchParams.get('line_user_id') || 
-                       url.searchParams.get('lu') || 
-                       url.searchParams.get('user_id');
+    const lineUserIdParam = url.searchParams.get('line_user_id') || url.searchParams.get('lu') || url.searchParams.get('user_id');
+
     let shortUid = url.searchParams.get('uid') || url.searchParams.get('suid') || url.searchParams.get('s');
-    
-    // UIDパラメータの検証と修正
-    if (shortUid === '[UID]' || shortUid === 'UID' || !shortUid) {
-      console.warn('無効なUIDパラメータが検出されました:', { originalUid: shortUid, fullUrl: window.location.href });
+    shortUid = shortUid?.trim() || null;
+    if (shortUid && shortUid !== '[UID]' && shortUid !== 'UID') {
+      shortUid = shortUid.toUpperCase(); // 運用規約に合わせて toUpperCase / toLowerCase を選択
+    } else {
+      if (shortUid) {
+        console.warn('[param.uid] invalid token detected, treating as null:', shortUid);
+      }
       shortUid = null;
     }
-    
-    // より詳細なURLパラメーター解析ログ
-    const allParams = Object.fromEntries(url.searchParams.entries());
-    console.log('フォーム送信開始 - 詳細URLパラメーター解析:', {
+
+    console.log('フォーム送信開始 - URL解析:', {
       fullUrl: window.location.href,
-      allSearchParams: allParams,
-      extractedParams: {
-        lineUserId,
-        shortUid,
-        originalUidParam: url.searchParams.get('uid')
-      },
-      validation: {
-        hasValidLineUserId: !!lineUserId && lineUserId !== '[UID]',
-        hasValidShortUid: !!shortUid && shortUid !== '[UID]',
-        requireLineFriend: form.require_line_friend
-      }
+      allSearchParams: Object.fromEntries(url.searchParams.entries()),
+      extractedParams: { lineUserIdParam, shortUid },
+      requireLineFriend: form.require_line_friend,
     });
 
-    let friendId: string | null = null;
+    // 挿入用の変数（後で共通payloadに詰める）
+    let actualFriendId: string | null = null;
+    let actualLineUserId: string | null = lineUserIdParam ?? null;
+
+    // 友だち限定フォームの検証
     if (form.require_line_friend) {
-      if (!lineUserId && !shortUid) {
+      if (!actualLineUserId && !shortUid) {
         toast.error('LINEアプリから開いてください（友だち限定フォーム）');
         return;
       }
-      
-      // Check friend existence for the form owner (by LINE User ID or Short UID)
+
+      // 所有ユーザー配下で友だち情報を検索
       let friendQuery = (supabase as any)
         .from('line_friends')
         .select('id, line_user_id')
         .eq('user_id', form.user_id);
-      
+
       if (shortUid) {
         friendQuery = friendQuery.eq('short_uid', shortUid);
-      } else {
-        friendQuery = friendQuery.eq('line_user_id', lineUserId);
+      } else if (actualLineUserId) {
+        friendQuery = friendQuery.eq('line_user_id', actualLineUserId);
       }
-      
+
       const { data: friend, error: fErr } = await friendQuery.maybeSingle();
-      console.log('LINE友達検索結果:', { friend, fErr, shortUid, lineUserId });
+      console.log('[require_friend] friend lookup:', { friend, fErr, shortUid, lineUserIdParam });
+
       if (fErr || !friend) {
         toast.error('このフォームはLINE友だち限定です。先に友だち追加してください。');
         return;
       }
-      friendId = friend.id;
+      actualFriendId = friend.id;
+      actualLineUserId = friend.line_user_id || actualLineUserId || null;
 
-      if (form.prevent_duplicate_per_friend) {
-        const { data: dup } = await (supabase as any)
+      // 重複送信の抑止（友だち単位）
+      if (form.prevent_duplicate_per_friend && actualFriendId) {
+        const { data: dup, error: dupErr } = await (supabase as any)
           .from('form_submissions')
           .select('id')
           .eq('form_id', form.id)
-          .eq('friend_id', friendId)
+          .eq('friend_id', actualFriendId)
           .maybeSingle();
+        if (dupErr) {
+          console.error('[dup.check] error:', dupErr);
+        }
         if (dup) {
           toast.error('このフォームはお一人様1回までです。');
           return;
         }
       }
-      
-      // Store friend data for later use
-      const actualLineUserId = friend.line_user_id || lineUserId;
-      
-      console.log('フォーム送信データ (友だち限定):', {
-        form_id: form.id,
-        data: values,
-        friend_id: friendId,
-        line_user_id: actualLineUserId,
-      });
-      
-      const { error } = await (supabase as any).from('form_submissions').insert({
-        form_id: form.id,
-        data: values,
-        friend_id: friendId,
-        line_user_id: actualLineUserId,
-      });
-      if (error) {
-        console.error(error);
-        toast.error('送信に失敗しました');
-        return;
-      }
     } else {
-      // 一般フォームでも、UIDパラメーターがあれば友だち情報を取得して保存
-      let actualLineUserId = lineUserId;
-      let actualFriendId = null;
-      
-      if (shortUid && !lineUserId) {
-        console.log('一般フォーム: shortUidからline_user_idを取得を試行:', shortUid);
+      // 一般フォームでも、shortUid があれば可能なら紐づけ
+      if (shortUid && !actualLineUserId) {
+        console.log('[general] try resolve from shortUid:', shortUid);
         const { data: friendByUid, error: uidErr } = await (supabase as any)
           .from('line_friends')
           .select('line_user_id, id')
           .eq('user_id', form.user_id)
           .eq('short_uid', shortUid)
           .maybeSingle();
-        
+
         if (friendByUid && !uidErr) {
           actualLineUserId = friendByUid.line_user_id;
           actualFriendId = friendByUid.id;
-          console.log('一般フォーム: shortUidから取得成功:', { 
-            shortUid, 
-            lineUserId: actualLineUserId, 
-            friendId: actualFriendId 
-          });
+          console.log('[general] resolve success from shortUid:', { shortUid, actualLineUserId, actualFriendId });
         } else {
-          console.log('一般フォーム: shortUidから取得失敗:', { shortUid, uidErr });
+          console.info('[general] resolve none (expected case):', { shortUid, uidErr });
         }
       }
-      
-      console.log('フォーム送信データ (一般) - 最終版:', {
-        form_id: form.id,
-        data: values,
-        friend_id: actualFriendId,
-        line_user_id: actualLineUserId,
-        user_id: null,
-        shortUid: shortUid,
-        originalLineUserId: lineUserId
-      });
-      
-      const { error } = await (supabase as any).from('form_submissions').insert({
-        form_id: form.id,
-        data: values,
-        user_id: null,
-        friend_id: actualFriendId,
-        line_user_id: actualLineUserId,
-      });
-      if (error) {
-        console.error(error);
-        toast.error('送信に失敗しました');
-        return;
-      }
     }
-    
+
+    // ここで共通payloadを作って一度だけ挿入
+    const payload = {
+      form_id: form.id,
+      data: values,
+      user_id: form.user_id, // ★匿名でも所有者に必ず紐づける（ダッシュボード/RLSで見えるように）
+      friend_id: actualFriendId,
+      line_user_id: actualLineUserId,
+    };
+
+    console.log('[insert.payload]', payload);
+
+    const { data: inserted, error } = await (supabase as any)
+      .from('form_submissions')
+      .insert(payload)
+      .select('id, user_id, friend_id, line_user_id')
+      .single();
+
+    if (error) {
+      console.error('[insert.error]', error);
+      toast.error('送信に失敗しました');
+      return;
+    }
+    console.log('[insert.ok]', inserted);
+
     setSubmitted(true);
     toast.success('送信しました');
-    // TODO: 回答後シナリオ遷移の実行（安全な関数を用意してサーバー側で切替）
+    // TODO: 回答後シナリオ遷移（必要なら安全なサーバ関数経由で）
   };
 
   if (loading) return <div className="container mx-auto max-w-3xl p-4">読み込み中...</div>;
@@ -259,127 +235,165 @@ export default function PublicForm() {
     <div className="container mx-auto max-w-3xl p-4">
       <Card>
         <CardHeader>
-          <CardTitle>
-            {form.name}
-          </CardTitle>
+          <CardTitle>{form.name}</CardTitle>
           {form.description && <CardDescription>{form.description}</CardDescription>}
         </CardHeader>
         <CardContent>
           {submitted ? (
             <div className="py-8">
-              <p className="text-center text-muted-foreground">{form.success_message || '送信ありがとうございました。'}</p>
+              <p className="text-center text-muted-foreground">
+                {form.success_message || '送信ありがとうございました。'}
+              </p>
             </div>
           ) : (
-            <form className="space-y-4" onSubmit={handleSubmit} style={{ ['--form-accent' as any]: form.accent_color || '#0cb386' }}>
+            <form
+              className="space-y-4"
+              onSubmit={handleSubmit}
+              style={{ ['--form-accent' as any]: form.accent_color || '#0cb386' }}
+            >
               {form.require_line_friend && (
                 <p className="text-xs text-muted-foreground">
                   このフォームはLINE友だち限定です。LINEから開くと自動で認証されます。
                 </p>
               )}
+
               {form.fields.map((f) => {
                 const fieldId = `field-${f.id || f.name}`;
+                const isGroup = f.type === 'radio' || f.type === 'checkbox';
+
+                // 上部ラベル：単一入力は htmlFor、グループ入力は id と aria-labelledby を使う
+                const TopLabel = (
+                  <label
+                    className="text-sm font-medium"
+                    {...(isGroup ? { id: `${fieldId}-label` } : { htmlFor: fieldId })}
+                  >
+                    {f.label}
+                    {f.required && (
+                      <span className="ml-1 inline-flex items-center rounded px-1.5 py-0.5 text-[10px] bg-destructive text-destructive-foreground">
+                        必須
+                      </span>
+                    )}
+                  </label>
+                );
+
                 return (
-                  <div key={f.id} className="space-y-2">
-                    <label className="text-sm font-medium" htmlFor={fieldId}>
-                      {f.label}
-                      {f.required && (
-                        <span className="ml-1 inline-flex items-center rounded px-1.5 py-0.5 text-[10px] bg-destructive text-destructive-foreground">必須</span>
-                      )}
-                    </label>
+                  <div key={f.id ?? f.name} className="space-y-2">
+                    {TopLabel}
+
                     {f.type === 'textarea' && (
-                      <Textarea 
-                        id={fieldId} 
-                        name={f.name} 
+                      <Textarea
+                        id={fieldId}
+                        name={f.name}
                         placeholder={f.placeholder}
                         rows={f.rows || 3}
-                        required={!!f.required} 
-                        onChange={(e)=>handleChange(f.name, e.target.value)} 
+                        required={!!f.required}
+                        onChange={(e) => handleChange(f.name, e.target.value)}
                       />
                     )}
+
                     {(f.type === 'text' || f.type === 'email') && (
-                      <Input 
-                        id={fieldId} 
-                        name={f.name} 
-                        type={f.type || 'text'} 
+                      <Input
+                        id={fieldId}
+                        name={f.name}
+                        type={f.type || 'text'}
                         placeholder={f.placeholder}
-                        required={!!f.required} 
-                        onChange={(e)=>handleChange(f.name, e.target.value)} 
+                        required={!!f.required}
+                        onChange={(e) => handleChange(f.name, e.target.value)}
                       />
                     )}
-                     {f.type === 'select' && Array.isArray(f.options) && (
-                       <div>
-                         <Select onValueChange={(v)=>handleChange(f.name, v)} required={!!f.required}>
-                           <SelectTrigger id={fieldId} name={f.name} className="px-3">
-                             <SelectValue placeholder="選択してください" />
-                           </SelectTrigger>
-                           <SelectContent className="bg-background z-[60]">
-                             {(f.options || []).map((opt) => (opt ?? "").trim()).filter(Boolean).map((opt, i) => (
-                               <SelectItem key={`${opt}-${i}`} value={opt}>{opt}</SelectItem>
-                             ))}
-                           </SelectContent>
-                         </Select>
-                       </div>
-                     )}
-                     {f.type === 'radio' && Array.isArray(f.options) && (
-                       <fieldset>
-                         <legend className="sr-only">{f.label}</legend>
-                         <RadioGroup 
-                           value={values[f.name] || ""} 
-                           onValueChange={(v)=>handleChange(f.name, v)}
-                           required={!!f.required}
-                         >
-                           <div className="flex flex-col gap-2">
-                             {f.options.map((opt, index) => {
-                               const radioId = `${fieldId}-radio-${index}`;
-                               return (
-                                 <div key={opt} className="inline-flex items-center gap-2">
-                                   <RadioGroupItem 
-                                     id={radioId}
-                                     value={opt}
-                                     className="border-[var(--form-accent)] data-[state=checked]:bg-[var(--form-accent)] data-[state=checked]:text-white" 
-                                   />
-                                   <label htmlFor={radioId} className="text-sm cursor-pointer">{opt}</label>
-                                 </div>
-                               );
-                             })}
-                           </div>
-                         </RadioGroup>
-                       </fieldset>
-                     )}
-                     {f.type === 'checkbox' && Array.isArray(f.options) && (
-                       <fieldset>
-                         <legend className="sr-only">{f.label}</legend>
-                         <div className="flex flex-col gap-2" role="group" aria-labelledby={fieldId}>
-                           {f.options.map((opt, index) => {
-                             const checkboxId = `${fieldId}-checkbox-${index}`;
-                             const checked = Array.isArray(values[f.name]) && values[f.name].includes(opt);
-                             return (
-                               <div key={opt} className="inline-flex items-center gap-2">
-                                 <Checkbox
-                                   id={checkboxId}
-                                   name={`${f.name}[]`}
-                                   className="border-[var(--form-accent)] data-[state=checked]:bg-[var(--form-accent)] data-[state=checked]:text-white"
-                                   checked={!!checked}
-                                   onCheckedChange={(v)=>{
-                                     const prev: string[] = Array.isArray(values[f.name]) ? values[f.name] : [];
-                                     if (v === true) {
-                                       handleChange(f.name, Array.from(new Set([...prev, opt])));
-                                     } else {
-                                       handleChange(f.name, prev.filter((x)=> x !== opt));
-                                     }
-                                   }}
-                                 />
-                                 <label htmlFor={checkboxId} className="text-sm cursor-pointer">{opt}</label>
-                               </div>
-                             );
-                           })}
-                         </div>
-                       </fieldset>
-                     )}
+
+                    {f.type === 'select' && Array.isArray(f.options) && (
+                      <div>
+                        <Select onValueChange={(v) => handleChange(f.name, v)}>
+                          <SelectTrigger id={fieldId} name={f.name} className="px-3" aria-labelledby={`${fieldId}-label`}>
+                            <SelectValue placeholder="選択してください" />
+                          </SelectTrigger>
+                          <SelectContent className="bg-background z-[60]">
+                            {(f.options || [])
+                              .map((opt) => (opt ?? "").trim())
+                              .filter(Boolean)
+                              .map((opt, i) => (
+                                <SelectItem key={`${opt}-${i}`} value={opt}>
+                                  {opt}
+                                </SelectItem>
+                              ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    )}
+
+                    {f.type === 'radio' && Array.isArray(f.options) && (
+                      <fieldset aria-labelledby={`${fieldId}-label`}>
+                        <legend className="sr-only">{f.label}</legend>
+                        <RadioGroup
+                          value={values[f.name] || ""}
+                          onValueChange={(v) => handleChange(f.name, v)}
+                        >
+                          <div className="flex flex-col gap-2">
+                            {f.options.map((opt, index) => {
+                              const radioId = `${fieldId}-radio-${index}`;
+                              return (
+                                <div key={opt} className="inline-flex items-center gap-2">
+                                  <RadioGroupItem
+                                    id={radioId}
+                                    value={opt}
+                                    className="border-[var(--form-accent)] data-[state=checked]:bg-[var(--form-accent)] data-[state=checked]:text-white"
+                                  />
+                                  <label htmlFor={radioId} className="text-sm cursor-pointer">
+                                    {opt}
+                                  </label>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </RadioGroup>
+                      </fieldset>
+                    )}
+
+                    {f.type === 'checkbox' && Array.isArray(f.options) && (
+                      <fieldset aria-labelledby={`${fieldId}-label`}>
+                        <legend className="sr-only">{f.label}</legend>
+                        <div className="flex flex-col gap-2" role="group">
+                          {f.options.map((opt, index) => {
+                            const checkboxId = `${fieldId}-checkbox-${index}`;
+                            const checked = Array.isArray(values[f.name]) && values[f.name].includes(opt);
+                            return (
+                              <div key={opt} className="inline-flex items-center gap-2">
+                                <Checkbox
+                                  id={checkboxId}
+                                  name={`${f.name}[]`}
+                                  className="border-[var(--form-accent)] data-[state=checked]:bg-[var(--form-accent)] data-[state=checked]:text-white"
+                                  checked={!!checked}
+                                  onCheckedChange={(v) => {
+                                    const prev: string[] = Array.isArray(values[f.name]) ? values[f.name] : [];
+                                    if (v === true) {
+                                      handleChange(f.name, Array.from(new Set([...prev, opt])));
+                                    } else {
+                                      handleChange(f.name, prev.filter((x) => x !== opt));
+                                    }
+                                  }}
+                                />
+                                <label htmlFor={checkboxId} className="text-sm cursor-pointer">
+                                  {opt}
+                                </label>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </fieldset>
+                    )}
                   </div>
                 );
               })}
-              <Button type="submit" className="w-full" variant="default" style={{ backgroundColor: form.submit_button_bg_color || '#0cb386', color: form.submit_button_text_color || '#ffffff' }}>{form.submit_button_text || '送信'}</Button>
+
+              <Button
+                type="submit"
+                className="w-full"
+                variant="default"
+                style={{ backgroundColor: form.submit_button_bg_color || '#0cb386', color: form.submit_button_text_color || '#ffffff' }}
+              >
+                {form.submit_button_text || '送信'}
+              </Button>
             </form>
           )}
         </CardContent>
