@@ -263,68 +263,80 @@ export default function PublicForm() {
                   このフォームはLINE友だち限定です。LINEから開くと自動で認証されます。
                 </p>
               )}
-              {form.fields.map((f) => (
-                <div key={f.id} className="space-y-2">
-                  <label className="text-sm font-medium" htmlFor={f.name}>
-                    {f.label}
-                    {f.required && (
-                      <span className="ml-1 inline-flex items-center rounded px-1.5 py-0.5 text-[10px] bg-destructive text-destructive-foreground">必須</span>
+              {form.fields.map((f) => {
+                const fieldId = `field-${f.id || f.name}`;
+                return (
+                  <div key={f.id} className="space-y-2">
+                    <label className="text-sm font-medium" htmlFor={fieldId}>
+                      {f.label}
+                      {f.required && (
+                        <span className="ml-1 inline-flex items-center rounded px-1.5 py-0.5 text-[10px] bg-destructive text-destructive-foreground">必須</span>
+                      )}
+                    </label>
+                    {f.type === 'textarea' && (
+                      <Textarea id={fieldId} name={f.name} required={!!f.required} onChange={(e)=>handleChange(f.name, e.target.value)} />
                     )}
-                  </label>
-                  {f.type === 'textarea' && (
-                    <Textarea id={f.name} name={f.name} required={!!f.required} onChange={(e)=>handleChange(f.name, e.target.value)} />
-                  )}
-                  {(f.type === 'text' || f.type === 'email') && (
-                    <Input id={f.name} name={f.name} type={f.type || 'text'} required={!!f.required} onChange={(e)=>handleChange(f.name, e.target.value)} />
-                  )}
-                  {f.type === 'select' && Array.isArray(f.options) && (
-                    <Select onValueChange={(v)=>handleChange(f.name, v)}>
-                      <SelectTrigger className="px-3"><SelectValue placeholder="選択してください" /></SelectTrigger>
-                      <SelectContent className="bg-background z-[60]">
-                        {(f.options || []).map((opt) => (opt ?? "").trim()).filter(Boolean).map((opt, i) => (
-                          <SelectItem key={`${opt}-${i}`} value={opt}>{opt}</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  )}
-                  {f.type === 'radio' && Array.isArray(f.options) && (
-                    <RadioGroup value={values[f.name] || ""} onValueChange={(v)=>handleChange(f.name, v)}>
+                    {(f.type === 'text' || f.type === 'email') && (
+                      <Input id={fieldId} name={f.name} type={f.type || 'text'} required={!!f.required} onChange={(e)=>handleChange(f.name, e.target.value)} />
+                    )}
+                    {f.type === 'select' && Array.isArray(f.options) && (
+                      <Select onValueChange={(v)=>handleChange(f.name, v)}>
+                        <SelectTrigger id={fieldId} className="px-3"><SelectValue placeholder="選択してください" /></SelectTrigger>
+                        <SelectContent className="bg-background z-[60]">
+                          {(f.options || []).map((opt) => (opt ?? "").trim()).filter(Boolean).map((opt, i) => (
+                            <SelectItem key={`${opt}-${i}`} value={opt}>{opt}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    )}
+                    {f.type === 'radio' && Array.isArray(f.options) && (
+                      <RadioGroup value={values[f.name] || ""} onValueChange={(v)=>handleChange(f.name, v)}>
+                        <div className="flex flex-col gap-2">
+                          {f.options.map((opt, index) => {
+                            const radioId = `${fieldId}-radio-${index}`;
+                            return (
+                              <div key={opt} className="inline-flex items-center gap-2">
+                                <RadioGroupItem 
+                                  id={radioId}
+                                  value={opt} 
+                                  className="border-[var(--form-accent)] data-[state=checked]:bg-[var(--form-accent)] data-[state=checked]:text-white" 
+                                />
+                                <label htmlFor={radioId} className="text-sm cursor-pointer">{opt}</label>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </RadioGroup>
+                    )}
+                    {f.type === 'checkbox' && Array.isArray(f.options) && (
                       <div className="flex flex-col gap-2">
-                        {f.options.map((opt)=> (
-                          <label key={opt} className="inline-flex items-center gap-2">
-                            <RadioGroupItem value={opt} className="border-[var(--form-accent)] data-[state=checked]:bg-[var(--form-accent)] data-[state=checked]:text-white" />
-                            <span>{opt}</span>
-                          </label>
-                        ))}
+                        {f.options.map((opt, index) => {
+                          const checkboxId = `${fieldId}-checkbox-${index}`;
+                          const checked = Array.isArray(values[f.name]) && values[f.name].includes(opt);
+                          return (
+                            <div key={opt} className="inline-flex items-center gap-2">
+                              <Checkbox
+                                id={checkboxId}
+                                className="border-[var(--form-accent)] data-[state=checked]:bg-[var(--form-accent)] data-[state=checked]:text-white"
+                                checked={!!checked}
+                                onCheckedChange={(v)=>{
+                                  const prev: string[] = Array.isArray(values[f.name]) ? values[f.name] : [];
+                                  if (v === true) {
+                                    handleChange(f.name, Array.from(new Set([...prev, opt])));
+                                  } else {
+                                    handleChange(f.name, prev.filter((x)=> x !== opt));
+                                  }
+                                }}
+                              />
+                              <label htmlFor={checkboxId} className="text-sm cursor-pointer">{opt}</label>
+                            </div>
+                          );
+                        })}
                       </div>
-                    </RadioGroup>
-                  )}
-                  {f.type === 'checkbox' && Array.isArray(f.options) && (
-                    <div className="flex flex-col gap-2">
-                      {f.options.map((opt)=> {
-                        const checked = Array.isArray(values[f.name]) && values[f.name].includes(opt);
-                        return (
-                          <label key={opt} className="inline-flex items-center gap-2">
-                            <Checkbox
-                              className="border-[var(--form-accent)] data-[state=checked]:bg-[var(--form-accent)] data-[state=checked]:text-white"
-                              checked={!!checked}
-                              onCheckedChange={(v)=>{
-                                const prev: string[] = Array.isArray(values[f.name]) ? values[f.name] : [];
-                                if (v === true) {
-                                  handleChange(f.name, Array.from(new Set([...prev, opt])));
-                                } else {
-                                  handleChange(f.name, prev.filter((x)=> x !== opt));
-                                }
-                              }}
-                            />
-                            <span>{opt}</span>
-                          </label>
-                        );
-                      })}
-                    </div>
-                  )}
-                </div>
-              ))}
+                    )}
+                  </div>
+                );
+              })}
               <Button type="submit" className="w-full" variant="default" style={{ backgroundColor: form.submit_button_bg_color || '#0cb386', color: form.submit_button_text_color || '#ffffff' }}>{form.submit_button_text || '送信'}</Button>
             </form>
           )}
