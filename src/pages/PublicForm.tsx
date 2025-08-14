@@ -176,34 +176,9 @@ const notifyLineBot = async (
   } catch (error) {
     console.error('LINE通知エラー:', error);
     
-    // フォールバック: Supabase Edge Functions または Realtime を使用
-    try {
-      const { error: notifyError } = await supabase
-        .from('line_notifications')
-        .insert({
-          type: 'form_submission',
-          line_user_id: lineUserId,
-          friend_id: friendId,
-          data: {
-            form_id: formId,
-            submission_data: submissionData,
-            post_submit_scenario_id: postSubmitScenarioId,
-          },
-          status: 'pending',
-          created_at: new Date().toISOString(),
-        });
-
-      if (notifyError) {
-        console.error('フォールバック通知も失敗:', notifyError);
-        return false;
-      }
-
-      console.log('フォールバック通知成功');
-      return true;
-    } catch (fallbackError) {
-      console.error('フォールバック通知エラー:', fallbackError);
-      return false;
-    }
+    // フォールバック: ログ出力のみ（通知テーブルがないため）
+    console.log('フォールバック: 直接API呼び出しが失敗しました');
+    return false;
   }
 };
 
@@ -271,16 +246,18 @@ export default function PublicForm() {
         if (data) {
           setForm({
             ...data,
-            fields: Array.isArray(data.fields) ? data.fields : []
+            fields: Array.isArray(data.fields) ? data.fields as PublicFormRow['fields'] : []
           });
           
           // デフォルト値の設定
           const defaultValues: Record<string, any> = {};
-          data.fields?.forEach((field: any) => {
-            if (field.type === 'checkbox') {
-              defaultValues[field.name] = [];
-            }
-          });
+          if (Array.isArray(data.fields)) {
+            (data.fields as PublicFormRow['fields']).forEach((field) => {
+              if (field.type === 'checkbox') {
+                defaultValues[field.name] = [];
+              }
+            });
+          }
           setValues(defaultValues);
         }
       } catch (error) {
