@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 
 import { supabase } from "@/integrations/supabase/client";
+import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { toast } from "sonner";
 import FormListTable from "@/components/forms/FormListTable";
@@ -261,6 +262,43 @@ export default function FormResponses() {
                   {selectedFormObj?.description && <CardDescription>{selectedFormObj.description}</CardDescription>}
                 </div>
                 <div className="flex gap-2">
+                  <Button 
+                    variant="outline" 
+                    size="sm" 
+                    onClick={async () => {
+                      if (!selectedForm) return;
+                      setLoading(true);
+                      const { data, error } = await (supabase as any)
+                        .from('form_submissions')
+                        .select(`
+                          id, 
+                          submitted_at, 
+                          data, 
+                          friend_id, 
+                          line_user_id,
+                          form_id,
+                          line_friends(display_name, short_uid)
+                        `)
+                        .eq('form_id', selectedForm)
+                        .order('submitted_at', { ascending: sortOrder === 'asc' });
+                      
+                      if (!error) {
+                        const formattedData = (data || []).map((item: any) => ({
+                          ...item,
+                          display_name: item.line_friends?.display_name || null,
+                          short_uid: item.line_friends?.short_uid || null
+                        }));
+                        setSubmissions(formattedData);
+                        toast.success('更新しました');
+                      } else {
+                        toast.error('更新に失敗しました');
+                      }
+                      setLoading(false);
+                    }}
+                    disabled={loading}
+                  >
+                    更新
+                  </Button>
                   <Select value={sortOrder} onValueChange={(v) => setSortOrder(v as 'asc' | 'desc')}>
                     <SelectTrigger className="w-[140px]">
                       <SelectValue placeholder="並び順" />
