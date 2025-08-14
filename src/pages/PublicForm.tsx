@@ -118,7 +118,7 @@ export default function PublicForm() {
     let friendId: string | null = null;
     let actualLineUserId: string | null = lineUserId;
 
-    // UIDまたはLINE User IDが提供されている場合、友だちを特定する（require_line_friendに関係なく）
+    // UIDまたはLINE User IDが提供されている場合、友だちを特定する
     if (shortUid || lineUserId) {
       let friendQuery = (supabase as any)
         .from('line_friends')
@@ -127,24 +127,21 @@ export default function PublicForm() {
       
       if (shortUid) {
         friendQuery = friendQuery.eq('short_uid', shortUid);
-        console.log(`短縮UIDで友だち検索: ${shortUid}`);
       } else {
         friendQuery = friendQuery.eq('line_user_id', lineUserId);
-        console.log(`LINE User IDで友だち検索: ${lineUserId}`);
       }
       
       const { data: friend, error: fErr } = await friendQuery.maybeSingle();
       if (friend) {
         friendId = friend.id;
         actualLineUserId = friend.line_user_id;
-        console.log(`友だちを特定: ${friend.display_name} (ID: ${friendId}, Short UID: ${friend.short_uid})`);
+        console.log(`友だちを特定: ${friend.display_name} (ID: ${friendId})`);
       } else {
         console.log('友だちが見つかりませんでした:', fErr);
-        console.log(`検索クエリ: user_id=${form.user_id}, ${shortUid ? `short_uid=${shortUid}` : `line_user_id=${lineUserId}`}`);
       }
     }
 
-    // LINE友だち限定チェック（require_line_friendがtrueの場合のみ）
+    // LINE友だち限定チェック
     if (form.require_line_friend) {
       if (!friendId) {
         toast.error('このフォームはLINE友だち限定です。先に友だち追加してください。');
