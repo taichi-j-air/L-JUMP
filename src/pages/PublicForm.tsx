@@ -151,6 +151,12 @@ export default function PublicForm() {
       } else {
         console.log('友だちが見つかりませんでした:', fErr);
         console.log(`検索クエリ: user_id=${form.user_id}, ${shortUid ? `short_uid=${shortUid}` : `line_user_id=${lineUserId}`}`);
+        
+        // 友だちとして登録されていない場合でも、URLパラメーターがあればline_user_idは保存する
+        if (lineUserId) {
+          actualLineUserId = lineUserId;
+          console.log(`友だち未登録だが、line_user_idを保存: ${lineUserId}`);
+        }
       }
     }
 
