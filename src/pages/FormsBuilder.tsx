@@ -281,7 +281,7 @@ const handleUpdate = async () => {
 
       <div className="grid gap-4 lg:grid-cols-12">
         {/* 左: フォーム一覧 */}
-        <div className="lg:col-span-4">
+        <div className="lg:col-span-4 space-y-2">
           <FormListPanel
             items={forms as any}
             loading={loading}
@@ -329,6 +329,9 @@ const handleUpdate = async () => {
             onDelete={deleteForm}
             unreadCounts={unreadCounts}
           />
+          <div className="text-xs text-muted-foreground">
+            削除するとフォームと回答データは完全に削除され、元に戻せません。
+          </div>
         </div>
 
         {/* 中央: 項目設定 */}
@@ -409,11 +412,6 @@ const handleUpdate = async () => {
             </CardContent>
           </Card>
         </div>
-      </div>
-
-
-      <div className="text-xs text-muted-foreground">
-        削除するとフォームと回答データは完全に削除され、元に戻せません。
       </div>
     </div>
   );
