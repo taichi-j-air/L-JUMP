@@ -112,12 +112,9 @@ export default function PublicForm() {
 
     let shortUid = url.searchParams.get('uid') || url.searchParams.get('suid') || url.searchParams.get('s');
     shortUid = shortUid?.trim() || null;
-    if (shortUid && shortUid !== '[UID]' && shortUid !== 'UID') {
+    if (shortUid && !['[UID]', 'UID'].includes(shortUid)) {
       shortUid = shortUid.toUpperCase(); // 運用規約に合わせて toUpperCase / toLowerCase を選択
     } else {
-      if (shortUid) {
-        console.warn('[param.uid] invalid token detected, treating as null:', shortUid);
-      }
       shortUid = null;
     }
 
@@ -209,18 +206,16 @@ export default function PublicForm() {
 
     console.log('[insert.payload]', payload);
 
-    const { data: inserted, error } = await (supabase as any)
+    const { error } = await (supabase as any)
       .from('form_submissions')
-      .insert(payload)
-      .select('id, user_id, friend_id, line_user_id')
-      .single();
+      .insert(payload);
 
     if (error) {
       console.error('[insert.error]', error);
       toast.error('送信に失敗しました');
       return;
     }
-    console.log('[insert.ok]', inserted);
+    console.log('[insert.success] Form submitted successfully');
 
     setSubmitted(true);
     toast.success('送信しました');
