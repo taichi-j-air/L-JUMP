@@ -201,13 +201,28 @@ export default function PublicForm() {
       let actualFriendId = null;
       
       if (shortUid && !lineUserId) {
-        console.log('一般フォーム: shortUidからline_user_idを取得を試行:', shortUid);
+        console.log('一般フォーム: shortUidからline_user_idを取得を試行:', {
+          shortUid,
+          form_user_id: form.user_id,
+          query_conditions: {
+            user_id: form.user_id,
+            short_uid: shortUid
+          }
+        });
+        
         const { data: friendByUid, error: uidErr } = await (supabase as any)
           .from('line_friends')
-          .select('line_user_id, id')
+          .select('line_user_id, id, user_id, short_uid, display_name')
           .eq('user_id', form.user_id)
           .eq('short_uid', shortUid)
           .maybeSingle();
+        
+        console.log('一般フォーム: データベース検索結果:', { 
+          friendByUid, 
+          uidErr,
+          hasData: !!friendByUid,
+          errorDetails: uidErr ? JSON.stringify(uidErr) : null
+        });
         
         if (friendByUid && !uidErr) {
           actualLineUserId = friendByUid.line_user_id;
@@ -215,10 +230,16 @@ export default function PublicForm() {
           console.log('一般フォーム: shortUidから取得成功:', { 
             shortUid, 
             lineUserId: actualLineUserId, 
-            friendId: actualFriendId 
+            friendId: actualFriendId,
+            displayName: friendByUid.display_name
           });
         } else {
-          console.log('一般フォーム: shortUidから取得失敗:', { shortUid, uidErr });
+          console.log('一般フォーム: shortUidから取得失敗:', { 
+            shortUid, 
+            uidErr: uidErr ? JSON.stringify(uidErr) : null,
+            noDataFound: !friendByUid,
+            form_user_id: form.user_id
+          });
         }
       }
       
