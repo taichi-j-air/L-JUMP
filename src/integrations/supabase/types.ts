@@ -7,7 +7,7 @@ export type Json =
   | Json[]
 
 export type Database = {
-  // Allows to automatically instanciate createClient with right options
+  // Allows to automatically instantiate createClient with right options
   // instead of createClient<Database, { PostgrestVersion: 'XX' }>(URL, KEY)
   __InternalSupabase: {
     PostgrestVersion: "12.2.12 (cd3cf9e)"
@@ -1238,24 +1238,24 @@ export type Database = {
       calculate_scheduled_delivery_time: {
         Args:
           | {
-              p_friend_added_at: string
-              p_delivery_type: string
-              p_delivery_seconds: number
-              p_delivery_minutes: number
-              p_delivery_hours: number
               p_delivery_days: number
+              p_delivery_hours: number
+              p_delivery_minutes: number
+              p_delivery_seconds: number
+              p_delivery_time_of_day?: string
+              p_delivery_type: string
+              p_friend_added_at: string
+              p_previous_step_delivered_at?: string
               p_specific_time?: string
             }
           | {
-              p_friend_added_at: string
-              p_delivery_type: string
-              p_delivery_seconds: number
-              p_delivery_minutes: number
-              p_delivery_hours: number
               p_delivery_days: number
+              p_delivery_hours: number
+              p_delivery_minutes: number
+              p_delivery_seconds: number
+              p_delivery_type: string
+              p_friend_added_at: string
               p_specific_time?: string
-              p_previous_step_delivered_at?: string
-              p_delivery_time_of_day?: string
             }
         Returns: string
       }
@@ -1286,39 +1286,39 @@ export type Database = {
         Args: { profile_user_id: string }
         Returns: {
           display_name: string
-          user_role: string
-          line_api_status: string
           friends_count: number
+          line_api_status: string
+          user_role: string
         }[]
       }
       log_security_event: {
         Args: {
-          p_user_id?: string
           p_action?: string
           p_details?: Json
           p_ip_address?: string
-          p_user_agent?: string
           p_success?: boolean
+          p_user_agent?: string
+          p_user_id?: string
         }
         Returns: undefined
       }
       register_friend_to_scenario: {
         Args: {
-          p_line_user_id: string
-          p_invite_code: string
           p_display_name?: string
+          p_invite_code: string
+          p_line_user_id: string
           p_picture_url?: string
         }
         Returns: Json
       }
       register_friend_with_scenario: {
         Args: {
-          p_line_user_id: string
-          p_display_name?: string
-          p_picture_url?: string
-          p_scenario_name?: string
           p_campaign_id?: string
+          p_display_name?: string
+          p_line_user_id: string
+          p_picture_url?: string
           p_registration_source?: string
+          p_scenario_name?: string
         }
         Returns: Json
       }
