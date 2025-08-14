@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import FormListTable from "@/components/forms/FormListTable";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -23,7 +24,7 @@ export default function FormResponses() {
 
   const [forms, setForms] = useState<FormRow[]>([]);
   const [selectedForm, setSelectedForm] = useState<string>("");
-  const [submissions, setSubmissions] = useState<Array<{ id: string; submitted_at: string; data: any; friend_id: string | null; form_id?: string }>>([]);
+  const [submissions, setSubmissions] = useState<Array<{ id: string; submitted_at: string; data: any; friend_id: string | null; line_user_id: string | null; form_id?: string }>>([]);
   const [loading, setLoading] = useState(false);
   const [unreadCounts, setUnreadCounts] = useState<Record<string, number>>({});
   const [badgeEnabledMap, setBadgeEnabledMap] = useState<Record<string, boolean>>({});
@@ -71,7 +72,7 @@ export default function FormResponses() {
       setLoading(true);
       const { data, error } = await (supabase as any)
         .from('form_submissions')
-        .select('id, submitted_at, data, friend_id, form_id')
+        .select('id, submitted_at, data, friend_id, line_user_id, form_id')
         .eq('form_id', selectedForm)
         .order('submitted_at', { ascending: sortOrder === 'asc' });
       if (error) {
@@ -138,7 +139,7 @@ export default function FormResponses() {
 
         // Append to list if this form is open
         if (row?.form_id === selectedForm) {
-          setSubmissions(prev => [{ id: row.id, submitted_at: row.submitted_at, data: row.data, friend_id: row.friend_id, form_id: row.form_id }, ...prev])
+          setSubmissions(prev => [{ id: row.id, submitted_at: row.submitted_at, data: row.data, friend_id: row.friend_id, line_user_id: row.line_user_id, form_id: row.form_id }, ...prev])
         }
 
         // Always update unread counts (respect per-form enable toggle)
@@ -297,7 +298,9 @@ export default function FormResponses() {
                         }}>
                           <div className="flex items-center gap-3">
                             <span className="text-xs text-muted-foreground whitespace-nowrap">{new Date(s.submitted_at).toLocaleString()}</span>
-                            <span className="text-xs text-muted-foreground">{s.friend_id ? s.friend_id : '匿名'}</span>
+                            <span className="text-xs text-muted-foreground">
+                              {s.friend_id ? `友達ID: ${s.friend_id}` : s.line_user_id ? `LINE: ${s.line_user_id.substring(0, 8)}...` : '匿名'}
+                            </span>
                             {(unreadSubmissionIds[selectedForm] || []).includes(s.id) && (
                               <span className="inline-block h-2 w-2 rounded-full bg-destructive" aria-label="未読" />
                             )}

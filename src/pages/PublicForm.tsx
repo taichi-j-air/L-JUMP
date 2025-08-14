@@ -185,11 +185,13 @@ export default function PublicForm() {
         data: values,
         friend_id: null,
         line_user_id: lineUserId || null,
+        user_id: null,
       });
       
       const { error } = await (supabase as any).from('form_submissions').insert({
         form_id: form.id,
         data: values,
+        user_id: null,
         friend_id: null,
         line_user_id: lineUserId || null,
       });
