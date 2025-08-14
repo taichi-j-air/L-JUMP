@@ -23,7 +23,7 @@ export default function FormResponses() {
 
   const [forms, setForms] = useState<FormRow[]>([]);
   const [selectedForm, setSelectedForm] = useState<string>("");
-  const [submissions, setSubmissions] = useState<Array<{ id: string; submitted_at: string; data: any; friend_id: string | null; line_user_id: string | null; display_name?: string | null; short_uid?: string | null; form_id?: string }>>([]);
+  const [submissions, setSubmissions] = useState<Array<{ id: string; submitted_at: string; data: any; friend_id: string | null; form_id?: string }>>([]);
   const [loading, setLoading] = useState(false);
   const [unreadCounts, setUnreadCounts] = useState<Record<string, number>>({});
   const [badgeEnabledMap, setBadgeEnabledMap] = useState<Record<string, boolean>>({});
@@ -69,34 +69,16 @@ export default function FormResponses() {
     const loadSubmissions = async () => {
       if (!selectedForm) return;
       setLoading(true);
-      // 友だち情報と一緒に取得
       const { data, error } = await (supabase as any)
         .from('form_submissions')
-        .select(`
-          id, 
-          submitted_at, 
-          data, 
-          friend_id, 
-          line_user_id,
-          form_id,
-          line_friends(display_name, short_uid)
-        `)
+        .select('id, submitted_at, data, friend_id, form_id')
         .eq('form_id', selectedForm)
         .order('submitted_at', { ascending: sortOrder === 'asc' });
       if (error) {
-        console.error('回答取得エラー:', error);
+        console.error(error);
         toast.error('回答の取得に失敗しました');
       }
-      
-      // データを整形
-      const formattedData = (data || []).map((item: any) => ({
-        ...item,
-        display_name: item.line_friends?.display_name || null,
-        short_uid: item.line_friends?.short_uid || null
-      }));
-      
-      console.log('取得したフォーム回答:', formattedData);
-      setSubmissions(formattedData);
+      setSubmissions(data || []);
       setLoading(false);
 
       // フェッチ時にも未読を更新（通知オンのフォームのみ）
@@ -156,14 +138,7 @@ export default function FormResponses() {
 
         // Append to list if this form is open
         if (row?.form_id === selectedForm) {
-          setSubmissions(prev => [{ 
-            id: row.id, 
-            submitted_at: row.submitted_at, 
-            data: row.data, 
-            friend_id: row.friend_id, 
-            line_user_id: row.line_user_id,
-            form_id: row.form_id 
-          }, ...prev])
+          setSubmissions(prev => [{ id: row.id, submitted_at: row.submitted_at, data: row.data, friend_id: row.friend_id, form_id: row.form_id }, ...prev])
         }
 
         // Always update unread counts (respect per-form enable toggle)
@@ -322,9 +297,7 @@ export default function FormResponses() {
                         }}>
                           <div className="flex items-center gap-3">
                             <span className="text-xs text-muted-foreground whitespace-nowrap">{new Date(s.submitted_at).toLocaleString()}</span>
-                            <span className="text-xs text-muted-foreground">
-                              {s.display_name ? `${s.display_name} (${s.short_uid})` : s.line_user_id ? `LINE: ${s.line_user_id}` : '匿名'}
-                            </span>
+                            <span className="text-xs text-muted-foreground">{s.friend_id ? s.friend_id : '匿名'}</span>
                             {(unreadSubmissionIds[selectedForm] || []).includes(s.id) && (
                               <span className="inline-block h-2 w-2 rounded-full bg-destructive" aria-label="未読" />
                             )}

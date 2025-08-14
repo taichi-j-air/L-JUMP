@@ -111,18 +111,17 @@ export default function PublicForm() {
                        url.searchParams.get('user_id');
     const shortUid = url.searchParams.get('uid') || url.searchParams.get('suid') || url.searchParams.get('s');
 
-    console.log(`フォーム送信 - URL: ${window.location.href}`);
-    console.log(`フォーム送信パラメーター: lineUserId=${lineUserId}, shortUid=${shortUid}`);
-    console.log(`フォーム設定: require_line_friend=${form.require_line_friend}, user_id=${form.user_id}`);
-
     let friendId: string | null = null;
-    let actualLineUserId: string | null = lineUserId;
-
-    // UIDまたはLINE User IDが提供されている場合、友だちを特定する
-    if (shortUid || lineUserId) {
+    if (form.require_line_friend) {
+      if (!lineUserId && !shortUid) {
+        toast.error('LINEアプリから開いてください（友だち限定フォーム）');
+        return;
+      }
+      
+      // Check friend existence for the form owner (by LINE User ID or Short UID)
       let friendQuery = (supabase as any)
         .from('line_friends')
-        .select('id, line_user_id, short_uid, display_name')
+        .select('id, line_user_id')
         .eq('user_id', form.user_id);
       
       if (shortUid) {
@@ -132,21 +131,11 @@ export default function PublicForm() {
       }
       
       const { data: friend, error: fErr } = await friendQuery.maybeSingle();
-      if (friend) {
-        friendId = friend.id;
-        actualLineUserId = friend.line_user_id;
-        console.log(`友だちを特定: ${friend.display_name} (ID: ${friendId})`);
-      } else {
-        console.log('友だちが見つかりませんでした:', fErr);
-      }
-    }
-
-    // LINE友だち限定チェック
-    if (form.require_line_friend) {
-      if (!friendId) {
+      if (fErr || !friend) {
         toast.error('このフォームはLINE友だち限定です。先に友だち追加してください。');
         return;
       }
+      friendId = friend.id;
 
       if (form.prevent_duplicate_per_friend) {
         const { data: dup } = await (supabase as any)
@@ -160,23 +149,34 @@ export default function PublicForm() {
           return;
         }
       }
-    }
       
-    // フォーム送信（友だち情報を含めて保存）
-    const { error } = await (supabase as any).from('form_submissions').insert({
-      form_id: form.id,
-      data: values,
-      friend_id: friendId,
-      line_user_id: actualLineUserId,
-    });
-    
-    if (error) {
-      console.error('フォーム送信エラー:', error);
-      toast.error('送信に失敗しました');
-      return;
+      // Store friend data for later use
+      const actualLineUserId = friend.line_user_id || lineUserId;
+      
+      const { error } = await (supabase as any).from('form_submissions').insert({
+        form_id: form.id,
+        data: values,
+        friend_id: friendId,
+        line_user_id: actualLineUserId,
+      });
+      if (error) {
+        console.error(error);
+        toast.error('送信に失敗しました');
+        return;
+      }
+    } else {
+      const { error } = await (supabase as any).from('form_submissions').insert({
+        form_id: form.id,
+        data: values,
+        friend_id: null,
+        line_user_id: lineUserId || null,
+      });
+      if (error) {
+        console.error(error);
+        toast.error('送信に失敗しました');
+        return;
+      }
     }
-    
-    console.log(`フォーム送信成功: friend_id=${friendId}, line_user_id=${actualLineUserId}`);
     
     setSubmitted(true);
     toast.success('送信しました');
