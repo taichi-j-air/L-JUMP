@@ -110,6 +110,13 @@ export default function PublicForm() {
                        url.searchParams.get('lu') || 
                        url.searchParams.get('user_id');
     const shortUid = url.searchParams.get('uid') || url.searchParams.get('suid') || url.searchParams.get('s');
+    
+    console.log('フォーム送信 - URL パラメーター:', {
+      url: window.location.href,
+      lineUserId,
+      shortUid,
+      requireLineFriend: form.require_line_friend
+    });
 
     let friendId: string | null = null;
     if (form.require_line_friend) {
@@ -131,6 +138,7 @@ export default function PublicForm() {
       }
       
       const { data: friend, error: fErr } = await friendQuery.maybeSingle();
+      console.log('LINE友達検索結果:', { friend, fErr, shortUid, lineUserId });
       if (fErr || !friend) {
         toast.error('このフォームはLINE友だち限定です。先に友だち追加してください。');
         return;
@@ -153,6 +161,13 @@ export default function PublicForm() {
       // Store friend data for later use
       const actualLineUserId = friend.line_user_id || lineUserId;
       
+      console.log('フォーム送信データ (友だち限定):', {
+        form_id: form.id,
+        data: values,
+        friend_id: friendId,
+        line_user_id: actualLineUserId,
+      });
+      
       const { error } = await (supabase as any).from('form_submissions').insert({
         form_id: form.id,
         data: values,
@@ -165,6 +180,13 @@ export default function PublicForm() {
         return;
       }
     } else {
+      console.log('フォーム送信データ (一般):', {
+        form_id: form.id,
+        data: values,
+        friend_id: null,
+        line_user_id: lineUserId || null,
+      });
+      
       const { error } = await (supabase as any).from('form_submissions').insert({
         form_id: form.id,
         data: values,
