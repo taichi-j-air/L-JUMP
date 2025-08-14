@@ -287,73 +287,94 @@ export default function PublicForm() {
                       )}
                     </label>
                     {f.type === 'textarea' && (
-                      <Textarea id={fieldId} name={f.name} required={!!f.required} onChange={(e)=>handleChange(f.name, e.target.value)} />
+                      <Textarea 
+                        id={fieldId} 
+                        name={f.name} 
+                        placeholder={f.placeholder}
+                        rows={f.rows || 3}
+                        required={!!f.required} 
+                        onChange={(e)=>handleChange(f.name, e.target.value)} 
+                      />
                     )}
                     {(f.type === 'text' || f.type === 'email') && (
-                      <Input id={fieldId} name={f.name} type={f.type || 'text'} required={!!f.required} onChange={(e)=>handleChange(f.name, e.target.value)} />
+                      <Input 
+                        id={fieldId} 
+                        name={f.name} 
+                        type={f.type || 'text'} 
+                        placeholder={f.placeholder}
+                        required={!!f.required} 
+                        onChange={(e)=>handleChange(f.name, e.target.value)} 
+                      />
                     )}
                      {f.type === 'select' && Array.isArray(f.options) && (
-                       <Select onValueChange={(v)=>handleChange(f.name, v)} required={!!f.required}>
-                         <SelectTrigger id={fieldId} name={f.name} className="px-3">
-                           <SelectValue placeholder="選択してください" />
-                         </SelectTrigger>
-                         <SelectContent className="bg-background z-[60]">
-                           {(f.options || []).map((opt) => (opt ?? "").trim()).filter(Boolean).map((opt, i) => (
-                             <SelectItem key={`${opt}-${i}`} value={opt}>{opt}</SelectItem>
-                           ))}
-                         </SelectContent>
-                       </Select>
+                       <div>
+                         <Select onValueChange={(v)=>handleChange(f.name, v)} required={!!f.required}>
+                           <SelectTrigger id={fieldId} name={f.name} className="px-3">
+                             <SelectValue placeholder="選択してください" />
+                           </SelectTrigger>
+                           <SelectContent className="bg-background z-[60]">
+                             {(f.options || []).map((opt) => (opt ?? "").trim()).filter(Boolean).map((opt, i) => (
+                               <SelectItem key={`${opt}-${i}`} value={opt}>{opt}</SelectItem>
+                             ))}
+                           </SelectContent>
+                         </Select>
+                       </div>
                      )}
                      {f.type === 'radio' && Array.isArray(f.options) && (
-                       <RadioGroup 
-                         value={values[f.name] || ""} 
-                         onValueChange={(v)=>handleChange(f.name, v)}
-                         name={f.name}
-                         required={!!f.required}
-                       >
-                         <div className="flex flex-col gap-2">
+                       <fieldset>
+                         <legend className="sr-only">{f.label}</legend>
+                         <RadioGroup 
+                           value={values[f.name] || ""} 
+                           onValueChange={(v)=>handleChange(f.name, v)}
+                           required={!!f.required}
+                         >
+                           <div className="flex flex-col gap-2">
+                             {f.options.map((opt, index) => {
+                               const radioId = `${fieldId}-radio-${index}`;
+                               return (
+                                 <div key={opt} className="inline-flex items-center gap-2">
+                                   <RadioGroupItem 
+                                     id={radioId}
+                                     value={opt}
+                                     className="border-[var(--form-accent)] data-[state=checked]:bg-[var(--form-accent)] data-[state=checked]:text-white" 
+                                   />
+                                   <label htmlFor={radioId} className="text-sm cursor-pointer">{opt}</label>
+                                 </div>
+                               );
+                             })}
+                           </div>
+                         </RadioGroup>
+                       </fieldset>
+                     )}
+                     {f.type === 'checkbox' && Array.isArray(f.options) && (
+                       <fieldset>
+                         <legend className="sr-only">{f.label}</legend>
+                         <div className="flex flex-col gap-2" role="group" aria-labelledby={fieldId}>
                            {f.options.map((opt, index) => {
-                             const radioId = `${fieldId}-radio-${index}`;
+                             const checkboxId = `${fieldId}-checkbox-${index}`;
+                             const checked = Array.isArray(values[f.name]) && values[f.name].includes(opt);
                              return (
                                <div key={opt} className="inline-flex items-center gap-2">
-                                 <RadioGroupItem 
-                                   id={radioId}
-                                   value={opt}
-                                   className="border-[var(--form-accent)] data-[state=checked]:bg-[var(--form-accent)] data-[state=checked]:text-white" 
+                                 <Checkbox
+                                   id={checkboxId}
+                                   name={`${f.name}[]`}
+                                   className="border-[var(--form-accent)] data-[state=checked]:bg-[var(--form-accent)] data-[state=checked]:text-white"
+                                   checked={!!checked}
+                                   onCheckedChange={(v)=>{
+                                     const prev: string[] = Array.isArray(values[f.name]) ? values[f.name] : [];
+                                     if (v === true) {
+                                       handleChange(f.name, Array.from(new Set([...prev, opt])));
+                                     } else {
+                                       handleChange(f.name, prev.filter((x)=> x !== opt));
+                                     }
+                                   }}
                                  />
-                                 <label htmlFor={radioId} className="text-sm cursor-pointer">{opt}</label>
+                                 <label htmlFor={checkboxId} className="text-sm cursor-pointer">{opt}</label>
                                </div>
                              );
                            })}
                          </div>
-                       </RadioGroup>
-                     )}
-                     {f.type === 'checkbox' && Array.isArray(f.options) && (
-                       <div className="flex flex-col gap-2" role="group" aria-labelledby={fieldId}>
-                         {f.options.map((opt, index) => {
-                           const checkboxId = `${fieldId}-checkbox-${index}`;
-                           const checked = Array.isArray(values[f.name]) && values[f.name].includes(opt);
-                           return (
-                             <div key={opt} className="inline-flex items-center gap-2">
-                               <Checkbox
-                                 id={checkboxId}
-                                 name={`${f.name}[]`}
-                                 className="border-[var(--form-accent)] data-[state=checked]:bg-[var(--form-accent)] data-[state=checked]:text-white"
-                                 checked={!!checked}
-                                 onCheckedChange={(v)=>{
-                                   const prev: string[] = Array.isArray(values[f.name]) ? values[f.name] : [];
-                                   if (v === true) {
-                                     handleChange(f.name, Array.from(new Set([...prev, opt])));
-                                   } else {
-                                     handleChange(f.name, prev.filter((x)=> x !== opt));
-                                   }
-                                 }}
-                               />
-                               <label htmlFor={checkboxId} className="text-sm cursor-pointer">{opt}</label>
-                             </div>
-                           );
-                         })}
-                       </div>
+                       </fieldset>
                      )}
                   </div>
                 );
