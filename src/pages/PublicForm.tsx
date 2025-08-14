@@ -183,20 +183,48 @@ export default function PublicForm() {
         return;
       }
     } else {
-      console.log('フォーム送信データ (一般):', {
+      // 一般フォームでも、UIDパラメーターがあれば友だち情報を取得して保存
+      let actualLineUserId = lineUserId;
+      let actualFriendId = null;
+      
+      if (shortUid && !lineUserId) {
+        console.log('一般フォーム: shortUidからline_user_idを取得を試行:', shortUid);
+        const { data: friendByUid, error: uidErr } = await (supabase as any)
+          .from('line_friends')
+          .select('line_user_id, id')
+          .eq('user_id', form.user_id)
+          .eq('short_uid', shortUid)
+          .maybeSingle();
+        
+        if (friendByUid && !uidErr) {
+          actualLineUserId = friendByUid.line_user_id;
+          actualFriendId = friendByUid.id;
+          console.log('一般フォーム: shortUidから取得成功:', { 
+            shortUid, 
+            lineUserId: actualLineUserId, 
+            friendId: actualFriendId 
+          });
+        } else {
+          console.log('一般フォーム: shortUidから取得失敗:', { shortUid, uidErr });
+        }
+      }
+      
+      console.log('フォーム送信データ (一般) - 最終版:', {
         form_id: form.id,
         data: values,
-        friend_id: null,
-        line_user_id: lineUserId || null,
+        friend_id: actualFriendId,
+        line_user_id: actualLineUserId,
         user_id: null,
+        shortUid: shortUid,
+        originalLineUserId: lineUserId
       });
       
       const { error } = await (supabase as any).from('form_submissions').insert({
         form_id: form.id,
         data: values,
         user_id: null,
-        friend_id: null,
-        line_user_id: lineUserId || null,
+        friend_id: actualFriendId,
+        line_user_id: actualLineUserId,
       });
       if (error) {
         console.error(error);
