@@ -42,6 +42,7 @@ interface Props {
   postScenario: string | null;
   setPostScenario: (v: string | null) => void;
   scenarios: Array<{ id: string; name: string }>;
+  formId: string;
 }
 
 export default function FormPreviewPanel({
@@ -71,6 +72,7 @@ export default function FormPreviewPanel({
   postScenario,
   setPostScenario,
   scenarios,
+  formId,
 }: Props) {
   const [values, setValues] = useState<Record<string, any>>({});
   const [showLiffDialog, setShowLiffDialog] = useState(false);
@@ -193,7 +195,7 @@ export default function FormPreviewPanel({
           <SuccessMessageManager 
             successMessage={successMessage}
             setSuccessMessage={setSuccessMessage}
-            formId="preview"
+            formId={formId}
           />
           <div className="space-y-1">
             <label className="text-sm">送信ボタンのテキスト</label>

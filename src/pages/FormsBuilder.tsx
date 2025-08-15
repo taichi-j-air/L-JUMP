@@ -370,6 +370,7 @@ const handleUpdate = async () => {
               />
 
               <FieldEditorPanel
+                key={`${editingId || 'new'}:${selectedFieldId || 'none'}`}
                 field={selectedField as any}
                 onChange={(patch) => selectedField && updateField(selectedField.id, patch)}
               />
@@ -385,6 +386,7 @@ const handleUpdate = async () => {
             </CardHeader>
             <CardContent>
               <FormPreviewPanel
+                key={editingId || 'new'}
                 formName={formName}
                 setFormName={setFormName}
                 description={description}
@@ -411,6 +413,7 @@ const handleUpdate = async () => {
                 postScenario={postScenario}
                 setPostScenario={setPostScenario}
                 scenarios={scenarios}
+                formId={editingId || 'new'}
                />
              </CardContent>
            </Card>
