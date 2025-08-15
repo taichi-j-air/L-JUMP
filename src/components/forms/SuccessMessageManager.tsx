@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
@@ -11,165 +11,145 @@ import { Plus, X, Trash2 } from "lucide-react";
 interface SuccessMessage {
   id: string;
   name: string;
-  content: string;
+  content: string; // rich HTML
   isRich: boolean;
 }
 
 interface SuccessMessageManagerProps {
+  /** 親のフォーム設定に反映するための値 */
   successMessage: string;
   setSuccessMessage: (message: string) => void;
-  formId?: string; // To track per-form selection
+
+  /** 必須: フォームごとのユニークID */
+  formId: string;
 }
 
-export function SuccessMessageManager({ successMessage, setSuccessMessage, formId = 'default' }: SuccessMessageManagerProps) {
-  const [isRichEditor, setIsRichEditor] = useState(false);
+export function SuccessMessageManager({
+  successMessage,
+  setSuccessMessage,
+  formId,
+}: SuccessMessageManagerProps) {
+  if (!formId) {
+    console.error("SuccessMessageManager: formId is required");
+    return null;
+  }
+
+  // ─────────────────────────────────────────────
+  // helpers: namespaced localStorage
+  // ─────────────────────────────────────────────
+  const nsKey = (suffix: string) => `form:${formId}:${suffix}`;
+
+  const readJSON = <T,>(key: string, fallback: T): T => {
+    try {
+      const raw = localStorage.getItem(key);
+      return raw ? (JSON.parse(raw) as T) : fallback;
+    } catch {
+      return fallback;
+    }
+  };
+  const saveJSON = (key: string, value: any) => {
+    localStorage.setItem(key, JSON.stringify(value));
+  };
+
+  const [isRichEditor, setIsRichEditor] = useState<boolean>(false);
   const [showManager, setShowManager] = useState(false);
   const [showEditor, setShowEditor] = useState(false);
+
+  // 保存済みリッチメッセージ（これは全フォームで共有でOK）
   const [savedMessages, setSavedMessages] = useState<SuccessMessage[]>([]);
   const [selectedMessageId, setSelectedMessageId] = useState<string | null>(null);
+
+  // プレーンテキストはフォームごとに保持
+  const [plainTextMessage, setPlainTextMessage] = useState<string>("送信ありがとうございます");
+
+  // エディタ用一時状態
   const [editingMessage, setEditingMessage] = useState<SuccessMessage | null>(null);
   const [newMessageName, setNewMessageName] = useState("");
   const [newMessageContent, setNewMessageContent] = useState("");
-  const [plainTextMessage, setPlainTextMessage] = useState("送信ありがとうございます");
 
-  // Load saved messages from localStorage
+  // HTML除去（プレーンに落とす時の保険）
+  const stripHTMLTags = (html: string): string => {
+    const tmp = document.createElement("div");
+    tmp.innerHTML = html;
+    return tmp.textContent || tmp.innerText || "";
+  };
+
+  // ─────────────────────────────────────────────
+  // 初期ロード & 旧キーからの簡易マイグレーション
+  // ─────────────────────────────────────────────
   useEffect(() => {
-    const saved = localStorage.getItem('form-success-messages');
-    const savedSelections = localStorage.getItem('form-success-selections');
-    const savedRichSettings = localStorage.getItem('form-rich-editor-settings');
-    const savedPlainText = localStorage.getItem('form-plain-text-messages');
-    
-    if (saved) {
-      try {
-        setSavedMessages(JSON.parse(saved));
-      } catch (error) {
-        console.error('Failed to load saved messages:', error);
-      }
+    // ① グローバルに保存しているリッチメッセージ群
+    const all = readJSON<SuccessMessage[]>("form-success-messages", []);
+    setSavedMessages(all);
+
+    // ② フォーム別キーがなければ旧方式から移行
+    // リッチON/OFF
+    if (localStorage.getItem(nsKey("rich-enabled")) === null) {
+      const old = readJSON<Record<string, boolean>>("form-rich-editor-settings", {});
+      const v = !!old[formId];
+      saveJSON(nsKey("rich-enabled"), v);
     }
-    
-    // Load rich editor setting for this specific form
-    let currentRichSetting = false;
-    if (savedRichSettings) {
-      try {
-        const richSettings = JSON.parse(savedRichSettings);
-        currentRichSetting = richSettings[formId] || false;
-      } catch (error) {
-        console.error('Failed to load rich settings:', error);
-      }
+    // 選択中リッチID
+    if (localStorage.getItem(nsKey("selected-rich-id")) === null) {
+      const oldSel = readJSON<Record<string, string>>("form-success-selections", {});
+      const v = oldSel[formId] ?? null;
+      if (v) localStorage.setItem(nsKey("selected-rich-id"), v);
     }
-    setIsRichEditor(currentRichSetting);
-    
-    // Load plain text message for this form
-    let currentPlainMessage = "送信ありがとうございます";
-    if (savedPlainText) {
-      try {
-        const plainMessages = JSON.parse(savedPlainText);
-        currentPlainMessage = plainMessages[formId] || "送信ありがとうございます";
-      } catch (error) {
-        console.error('Failed to load plain messages:', error);
-      }
+    // プレーンテキスト
+    if (localStorage.getItem(nsKey("plain")) === null) {
+      const oldPlain = readJSON<Record<string, string>>("form-plain-text-messages", {});
+      const v = oldPlain[formId] ?? "送信ありがとうございます";
+      localStorage.setItem(nsKey("plain"), v);
     }
-    setPlainTextMessage(currentPlainMessage);
-    
-    // Load selection and set appropriate message
-    if (savedSelections) {
-      try {
-        const selections = JSON.parse(savedSelections);
-        const currentSelection = selections[formId];
-        if (currentSelection && currentRichSetting) {
-          setSelectedMessageId(currentSelection);
-          // Set the success message content for this form from rich message
-          const savedMsg = JSON.parse(localStorage.getItem('form-success-messages') || '[]');
-          const selectedMsg = savedMsg.find((msg: SuccessMessage) => msg.id === currentSelection);
-          if (selectedMsg) {
-            setSuccessMessage(selectedMsg.content);
-          } else {
-            // Rich message was deleted, fall back to plain text
-            setSuccessMessage(currentPlainMessage);
-          }
-        } else {
-          // No rich message selected or rich editor is off, use plain text
-          setSelectedMessageId(null);
-          setSuccessMessage(currentPlainMessage);
-        }
-      } catch (error) {
-        console.error('Failed to load saved selections:', error);
-        setSuccessMessage(currentPlainMessage);
-      }
+
+    // ③ フォーム別キーを読み込み
+    const richEnabled = readJSON<boolean>(nsKey("rich-enabled"), false);
+    const selId = localStorage.getItem(nsKey("selected-rich-id"));
+    const plain = localStorage.getItem(nsKey("plain")) || "送信ありがとうございます";
+
+    setIsRichEditor(richEnabled);
+    setSelectedMessageId(selId || null);
+    setPlainTextMessage(plain);
+
+    // ④ 親の successMessage をフォームの状態に合わせて初期化
+    if (richEnabled && selId) {
+      const msg = all.find((m) => m.id === selId);
+      setSuccessMessage(msg?.content || plain);
     } else {
-      // No selections saved, use plain text
-      setSuccessMessage(currentPlainMessage);
+      setSuccessMessage(plain);
     }
   }, [formId, setSuccessMessage]);
 
-  // Save messages to localStorage
+  // ─────────────────────────────────────────────
+  // 保存系
+  // ─────────────────────────────────────────────
   const saveMessages = (messages: SuccessMessage[]) => {
-    localStorage.setItem('form-success-messages', JSON.stringify(messages));
+    saveJSON("form-success-messages", messages);
     setSavedMessages(messages);
   };
 
-  // Save rich editor setting per form
-  const saveRichEditorSetting = (isRich: boolean) => {
-    const saved = localStorage.getItem('form-rich-editor-settings');
-    let settings = {};
-    if (saved) {
-      try {
-        settings = JSON.parse(saved);
-      } catch (error) {
-        console.error('Failed to load settings:', error);
-      }
-    }
-    
-    settings[formId] = isRich;
-    localStorage.setItem('form-rich-editor-settings', JSON.stringify(settings));
+  const saveRichEditorSetting = (enabled: boolean) => {
+    saveJSON(nsKey("rich-enabled"), enabled);
   };
 
-  // Save plain text message per form
-  const savePlainTextMessage = (message: string) => {
-    const saved = localStorage.getItem('form-plain-text-messages');
-    let messages = {};
-    if (saved) {
-      try {
-        messages = JSON.parse(saved);
-      } catch (error) {
-        console.error('Failed to load plain messages:', error);
-      }
-    }
-    
-    messages[formId] = message;
-    localStorage.setItem('form-plain-text-messages', JSON.stringify(messages));
+  const savePlainTextForForm = (message: string) => {
+    localStorage.setItem(nsKey("plain"), message);
     setPlainTextMessage(message);
   };
 
-  // Save selection per form
-  const saveSelection = (messageId: string | null) => {
-    const saved = localStorage.getItem('form-success-selections');
-    let selections = {};
-    if (saved) {
-      try {
-        selections = JSON.parse(saved);
-      } catch (error) {
-        console.error('Failed to load selections:', error);
-      }
-    }
-    
-    if (messageId) {
-      selections[formId] = messageId;
+  const saveSelectedRichId = (id: string | null) => {
+    if (id) {
+      localStorage.setItem(nsKey("selected-rich-id"), id);
+      setSelectedMessageId(id);
     } else {
-      delete selections[formId];
+      localStorage.removeItem(nsKey("selected-rich-id"));
+      setSelectedMessageId(null);
     }
-    
-    localStorage.setItem('form-success-selections', JSON.stringify(selections));
-    setSelectedMessageId(messageId);
   };
 
-  // Strip HTML tags from rich content
-  const stripHTMLTags = (html: string): string => {
-    const tempDiv = document.createElement('div');
-    tempDiv.innerHTML = html;
-    return tempDiv.textContent || tempDiv.innerText || '';
-  };
-
+  // ─────────────────────────────────────────────
+  // UI操作ハンドラ
+  // ─────────────────────────────────────────────
   const handleCreateNew = () => {
     setEditingMessage(null);
     setNewMessageName("");
@@ -186,49 +166,63 @@ export function SuccessMessageManager({ successMessage, setSuccessMessage, formI
 
   const handleSaveMessage = () => {
     if (!newMessageName.trim()) return;
-    
-    const messageData: SuccessMessage = {
+    const data: SuccessMessage = {
       id: editingMessage?.id || Date.now().toString(),
       name: newMessageName,
       content: newMessageContent,
-      isRich: true
+      isRich: true,
     };
-
     if (editingMessage) {
-      // Update existing message
-      const updated = savedMessages.map(msg => 
-        msg.id === editingMessage.id ? messageData : msg
-      );
+      const updated = savedMessages.map((m) => (m.id === editingMessage.id ? data : m));
       saveMessages(updated);
     } else {
-      // Create new message
-      saveMessages([...savedMessages, messageData]);
+      saveMessages([...savedMessages, data]);
     }
-    
     setShowEditor(false);
   };
 
-  const handleToggleMessage = (message: SuccessMessage, isSelected: boolean) => {
-    if (isSelected) {
+  const currentSelectedMessage = useMemo(
+    () => savedMessages.find((m) => m.id === selectedMessageId) || null,
+    [savedMessages, selectedMessageId]
+  );
+
+  const handleToggleUseRichMessage = (message: SuccessMessage, use: boolean) => {
+    if (use) {
+      saveSelectedRichId(message.id);
       setSuccessMessage(message.content);
-      saveSelection(message.id);
     } else {
+      saveSelectedRichId(null);
+      // リッチを使わない＝プレーンに戻す
       setSuccessMessage(plainTextMessage);
-      saveSelection(null);
     }
   };
 
-  // Get the currently selected message for this form
-  const currentSelectedMessage = savedMessages.find(msg => msg.id === selectedMessageId);
-
   const handleDeleteMessage = (id: string) => {
-    const updated = savedMessages.filter(msg => msg.id !== id);
+    const updated = savedMessages.filter((m) => m.id !== id);
     saveMessages(updated);
-    
-    // If deleting the currently selected message, clear selection and restore plain text
     if (selectedMessageId === id) {
+      saveSelectedRichId(null);
       setSuccessMessage(plainTextMessage);
-      saveSelection(null);
+    }
+  };
+
+  // リッチエディタのON/OFFスイッチ
+  const handleSwitchRich = (checked: boolean) => {
+    setIsRichEditor(checked);
+    saveRichEditorSetting(checked);
+
+    if (checked) {
+      if (selectedMessageId) {
+        const msg = savedMessages.find((m) => m.id === selectedMessageId);
+        setSuccessMessage(msg?.content || plainTextMessage);
+      } else {
+        // リッチONにした直後に何も選ばれていなければ選択ダイアログを出す
+        setShowManager(true);
+      }
+    } else {
+      // リッチOFFに切り替えたら、HTMLが残らないよう必ずプレーンに戻す
+      setSuccessMessage(plainTextMessage);
+      saveSelectedRichId(null);
     }
   };
 
@@ -238,29 +232,7 @@ export function SuccessMessageManager({ successMessage, setSuccessMessage, formI
         <label className="text-sm">送信成功メッセージ</label>
         <div className="flex items-center gap-2">
           <span className="text-xs text-muted-foreground">リッチエディタ</span>
-          <Switch 
-            checked={isRichEditor} 
-            onCheckedChange={(checked) => {
-              setIsRichEditor(checked);
-              saveRichEditorSetting(checked);
-              if (checked) {
-                // When switching to rich editor, load selected message if available
-                if (selectedMessageId) {
-                  const savedMsg = savedMessages.find(msg => msg.id === selectedMessageId);
-                  if (savedMsg) {
-                    setSuccessMessage(savedMsg.content);
-                  }
-                } else {
-                  setShowManager(true);
-                }
-              } else {
-                // When switching to plain text, restore saved plain text for this form
-                setSuccessMessage(plainTextMessage);
-                // Clear rich message selection
-                saveSelection(null);
-              }
-            }}
-          />
+          <Switch checked={isRichEditor} onCheckedChange={handleSwitchRich} />
         </div>
       </div>
 
@@ -271,30 +243,31 @@ export function SuccessMessageManager({ successMessage, setSuccessMessage, formI
               設定中: {currentSelectedMessage.name}
             </div>
           )}
-          <Button 
-            variant="outline" 
-            onClick={() => setShowManager(true)}
-            className="w-full"
-          >
+          <Button variant="outline" onClick={() => setShowManager(true)} className="w-full">
             フォーム成功画面の新規作成/設定
           </Button>
           <p className="text-xs text-muted-foreground text-center">
-            オフにした場合、リッチエディタで設定した内容がすべて無効になります
+            オフにすると、リッチで設定した内容は表示されません（プレーンテキストに戻ります）
           </p>
         </div>
       ) : (
-        <Textarea 
-          value={successMessage} 
+        // ★ リッチOFF時は Textarea の value に「常にプレーン用の state」を使う
+        //   これで successMessage にリッチHTMLが残っていても表示されません。
+        <Textarea
+          value={plainTextMessage}
           onChange={(e) => {
-            setSuccessMessage(e.target.value);
-            savePlainTextMessage(e.target.value);
+            const val = e.target.value;
+            setPlainTextMessage(val);
+            savePlainTextForForm(val);
+            // 親にも反映（プレーン運用中のみ）
+            setSuccessMessage(val);
           }}
           rows={3}
           placeholder="送信完了メッセージを入力してください"
         />
       )}
 
-      {/* Success Message Manager Dialog */}
+      {/* 成功メッセージ管理ダイアログ */}
       <Dialog open={showManager} onOpenChange={setShowManager}>
         <DialogContent className="max-w-3xl max-h-[80vh] overflow-y-auto">
           <DialogHeader>
@@ -305,9 +278,9 @@ export function SuccessMessageManager({ successMessage, setSuccessMessage, formI
                   <Plus className="h-4 w-4 mr-1" />
                   新規作成
                 </Button>
-                <Button 
-                  variant="ghost" 
-                  size="sm" 
+                <Button
+                  variant="ghost"
+                  size="sm"
                   onClick={() => setShowManager(false)}
                   className="text-destructive font-bold hover:bg-destructive/10"
                 >
@@ -316,12 +289,10 @@ export function SuccessMessageManager({ successMessage, setSuccessMessage, formI
               </div>
             </DialogTitle>
           </DialogHeader>
-          
+
           <div className="space-y-2">
             {savedMessages.length === 0 ? (
-              <div className="text-center py-4 text-muted-foreground text-xs">
-                保存されたメッセージがありません
-              </div>
+              <div className="text-center py-4 text-muted-foreground text-xs">保存されたメッセージがありません</div>
             ) : (
               <Table className="text-xs">
                 <TableHeader>
@@ -335,26 +306,26 @@ export function SuccessMessageManager({ successMessage, setSuccessMessage, formI
                   {savedMessages.map((message) => (
                     <TableRow key={message.id} className="h-8">
                       <TableCell className="p-2">
-                        <Switch 
+                        <Switch
                           checked={selectedMessageId === message.id}
-                          onCheckedChange={(checked) => handleToggleMessage(message, checked)}
+                          onCheckedChange={(checked) => handleToggleUseRichMessage(message, checked)}
                           className="scale-75"
                         />
                       </TableCell>
                       <TableCell className="font-medium text-xs p-2">{message.name}</TableCell>
                       <TableCell className="p-2">
                         <div className="flex gap-1">
-                          <Button 
-                            size="sm" 
-                            variant="outline" 
+                          <Button
+                            size="sm"
+                            variant="outline"
                             onClick={() => handleEditMessage(message)}
                             className="h-6 px-2 text-xs"
                           >
                             編集
                           </Button>
-                          <Button 
-                            size="sm" 
-                            variant="destructive" 
+                          <Button
+                            size="sm"
+                            variant="destructive"
                             onClick={() => handleDeleteMessage(message.id)}
                             className="h-6 px-1 bg-destructive text-white hover:bg-destructive/80"
                           >
@@ -367,7 +338,7 @@ export function SuccessMessageManager({ successMessage, setSuccessMessage, formI
                 </TableBody>
               </Table>
             )}
-            
+
             <div className="flex justify-end mt-4">
               <Button onClick={() => setShowManager(false)} className="h-8 px-4 text-xs">
                 保存
@@ -377,40 +348,34 @@ export function SuccessMessageManager({ successMessage, setSuccessMessage, formI
         </DialogContent>
       </Dialog>
 
-      {/* Message Editor Dialog */}
+      {/* リッチメッセージ編集ダイアログ */}
       <Dialog open={showEditor} onOpenChange={setShowEditor}>
         <DialogContent className="max-w-4xl max-h-[80vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle>
-              {editingMessage ? 'メッセージを編集' : '新しいメッセージを作成'}
-            </DialogTitle>
+            <DialogTitle>{editingMessage ? "メッセージを編集" : "新しいメッセージを作成"}</DialogTitle>
           </DialogHeader>
-          
+
           <div className="space-y-4">
             <div className="space-y-1">
               <label className="text-sm font-medium">メッセージ名</label>
-              <Input 
+              <Input
                 value={newMessageName}
                 onChange={(e) => setNewMessageName(e.target.value)}
                 placeholder="メッセージの名前を入力"
               />
             </div>
-            
+
             <div className="space-y-1">
               <label className="text-sm font-medium">メッセージ内容</label>
-              <RichTextEditor 
-                value={newMessageContent}
-                onChange={setNewMessageContent}
-                className="min-h-[300px]"
-              />
+              <RichTextEditor value={newMessageContent} onChange={setNewMessageContent} className="min-h-[300px]" />
             </div>
-            
+
             <div className="flex justify-end gap-2">
               <Button variant="outline" onClick={() => setShowEditor(false)}>
                 キャンセル
               </Button>
               <Button onClick={handleSaveMessage} disabled={!newMessageName.trim()}>
-                {editingMessage ? '更新' : '新規保存'}
+                {editingMessage ? "更新" : "新規保存"}
               </Button>
             </div>
           </div>
