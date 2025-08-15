@@ -67,7 +67,7 @@ export default function FormsBuilder() {
   const [isPublic, setIsPublic] = useState(false);
   const [successMessage, setSuccessMessage] = useState("送信ありがとうございました。");
   const [fields, setFields] = useState<FormRow["fields"]>([]);
-  const [requireLineFriend, setRequireLineFriend] = useState(true);
+  const [requireLineFriend, setRequireLineFriend] = useState(false);
   const [preventDuplicate, setPreventDuplicate] = useState(false);
   const [postScenario, setPostScenario] = useState<string | null>(null);
 const [scenarios, setScenarios] = useState<Array<{ id: string; name: string }>>([]);
@@ -160,7 +160,7 @@ const resetCreator = () => {
   setIsPublic(false);
   setSuccessMessage("送信ありがとうございました。");
   setFields([]);
-  setRequireLineFriend(true);
+  setRequireLineFriend(false);
   setPreventDuplicate(false);
   setPostScenario(null);
   setSubmitButtonText("送信");
@@ -227,7 +227,7 @@ const startEdit = (f: FormRow) => {
   const normalized = Array.isArray(f.fields) ? f.fields : [];
   setFields(normalized);
   setSelectedFieldId(normalized[0]?.id ?? null);
-  setRequireLineFriend(f.require_line_friend ?? true);
+  setRequireLineFriend(f.require_line_friend ?? false);
   setPreventDuplicate(f.prevent_duplicate_per_friend ?? false);
   setPostScenario(f.post_submit_scenario_id ?? null);
   setSubmitButtonText(f.submit_button_text || "送信");
@@ -306,7 +306,7 @@ const handleUpdate = async () => {
                   is_public: false,
                   success_message: '送信ありがとうございました。',
                   fields: [],
-                  require_line_friend: true,
+                  require_line_friend: false,
                   prevent_duplicate_per_friend: false,
                   post_submit_scenario_id: null,
                   submit_button_text: '送信',

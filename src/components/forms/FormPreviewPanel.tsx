@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import { RichTextEditor } from "@/components/RichTextEditor";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -174,8 +175,8 @@ export default function FormPreviewPanel({
           ))}
         </div>
 
-        <div className="pt-2 flex justify-center">
-          <Button disabled={!canSubmit} variant="default" style={{ backgroundColor: submitButtonBgColor, color: submitButtonTextColor }}>
+        <div className="pt-2">
+          <Button disabled={!canSubmit} variant="default" className="w-full" style={{ backgroundColor: submitButtonBgColor, color: submitButtonTextColor }}>
             {submitButtonText || "送信"}
           </Button>
         </div>
@@ -190,7 +191,11 @@ export default function FormPreviewPanel({
           </div>
           <div className="space-y-1">
             <label className="text-sm">送信成功メッセージ</label>
-            <Input value={successMessage} onChange={(e) => setSuccessMessage(e.target.value)} />
+            <RichTextEditor 
+              value={successMessage} 
+              onChange={setSuccessMessage}
+              className="min-h-[100px]"
+            />
           </div>
           <div className="space-y-1">
             <label className="text-sm">送信ボタンのテキスト</label>
@@ -262,7 +267,7 @@ export default function FormPreviewPanel({
           <AlertDialogFooter>
             <AlertDialogCancel>キャンセル</AlertDialogCancel>
             <AlertDialogAction onClick={() => {
-              window.open('/line-login-settings', '_blank');
+              window.location.href = '/line-login-settings#liff-settings';
               setShowLiffDialog(false);
             }}>
               設定画面を開く

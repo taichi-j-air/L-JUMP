@@ -193,9 +193,8 @@ export default function PublicForm() {
         <CardContent>
           {submitted ? (
             <div className="py-8">
-              <p className="text-center text-muted-foreground">
-                {form.success_message || '送信ありがとうございました。'}
-              </p>
+              <div className="text-center text-muted-foreground" 
+                   dangerouslySetInnerHTML={{ __html: form.success_message || '送信ありがとうございました。' }} />
             </div>
           ) : (
             <form

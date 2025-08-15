@@ -221,9 +221,8 @@ export default function LiffFormSecure() {
         <CardContent>
           {submitted ? (
             <div className="py-8 text-center space-y-4">
-              <p className="text-muted-foreground">
-                {form.success_message || '送信ありがとうございました。'}
-              </p>
+              <div className="text-muted-foreground" 
+                   dangerouslySetInnerHTML={{ __html: form.success_message || '送信ありがとうございました。' }} />
               <p className="text-sm text-muted-foreground">
                 このウィンドウは自動で閉じます...
               </p>
