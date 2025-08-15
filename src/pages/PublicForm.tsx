@@ -167,6 +167,12 @@ export default function PublicForm() {
       payloadUserId: payload.user_id,
       match: formCheck?.user_id === payload.user_id
     });
+    
+    // Supabase接続状態の確認
+    console.log('[insert.debug] Supabase client check:', {
+      hasSupabase: !!supabase,
+      authUser: (await supabase.auth.getUser()).data?.user?.id || 'anonymous'
+    });
 
     const { data, error } = await supabase
       .from('form_submissions')
