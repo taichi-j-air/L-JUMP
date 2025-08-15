@@ -301,9 +301,13 @@ export default function LiffForm() {
           {submitted ? (
             <div className="py-8 text-center space-y-4">
               <div className="text-4xl">✅</div>
-              <p className="text-muted-foreground">
-                {form.success_message || '送信ありがとうございました。'}
-              </p>
+              <div className="text-muted-foreground" 
+                   dangerouslySetInnerHTML={{ 
+                     __html: form.success_message && form.success_message.trim() 
+                       ? form.success_message 
+                       : '送信ありがとうございました。' 
+                   }} 
+              />
               {isInClient && (
                 <p className="text-xs text-muted-foreground">
                   まもなくこのウィンドウが閉じます

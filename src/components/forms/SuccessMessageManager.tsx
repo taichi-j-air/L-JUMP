@@ -51,12 +51,18 @@ export function SuccessMessageManager({ successMessage, setSuccessMessage, formI
         if (currentSelection) {
           setSelectedMessageId(currentSelection);
           setIsRichEditor(true);
+          // Set the success message content for this form
+          const savedMsg = JSON.parse(localStorage.getItem('form-success-messages') || '[]');
+          const selectedMsg = savedMsg.find((msg: SuccessMessage) => msg.id === currentSelection);
+          if (selectedMsg) {
+            setSuccessMessage(selectedMsg.content);
+          }
         }
       } catch (error) {
         console.error('Failed to load saved selections:', error);
       }
     }
-  }, [formId]);
+  }, [formId, setSuccessMessage]);
 
   // Save messages to localStorage
   const saveMessages = (messages: SuccessMessage[]) => {
@@ -134,6 +140,9 @@ export function SuccessMessageManager({ successMessage, setSuccessMessage, formI
     }
   };
 
+  // Get the currently selected message for this form
+  const currentSelectedMessage = savedMessages.find(msg => msg.id === selectedMessageId);
+
   const handleDeleteMessage = (id: string) => {
     const updated = savedMessages.filter(msg => msg.id !== id);
     saveMessages(updated);
@@ -168,13 +177,20 @@ export function SuccessMessageManager({ successMessage, setSuccessMessage, formI
       </div>
 
       {isRichEditor ? (
-        <Button 
-          variant="outline" 
-          onClick={() => setShowManager(true)}
-          className="w-full"
-        >
-          フォーム成功画面の新規作成
-        </Button>
+        <div className="space-y-2">
+          {currentSelectedMessage && (
+            <div className="text-xs text-muted-foreground px-2 py-1 bg-muted rounded">
+              設定中: {currentSelectedMessage.name}
+            </div>
+          )}
+          <Button 
+            variant="outline" 
+            onClick={() => setShowManager(true)}
+            className="w-full"
+          >
+            フォーム成功画面の新規作成/設定
+          </Button>
+        </div>
       ) : (
         <Textarea 
           value={successMessage} 
@@ -186,63 +202,59 @@ export function SuccessMessageManager({ successMessage, setSuccessMessage, formI
 
       {/* Success Message Manager Dialog */}
       <Dialog open={showManager} onOpenChange={setShowManager}>
-        <DialogContent className="max-w-4xl max-h-[80vh] overflow-y-auto">
+        <DialogContent className="max-w-3xl max-h-[80vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle className="flex items-center justify-between pr-8">
+            <DialogTitle className="flex items-center justify-between">
               <span>成功メッセージ管理</span>
-              <Button onClick={handleCreateNew} size="sm" className="mr-4">
-                <Plus className="h-4 w-4 mr-1" />
-                新規作成
-              </Button>
+              <div className="flex items-center gap-2">
+                <Button onClick={handleCreateNew} size="sm">
+                  <Plus className="h-4 w-4 mr-1" />
+                  新規作成
+                </Button>
+                <Button 
+                  variant="ghost" 
+                  size="sm" 
+                  onClick={() => setShowManager(false)}
+                  className="text-destructive font-bold hover:bg-destructive/10"
+                >
+                  <X className="h-4 w-4" />
+                </Button>
+              </div>
             </DialogTitle>
-            <Button 
-              variant="ghost" 
-              size="sm" 
-              onClick={() => setShowManager(false)}
-              className="absolute top-2 right-2 text-destructive font-bold text-lg hover:bg-destructive/10"
-            >
-              <X className="h-4 w-4" />
-            </Button>
           </DialogHeader>
           
           <div className="space-y-2">
             {savedMessages.length === 0 ? (
-              <div className="text-center py-6 text-muted-foreground text-sm">
+              <div className="text-center py-4 text-muted-foreground text-xs">
                 保存されたメッセージがありません
               </div>
             ) : (
-              <Table>
+              <Table className="text-xs">
                 <TableHeader>
-                  <TableRow className="text-xs">
-                    <TableHead className="w-12 text-xs">選択</TableHead>
-                    <TableHead className="text-xs">名前</TableHead>
-                    <TableHead className="text-xs">プレビュー</TableHead>
-                    <TableHead className="w-24 text-xs">操作</TableHead>
+                  <TableRow className="h-8">
+                    <TableHead className="w-8 text-xs p-2">選択</TableHead>
+                    <TableHead className="text-xs p-2">名前</TableHead>
+                    <TableHead className="w-20 text-xs p-2">操作</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {savedMessages.map((message) => (
-                    <TableRow key={message.id} className="h-12">
-                      <TableCell className="py-2">
+                    <TableRow key={message.id} className="h-8">
+                      <TableCell className="p-2">
                         <Switch 
                           checked={selectedMessageId === message.id}
                           onCheckedChange={(checked) => handleToggleMessage(message, checked)}
+                          className="scale-75"
                         />
                       </TableCell>
-                      <TableCell className="font-medium text-sm py-2">{message.name}</TableCell>
-                      <TableCell className="py-2">
-                        <div 
-                          className="text-xs max-w-xs truncate" 
-                          dangerouslySetInnerHTML={{ __html: message.content.substring(0, 60) + '...' }}
-                        />
-                      </TableCell>
-                      <TableCell className="py-2">
+                      <TableCell className="font-medium text-xs p-2">{message.name}</TableCell>
+                      <TableCell className="p-2">
                         <div className="flex gap-1">
                           <Button 
                             size="sm" 
                             variant="outline" 
                             onClick={() => handleEditMessage(message)}
-                            className="h-7 px-2 text-xs"
+                            className="h-6 px-2 text-xs"
                           >
                             編集
                           </Button>
@@ -250,7 +262,7 @@ export function SuccessMessageManager({ successMessage, setSuccessMessage, formI
                             size="sm" 
                             variant="destructive" 
                             onClick={() => handleDeleteMessage(message.id)}
-                            className="h-7 px-2"
+                            className="h-6 px-1 bg-destructive text-white hover:bg-destructive/80"
                           >
                             <Trash2 className="h-3 w-3" />
                           </Button>
@@ -261,6 +273,12 @@ export function SuccessMessageManager({ successMessage, setSuccessMessage, formI
                 </TableBody>
               </Table>
             )}
+            
+            <div className="flex justify-end mt-4">
+              <Button onClick={() => setShowManager(false)} className="h-8 px-4 text-xs">
+                保存
+              </Button>
+            </div>
           </div>
         </DialogContent>
       </Dialog>
