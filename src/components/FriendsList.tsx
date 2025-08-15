@@ -360,11 +360,14 @@ export function FriendsList({ user }: FriendsListProps) {
                     setDetailFriend(friend)
                     setDetailOpen(true)
                     try {
-                      const [{ data: forms }, { data: logs }, { data: exitLogs }] = await Promise.all([
-                        supabase.from('form_submissions').select('id, submitted_at, data').eq('user_id', user.id).eq('friend_id', friend.id).order('submitted_at',{ascending:false}).limit(50),
-                        supabase.from('scenario_friend_logs').select('added_at, scenario_id').eq('line_user_id', friend.line_user_id).order('added_at',{ascending:false}).limit(100),
-                        supabase.from('step_delivery_tracking').select('updated_at, scenario_id, status').eq('friend_id', friend.id).eq('status','exited').order('updated_at',{ascending:false}).limit(100)
-                      ])
+                       const [{ data: forms }, { data: logs }, { data: exitLogs }] = await Promise.all([
+                         supabase.from('form_submissions').select(`
+                           id, submitted_at, data, form_id,
+                           forms(name, fields)
+                         `).eq('user_id', user.id).eq('friend_id', friend.id).order('submitted_at',{ascending:false}).limit(50),
+                         supabase.from('scenario_friend_logs').select('added_at, scenario_id').eq('line_user_id', friend.line_user_id).order('added_at',{ascending:false}).limit(100),
+                         supabase.from('step_delivery_tracking').select('updated_at, scenario_id, status').eq('friend_id', friend.id).eq('status','exited').order('updated_at',{ascending:false}).limit(100)
+                       ])
                       setDetailForms(forms||[])
                       const combined = [
                         ...((logs||[]).map((l:any)=>({ type:'registered', date:l.added_at, scenario_id:l.scenario_id }))),
@@ -466,16 +469,32 @@ export function FriendsList({ user }: FriendsListProps) {
                 {detailForms.length === 0 && <div className="text-muted-foreground">履歴なし</div>}
                 {detailForms.length > 0 && (
                   <Accordion type="single" collapsible className="w-full">
-                    {detailForms.map((f:any)=> (
-                      <AccordionItem key={f.id} value={f.id}>
-                        <AccordionTrigger className="text-xs">
-                          {format(new Date(f.submitted_at), "yyyy/MM/dd HH:mm")}
-                        </AccordionTrigger>
-                        <AccordionContent>
-                          <pre className="whitespace-pre-wrap break-words">{JSON.stringify(f.data, null, 2)}</pre>
-                        </AccordionContent>
-                      </AccordionItem>
-                    ))}
+                     {detailForms.map((f:any)=> {
+                       const formFields = f.forms?.fields || [];
+                       return (
+                         <AccordionItem key={f.id} value={f.id}>
+                           <AccordionTrigger className="text-xs">
+                             {f.forms?.name || 'フォーム'} - {format(new Date(f.submitted_at), "yyyy/MM/dd HH:mm")}
+                           </AccordionTrigger>
+                           <AccordionContent>
+                             <div className="space-y-2">
+                               {Object.entries(f.data).map(([key, value]) => {
+                                 const field = formFields.find((field: any) => field.name === key);
+                                 const label = field?.label || key;
+                                 return (
+                                   <div key={key} className="border-b pb-1">
+                                     <div className="font-medium text-xs">{label}</div>
+                                     <div className="text-xs text-muted-foreground">
+                                       {Array.isArray(value) ? value.join(', ') : String(value)}
+                                     </div>
+                                   </div>
+                                 );
+                               })}
+                             </div>
+                           </AccordionContent>
+                         </AccordionItem>
+                       );
+                     })}
                   </Accordion>
                 )}
               </div>
