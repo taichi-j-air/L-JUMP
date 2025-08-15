@@ -256,7 +256,7 @@ export function SuccessMessageManager({
         <DialogContent className="max-w-3xl max-h-[80vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="flex items-center justify-between">
-              <span>成功メッセージテンプレート管理</span>
+              <span>回答成功時画面のテンプレート管理</span>
               <div className="flex items-center gap-2">
                 <Button onClick={handleCreateNew} size="sm">
                   <Plus className="h-4 w-4 mr-1" />
@@ -325,10 +325,18 @@ export function SuccessMessageManager({
               </Table>
             )}
 
-            <div className="flex justify-end mt-4">
-              <Button onClick={() => setShowManager(false)} className="h-8 px-4 text-xs">
-                閉じる
-              </Button>
+            <div className="space-y-3">
+              <p className="text-xs text-muted-foreground text-center">
+                保存を押さないと設定が保存されません
+              </p>
+              <div className="flex justify-end gap-2">
+                <Button onClick={() => setShowManager(false)} variant="outline" className="h-8 px-4 text-xs">
+                  閉じる
+                </Button>
+                <Button onClick={() => setShowManager(false)} className="h-8 px-4 text-xs">
+                  保存
+                </Button>
+              </div>
             </div>
           </div>
         </DialogContent>

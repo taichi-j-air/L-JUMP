@@ -10,6 +10,7 @@ import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Checkbox } from "@/components/ui/checkbox";
 import { toast } from "sonner";
 import DOMPurify from 'dompurify';
+import { useIsMobile } from "@/hooks/use-mobile";
 
 interface PublicFormRow {
   id: string;
@@ -56,6 +57,7 @@ export default function PublicForm() {
   const [values, setValues] = useState<Record<string, any>>({});
   const [submitted, setSubmitted] = useState(false);
   const [loading, setLoading] = useState(true);
+  const isMobile = useIsMobile();
 
   useSEO(
     form ? `${form.name} | フォーム` : 'フォーム',
@@ -180,13 +182,13 @@ export default function PublicForm() {
     // 回答後シナリオ遷移の処理はデータベーストリガーで自動実行される
   };
 
-  if (loading) return <div className="container mx-auto max-w-3xl p-4">読み込み中...</div>;
-  if (!form) return <div className="container mx-auto max-w-3xl p-4">フォームが見つかりません</div>;
-  if (!form.is_public) return <div className="container mx-auto max-w-3xl p-4">このフォームは非公開です</div>;
+  if (loading) return <div className={isMobile ? "p-4" : "container mx-auto max-w-3xl p-4"}>読み込み中...</div>;
+  if (!form) return <div className={isMobile ? "p-4" : "container mx-auto max-w-3xl p-4"}>フォームが見つかりません</div>;
+  if (!form.is_public) return <div className={isMobile ? "p-4" : "container mx-auto max-w-3xl p-4"}>このフォームは非公開です</div>;
 
   return (
-    <div className="container mx-auto max-w-3xl p-4">
-      <Card>
+    <div className={isMobile ? "min-h-screen" : "container mx-auto max-w-3xl p-4"}>
+      <Card className={isMobile ? "border-0 rounded-none min-h-screen" : ""}>
         <CardHeader>
           <CardTitle>{form.name}</CardTitle>
           {form.description && <CardDescription>{form.description}</CardDescription>}
