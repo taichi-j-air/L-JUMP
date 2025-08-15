@@ -552,39 +552,113 @@ export function FriendsList({ user }: FriendsListProps) {
                 let successCount = 0;
                 let errorCount = 0;
                 
-                // Register each friend to the scenario using RPC function
-                for (const f of filteredFriends) {
+                // 個別登録と同じ方式で直接step_delivery_trackingを操作
+                for (const friend of filteredFriends) {
                   try {
-                    console.log('Registering friend:', f.line_user_id, 'to scenario:', target.name)
+                    console.log('Registering friend:', friend.line_user_id, 'to scenario:', target.name)
                     
-                    const result = await supabase.rpc('register_friend_with_scenario', { 
-                      p_line_user_id: f.line_user_id, 
-                      p_display_name: f.display_name, 
-                      p_picture_url: f.picture_url, 
-                      p_scenario_name: target.name 
-                    })
-                    
-                    console.log('Registration result:', result)
-                    
-                    if (result.error) {
-                      console.error('Registration failed for friend:', f.line_user_id, result.error)
-                      errorCount++;
-                    } else {
-                      successCount++;
+                    // シナリオの全ステップを取得
+                    const { data: allSteps } = await supabase
+                      .from('steps')
+                      .select('id, step_order, delivery_type, delivery_seconds, delivery_minutes, delivery_hours, delivery_days, delivery_time_of_day, specific_time')
+                      .eq('scenario_id', target.id)
+                      .order('step_order', { ascending: true })
+
+                    if (!allSteps || allSteps.length === 0) {
+                      console.error('No steps found for scenario:', target.id)
+                      errorCount++
+                      continue
                     }
+
+                    // 最初のステップの配信スケジュールを計算
+                    const firstStep = allSteps[0]
+                    const now = new Date()
+                    let firstScheduledAt = now.toISOString()
+                    
+                    if (firstStep.delivery_type === 'relative' && (firstStep.delivery_seconds || firstStep.delivery_minutes || firstStep.delivery_hours || firstStep.delivery_days)) {
+                      const scheduled = new Date(now)
+                      scheduled.setSeconds(scheduled.getSeconds() + (firstStep.delivery_seconds || 0))
+                      scheduled.setMinutes(scheduled.getMinutes() + (firstStep.delivery_minutes || 0))
+                      scheduled.setHours(scheduled.getHours() + (firstStep.delivery_hours || 0))
+                      scheduled.setDate(scheduled.getDate() + (firstStep.delivery_days || 0))
+                      firstScheduledAt = scheduled.toISOString()
+                    } else if (firstStep.delivery_type === 'specific_time' && firstStep.specific_time) {
+                      firstScheduledAt = new Date(firstStep.specific_time).toISOString()
+                    }
+                    
+                    const firstNextCheck = new Date(new Date(firstScheduledAt).getTime() - 5000).toISOString()
+
+                    // 既存のトラッキングを確認
+                    const { data: existing } = await supabase
+                      .from('step_delivery_tracking')
+                      .select('id, step_id')
+                      .eq('scenario_id', target.id)
+                      .eq('friend_id', friend.id)
+
+                    const existingMap = new Map<string, string>((existing || []).map((r: any) => [r.step_id, r.id]))
+
+                    // 不足分を一括INSERT
+                    const missingRows = allSteps
+                      .filter((s: any) => !existingMap.has(s.id))
+                      .map((s: any) => ({
+                        scenario_id: target.id,
+                        step_id: s.id,
+                        friend_id: friend.id,
+                        status: s.step_order === 0 ? 'ready' : 'waiting',
+                        scheduled_delivery_at: s.step_order === 0 ? firstScheduledAt : null,
+                        next_check_at: s.step_order === 0 ? firstNextCheck : null,
+                      }))
+                    
+                    if (missingRows.length > 0) {
+                      const { error: insErr } = await supabase.from('step_delivery_tracking').insert(missingRows)
+                      if (insErr) throw insErr
+                    }
+
+                    // 既存分をUPDATE（再登録の場合）
+                    for (const s of allSteps) {
+                      const id = existingMap.get(s.id)
+                      if (!id) continue
+                      const target_update = s.step_order === 0
+                        ? { status: 'ready', delivered_at: null, scheduled_delivery_at: firstScheduledAt, next_check_at: firstNextCheck }
+                        : { status: 'waiting', delivered_at: null, scheduled_delivery_at: null, next_check_at: null }
+                      const { error: updErr } = await supabase
+                        .from('step_delivery_tracking')
+                        .update({ ...target_update, updated_at: new Date().toISOString() })
+                        .eq('id', id)
+                      if (updErr) throw updErr
+                    }
+
+                    // ログを追加
+                    try {
+                      await supabase
+                        .from('scenario_friend_logs')
+                        .insert({
+                          scenario_id: target.id,
+                          friend_id: friend.id,
+                          line_user_id: friend.line_user_id,
+                          invite_code: 'bulk_manual'
+                        })
+                    } catch (logErr) {
+                      console.warn('scenario_friend_logs insert failed', logErr)
+                    }
+
+                    successCount++
+                    console.log('Successfully registered friend:', friend.line_user_id)
+                    
                   } catch (e: any) {
-                    console.error('Registration error for friend:', f.line_user_id, e)
-                    errorCount++;
+                    console.error('Registration error for friend:', friend.line_user_id, e)
+                    errorCount++
                   }
                 }
                 
                 if (successCount > 0) {
                   toast({ title:'登録完了', description:`${successCount}名を登録しました${errorCount > 0 ? ` (${errorCount}名でエラー)` : ''}` })
+                  // 統計更新通知
+                  window.dispatchEvent(new CustomEvent('scenario-stats-updated'))
+                  loadFriends() // Reload to update scenario mappings
                 } else {
                   toast({ title:'登録失敗', description:'登録できませんでした', variant:'destructive' })
                 }
-                
-                loadFriends() // Reload to update scenario mappings
               } catch (e:any) {
                 console.error('Bulk registration error:', e)
                 toast({ title:'登録失敗', description:e.message||'不明なエラー', variant:'destructive' })
