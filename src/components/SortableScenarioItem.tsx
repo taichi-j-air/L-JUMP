@@ -1,9 +1,14 @@
 import { useSortable } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
+import { useState } from "react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
-import { Trash2, GripVertical, Users, UserX, Ban } from "lucide-react"
+import { Switch } from "@/components/ui/switch"
+import { Label } from "@/components/ui/label"
+import { Trash2, GripVertical, Users, UserX, Ban, Shield } from "lucide-react"
 import { StepScenario } from "@/hooks/useStepScenarios"
+import { supabase } from "@/integrations/supabase/client"
+import { toast } from "sonner"
 
 interface SortableScenarioItemProps {
   scenario: StepScenario
@@ -26,6 +31,8 @@ export function SortableScenarioItem({
   onDelete,
   stats,
 }: SortableScenarioItemProps) {
+  const [isUpdatingToggle, setIsUpdatingToggle] = useState(false)
+  
   const {
     attributes,
     listeners,
@@ -34,6 +41,31 @@ export function SortableScenarioItem({
     transition,
     isDragging,
   } = useSortable({ id: scenario.id })
+
+  const handleToggle = async (checked: boolean) => {
+    if (isUpdatingToggle) return
+
+    setIsUpdatingToggle(true)
+    try {
+      const { error } = await supabase
+        .from('step_scenarios')
+        .update({ prevent_auto_exit: checked })
+        .eq('id', scenario.id)
+
+      if (error) throw error
+
+      toast.success(
+        checked 
+          ? `${scenario.name}は他シナリオ移行時に解除されなくなりました` 
+          : `${scenario.name}は他シナリオ移行時に解除されるようになりました`
+      )
+    } catch (error: any) {
+      console.error('シナリオ解除防止設定の更新に失敗しました:', error)
+      toast.error('設定の更新に失敗しました')
+    } finally {
+      setIsUpdatingToggle(false)
+    }
+  }
 
   const style = {
     transform: CSS.Transform.toString(transform),
@@ -77,6 +109,25 @@ export function SortableScenarioItem({
                 <span className="flex items-center gap-1"><Ban className="h-3 w-3" />失敗 {stats.blocked}</span>
               </div>
             )}
+            
+            {/* 解除防止トグル */}
+            <div className="mt-1 flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
+              <div className="flex items-center space-x-1">
+                <Shield className="h-3 w-3 text-muted-foreground" />
+                <Switch 
+                  id={`prevent-auto-exit-${scenario.id}`}
+                  checked={scenario.prevent_auto_exit || false}
+                  onCheckedChange={handleToggle}
+                  disabled={isUpdatingToggle}
+                />
+                <Label 
+                  htmlFor={`prevent-auto-exit-${scenario.id}`}
+                  className="text-xs text-muted-foreground"
+                >
+                  解除防止
+                </Label>
+              </div>
+            </div>
           </div>
           
           <Button
