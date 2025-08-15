@@ -33,6 +33,9 @@ interface SuccessMessageManagerProps {
 
   /** 必須: フォームごとのユニークID */
   formId: string;
+  
+  /** 保存処理関数 */
+  onSave?: () => Promise<void> | void;
 }
 
 export function SuccessMessageManager({
@@ -43,6 +46,7 @@ export function SuccessMessageManager({
   selectedTemplateId,
   setSelectedTemplateId,
   formId,
+  onSave,
 }: SuccessMessageManagerProps) {
   const [showManager, setShowManager] = useState(false);
   const [showEditor, setShowEditor] = useState(false);
@@ -334,9 +338,10 @@ export function SuccessMessageManager({
                   閉じる
                 </Button>
                 <Button 
-                  onClick={() => {
-                    // 設定が保存されました（実際の保存はFormsBuilderで実行される）
-                    toast.success('設定が保存されました');
+                  onClick={async () => {
+                    if (onSave) {
+                      await onSave();
+                    }
                     setShowManager(false);
                   }} 
                   className="h-8 px-4 text-xs"

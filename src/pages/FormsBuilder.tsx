@@ -505,6 +505,7 @@ const handleUpdate = async () => {
                 setPostScenario={setPostScenario}
                 scenarios={scenarios}
                 formId={editingId || 'new'}
+                onSave={editingId ? handleUpdate : handleCreate}
                />
              </CardContent>
            </Card>

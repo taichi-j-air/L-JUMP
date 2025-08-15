@@ -51,6 +51,9 @@ interface Props {
   setPostScenario: (v: string | null) => void;
   scenarios: Array<{ id: string; name: string }>;
   formId: string;
+  
+  // 保存処理関数
+  onSave?: () => Promise<void> | void;
 }
 
 export default function FormPreviewPanel({
@@ -85,6 +88,7 @@ export default function FormPreviewPanel({
   setPostScenario,
   scenarios,
   formId,
+  onSave,
 }: Props) {
   const [values, setValues] = useState<Record<string, any>>({});
   const [showLiffDialog, setShowLiffDialog] = useState(false);
@@ -212,6 +216,7 @@ export default function FormPreviewPanel({
             selectedTemplateId={successMessageTemplateId}
             setSelectedTemplateId={setSuccessMessageTemplateId}
             formId={formId}
+            onSave={onSave}
           />
           <div className="space-y-1">
             <label className="text-sm">送信ボタンのテキスト</label>
