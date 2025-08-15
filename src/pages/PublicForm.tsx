@@ -90,6 +90,21 @@ export default function PublicForm() {
     e.preventDefault();
     if (!form) return;
 
+    // デバッグ: Supabaseクライアントの認証状態確認
+    console.log('Supabase auth debug:', {
+      hasSupabase: !!supabase,
+      session: await supabase.auth.getSession(),
+      user: await supabase.auth.getUser()
+    });
+
+    // まずテスト用のクエリを実行してAPIキー/認証確認
+    try {
+      const testResult = await supabase.from('forms').select('id').limit(1);
+      console.log('Test query result:', testResult);
+    } catch (testError) {
+      console.error('Test query failed:', testError);
+    }
+
     // 必須チェック（checkbox/radioは上で制御）
     for (const f of form.fields) {
       const val = values[f.name];
@@ -140,21 +155,34 @@ export default function PublicForm() {
 
     console.log('[insert.payload]', payload);
 
-    const { error } = await supabase
+    const { data, error } = await supabase
       .from('form_submissions')
-      .insert(payload);
+      .insert(payload)
+      .select();
 
     if (error) {
       console.error('[insert.error]', error);
+      console.error('Error details:', {
+        code: error.code,
+        message: error.message,
+        details: error.details,
+        hint: error.hint
+      });
+      
+      // 401エラーの詳細ログ
+      if (error.message?.includes('401') || error.code === '401') {
+        console.error('401 Unauthorized detected - check API key and headers');
+      }
+      
       // 友だち限定フォームでRLS拒否された場合
       if (form.require_line_friend) {
         toast.error('このフォームはLINE友だち限定です。正しいリンクから開いてください。');
       } else {
-        toast.error('送信に失敗しました');
+        toast.error('送信に失敗しました: ' + error.message);
       }
       return;
     }
-    console.log('[insert.success] Form submitted successfully');
+    console.log('[insert.success] Form submitted successfully', data);
 
     setSubmitted(true);
     toast.success('送信しました');
