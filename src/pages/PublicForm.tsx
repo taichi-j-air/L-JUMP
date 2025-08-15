@@ -62,7 +62,7 @@ export default function PublicForm() {
   const isMobile = useIsMobile();
 
   // LIFFの状態を取得
-  const { isLiffReady, isLoggedIn, profile, error: liffError } = useLiff(liffId || undefined);
+  const { isLiffReady, isLoggedIn, profile, error: liffError, login } = useLiff(liffId || undefined);
 
   // LIFF状態の詳細ログ
   useEffect(() => {
@@ -189,8 +189,8 @@ export default function PublicForm() {
       // LIFFが利用可能な場合はLIFFログインを要求
       if (liffId && isLiffReady) {
         if (!isLoggedIn || !profile?.userId) {
-          console.error('[LIFF DEBUG] LIFF authentication failed:', { isLoggedIn, profile });
-          toast.error('このフォームはLINE友だち限定です。LINEでログインしてください。');
+          console.error('[LIFF DEBUG] LIFF authentication required - showing login UI');
+          toast.error('LINEログインが必要です。上記のボタンからログインしてください。');
           return;
         }
       } else {
@@ -277,9 +277,30 @@ export default function PublicForm() {
               style={{ ['--form-accent' as any]: form.accent_color || '#0cb386' }}
             >
               {form.require_line_friend && (
-                <p className="text-xs text-muted-foreground">
-                  このフォームはLINE友だち限定です。LINEから開くと自動で認証されます。
-                </p>
+                <div className="text-xs text-muted-foreground space-y-2">
+                  <p>このフォームはLINE友だち限定です。</p>
+                  {liffId && isLiffReady && !isLoggedIn && (
+                    <div className="flex flex-col gap-2 p-3 border rounded-md bg-muted/50">
+                      <p className="text-sm font-medium">LINEログインが必要です</p>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        onClick={() => {
+                          console.log('[LIFF] Manual login triggered');
+                          login();
+                        }}
+                        className="w-full"
+                      >
+                        LINEでログイン
+                      </Button>
+                    </div>
+                  )}
+                  {liffId && isLiffReady && isLoggedIn && profile && (
+                    <div className="flex items-center gap-2 text-green-600">
+                      <span className="text-sm">✓ LINEログイン済み ({profile.displayName})</span>
+                    </div>
+                  )}
+                </div>
               )}
 
               {form.fields.map((f) => {
