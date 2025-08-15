@@ -186,20 +186,11 @@ export default function PublicForm() {
         shortUid
       });
 
-      // LIFFが利用可能な場合はLIFFログインを要求
-      if (liffId && isLiffReady) {
-        if (!isLoggedIn || !profile?.userId) {
-          console.error('[LIFF DEBUG] LIFF authentication required');
-          toast.error('このフォームはLINE友だち限定です。LINEアプリから開いてください。');
-          return;
-        }
-      } else {
-        // LIFFが利用不可の場合はURLパラメータをチェック
-        if (!lineUserIdParam && !shortUid) {
-          console.error('[LIFF DEBUG] No LIFF and no URL params:', { liffId, isLiffReady, lineUserIdParam, shortUid });
-          toast.error('このフォームはLINE友だち限定です。正しいリンクから開いてください。');
-          return;
-        }
+      // LIFF友達情報またはURLパラメータが必要
+      if (!profile?.userId && !lineUserIdParam && !shortUid) {
+        console.error('[LIFF DEBUG] No LINE friend info available');
+        toast.error('このフォームはLINE友だち限定です。LINEアプリから開いてください。');
+        return;
       }
     }
 

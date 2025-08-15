@@ -55,25 +55,6 @@ export const useLiff = (liffId?: string) => {
           displayName: userProfile.displayName,
           pictureUrl: userProfile.pictureUrl
         });
-      } else {
-        // ブラウザでアクセスしている場合、自動ログインを実行
-        const isInClient = window.liff.isInClient();
-        console.log('[LIFF] Login status check:', { 
-          loggedIn, 
-          isInClient, 
-          userAgent: navigator.userAgent 
-        });
-        
-        if (!isInClient) {
-          // ブラウザの場合は自動ログインを実行
-          console.log('[LIFF] Browser access detected, attempting auto-login...');
-          try {
-            window.liff.login({ redirectUri: window.location.href });
-          } catch (loginError) {
-            console.error('[LIFF] Auto-login failed:', loginError);
-            setError('LIFF自動ログインに失敗しました');
-          }
-        }
       }
 
       const liffContext = window.liff.getContext();
