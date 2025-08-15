@@ -37,6 +37,9 @@ import FormsBuilder from "./pages/FormsBuilder";
 import PublicForm from "./pages/PublicForm";
 import LiffForm from "./pages/LiffForm";
 import FormResponses from "./pages/FormResponses";
+import StripeSettings from "./pages/StripeSettings";
+import ProductManagement from "./pages/ProductManagement";
+import PaymentManagement from "./pages/PaymentManagement";
 
 const CMSFriendsPageBuilder = lazy(() => import('./pages/CMSFriendsPageBuilder'));
 const CMSPublicPageBuilder = lazy(() => import('./pages/CMSPublicPageBuilder'));
