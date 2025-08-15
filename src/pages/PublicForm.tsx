@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { useParams } from "react-router-dom";
+import { useParams, useLocation } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -11,6 +11,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { toast } from "sonner";
 import DOMPurify from 'dompurify';
 import { useIsMobile } from "@/hooks/use-mobile";
+import { useLiff } from "@/hooks/useLiff";
 
 interface PublicFormRow {
   id: string;
@@ -57,7 +58,11 @@ export default function PublicForm() {
   const [values, setValues] = useState<Record<string, any>>({});
   const [submitted, setSubmitted] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [liffId, setLiffId] = useState<string | null>(null);
   const isMobile = useIsMobile();
+
+  // LIFFの状態を取得
+  const { isLiffReady, isLoggedIn, profile, error: liffError } = useLiff(liffId || undefined);
 
   useSEO(
     form ? `${form.name} | フォーム` : 'フォーム',
@@ -68,20 +73,51 @@ export default function PublicForm() {
   useEffect(() => {
     const load = async () => {
       setLoading(true);
-      const { data, error } = await (supabase as any)
-        .from('forms')
-        .select('id,name,description,fields,success_message,is_public,user_id,require_line_friend,prevent_duplicate_per_friend,post_submit_scenario_id,submit_button_text,submit_button_variant,submit_button_bg_color,submit_button_text_color,accent_color')
-        .eq('id', formId)
-        .maybeSingle();
-      if (error) {
-        console.error('[forms.load] error:', error);
+      
+      try {
+        // まずフォーム情報を取得
+        const { data: formData, error: formError } = await supabase
+          .from('forms')
+          .select('id,name,description,fields,success_message,is_public,user_id,require_line_friend,prevent_duplicate_per_friend,post_submit_scenario_id,submit_button_text,submit_button_variant,submit_button_bg_color,submit_button_text_color,accent_color')
+          .eq('id', formId)
+          .maybeSingle();
+
+        if (formError) {
+          console.error('[forms.load] error:', formError);
+          toast.error('フォームの取得に失敗しました');
+          return;
+        }
+        
+        if (formData) {
+          // 型アサーションを使用してfieldsを適切にキャスト
+          const formFields = Array.isArray(formData.fields) 
+            ? formData.fields as Array<{ id: string; label: string; name: string; type: string; required?: boolean; options?: string[]; placeholder?: string; rows?: number }>
+            : [];
+          
+          setForm({ ...formData, fields: formFields });
+          
+          // フォーム所有者のLIFF IDを取得
+          if (formData.user_id) {
+            const { data: profileData } = await supabase
+              .from('profiles')
+              .select('liff_id')
+              .eq('user_id', formData.user_id)
+              .single();
+            
+            if (profileData?.liff_id) {
+              console.log('[liff] Setting LIFF ID:', profileData.liff_id);
+              setLiffId(profileData.liff_id);
+            }
+          }
+        }
+      } catch (error) {
+        console.error('[forms.load] unexpected error:', error);
         toast.error('フォームの取得に失敗しました');
+      } finally {
+        setLoading(false);
       }
-      if (data) {
-        setForm({ ...data, fields: Array.isArray(data.fields) ? data.fields : [] });
-      }
-      setLoading(false);
     };
+    
     if (formId) load();
   }, [formId]);
 
@@ -109,77 +145,74 @@ export default function PublicForm() {
       }
     }
 
-    // URLパラメータ取得 & 正規化
+    // URLパラメータとLIFF情報の取得・統合
     const url = new URL(window.location.href);
-    const lineUserIdParam = url.searchParams.get('line_user_id') || url.searchParams.get('lu') || url.searchParams.get('user_id');
+    let lineUserIdParam = url.searchParams.get('line_user_id') || url.searchParams.get('lu') || url.searchParams.get('user_id');
+    
+    // LIFFからLINE友達情報を取得（優先）
+    if (isLiffReady && isLoggedIn && profile?.userId) {
+      console.log('[liff] Using LIFF profile:', profile);
+      lineUserIdParam = profile.userId;
+    }
 
     let shortUid = url.searchParams.get('uid') || url.searchParams.get('suid') || url.searchParams.get('s');
     shortUid = shortUid?.trim() || null;
-    if (shortUid && !['[UID]', 'UID'].includes(shortUid)) {
-      shortUid = shortUid.toUpperCase(); // 運用規約に合わせて toUpperCase / toLowerCase を選択
+    if (shortUid && !['[UID]', 'UID', ''].includes(shortUid)) {
+      shortUid = shortUid.toUpperCase();
     } else {
       shortUid = null;
     }
 
-    console.log('フォーム送信開始 - URL解析:', {
+    console.log('フォーム送信開始 - 情報統合:', {
       fullUrl: window.location.href,
-      allSearchParams: Object.fromEntries(url.searchParams.entries()),
+      urlParams: Object.fromEntries(url.searchParams.entries()),
+      liffInfo: { isLiffReady, isLoggedIn, hasProfile: !!profile },
       extractedParams: { lineUserIdParam, shortUid },
       requireLineFriend: form.require_line_friend,
     });
 
-    // 友だち限定フォームの事前チェック（必要最小限）
+    // 友だち限定フォームのチェック
     if (form.require_line_friend) {
-      if (!lineUserIdParam && !shortUid) {
-        toast.error('LINEアプリから開いてください（友だち限定フォーム）');
-        return;
+      // LIFFが利用可能な場合はLIFFログインを要求
+      if (liffId && isLiffReady) {
+        if (!isLoggedIn || !profile?.userId) {
+          toast.error('このフォームはLINE友だち限定です。LINEでログインしてください。');
+          return;
+        }
+      } else {
+        // LIFFが利用不可の場合はURLパラメータをチェック
+        if (!lineUserIdParam && !shortUid) {
+          toast.error('このフォームはLINE友だち限定です。正しいリンクから開いてください。');
+          return;
+        }
       }
     }
 
-    // 共通payloadを作成（データベーストリガーで友だち解決される）
+    // ペイロードを作成（LIFFまたはURLパラメータから取得した情報を使用）
     const payload = {
       form_id: form.id,
       data: values,
-      user_id: form.user_id, // ★匿名でも所有者に必ず紐づける（ダッシュボード/RLSで見えるように）
+      user_id: form.user_id,
       line_user_id: lineUserIdParam,
       meta: {
         source_uid: shortUid,
         full_url: window.location.href,
         user_agent: navigator.userAgent,
-        timestamp: new Date().toISOString()
+        timestamp: new Date().toISOString(),
+        liff_info: liffId ? {
+          liff_id: liffId,
+          is_logged_in: isLoggedIn,
+          has_profile: !!profile
+        } : null
       }
     };
 
     console.log('[insert.payload]', payload);
 
-    console.log('[insert.debug] Attempting insert with payload:', JSON.stringify(payload, null, 2));
-    
-    // RLSポリシーのデバッグのために、まずformの詳細を再取得
-    const { data: formCheck, error: formError } = await supabase
-      .from('forms')
-      .select('id, user_id, is_public, require_line_friend')
-      .eq('id', form.id)
-      .single();
-    
-    console.log('[insert.debug] Form check:', { formCheck, formError });
-    console.log('[insert.debug] Form matches payload user_id:', {
-      formUserId: formCheck?.user_id,
-      payloadUserId: payload.user_id,
-      match: formCheck?.user_id === payload.user_id
-    });
-    
-    // Supabase接続状態の確認
-    console.log('[insert.debug] Supabase client check:', {
-      hasSupabase: !!supabase,
-      authUser: (await supabase.auth.getUser()).data?.user?.id || 'anonymous'
-    });
-
     const { data, error } = await supabase
       .from('form_submissions')
       .insert(payload)
       .select('*');
-
-    console.log('[insert.debug] Insert result:', { data, error });
 
     if (error) {
       console.error('[insert.error] Full error details:', {
@@ -189,22 +222,21 @@ export default function PublicForm() {
         hint: error.hint,
         payload: payload
       });
-      // Check if this is a friend-only form RLS rejection
-      if (form.require_line_friend && (error.code === '42501' || error.code === 'PGRST301')) {
-        toast.error('このフォームはLINE友だち限定です。正しいリンクから開いてください。');
+      
+      // エラーメッセージの改善
+      if (form.require_line_friend && (error.code === '42501' || error.code === 'PGRST301' || error.code === '401')) {
+        toast.error('このフォームはLINE友だち限定です。LINEでログインしてから送信してください。');
       } else if (error.code === '23505' && error.message?.includes('この友だちは既にこのフォームに回答済みです')) {
         toast.error('この友だちは既にこのフォームに回答済みです。');
       } else {
-        toast.error('送信に失敗しました');
+        toast.error(`送信に失敗しました: ${error.message || 'エラーが発生しました'}`);
       }
       return;
     }
-    console.log('[insert.success] Form submitted successfully');
-
+    
+    console.log('[insert.success] Form submitted successfully:', data);
     setSubmitted(true);
     toast.success('送信しました');
-    
-    // 回答後シナリオ遷移の処理はデータベーストリガーで自動実行される
   };
 
   if (loading) return <div className={isMobile ? "p-4" : "container mx-auto max-w-3xl p-4"}>読み込み中...</div>;
