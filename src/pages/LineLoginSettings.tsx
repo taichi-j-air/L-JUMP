@@ -277,6 +277,18 @@ export default function LineLoginSettings() {
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
+              <Alert>
+                <AlertTriangle className="h-4 w-4" />
+                <AlertDescription>
+                  <strong>LIFF設定手順：</strong><br />
+                  1. LINE Developers コンソールでチャネルを選択<br />
+                  2. 「LIFF」タブをクリック<br />
+                  3. 「追加」ボタンでLIFFアプリを作成<br />
+                  4. 「エンドポイントURL」に下記の自動生成URLを設定<br />
+                  5. サイズは「Full」を選択（推奨）<br />
+                  6. 作成後、LIFF IDとLIFF URLをここに入力
+                </AlertDescription>
+              </Alert>
               <div className="space-y-2">
                 <Label htmlFor="liffId">LIFF ID</Label>
                 <Input
@@ -310,27 +322,31 @@ export default function LineLoginSettings() {
                 </p>
               </div>
 
-              {liffSettings.liffId && (
-                <div className="space-y-2">
-                  <Label>LIFFエンドポイントURL（自動生成）</Label>
-                  <div className="flex items-center gap-2">
-                    <Input value={liffSettings.liffEndpointUrl} readOnly className="font-mono text-sm" />
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => copyToClipboard(liffSettings.liffEndpointUrl, "LIFFエンドポイントURL")}
-                      disabled={!liffSettings.liffEndpointUrl}
-                    >
-                      <Copy className="h-4 w-4" />
-                    </Button>
-                  </div>
-                  <p className="text-sm text-muted-foreground">
-                    LINE Developers コンソールのLIFF設定で「エンドポイントURL」として設定してください。
-                    このURLには動的にユーザーIDとLIFF IDが含まれ、ユーザー識別とセキュリティが向上します。
-                    ユーザーは「https://liff.line.me/{"{LIFF_ID}"}」からLIFF認証にアクセスできます。
-                  </p>
+              <div className="space-y-2">
+                <Label>LIFFエンドポイントURL（設定用・自動生成）</Label>
+                <div className="flex items-center gap-2">
+                  <Input 
+                    value={user ? `${window.location.origin}/liff?userId=${user.id}&liffId=[LIFF_ID]` : ''} 
+                    readOnly 
+                    className="font-mono text-sm" 
+                  />
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => copyToClipboard(
+                      user ? `${window.location.origin}/liff?userId=${user.id}&liffId=[LIFF_ID]` : '', 
+                      "LIFFエンドポイントURL"
+                    )}
+                    disabled={!user}
+                  >
+                    <Copy className="h-4 w-4" />
+                  </Button>
                 </div>
-              )}
+                <p className="text-sm text-muted-foreground">
+                  <strong>重要：</strong> LIFF作成時に上記URLの「[LIFF_ID]」部分を実際のLIFF IDに置き換えてエンドポイントURLに設定してください。<br />
+                  例：{user ? `${window.location.origin}/liff?userId=${user.id}&liffId=2007859465-L5VQg5q9` : ''}
+                </p>
+              </div>
 
               <Button onClick={handleLiffSave} disabled={savingLiff || !liffSettings.liffId || !liffSettings.liffUrl}>
                 {savingLiff ? "保存中..." : "LIFF設定を保存"}
