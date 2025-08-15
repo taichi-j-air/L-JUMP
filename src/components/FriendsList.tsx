@@ -560,7 +560,7 @@ export function FriendsList({ user }: FriendsListProps) {
                     // シナリオの全ステップを取得
                     const { data: allSteps } = await supabase
                       .from('steps')
-                      .select('id, step_order, delivery_type, delivery_seconds, delivery_minutes, delivery_hours, delivery_days, delivery_time_of_day, specific_time')
+                      .select('id, step_order, delivery_type, delivery_seconds, delivery_minutes, delivery_hours, delivery_days, delivery_time_of_day, specific_time, delivery_relative_to_previous')
                       .eq('scenario_id', target.id)
                       .order('step_order', { ascending: true })
 
@@ -570,22 +570,64 @@ export function FriendsList({ user }: FriendsListProps) {
                       continue
                     }
 
-                    // 最初のステップの配信スケジュールを計算
-                    const firstStep = allSteps[0]
-                    const now = new Date()
-                    let firstScheduledAt = now.toISOString()
+                    // 個別登録と同じ開始ステップ設定（step_order 0から開始）
+                    const startOrder = 0 // 常に最初のステップから開始
+                    const startStepId = allSteps[0]?.id
+
+                    // 個別登録と同じ詳細な配信時刻計算ロジック
+                    const startStepDetail = allSteps[0]
                     
-                    if (firstStep.delivery_type === 'relative' && (firstStep.delivery_seconds || firstStep.delivery_minutes || firstStep.delivery_hours || firstStep.delivery_days)) {
-                      const scheduled = new Date(now)
-                      scheduled.setSeconds(scheduled.getSeconds() + (firstStep.delivery_seconds || 0))
-                      scheduled.setMinutes(scheduled.getMinutes() + (firstStep.delivery_minutes || 0))
-                      scheduled.setHours(scheduled.getHours() + (firstStep.delivery_hours || 0))
-                      scheduled.setDate(scheduled.getDate() + (firstStep.delivery_days || 0))
-                      firstScheduledAt = scheduled.toISOString()
-                    } else if (firstStep.delivery_type === 'specific_time' && firstStep.specific_time) {
-                      firstScheduledAt = new Date(firstStep.specific_time).toISOString()
+                    const computeFirstScheduledAt = (): string => {
+                      const now = new Date()
+                      if (!startStepDetail) return now.toISOString()
+
+                      // delivery_typeの正規化（Edge関数に合わせる）
+                      let effectiveType = startStepDetail.delivery_type as string
+                      if (effectiveType === 'immediate') effectiveType = 'immediately'
+                      if (effectiveType === 'specific') effectiveType = 'specific_time'
+                      if (effectiveType === 'time_of_day') effectiveType = 'relative_to_previous'
+                      if (effectiveType === 'relative' && startStepDetail.delivery_relative_to_previous) effectiveType = 'relative_to_previous'
+
+                      const addOffset = (base: Date) => {
+                        const d = new Date(base)
+                        d.setSeconds(d.getSeconds() + (startStepDetail.delivery_seconds || 0))
+                        d.setMinutes(d.getMinutes() + (startStepDetail.delivery_minutes || 0))
+                        d.setHours(d.getHours() + (startStepDetail.delivery_hours || 0))
+                        d.setDate(d.getDate() + (startStepDetail.delivery_days || 0))
+                        return d
+                      }
+                      
+                      const parseTimeOfDay = (val?: string | null) => {
+                        if (!val) return null
+                        const [hh, mm = '0', ss = '0'] = val.split(':')
+                        return { h: Number(hh), m: Number(mm), s: Number(ss) }
+                      }
+
+                      // ベース時刻（シナリオ登録時刻 = 今）
+                      const registrationAt = now
+
+                      if (effectiveType === 'specific_time' && startStepDetail.specific_time) {
+                        // 特定日時
+                        return new Date(startStepDetail.specific_time).toISOString()
+                      }
+
+                      // relative / relative_to_previous の初回は「シナリオ登録時刻」を基準に
+                      let scheduled = addOffset(registrationAt)
+
+                      const tod = parseTimeOfDay(startStepDetail.delivery_time_of_day)
+                      if (tod) {
+                        const withTod = new Date(scheduled)
+                        withTod.setHours(tod.h, tod.m, tod.s, 0)
+                        // もしすでに過去なら翌日に
+                        if (withTod.getTime() <= scheduled.getTime()) {
+                          withTod.setDate(withTod.getDate() + 1)
+                        }
+                        scheduled = withTod
+                      }
+                      return scheduled.toISOString()
                     }
-                    
+
+                    const firstScheduledAt = computeFirstScheduledAt()
                     const firstNextCheck = new Date(new Date(firstScheduledAt).getTime() - 5000).toISOString()
 
                     // 既存のトラッキングを確認
@@ -597,16 +639,17 @@ export function FriendsList({ user }: FriendsListProps) {
 
                     const existingMap = new Map<string, string>((existing || []).map((r: any) => [r.step_id, r.id]))
 
-                    // 不足分を一括INSERT
+                    // 不足分を一括INSERT（個別登録と同じstatus設定）
                     const missingRows = allSteps
                       .filter((s: any) => !existingMap.has(s.id))
                       .map((s: any) => ({
                         scenario_id: target.id,
                         step_id: s.id,
                         friend_id: friend.id,
-                        status: s.step_order === 0 ? 'ready' : 'waiting',
-                        scheduled_delivery_at: s.step_order === 0 ? firstScheduledAt : null,
-                        next_check_at: s.step_order === 0 ? firstNextCheck : null,
+                        status: s.step_order < startOrder ? 'delivered' : s.step_order === startOrder ? 'waiting' : 'waiting',
+                        delivered_at: s.step_order < startOrder ? new Date().toISOString() : null,
+                        scheduled_delivery_at: s.step_order === startOrder ? firstScheduledAt : null,
+                        next_check_at: s.step_order === startOrder ? firstNextCheck : null,
                       }))
                     
                     if (missingRows.length > 0) {
@@ -614,12 +657,14 @@ export function FriendsList({ user }: FriendsListProps) {
                       if (insErr) throw insErr
                     }
 
-                    // 既存分をUPDATE（再登録の場合）
+                    // 既存分をUPDATE（個別登録と同じstatus設定）
                     for (const s of allSteps) {
                       const id = existingMap.get(s.id)
                       if (!id) continue
-                      const target_update = s.step_order === 0
-                        ? { status: 'ready', delivered_at: null, scheduled_delivery_at: firstScheduledAt, next_check_at: firstNextCheck }
+                      const target_update = s.step_order < startOrder
+                        ? { status: 'delivered', delivered_at: new Date().toISOString(), scheduled_delivery_at: null, next_check_at: null }
+                        : s.step_order === startOrder
+                        ? { status: 'waiting', delivered_at: null, scheduled_delivery_at: firstScheduledAt, next_check_at: firstNextCheck }
                         : { status: 'waiting', delivered_at: null, scheduled_delivery_at: null, next_check_at: null }
                       const { error: updErr } = await supabase
                         .from('step_delivery_tracking')
