@@ -628,6 +628,15 @@ export function FriendsList({ user }: FriendsListProps) {
                       if (updErr) throw updErr
                     }
 
+                    // スケジューラ関数をキック（この友だちのみ）
+                    try {
+                      await supabase.functions.invoke('scheduled-step-delivery', {
+                        body: { line_user_id: friend.line_user_id, scenario_id: target.id }
+                      })
+                    } catch (e) {
+                      console.warn('scheduled-step-delivery invoke failed', e)
+                    }
+
                     // ログを追加
                     try {
                       await supabase
