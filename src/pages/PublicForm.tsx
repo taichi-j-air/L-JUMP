@@ -64,6 +64,17 @@ export default function PublicForm() {
   // LIFFの状態を取得
   const { isLiffReady, isLoggedIn, profile, error: liffError } = useLiff(liffId || undefined);
 
+  // LIFF状態の詳細ログ
+  useEffect(() => {
+    console.log('[LIFF DEBUG] State changed:', {
+      liffId,
+      isLiffReady,
+      isLoggedIn,
+      profile,
+      liffError
+    });
+  }, [liffId, isLiffReady, isLoggedIn, profile, liffError]);
+
   useSEO(
     form ? `${form.name} | フォーム` : 'フォーム',
     form?.description || '埋め込みフォーム',
@@ -98,6 +109,8 @@ export default function PublicForm() {
           if (formData.liff_id) {
             console.log('[liff] Setting LIFF ID from RPC:', formData.liff_id);
             setLiffId(formData.liff_id);
+          } else {
+            console.log('[liff] No LIFF ID returned from RPC:', formData);
           }
         }
       } catch (error) {
@@ -163,15 +176,27 @@ export default function PublicForm() {
 
     // 友だち限定フォームのチェック
     if (form.require_line_friend) {
+      console.log('[LIFF DEBUG] Friend-only form check:', {
+        liffId,
+        isLiffReady,
+        isLoggedIn,
+        hasProfile: !!profile,
+        profileUserId: profile?.userId,
+        lineUserIdParam,
+        shortUid
+      });
+
       // LIFFが利用可能な場合はLIFFログインを要求
       if (liffId && isLiffReady) {
         if (!isLoggedIn || !profile?.userId) {
+          console.error('[LIFF DEBUG] LIFF authentication failed:', { isLoggedIn, profile });
           toast.error('このフォームはLINE友だち限定です。LINEでログインしてください。');
           return;
         }
       } else {
         // LIFFが利用不可の場合はURLパラメータをチェック
         if (!lineUserIdParam && !shortUid) {
+          console.error('[LIFF DEBUG] No LIFF and no URL params:', { liffId, isLiffReady, lineUserIdParam, shortUid });
           toast.error('このフォームはLINE友だち限定です。正しいリンクから開いてください。');
           return;
         }
