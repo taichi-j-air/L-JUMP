@@ -129,34 +129,34 @@ export default function PublicForm() {
     let actualFriendId: string | null = null;
     let actualLineUserId: string | null = lineUserIdParam ?? null;
 
-    // 友だち限定フォームの検証
-    if (form.require_line_friend) {
-      if (!actualLineUserId && !shortUid) {
-        toast.error('LINEアプリから開いてください（友だち限定フォーム）');
-        return;
-      }
+      // 友だち限定フォームの検証
+      if (form.require_line_friend) {
+        if (!actualLineUserId && !shortUid) {
+          toast.error('LINEアプリから開いてください（友だち限定フォーム）');
+          return;
+        }
 
-      // 所有ユーザー配下で友だち情報を検索（case-insensitive short_uid）
-      let friendQuery = (supabase as any)
-        .from('line_friends')
-        .select('id, line_user_id')
-        .eq('user_id', form.user_id);
+        // 所有ユーザー配下で友だち情報を検索（case-insensitive short_uid）
+        let friendQuery = supabase
+          .from('line_friends')
+          .select('id, line_user_id')
+          .eq('user_id', form.user_id);
 
-      if (shortUid) {
-        friendQuery = friendQuery.eq('short_uid_ci', shortUid); // Use case-insensitive column
-      } else if (actualLineUserId) {
-        friendQuery = friendQuery.eq('line_user_id', actualLineUserId);
-      }
+        if (shortUid) {
+          friendQuery = friendQuery.eq('short_uid_ci', shortUid);
+        } else if (actualLineUserId) {
+          friendQuery = friendQuery.eq('line_user_id', actualLineUserId);
+        }
 
-      const { data: friend, error: fErr } = await friendQuery.maybeSingle();
-      console.log('[require_friend] friend lookup:', { friend, fErr, shortUid, lineUserIdParam });
+        const { data: friend, error: fErr } = await friendQuery.maybeSingle();
+        console.log('[require_friend] friend lookup:', { friend, fErr, shortUid, lineUserIdParam });
 
-      if (fErr || !friend) {
-        toast.error('このフォームはLINE友だち限定です。先に友だち追加してください。');
-        return;
-      }
-      actualFriendId = friend.id;
-      actualLineUserId = friend.line_user_id || actualLineUserId || null;
+        if (fErr || !friend) {
+          toast.error('このフォームはLINE友だち限定です。先に友だち追加してください。');
+          return;
+        }
+        actualFriendId = friend.id;
+        actualLineUserId = friend.line_user_id || actualLineUserId || null;
 
       // 重複送信の抑止（友だち単位）
       if (form.prevent_duplicate_per_friend && actualFriendId) {
