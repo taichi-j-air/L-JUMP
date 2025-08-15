@@ -16,6 +16,7 @@ import FieldEditorPanel from "@/components/forms/FieldEditorPanel";
 import FormPreviewPanel from "@/components/forms/FormPreviewPanel";
 import FormListPanel from "@/components/forms/FormListPanel";
 import { FormShareDialog } from "@/components/FormShareDialog";
+import { getSuccessMessageForSave } from "@/utils/successMessageHelper";
 
 interface FormRow {
   id: string;
@@ -180,12 +181,16 @@ const resetCreator = () => {
     if (!user) { toast.error('ログインが必要です'); return; }
 
 const cleanFields = fields.map(f => ({ id: f.id, label: f.label.trim(), name: f.name.trim(), type: f.type, required: !!f.required, options: Array.isArray(f.options) ? f.options : undefined, placeholder: f.placeholder?.trim() || undefined, rows: f.rows ? Number(f.rows) : undefined }));
+
+// SuccessMessageManagerの設定から実際の成功メッセージを取得
+const actualSuccessMessage = getSuccessMessageForSave('new');
+
 const { data: created, error } = await (supabase as any).from('forms').insert({
   user_id: user.id,
   name: formName.trim(),
   description: description.trim() || null,
   is_public: isPublic,
-  success_message: successMessage.trim() || null,
+  success_message: actualSuccessMessage.trim() || null,
   fields: cleanFields,
   require_line_friend: requireLineFriend,
   prevent_duplicate_per_friend: preventDuplicate,
@@ -250,11 +255,15 @@ const handleUpdate = async () => {
   if (!user) { toast.error('ログインが必要です'); return; }
 
   const cleanFields = fields.map(f => ({ id: f.id, label: f.label.trim(), name: f.name.trim(), type: f.type, required: !!f.required, options: Array.isArray(f.options) ? f.options : undefined, placeholder: f.placeholder?.trim() || undefined, rows: f.rows ? Number(f.rows) : undefined }));
+  
+  // SuccessMessageManagerの設定から実際の成功メッセージを取得
+  const actualSuccessMessage = getSuccessMessageForSave(editingId);
+
   const { error } = await (supabase as any).from('forms').update({
     name: formName.trim(),
     description: description.trim() || null,
     is_public: isPublic,
-    success_message: successMessage.trim() || null,
+    success_message: actualSuccessMessage.trim() || null,
     fields: cleanFields,
     require_line_friend: requireLineFriend,
     prevent_duplicate_per_friend: preventDuplicate,
@@ -296,6 +305,10 @@ const handleUpdate = async () => {
             onAddNew={async () => {
               const { data: { user } } = await supabase.auth.getUser();
               if (!user) { toast.error('ログインが必要です'); return; }
+              
+              // SuccessMessageManagerの設定から実際の成功メッセージを取得（新規フォームの場合）
+              const actualSuccessMessage = getSuccessMessageForSave('new');
+              
               // 即時DB作成
               const { data, error } = await (supabase as any)
                 .from('forms')
@@ -304,7 +317,7 @@ const handleUpdate = async () => {
                   name: '無題のフォーム',
                   description: null,
                   is_public: false,
-                  success_message: '送信ありがとうございました。',
+                  success_message: actualSuccessMessage,
                   fields: [],
                   require_line_friend: false,
                   prevent_duplicate_per_friend: false,
