@@ -164,6 +164,8 @@ export default function PublicForm() {
       // Check if this is a friend-only form RLS rejection
       if (form.require_line_friend && (error.code === '42501' || error.code === 'PGRST301')) {
         toast.error('このフォームはLINE友だち限定です。正しいリンクから開いてください。');
+      } else if (error.code === '23505' && error.message?.includes('この友だちは既にこのフォームに回答済みです')) {
+        toast.error('この友だちは既にこのフォームに回答済みです。');
       } else {
         toast.error('送信に失敗しました');
       }
