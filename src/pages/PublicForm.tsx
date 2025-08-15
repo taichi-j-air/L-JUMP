@@ -149,12 +149,18 @@ export default function PublicForm() {
 
     console.log('[insert.payload]', payload);
 
-    const { error } = await (supabase as any)
+    const { data, error } = await (supabase as any)
       .from('form_submissions')
       .insert(payload);
 
     if (error) {
-      console.error('[insert.error]', error);
+      console.error('[insert.error] Full error details:', {
+        code: error.code,
+        message: error.message,
+        details: error.details,
+        hint: error.hint,
+        payload: payload
+      });
       // Check if this is a friend-only form RLS rejection
       if (form.require_line_friend && (error.code === '42501' || error.code === 'PGRST301')) {
         toast.error('このフォームはLINE友だち限定です。正しいリンクから開いてください。');
