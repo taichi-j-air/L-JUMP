@@ -326,7 +326,7 @@ export default function LineLoginSettings() {
                 <Label>LIFFエンドポイントURL（設定用・自動生成）</Label>
                 <div className="flex items-center gap-2">
                   <Input 
-                    value={user ? `${window.location.origin}/liff?userId=${user.id}&liffId=[LIFF_ID]` : ''} 
+                    value={user ? `${window.location.origin}/liff?userId=${user.id}&liffId=${liffSettings.liffId || '[LIFF_ID]'}` : ''} 
                     readOnly 
                     className="font-mono text-sm" 
                   />
@@ -334,7 +334,7 @@ export default function LineLoginSettings() {
                     variant="outline"
                     size="sm"
                     onClick={() => copyToClipboard(
-                      user ? `${window.location.origin}/liff?userId=${user.id}&liffId=[LIFF_ID]` : '', 
+                      user ? `${window.location.origin}/liff?userId=${user.id}&liffId=${liffSettings.liffId || '[LIFF_ID]'}` : '', 
                       "LIFFエンドポイントURL"
                     )}
                     disabled={!user}
@@ -343,8 +343,16 @@ export default function LineLoginSettings() {
                   </Button>
                 </div>
                 <p className="text-sm text-muted-foreground">
-                  <strong>重要：</strong> LIFF作成時に上記URLの「[LIFF_ID]」部分を実際のLIFF IDに置き換えてエンドポイントURLに設定してください。<br />
-                  例：{user ? `${window.location.origin}/liff?userId=${user.id}&liffId=2007859465-L5VQg5q9` : ''}
+                  {liffSettings.liffId ? (
+                    <>
+                      <strong>完了：</strong> 上記URLがあなた専用のLIFFエンドポイントURLです。LINE Developers コンソールでLIFFアプリ作成時にそのまま設定してください。
+                    </>
+                  ) : (
+                    <>
+                      <strong>重要：</strong> LIFF作成時に上記URLの「[LIFF_ID]」部分を実際のLIFF IDに置き換えてエンドポイントURLに設定してください。<br />
+                      例：{user ? `${window.location.origin}/liff?userId=${user.id}&liffId=2007859465-L5VQg5q9` : ''}
+                    </>
+                  )}
                 </p>
               </div>
 
