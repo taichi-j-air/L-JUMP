@@ -356,7 +356,7 @@ export default function LineLoginSettings() {
                 </p>
               </div>
 
-              <Button onClick={handleLiffSave} disabled={savingLiff || !liffSettings.liffId || !liffSettings.liffUrl}>
+              <Button onClick={handleLiffSave} disabled={savingLiff}>
                 {savingLiff ? "保存中..." : "LIFF設定を保存"}
               </Button>
             </CardContent>
