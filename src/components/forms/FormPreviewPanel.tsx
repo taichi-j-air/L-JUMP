@@ -10,6 +10,7 @@ import { Switch } from "@/components/ui/switch";
 import { ColorPicker } from "@/components/ui/color-picker";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { useLiffValidation } from "@/hooks/useLiffValidation";
+import { SuccessMessageManager } from "./SuccessMessageManager";
 
 // Keep props same to avoid refactor ripple, but name/description editing moved to middle column
 type Field = { id: string; label: string; name: string; type: string; required?: boolean; options?: string[]; placeholder?: string; rows?: number };
@@ -189,14 +190,10 @@ export default function FormPreviewPanel({
             <Switch id="is-public" checked={isPublic} onCheckedChange={setIsPublic} />
             <label htmlFor="is-public">公開</label>
           </div>
-          <div className="space-y-1">
-            <label className="text-sm">送信成功メッセージ</label>
-            <RichTextEditor 
-              value={successMessage} 
-              onChange={setSuccessMessage}
-              className="min-h-[100px]"
-            />
-          </div>
+          <SuccessMessageManager 
+            successMessage={successMessage}
+            setSuccessMessage={setSuccessMessage}
+          />
           <div className="space-y-1">
             <label className="text-sm">送信ボタンのテキスト</label>
             <Input value={submitButtonText} onChange={(e) => setSubmitButtonText(e.target.value)} placeholder="送信 / 申し込み など" />

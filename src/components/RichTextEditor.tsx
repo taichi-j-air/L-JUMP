@@ -75,17 +75,43 @@ export function RichTextEditor({ value, onChange, className }: RichTextEditorPro
   const applySizeDelta = (delta: number) => {
     const editor = quillRef.current?.getEditor();
     if (!editor) return;
+    
     let range = editor.getSelection(true);
-    if (!range) {
-      editor.setSelection(editor.getLength(), 0);
+    if (!range || range.length === 0) {
+      // If no selection, select all text to apply formatting
+      editor.setSelection(0, editor.getLength());
       range = editor.getSelection(true);
       if (!range) return;
     }
-    const current = editor.getFormat(range).size as string | undefined;
-    const base = current?.endsWith("px") ? parseInt(current) : 16;
-    const next = Math.max(8, Math.min(96, base + delta));
-    editor.format("size", `${next}px`);
-    setCurrentSize(next);
+    
+    // Get current format at selection
+    const format = editor.getFormat(range);
+    const currentSizeStr = format.size as string | undefined;
+    let currentSize = 16; // default size
+    
+    if (currentSizeStr) {
+      if (currentSizeStr.endsWith('px')) {
+        currentSize = parseInt(currentSizeStr.replace('px', ''));
+      } else {
+        // Handle cases where size might be in other units or just a number
+        currentSize = parseInt(currentSizeStr) || 16;
+      }
+    }
+    
+    const newSize = Math.max(8, Math.min(96, currentSize + delta));
+    
+    // Apply the new size
+    editor.format("size", `${newSize}px`);
+    setCurrentSize(newSize);
+    
+    // Update selection to show current size
+    setTimeout(() => {
+      const updatedFormat = editor.getFormat(range);
+      const updatedSizeStr = updatedFormat.size as string | undefined;
+      if (updatedSizeStr && updatedSizeStr.endsWith('px')) {
+        setCurrentSize(parseInt(updatedSizeStr.replace('px', '')));
+      }
+    }, 100);
   };
 
   const applyColor = (type: "color" | "background", color: string) => {
@@ -134,13 +160,14 @@ export function RichTextEditor({ value, onChange, className }: RichTextEditorPro
             <input type="color" className="ml-2 h-6 w-6 p-0 border rounded-none aspect-square" onChange={(e) => applyColor("background", e.target.value)} />
           </label>
         </span>
-        <span className="ql-formats ms-auto">
+        <span className="ql-formats ml-auto flex gap-1">
           <Button
             type="button"
             size="sm"
             variant="outline"
             onClick={() => setMediaOpen(true)}
             title="ライブラリ"
+            className="text-xs px-2 py-1"
           >
             ライブラリ
           </Button>
@@ -148,7 +175,7 @@ export function RichTextEditor({ value, onChange, className }: RichTextEditorPro
             type="button"
             size="sm"
             variant="outline"
-            className={htmlMode ? "bg-muted" : ""}
+            className={`text-xs px-2 py-1 ${htmlMode ? "bg-muted" : ""}`}
             onClick={() => { setHtmlMode(!htmlMode); if (!htmlMode) setDraftHtml(value); }}
             title="HTML"
           >
@@ -178,6 +205,8 @@ export function RichTextEditor({ value, onChange, className }: RichTextEditorPro
           onChange={onChange}
           modules={modules}
           formats={formats}
+          style={{ minHeight: '200px' }}
+          className="[&_.ql-editor]:min-h-[180px] [&_.ql-toolbar]:flex [&_.ql-toolbar]:flex-wrap [&_.ql-toolbar]:gap-1 [&_.ql-toolbar_.ql-formats]:mr-2"
           onChangeSelection={(range: any, _source: any, editor: any) => {
             try {
               const fmt = editor?.getFormat(range) || {};
