@@ -1327,6 +1327,27 @@ export type Database = {
         Args: Record<PropertyKey, never>
         Returns: string
       }
+      get_public_form_meta: {
+        Args: { p_form_id: string }
+        Returns: {
+          accent_color: string
+          description: string
+          fields: Json
+          id: string
+          is_public: boolean
+          liff_id: string
+          name: string
+          post_submit_scenario_id: string
+          prevent_duplicate_per_friend: boolean
+          require_line_friend: boolean
+          submit_button_bg_color: string
+          submit_button_text: string
+          submit_button_text_color: string
+          submit_button_variant: string
+          success_message: string
+          user_id: string
+        }[]
+      }
       get_public_profile_info: {
         Args: { profile_user_id: string }
         Returns: {

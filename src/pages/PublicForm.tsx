@@ -75,12 +75,10 @@ export default function PublicForm() {
       setLoading(true);
       
       try {
-        // まずフォーム情報を取得
+        // RPCでフォーム情報とLIFF IDを一括取得
         const { data: formData, error: formError } = await supabase
-          .from('forms')
-          .select('id,name,description,fields,success_message,is_public,user_id,require_line_friend,prevent_duplicate_per_friend,post_submit_scenario_id,submit_button_text,submit_button_variant,submit_button_bg_color,submit_button_text_color,accent_color')
-          .eq('id', formId)
-          .maybeSingle();
+          .rpc('get_public_form_meta', { p_form_id: formId })
+          .single();
 
         if (formError) {
           console.error('[forms.load] error:', formError);
@@ -96,18 +94,10 @@ export default function PublicForm() {
           
           setForm({ ...formData, fields: formFields });
           
-          // フォーム所有者のLIFF IDを取得
-          if (formData.user_id) {
-            const { data: profileData } = await supabase
-              .from('profiles')
-              .select('liff_id')
-              .eq('user_id', formData.user_id)
-              .single();
-            
-            if (profileData?.liff_id) {
-              console.log('[liff] Setting LIFF ID:', profileData.liff_id);
-              setLiffId(profileData.liff_id);
-            }
+          // LIFF IDをRPCから設定
+          if (formData.liff_id) {
+            console.log('[liff] Setting LIFF ID from RPC:', formData.liff_id);
+            setLiffId(formData.liff_id);
           }
         }
       } catch (error) {
@@ -209,24 +199,15 @@ export default function PublicForm() {
 
     console.log('[insert.payload]', payload);
 
-    const { data, error } = await supabase
+    const { error } = await supabase
       .from('form_submissions')
-      .insert(payload)
-      .select('*');
+      .insert(payload);
 
     if (error) {
-      console.error('[insert.error] Full error details:', {
-        code: error.code,
-        message: error.message,
-        details: error.details,
-        hint: error.hint,
-        payload: payload
-      });
-      
-      // エラーメッセージの改善
+      console.error('[insert.error]', error, payload);
       if (form.require_line_friend && (error.code === '42501' || error.code === 'PGRST301' || error.code === '401')) {
         toast.error('このフォームはLINE友だち限定です。LINEでログインしてから送信してください。');
-      } else if (error.code === '23505' && error.message?.includes('この友だちは既にこのフォームに回答済みです')) {
+      } else if (error.code === '23505') {
         toast.error('この友だちは既にこのフォームに回答済みです。');
       } else {
         toast.error(`送信に失敗しました: ${error.message || 'エラーが発生しました'}`);
@@ -234,7 +215,7 @@ export default function PublicForm() {
       return;
     }
     
-    console.log('[insert.success] Form submitted successfully:', data);
+    console.log('[insert.success] Form submitted successfully');
     setSubmitted(true);
     toast.success('送信しました');
   };
