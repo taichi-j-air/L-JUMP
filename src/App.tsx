@@ -35,6 +35,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { User } from "@supabase/supabase-js";
 import FormsBuilder from "./pages/FormsBuilder";
 import PublicForm from "./pages/PublicForm";
+import LiffForm from "./pages/LiffForm";
 import FormResponses from "./pages/FormResponses";
 
 const CMSFriendsPageBuilder = lazy(() => import('./pages/CMSFriendsPageBuilder'));
@@ -74,7 +75,7 @@ function AppContent() {
   const isInvitePage = window.location.pathname.startsWith('/invite')
   const isLoginPage = window.location.pathname === '/login'
   const hasLineLoginSuccess = window.location.search.includes('line_login=success')
-  const isPublicFormPage = window.location.pathname.startsWith('/form/')
+  const isPublicFormPage = window.location.pathname.startsWith('/form/') || window.location.pathname.startsWith('/liff-form/')
   const isCMSPublicPath = window.location.pathname.startsWith('/cms/f/')
   const isCMSPreviewPath = window.location.pathname.startsWith('/cms/preview/')
 
@@ -94,6 +95,7 @@ function AppContent() {
           <Route path="/verify" element={<EmailVerify />} />
           <Route path="/reset-password" element={<ResetPassword />} />
           <Route path="/form/:id" element={<PublicForm />} />
+          <Route path="/liff-form/:id" element={<LiffForm />} />
           <Route path="/cms/f/:shareCode" element={<CMSFriendsPublicView />} />
           <Route path="/cms/preview/:pageId" element={<CMSFriendsPublicView />} />
           <Route path="/error" element={<ErrorPage />} />
@@ -151,6 +153,7 @@ function AppContent() {
               <Route path="/chat-inbox" element={<ChatInboxPage />} />
               <Route path="/chat/:friendId" element={<IndividualChatPage />} />
               <Route path="/form/:id" element={<PublicForm />} />
+              <Route path="/liff-form/:id" element={<LiffForm />} />
               <Route path="/forms" element={<FormsBuilder />} />
               <Route path="/forms/responses" element={<FormResponses />} />
               <Route path="/cms/friends-page" element={<CMSFriendsPageBuilder />} />

@@ -15,6 +15,7 @@ import FormFieldList from "@/components/forms/FormFieldList";
 import FieldEditorPanel from "@/components/forms/FieldEditorPanel";
 import FormPreviewPanel from "@/components/forms/FormPreviewPanel";
 import FormListPanel from "@/components/forms/FormListPanel";
+import { FormShareDialog } from "@/components/FormShareDialog";
 
 interface FormRow {
   id: string;
@@ -77,6 +78,8 @@ const [selectedFieldId, setSelectedFieldId] = useState<string | null>(null);
 const [submitButtonBgColor, setSubmitButtonBgColor] = useState<string>("#0cb386");
 const [submitButtonTextColor, setSubmitButtonTextColor] = useState<string>("#ffffff");
 const [accentColor, setAccentColor] = useState<string>("#0cb386");
+const [showShareDialog, setShowShareDialog] = useState(false);
+const [selectedFormForShare, setSelectedFormForShare] = useState<{id: string, name: string} | null>(null);
   const loadForms = async () => {
     setLoading(true);
     const { data: { user } } = await supabase.auth.getUser();
@@ -408,11 +411,20 @@ const handleUpdate = async () => {
                 postScenario={postScenario}
                 setPostScenario={setPostScenario}
                 scenarios={scenarios}
-              />
-            </CardContent>
-          </Card>
-        </div>
-      </div>
-    </div>
-  );
+               />
+             </CardContent>
+           </Card>
+         </div>
+       </div>
+
+       {selectedFormForShare && (
+         <FormShareDialog
+           open={showShareDialog}
+           onOpenChange={setShowShareDialog}
+           formId={selectedFormForShare.id}
+           formName={selectedFormForShare.name}
+         />
+       )}
+     </div>
+   );
 }
