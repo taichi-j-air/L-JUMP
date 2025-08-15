@@ -1,4 +1,4 @@
-import { Home, MessageSquare, Settings, FileImage, Webhook, User, Bot, Users, MessageCircle, ArrowRight, LogIn, ChevronRight, ChevronDown, FileText, BarChart3 } from "lucide-react"
+import { Home, MessageSquare, Settings, FileImage, Webhook, User, Bot, Users, MessageCircle, ArrowRight, LogIn, ChevronRight, ChevronDown, FileText, BarChart3, CreditCard } from "lucide-react"
 import { NavLink, useLocation } from "react-router-dom"
 import { useState, useEffect } from "react"
 import { supabase } from "@/integrations/supabase/client"
@@ -61,16 +61,19 @@ export function AppSidebar({ user }: AppSidebarProps) {
   const [formsOpen, setFormsOpen] = useState(false)
   const [responsesHasNew, setResponsesHasNew] = useState(false)
   const [cmsOpen, setCmsOpen] = useState(false)
+  const [paymentOpen, setPaymentOpen] = useState(false)
   const collapsed = state === "collapsed"
   const groupActiveFriends = currentPath.startsWith('/friends-list') || currentPath.startsWith('/tags')
   const groupActiveForms = currentPath.startsWith('/forms')
   const groupActiveCMS = currentPath.startsWith('/cms')
+  const groupActivePayment = currentPath.startsWith('/payment')
 
   useEffect(() => {
     setFriendsOpen(groupActiveFriends)
     setFormsOpen(groupActiveForms)
     setCmsOpen(groupActiveCMS)
-  }, [groupActiveFriends, groupActiveForms, groupActiveCMS])
+    setPaymentOpen(groupActivePayment)
+  }, [groupActiveFriends, groupActiveForms, groupActiveCMS, groupActivePayment])
 
   useEffect(() => {
     loadFriends()
@@ -286,6 +289,44 @@ export function AppSidebar({ user }: AppSidebarProps) {
                       <SidebarMenuSubButton asChild>
                         <NavLink to="/cms/public-page" end className={({ isActive }) => getNavClass({ isActive })}>
                           <span>外部WEBページ作成</span>
+                        </NavLink>
+                      </SidebarMenuSubButton>
+                    </SidebarMenuSubItem>
+                  </SidebarMenuSub>
+                )}
+              </SidebarMenuItem>
+
+              {/* Payment Management dropdown */}
+              <SidebarMenuItem>
+                <SidebarMenuButton onClick={() => setPaymentOpen((v) => !v)} isActive={groupActivePayment}>
+                  <CreditCard className="h-4 w-4" />
+                  {!collapsed && (
+                    <span className="flex items-center gap-1">
+                      決済/商品管理
+                      <ChevronDown className="h-3 w-3" />
+                    </span>
+                  )}
+                </SidebarMenuButton>
+                {paymentOpen && (
+                  <SidebarMenuSub>
+                    <SidebarMenuSubItem>
+                      <SidebarMenuSubButton asChild>
+                        <NavLink to="/payment/stripe-settings" end className={({ isActive }) => getNavClass({ isActive })}>
+                          <span>決済連携設定</span>
+                        </NavLink>
+                      </SidebarMenuSubButton>
+                    </SidebarMenuSubItem>
+                    <SidebarMenuSubItem>
+                      <SidebarMenuSubButton asChild>
+                        <NavLink to="/payment/products" end className={({ isActive }) => getNavClass({ isActive })}>
+                          <span>商品管理</span>
+                        </NavLink>
+                      </SidebarMenuSubButton>
+                    </SidebarMenuSubItem>
+                    <SidebarMenuSubItem>
+                      <SidebarMenuSubButton asChild>
+                        <NavLink to="/payment/orders" end className={({ isActive }) => getNavClass({ isActive })}>
+                          <span>決済管理</span>
                         </NavLink>
                       </SidebarMenuSubButton>
                     </SidebarMenuSubItem>

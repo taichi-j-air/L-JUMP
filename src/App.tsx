@@ -149,6 +149,9 @@ function AppContent() {
               <Route path="/media-library" element={<MediaLibrary />} />
               <Route path="/friends-list" element={<FriendsListPage />} />
               <Route path="/tags" element={<TagsManager />} />
+              <Route path="/payment/stripe-settings" element={<StripeSettings />} />
+              <Route path="/payment/products" element={<ProductManagement />} />
+              <Route path="/payment/orders" element={<PaymentManagement />} />
               <Route path="/step-delivery" element={<StepDeliveryPage />} />
               <Route path="/chat-inbox" element={<ChatInboxPage />} />
               <Route path="/chat/:friendId" element={<IndividualChatPage />} />

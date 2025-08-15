@@ -9,6 +9,7 @@ export interface StepScenario {
   user_id: string
   is_active: boolean
   scenario_order: number
+  prevent_auto_exit: boolean
   created_at: string
   updated_at: string
 }
