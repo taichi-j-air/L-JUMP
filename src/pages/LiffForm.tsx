@@ -301,7 +301,7 @@ export default function LiffForm() {
           {submitted ? (
             <div className="py-8 text-center space-y-4">
               <div className="text-4xl">✅</div>
-              <div className="text-muted-foreground" 
+              <div className="text-foreground" 
                    dangerouslySetInnerHTML={{ 
                      __html: form.success_message && form.success_message.trim() 
                        ? form.success_message 

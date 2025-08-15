@@ -30,11 +30,14 @@ export function SuccessMessageManager({ successMessage, setSuccessMessage, formI
   const [editingMessage, setEditingMessage] = useState<SuccessMessage | null>(null);
   const [newMessageName, setNewMessageName] = useState("");
   const [newMessageContent, setNewMessageContent] = useState("");
+  const [plainTextMessage, setPlainTextMessage] = useState("");
 
   // Load saved messages from localStorage
   useEffect(() => {
     const saved = localStorage.getItem('form-success-messages');
     const savedSelections = localStorage.getItem('form-success-selections');
+    const savedRichSettings = localStorage.getItem('form-rich-editor-settings');
+    const savedPlainText = localStorage.getItem('form-plain-text-messages');
     
     if (saved) {
       try {
@@ -44,18 +47,50 @@ export function SuccessMessageManager({ successMessage, setSuccessMessage, formI
       }
     }
     
+    // Load rich editor setting for this specific form
+    if (savedRichSettings) {
+      try {
+        const richSettings = JSON.parse(savedRichSettings);
+        const currentRichSetting = richSettings[formId];
+        if (currentRichSetting !== undefined) {
+          setIsRichEditor(currentRichSetting);
+        }
+      } catch (error) {
+        console.error('Failed to load rich settings:', error);
+      }
+    }
+    
+    // Load plain text message for this form
+    if (savedPlainText) {
+      try {
+        const plainMessages = JSON.parse(savedPlainText);
+        const currentPlainMessage = plainMessages[formId];
+        if (currentPlainMessage) {
+          setPlainTextMessage(currentPlainMessage);
+        }
+      } catch (error) {
+        console.error('Failed to load plain messages:', error);
+      }
+    }
+    
     if (savedSelections) {
       try {
         const selections = JSON.parse(savedSelections);
         const currentSelection = selections[formId];
         if (currentSelection) {
           setSelectedMessageId(currentSelection);
-          setIsRichEditor(true);
           // Set the success message content for this form
           const savedMsg = JSON.parse(localStorage.getItem('form-success-messages') || '[]');
           const selectedMsg = savedMsg.find((msg: SuccessMessage) => msg.id === currentSelection);
           if (selectedMsg) {
             setSuccessMessage(selectedMsg.content);
+          }
+        } else {
+          // If no rich message selected, load plain text
+          const plainMessages = JSON.parse(localStorage.getItem('form-plain-text-messages') || '{}');
+          const currentPlainMessage = plainMessages[formId];
+          if (currentPlainMessage) {
+            setSuccessMessage(currentPlainMessage);
           }
         }
       } catch (error) {
@@ -68,6 +103,39 @@ export function SuccessMessageManager({ successMessage, setSuccessMessage, formI
   const saveMessages = (messages: SuccessMessage[]) => {
     localStorage.setItem('form-success-messages', JSON.stringify(messages));
     setSavedMessages(messages);
+  };
+
+  // Save rich editor setting per form
+  const saveRichEditorSetting = (isRich: boolean) => {
+    const saved = localStorage.getItem('form-rich-editor-settings');
+    let settings = {};
+    if (saved) {
+      try {
+        settings = JSON.parse(saved);
+      } catch (error) {
+        console.error('Failed to load settings:', error);
+      }
+    }
+    
+    settings[formId] = isRich;
+    localStorage.setItem('form-rich-editor-settings', JSON.stringify(settings));
+  };
+
+  // Save plain text message per form
+  const savePlainTextMessage = (message: string) => {
+    const saved = localStorage.getItem('form-plain-text-messages');
+    let messages = {};
+    if (saved) {
+      try {
+        messages = JSON.parse(saved);
+      } catch (error) {
+        console.error('Failed to load plain messages:', error);
+      }
+    }
+    
+    messages[formId] = message;
+    localStorage.setItem('form-plain-text-messages', JSON.stringify(messages));
+    setPlainTextMessage(message);
   };
 
   // Save selection per form
@@ -90,6 +158,13 @@ export function SuccessMessageManager({ successMessage, setSuccessMessage, formI
     
     localStorage.setItem('form-success-selections', JSON.stringify(selections));
     setSelectedMessageId(messageId);
+  };
+
+  // Strip HTML tags from rich content
+  const stripHTMLTags = (html: string): string => {
+    const tempDiv = document.createElement('div');
+    tempDiv.innerHTML = html;
+    return tempDiv.textContent || tempDiv.innerText || '';
   };
 
   const handleCreateNew = () => {
@@ -164,11 +239,27 @@ export function SuccessMessageManager({ successMessage, setSuccessMessage, formI
             checked={isRichEditor} 
             onCheckedChange={(checked) => {
               setIsRichEditor(checked);
+              saveRichEditorSetting(checked);
               if (checked) {
-                setShowManager(true);
+                // When switching to rich editor, load selected message if available
+                if (selectedMessageId) {
+                  const savedMsg = savedMessages.find(msg => msg.id === selectedMessageId);
+                  if (savedMsg) {
+                    setSuccessMessage(savedMsg.content);
+                  }
+                } else {
+                  setShowManager(true);
+                }
               } else {
-                // Clear selection when switching to plain text
-                setSuccessMessage("");
+                // When switching to plain text, convert HTML to plain text
+                if (successMessage) {
+                  const plainText = stripHTMLTags(successMessage);
+                  setSuccessMessage(plainText);
+                  savePlainTextMessage(plainText);
+                } else {
+                  setSuccessMessage(plainTextMessage);
+                }
+                // Clear rich message selection
                 saveSelection(null);
               }
             }} 
@@ -194,7 +285,10 @@ export function SuccessMessageManager({ successMessage, setSuccessMessage, formI
       ) : (
         <Textarea 
           value={successMessage} 
-          onChange={(e) => setSuccessMessage(e.target.value)}
+          onChange={(e) => {
+            setSuccessMessage(e.target.value);
+            savePlainTextMessage(e.target.value);
+          }}
           rows={3}
           placeholder="送信完了メッセージを入力してください"
         />
