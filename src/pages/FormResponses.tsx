@@ -41,8 +41,6 @@ export default function FormResponses() {
   const [unreadSubmissionIds, setUnreadSubmissionIds] = useState<Record<string, string[]>>({});
   const [sortOrder, setSortOrder] = useState<"asc" | "desc">("desc");
   const [filterMode, setFilterMode] = useState<"all" | "friend" | "anonymous">("all");
-  const [currentPage, setCurrentPage] = useState(1);
-  const pageSize = 20;
   useEffect(() => {
     const loadForms = async () => {
       const { data: { user } } = await supabase.auth.getUser();
@@ -101,7 +99,6 @@ export default function FormResponses() {
         toast.error('回答の取得に失敗しました');
       }
       setSubmissions(transformedData || []);
-      setCurrentPage(1); // Reset to first page when loading new data
       setLoading(false);
 
       // フェッチ時にも未読を更新（通知オンのフォームのみ）
@@ -310,17 +307,9 @@ export default function FormResponses() {
               ) : submissions.length === 0 ? (
                 <p className="text-muted-foreground">まだ回答はありません</p>
               ) : (
-                 <div className="rounded-md border p-2">
-                   {(() => {
-                     const totalPages = Math.ceil(displayedSubmissions.length / pageSize);
-                     const startIndex = (currentPage - 1) * pageSize;
-                     const endIndex = startIndex + pageSize;
-                     const paginatedSubmissions = displayedSubmissions.slice(startIndex, endIndex);
-                     
-                     return (
-                       <>
-                         <Accordion type="multiple" className="w-full">
-                           {paginatedSubmissions.map((s) => (
+                <div className="rounded-md border p-2">
+                  <Accordion type="multiple" className="w-full">
+                    {displayedSubmissions.map((s) => (
                       <AccordionItem key={s.id} value={s.id}>
                         <AccordionTrigger className="px-3 py-2 text-left" onClick={() => {
                           try {
@@ -373,43 +362,10 @@ export default function FormResponses() {
                             })}
                           </div>
                         </AccordionContent>
-                             </AccordionItem>
-                           ))}
-                         </Accordion>
-                         
-                         {/* Pagination Controls */}
-                         {totalPages > 1 && (
-                           <div className="flex items-center justify-between pt-4 border-t mt-4">
-                             <div className="text-sm text-muted-foreground">
-                               {displayedSubmissions.length}件中 {startIndex + 1}-{Math.min(endIndex, displayedSubmissions.length)}件を表示
-                             </div>
-                             <div className="flex items-center gap-2">
-                               <Button
-                                 variant="outline"
-                                 size="sm"
-                                 onClick={() => setCurrentPage(currentPage - 1)}
-                                 disabled={currentPage <= 1}
-                               >
-                                 前へ
-                               </Button>
-                               <span className="text-sm">
-                                 {currentPage} / {totalPages}
-                               </span>
-                               <Button
-                                 variant="outline"
-                                 size="sm"
-                                 onClick={() => setCurrentPage(currentPage + 1)}
-                                 disabled={currentPage >= totalPages}
-                               >
-                                 次へ
-                               </Button>
-                             </div>
-                           </div>
-                         )}
-                       </>
-                     );
-                   })()}
-                 </div>
+                      </AccordionItem>
+                    ))}
+                  </Accordion>
+                </div>
               )}
             </CardContent>
           </Card>

@@ -1311,13 +1311,6 @@ export type Database = {
         }
         Returns: undefined
       }
-      lookup_friend_by_uid: {
-        Args: { p_form_id: string; p_uid: string }
-        Returns: {
-          friend_id: string
-          line_user_id: string
-        }[]
-      }
       register_friend_to_scenario: {
         Args: {
           p_display_name?: string

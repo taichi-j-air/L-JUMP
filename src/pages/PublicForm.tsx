@@ -65,7 +65,7 @@ export default function PublicForm() {
   useEffect(() => {
     const load = async () => {
       setLoading(true);
-      const { data, error } = await supabase
+      const { data, error } = await (supabase as any)
         .from('forms')
         .select('id,name,description,fields,success_message,is_public,user_id,require_line_friend,prevent_duplicate_per_friend,post_submit_scenario_id,submit_button_text,submit_button_variant,submit_button_bg_color,submit_button_text_color,accent_color')
         .eq('id', formId)
@@ -75,7 +75,7 @@ export default function PublicForm() {
         toast.error('フォームの取得に失敗しました');
       }
       if (data) {
-        setForm({ ...data, fields: Array.isArray(data.fields) ? data.fields as any : [] });
+        setForm({ ...data, fields: Array.isArray(data.fields) ? data.fields : [] });
       }
       setLoading(false);
     };
@@ -89,21 +89,6 @@ export default function PublicForm() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!form) return;
-
-    // デバッグ: Supabaseクライアントの認証状態確認
-    console.log('Supabase auth debug:', {
-      hasSupabase: !!supabase,
-      session: await supabase.auth.getSession(),
-      user: await supabase.auth.getUser()
-    });
-
-    // まずテスト用のクエリを実行してAPIキー/認証確認
-    try {
-      const testResult = await supabase.from('forms').select('id').limit(1);
-      console.log('Test query result:', testResult);
-    } catch (testError) {
-      console.error('Test query failed:', testError);
-    }
 
     // 必須チェック（checkbox/radioは上で制御）
     for (const f of form.fields) {
@@ -128,7 +113,7 @@ export default function PublicForm() {
     let shortUid = url.searchParams.get('uid') || url.searchParams.get('suid') || url.searchParams.get('s');
     shortUid = shortUid?.trim() || null;
     if (shortUid && !['[UID]', 'UID'].includes(shortUid)) {
-      shortUid = shortUid.toUpperCase(); // 正規化：trim → toUpperCase
+      shortUid = shortUid.toUpperCase(); // 運用規約に合わせて toUpperCase / toLowerCase を選択
     } else {
       shortUid = null;
     }
@@ -140,13 +125,85 @@ export default function PublicForm() {
       requireLineFriend: form.require_line_friend,
     });
 
-    // INSERT一発方式：DBトリガーが友だち解決を行う
+    // 挿入用の変数（後で共通payloadに詰める）
+    let actualFriendId: string | null = null;
+    let actualLineUserId: string | null = lineUserIdParam ?? null;
+
+    // 友だち限定フォームの検証
+    if (form.require_line_friend) {
+      if (!actualLineUserId && !shortUid) {
+        toast.error('LINEアプリから開いてください（友だち限定フォーム）');
+        return;
+      }
+
+      // 所有ユーザー配下で友だち情報を検索（case-insensitive short_uid）
+      let friendQuery = (supabase as any)
+        .from('line_friends')
+        .select('id, line_user_id')
+        .eq('user_id', form.user_id);
+
+      if (shortUid) {
+        friendQuery = friendQuery.eq('short_uid_ci', shortUid); // Use case-insensitive column
+      } else if (actualLineUserId) {
+        friendQuery = friendQuery.eq('line_user_id', actualLineUserId);
+      }
+
+      const { data: friend, error: fErr } = await friendQuery.maybeSingle();
+      console.log('[require_friend] friend lookup:', { friend, fErr, shortUid, lineUserIdParam });
+
+      if (fErr || !friend) {
+        toast.error('このフォームはLINE友だち限定です。先に友だち追加してください。');
+        return;
+      }
+      actualFriendId = friend.id;
+      actualLineUserId = friend.line_user_id || actualLineUserId || null;
+
+      // 重複送信の抑止（友だち単位）
+      if (form.prevent_duplicate_per_friend && actualFriendId) {
+        const { data: dup, error: dupErr } = await (supabase as any)
+          .from('form_submissions')
+          .select('id')
+          .eq('form_id', form.id)
+          .eq('friend_id', actualFriendId)
+          .maybeSingle();
+        if (dupErr) {
+          console.error('[dup.check] error:', dupErr);
+        }
+        if (dup) {
+          toast.error('このフォームはお一人様1回までです。');
+          return;
+        }
+      }
+    } else {
+      // 一般フォームでも、shortUid があれば可能なら紐づけ（case-insensitive）
+      if (shortUid && !actualLineUserId) {
+        console.log('[general] try resolve from shortUid:', shortUid);
+        const { data: friendByUid, error: uidErr } = await (supabase as any)
+          .from('line_friends')
+          .select('line_user_id, id')
+          .eq('user_id', form.user_id)
+          .eq('short_uid_ci', shortUid) // Use case-insensitive column
+          .maybeSingle();
+
+        if (friendByUid && !uidErr) {
+          actualLineUserId = friendByUid.line_user_id;
+          actualFriendId = friendByUid.id;
+          console.log('[general] resolve success from shortUid:', { shortUid, actualLineUserId, actualFriendId });
+        } else {
+          console.info('[general] resolve none (expected case):', { shortUid, uidErr });
+        }
+      }
+    }
+
+    // ここで共通payloadを作って一度だけ挿入（meta情報も含める）
     const payload = {
       form_id: form.id,
       data: values,
-      user_id: form.user_id, // オーナーに必ず紐づける（ダッシュボード/RLS用）
+      user_id: form.user_id, // ★匿名でも所有者に必ず紐づける（ダッシュボード/RLSで見えるように）
+      friend_id: actualFriendId,
+      line_user_id: actualLineUserId,
       meta: {
-        source_uid: shortUid, // 正規化済みUID（DB側で友だち解決に使用）
+        source_uid: shortUid,
         full_url: window.location.href,
         user_agent: navigator.userAgent,
         timestamp: new Date().toISOString()
@@ -155,34 +212,16 @@ export default function PublicForm() {
 
     console.log('[insert.payload]', payload);
 
-    const { data, error } = await supabase
+    const { error } = await (supabase as any)
       .from('form_submissions')
-      .insert(payload)
-      .select();
+      .insert(payload);
 
     if (error) {
       console.error('[insert.error]', error);
-      console.error('Error details:', {
-        code: error.code,
-        message: error.message,
-        details: error.details,
-        hint: error.hint
-      });
-      
-      // 401エラーの詳細ログ
-      if (error.message?.includes('401') || error.code === '401') {
-        console.error('401 Unauthorized detected - check API key and headers');
-      }
-      
-      // 友だち限定フォームでRLS拒否された場合
-      if (form.require_line_friend) {
-        toast.error('このフォームはLINE友だち限定です。正しいリンクから開いてください。');
-      } else {
-        toast.error('送信に失敗しました: ' + error.message);
-      }
+      toast.error('送信に失敗しました');
       return;
     }
-    console.log('[insert.success] Form submitted successfully', data);
+    console.log('[insert.success] Form submitted successfully');
 
     setSubmitted(true);
     toast.success('送信しました');
