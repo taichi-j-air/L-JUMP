@@ -136,14 +136,14 @@ export default function PublicForm() {
         return;
       }
 
-      // 所有ユーザー配下で友だち情報を検索
+      // 所有ユーザー配下で友だち情報を検索（case-insensitive short_uid）
       let friendQuery = (supabase as any)
         .from('line_friends')
         .select('id, line_user_id')
         .eq('user_id', form.user_id);
 
       if (shortUid) {
-        friendQuery = friendQuery.eq('short_uid', shortUid);
+        friendQuery = friendQuery.eq('short_uid_ci', shortUid); // Use case-insensitive column
       } else if (actualLineUserId) {
         friendQuery = friendQuery.eq('line_user_id', actualLineUserId);
       }
@@ -175,14 +175,14 @@ export default function PublicForm() {
         }
       }
     } else {
-      // 一般フォームでも、shortUid があれば可能なら紐づけ
+      // 一般フォームでも、shortUid があれば可能なら紐づけ（case-insensitive）
       if (shortUid && !actualLineUserId) {
         console.log('[general] try resolve from shortUid:', shortUid);
         const { data: friendByUid, error: uidErr } = await (supabase as any)
           .from('line_friends')
           .select('line_user_id, id')
           .eq('user_id', form.user_id)
-          .eq('short_uid', shortUid)
+          .eq('short_uid_ci', shortUid) // Use case-insensitive column
           .maybeSingle();
 
         if (friendByUid && !uidErr) {
@@ -195,13 +195,19 @@ export default function PublicForm() {
       }
     }
 
-    // ここで共通payloadを作って一度だけ挿入
+    // ここで共通payloadを作って一度だけ挿入（meta情報も含める）
     const payload = {
       form_id: form.id,
       data: values,
       user_id: form.user_id, // ★匿名でも所有者に必ず紐づける（ダッシュボード/RLSで見えるように）
       friend_id: actualFriendId,
       line_user_id: actualLineUserId,
+      meta: {
+        source_uid: shortUid,
+        full_url: window.location.href,
+        user_agent: navigator.userAgent,
+        timestamp: new Date().toISOString()
+      }
     };
 
     console.log('[insert.payload]', payload);

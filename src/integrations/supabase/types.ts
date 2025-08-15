@@ -200,6 +200,8 @@ export type Database = {
           friend_id: string | null
           id: string
           line_user_id: string | null
+          meta: Json | null
+          source_uid: string | null
           submitted_at: string
           user_id: string | null
         }
@@ -209,6 +211,8 @@ export type Database = {
           friend_id?: string | null
           id?: string
           line_user_id?: string | null
+          meta?: Json | null
+          source_uid?: string | null
           submitted_at?: string
           user_id?: string | null
         }
@@ -218,6 +222,8 @@ export type Database = {
           friend_id?: string | null
           id?: string
           line_user_id?: string | null
+          meta?: Json | null
+          source_uid?: string | null
           submitted_at?: string
           user_id?: string | null
         }
@@ -486,6 +492,7 @@ export type Database = {
           registration_source: string | null
           scenario_name: string | null
           short_uid: string | null
+          short_uid_ci: string | null
           updated_at: string
           user_id: string
         }
@@ -500,6 +507,7 @@ export type Database = {
           registration_source?: string | null
           scenario_name?: string | null
           short_uid?: string | null
+          short_uid_ci?: string | null
           updated_at?: string
           user_id: string
         }
@@ -514,6 +522,7 @@ export type Database = {
           registration_source?: string | null
           scenario_name?: string | null
           short_uid?: string | null
+          short_uid_ci?: string | null
           updated_at?: string
           user_id?: string
         }
