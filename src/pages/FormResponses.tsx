@@ -17,6 +17,16 @@ interface FormRow {
   fields?: Array<{ id: string; label: string; name: string; type: string }>;
 }
 
+interface SubmissionRow {
+  id: string;
+  submitted_at: string;
+  data: any;
+  friend_id: string | null;
+  line_user_id: string | null;
+  form_id?: string;
+  friend_display_name?: string | null;
+}
+
 export default function FormResponses() {
   useEffect(() => {
     document.title = "回答結果 | フォーム";
@@ -24,7 +34,7 @@ export default function FormResponses() {
 
   const [forms, setForms] = useState<FormRow[]>([]);
   const [selectedForm, setSelectedForm] = useState<string>("");
-  const [submissions, setSubmissions] = useState<Array<{ id: string; submitted_at: string; data: any; friend_id: string | null; line_user_id: string | null; form_id?: string }>>([]);
+  const [submissions, setSubmissions] = useState<SubmissionRow[]>([]);
   const [loading, setLoading] = useState(false);
   const [unreadCounts, setUnreadCounts] = useState<Record<string, number>>({});
   const [badgeEnabledMap, setBadgeEnabledMap] = useState<Record<string, boolean>>({});
@@ -72,14 +82,23 @@ export default function FormResponses() {
       setLoading(true);
       const { data, error } = await (supabase as any)
         .from('form_submissions')
-        .select('id, submitted_at, data, friend_id, line_user_id, form_id')
+        .select(`
+          id, submitted_at, data, friend_id, line_user_id, form_id,
+          line_friends(display_name)
+        `)
         .eq('form_id', selectedForm)
         .order('submitted_at', { ascending: sortOrder === 'asc' });
+        
+      // Transform the data to flatten the friend display name
+      const transformedData = (data || []).map((item: any) => ({
+        ...item,
+        friend_display_name: item.line_friends?.display_name || null
+      }));
       if (error) {
         console.error(error);
         toast.error('回答の取得に失敗しました');
       }
-      setSubmissions(data || []);
+      setSubmissions(transformedData || []);
       setLoading(false);
 
       // フェッチ時にも未読を更新（通知オンのフォームのみ）
@@ -139,7 +158,30 @@ export default function FormResponses() {
 
         // Append to list if this form is open
         if (row?.form_id === selectedForm) {
-          setSubmissions(prev => [{ id: row.id, submitted_at: row.submitted_at, data: row.data, friend_id: row.friend_id, line_user_id: row.line_user_id, form_id: row.form_id }, ...prev])
+          // For real-time updates, we need to fetch the display name separately
+          const fetchDisplayName = async () => {
+            if (row.friend_id) {
+              const { data: friendData } = await supabase
+                .from('line_friends')
+                .select('display_name')
+                .eq('id', row.friend_id)
+                .single();
+              return friendData?.display_name || null;
+            }
+            return null;
+          };
+          
+          fetchDisplayName().then(displayName => {
+            setSubmissions(prev => [{
+              id: row.id,
+              submitted_at: row.submitted_at,
+              data: row.data,
+              friend_id: row.friend_id,
+              line_user_id: row.line_user_id,
+              form_id: row.form_id,
+              friend_display_name: displayName
+            }, ...prev]);
+          });
         }
 
         // Always update unread counts (respect per-form enable toggle)
@@ -299,7 +341,7 @@ export default function FormResponses() {
                           <div className="flex items-center gap-3">
                             <span className="text-xs text-muted-foreground whitespace-nowrap">{new Date(s.submitted_at).toLocaleString()}</span>
                             <span className="text-xs text-muted-foreground">
-                              {s.friend_id ? `友達ID: ${s.friend_id}` : s.line_user_id ? `LINE: ${s.line_user_id.substring(0, 8)}...` : '匿名'}
+                              {s.friend_display_name ? `LINE友達: ${s.friend_display_name}` : s.line_user_id ? `LINE: ${s.line_user_id.substring(0, 8)}...` : '匿名'}
                             </span>
                             {(unreadSubmissionIds[selectedForm] || []).includes(s.id) && (
                               <span className="inline-block h-2 w-2 rounded-full bg-destructive" aria-label="未読" />
