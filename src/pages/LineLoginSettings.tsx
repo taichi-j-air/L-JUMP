@@ -310,25 +310,27 @@ export default function LineLoginSettings() {
                 </p>
               </div>
 
-              <div className="space-y-2">
-                <Label>LIFFエンドポイントURL（自動生成）</Label>
-                <div className="flex items-center gap-2">
-                  <Input value={liffSettings.liffEndpointUrl} readOnly className="font-mono text-sm" />
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => copyToClipboard(liffSettings.liffEndpointUrl, "LIFFエンドポイントURL")}
-                    disabled={!liffSettings.liffEndpointUrl}
-                  >
-                    <Copy className="h-4 w-4" />
-                  </Button>
+              {liffSettings.liffId && (
+                <div className="space-y-2">
+                  <Label>LIFFエンドポイントURL（自動生成）</Label>
+                  <div className="flex items-center gap-2">
+                    <Input value={liffSettings.liffEndpointUrl} readOnly className="font-mono text-sm" />
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => copyToClipboard(liffSettings.liffEndpointUrl, "LIFFエンドポイントURL")}
+                      disabled={!liffSettings.liffEndpointUrl}
+                    >
+                      <Copy className="h-4 w-4" />
+                    </Button>
+                  </div>
+                  <p className="text-sm text-muted-foreground">
+                    LINE Developers コンソールのLIFF設定で「エンドポイントURL」として設定してください。
+                    このURLには動的にユーザーIDとLIFF IDが含まれ、ユーザー識別とセキュリティが向上します。
+                    ユーザーは「https://liff.line.me/{"{LIFF_ID}"}」からLIFF認証にアクセスできます。
+                  </p>
                 </div>
-                <p className="text-sm text-muted-foreground">
-                  LINE Developers コンソールのLIFF設定で「エンドポイントURL」として設定してください。
-                  このURLには動的にユーザーIDとLIFF IDが含まれ、ユーザー識別とセキュリティが向上します。
-                  ユーザーは「https://liff.line.me/{"{LIFF_ID}"}」からLIFF認証にアクセスできます。
-                </p>
-              </div>
+              )}
 
               <Button onClick={handleLiffSave} disabled={savingLiff || !liffSettings.liffId || !liffSettings.liffUrl}>
                 {savingLiff ? "保存中..." : "LIFF設定を保存"}
