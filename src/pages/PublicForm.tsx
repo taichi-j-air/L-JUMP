@@ -152,9 +152,28 @@ export default function PublicForm() {
 
     console.log('[insert.payload]', payload);
 
-    const { data, error } = await (supabase as any)
+    console.log('[insert.debug] Attempting insert with payload:', JSON.stringify(payload, null, 2));
+    
+    // RLSポリシーのデバッグのために、まずformの詳細を再取得
+    const { data: formCheck, error: formError } = await supabase
+      .from('forms')
+      .select('id, user_id, is_public, require_line_friend')
+      .eq('id', form.id)
+      .single();
+    
+    console.log('[insert.debug] Form check:', { formCheck, formError });
+    console.log('[insert.debug] Form matches payload user_id:', {
+      formUserId: formCheck?.user_id,
+      payloadUserId: payload.user_id,
+      match: formCheck?.user_id === payload.user_id
+    });
+
+    const { data, error } = await supabase
       .from('form_submissions')
-      .insert(payload);
+      .insert(payload)
+      .select('*');
+
+    console.log('[insert.debug] Insert result:', { data, error });
 
     if (error) {
       console.error('[insert.error] Full error details:', {
