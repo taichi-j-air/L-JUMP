@@ -194,7 +194,12 @@ export default function PublicForm() {
           {submitted ? (
             <div className="py-8">
               <div className="text-center text-muted-foreground" 
-                   dangerouslySetInnerHTML={{ __html: form.success_message || '送信ありがとうございました。' }} />
+                   dangerouslySetInnerHTML={{ 
+                     __html: form.success_message && form.success_message.trim() 
+                       ? form.success_message 
+                       : '送信ありがとうございました。' 
+                   }} 
+              />
             </div>
           ) : (
             <form

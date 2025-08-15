@@ -193,6 +193,7 @@ export default function FormPreviewPanel({
           <SuccessMessageManager 
             successMessage={successMessage}
             setSuccessMessage={setSuccessMessage}
+            formId="preview"
           />
           <div className="space-y-1">
             <label className="text-sm">送信ボタンのテキスト</label>

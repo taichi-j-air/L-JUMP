@@ -6,7 +6,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { RichTextEditor } from "@/components/RichTextEditor";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Input } from "@/components/ui/input";
-import { Pencil, Plus, X } from "lucide-react";
+import { Plus, X, Trash2 } from "lucide-react";
 
 interface SuccessMessage {
   id: string;
@@ -18,13 +18,15 @@ interface SuccessMessage {
 interface SuccessMessageManagerProps {
   successMessage: string;
   setSuccessMessage: (message: string) => void;
+  formId?: string; // To track per-form selection
 }
 
-export function SuccessMessageManager({ successMessage, setSuccessMessage }: SuccessMessageManagerProps) {
+export function SuccessMessageManager({ successMessage, setSuccessMessage, formId = 'default' }: SuccessMessageManagerProps) {
   const [isRichEditor, setIsRichEditor] = useState(false);
   const [showManager, setShowManager] = useState(false);
   const [showEditor, setShowEditor] = useState(false);
   const [savedMessages, setSavedMessages] = useState<SuccessMessage[]>([]);
+  const [selectedMessageId, setSelectedMessageId] = useState<string | null>(null);
   const [editingMessage, setEditingMessage] = useState<SuccessMessage | null>(null);
   const [newMessageName, setNewMessageName] = useState("");
   const [newMessageContent, setNewMessageContent] = useState("");
@@ -32,6 +34,8 @@ export function SuccessMessageManager({ successMessage, setSuccessMessage }: Suc
   // Load saved messages from localStorage
   useEffect(() => {
     const saved = localStorage.getItem('form-success-messages');
+    const savedSelections = localStorage.getItem('form-success-selections');
+    
     if (saved) {
       try {
         setSavedMessages(JSON.parse(saved));
@@ -39,12 +43,47 @@ export function SuccessMessageManager({ successMessage, setSuccessMessage }: Suc
         console.error('Failed to load saved messages:', error);
       }
     }
-  }, []);
+    
+    if (savedSelections) {
+      try {
+        const selections = JSON.parse(savedSelections);
+        const currentSelection = selections[formId];
+        if (currentSelection) {
+          setSelectedMessageId(currentSelection);
+          setIsRichEditor(true);
+        }
+      } catch (error) {
+        console.error('Failed to load saved selections:', error);
+      }
+    }
+  }, [formId]);
 
   // Save messages to localStorage
   const saveMessages = (messages: SuccessMessage[]) => {
     localStorage.setItem('form-success-messages', JSON.stringify(messages));
     setSavedMessages(messages);
+  };
+
+  // Save selection per form
+  const saveSelection = (messageId: string | null) => {
+    const saved = localStorage.getItem('form-success-selections');
+    let selections = {};
+    if (saved) {
+      try {
+        selections = JSON.parse(saved);
+      } catch (error) {
+        console.error('Failed to load selections:', error);
+      }
+    }
+    
+    if (messageId) {
+      selections[formId] = messageId;
+    } else {
+      delete selections[formId];
+    }
+    
+    localStorage.setItem('form-success-selections', JSON.stringify(selections));
+    setSelectedMessageId(messageId);
   };
 
   const handleCreateNew = () => {
@@ -85,15 +124,25 @@ export function SuccessMessageManager({ successMessage, setSuccessMessage }: Suc
     setShowEditor(false);
   };
 
-  const handleSelectMessage = (message: SuccessMessage) => {
-    setSuccessMessage(message.content);
-    setIsRichEditor(message.isRich);
-    setShowManager(false);
+  const handleToggleMessage = (message: SuccessMessage, isSelected: boolean) => {
+    if (isSelected) {
+      setSuccessMessage(message.content);
+      saveSelection(message.id);
+    } else {
+      setSuccessMessage("");
+      saveSelection(null);
+    }
   };
 
   const handleDeleteMessage = (id: string) => {
     const updated = savedMessages.filter(msg => msg.id !== id);
     saveMessages(updated);
+    
+    // If deleting the currently selected message, clear selection
+    if (selectedMessageId === id) {
+      setSuccessMessage("");
+      saveSelection(null);
+    }
   };
 
   return (
@@ -108,6 +157,10 @@ export function SuccessMessageManager({ successMessage, setSuccessMessage }: Suc
               setIsRichEditor(checked);
               if (checked) {
                 setShowManager(true);
+              } else {
+                // Clear selection when switching to plain text
+                setSuccessMessage("");
+                saveSelection(null);
               }
             }} 
           />
@@ -135,63 +188,71 @@ export function SuccessMessageManager({ successMessage, setSuccessMessage }: Suc
       <Dialog open={showManager} onOpenChange={setShowManager}>
         <DialogContent className="max-w-4xl max-h-[80vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle className="flex items-center justify-between">
-              成功メッセージ管理
-              <Button onClick={handleCreateNew} size="sm">
+            <DialogTitle className="flex items-center justify-between pr-8">
+              <span>成功メッセージ管理</span>
+              <Button onClick={handleCreateNew} size="sm" className="mr-4">
                 <Plus className="h-4 w-4 mr-1" />
                 新規作成
               </Button>
             </DialogTitle>
+            <Button 
+              variant="ghost" 
+              size="sm" 
+              onClick={() => setShowManager(false)}
+              className="absolute top-2 right-2 text-destructive font-bold text-lg hover:bg-destructive/10"
+            >
+              <X className="h-4 w-4" />
+            </Button>
           </DialogHeader>
           
-          <div className="space-y-4">
+          <div className="space-y-2">
             {savedMessages.length === 0 ? (
-              <div className="text-center py-8 text-muted-foreground">
+              <div className="text-center py-6 text-muted-foreground text-sm">
                 保存されたメッセージがありません
               </div>
             ) : (
               <Table>
                 <TableHeader>
-                  <TableRow>
-                    <TableHead>名前</TableHead>
-                    <TableHead>プレビュー</TableHead>
-                    <TableHead>選択</TableHead>
-                    <TableHead>操作</TableHead>
+                  <TableRow className="text-xs">
+                    <TableHead className="w-12 text-xs">選択</TableHead>
+                    <TableHead className="text-xs">名前</TableHead>
+                    <TableHead className="text-xs">プレビュー</TableHead>
+                    <TableHead className="w-24 text-xs">操作</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {savedMessages.map((message) => (
-                    <TableRow key={message.id}>
-                      <TableCell className="font-medium">{message.name}</TableCell>
-                      <TableCell>
-                        <div 
-                          className="text-sm max-w-xs truncate" 
-                          dangerouslySetInnerHTML={{ __html: message.content.substring(0, 100) + '...' }}
+                    <TableRow key={message.id} className="h-12">
+                      <TableCell className="py-2">
+                        <Switch 
+                          checked={selectedMessageId === message.id}
+                          onCheckedChange={(checked) => handleToggleMessage(message, checked)}
                         />
                       </TableCell>
-                      <TableCell>
-                        <Button 
-                          size="sm" 
-                          onClick={() => handleSelectMessage(message)}
-                        >
-                          設定する
-                        </Button>
+                      <TableCell className="font-medium text-sm py-2">{message.name}</TableCell>
+                      <TableCell className="py-2">
+                        <div 
+                          className="text-xs max-w-xs truncate" 
+                          dangerouslySetInnerHTML={{ __html: message.content.substring(0, 60) + '...' }}
+                        />
                       </TableCell>
-                      <TableCell>
+                      <TableCell className="py-2">
                         <div className="flex gap-1">
                           <Button 
                             size="sm" 
                             variant="outline" 
                             onClick={() => handleEditMessage(message)}
+                            className="h-7 px-2 text-xs"
                           >
-                            <Pencil className="h-3 w-3" />
+                            編集
                           </Button>
                           <Button 
                             size="sm" 
-                            variant="outline" 
+                            variant="destructive" 
                             onClick={() => handleDeleteMessage(message.id)}
+                            className="h-7 px-2"
                           >
-                            <X className="h-3 w-3" />
+                            <Trash2 className="h-3 w-3" />
                           </Button>
                         </div>
                       </TableCell>

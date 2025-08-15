@@ -222,7 +222,12 @@ export default function LiffFormSecure() {
           {submitted ? (
             <div className="py-8 text-center space-y-4">
               <div className="text-muted-foreground" 
-                   dangerouslySetInnerHTML={{ __html: form.success_message || '送信ありがとうございました。' }} />
+                   dangerouslySetInnerHTML={{ 
+                     __html: form.success_message && form.success_message.trim() 
+                       ? form.success_message 
+                       : '送信ありがとうございました。' 
+                   }} 
+              />
               <p className="text-sm text-muted-foreground">
                 このウィンドウは自動で閉じます...
               </p>
