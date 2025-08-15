@@ -11,6 +11,7 @@ import { ColorPicker } from "@/components/ui/color-picker";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { useLiffValidation } from "@/hooks/useLiffValidation";
 import { SuccessMessageManager } from "./SuccessMessageManager";
+import { supabase } from "@/integrations/supabase/client";
 
 // Keep props same to avoid refactor ripple, but name/description editing moved to middle column
 type Field = { id: string; label: string; name: string; type: string; required?: boolean; options?: string[]; placeholder?: string; rows?: number };
@@ -31,8 +32,15 @@ interface Props {
   setSubmitButtonTextColor: (v: string) => void;
   accentColor: string;
   setAccentColor: (v: string) => void;
-  successMessage: string;
-  setSuccessMessage: (v: string) => void;
+  
+  // Success message fields updated for new system
+  successMessageMode: 'plain' | 'rich';
+  setSuccessMessageMode: (mode: 'plain' | 'rich') => void;
+  successMessagePlain: string;
+  setSuccessMessagePlain: (content: string) => void;
+  successMessageTemplateId: string | null;
+  setSuccessMessageTemplateId: (id: string | null) => void;
+  
   isPublic: boolean;
   setIsPublic: (v: boolean) => void;
   requireLineFriend: boolean;
@@ -61,8 +69,12 @@ export default function FormPreviewPanel({
   setSubmitButtonTextColor,
   accentColor,
   setAccentColor,
-  successMessage,
-  setSuccessMessage,
+  successMessageMode,
+  setSuccessMessageMode,
+  successMessagePlain,
+  setSuccessMessagePlain,
+  successMessageTemplateId,
+  setSuccessMessageTemplateId,
   isPublic,
   setIsPublic,
   requireLineFriend,
@@ -193,8 +205,12 @@ export default function FormPreviewPanel({
             <label htmlFor="is-public">公開</label>
           </div>
           <SuccessMessageManager 
-            successMessage={successMessage}
-            setSuccessMessage={setSuccessMessage}
+            mode={successMessageMode}
+            setMode={setSuccessMessageMode}
+            plainContent={successMessagePlain}
+            setPlainContent={setSuccessMessagePlain}
+            selectedTemplateId={successMessageTemplateId}
+            setSelectedTemplateId={setSuccessMessageTemplateId}
             formId={formId}
           />
           <div className="space-y-1">

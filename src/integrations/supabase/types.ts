@@ -261,6 +261,9 @@ export type Database = {
           submit_button_text_color: string
           submit_button_variant: string | null
           success_message: string | null
+          success_message_mode: string
+          success_message_plain: string | null
+          success_message_template_id: string | null
           updated_at: string
           user_id: string
         }
@@ -280,6 +283,9 @@ export type Database = {
           submit_button_text_color?: string
           submit_button_variant?: string | null
           success_message?: string | null
+          success_message_mode?: string
+          success_message_plain?: string | null
+          success_message_template_id?: string | null
           updated_at?: string
           user_id: string
         }
@@ -299,6 +305,9 @@ export type Database = {
           submit_button_text_color?: string
           submit_button_variant?: string | null
           success_message?: string | null
+          success_message_mode?: string
+          success_message_plain?: string | null
+          success_message_template_id?: string | null
           updated_at?: string
           user_id?: string
         }
@@ -308,6 +317,13 @@ export type Database = {
             columns: ["post_submit_scenario_id"]
             isOneToOne: false
             referencedRelation: "step_scenarios"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "forms_success_message_template_id_fkey"
+            columns: ["success_message_template_id"]
+            isOneToOne: false
+            referencedRelation: "success_message_templates"
             referencedColumns: ["id"]
           },
         ]
@@ -1161,6 +1177,33 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      success_message_templates: {
+        Row: {
+          content_html: string
+          created_at: string
+          id: string
+          name: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          content_html: string
+          created_at?: string
+          id?: string
+          name: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          content_html?: string
+          created_at?: string
+          id?: string
+          name?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
       }
       tags: {
         Row: {

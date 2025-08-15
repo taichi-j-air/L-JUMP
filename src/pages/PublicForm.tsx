@@ -9,6 +9,7 @@ import { Select, SelectTrigger, SelectContent, SelectItem, SelectValue } from "@
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Checkbox } from "@/components/ui/checkbox";
 import { toast } from "sonner";
+import DOMPurify from 'dompurify';
 
 interface PublicFormRow {
   id: string;
@@ -193,12 +194,15 @@ export default function PublicForm() {
         <CardContent>
           {submitted ? (
             <div className="py-8">
-              <div className="text-center text-muted-foreground" 
-                   dangerouslySetInnerHTML={{ 
-                     __html: form.success_message && form.success_message.trim() 
-                       ? form.success_message 
-                       : '送信ありがとうございました。' 
-                   }} 
+              <div 
+                className="text-center text-muted-foreground prose prose-sm mx-auto" 
+                dangerouslySetInnerHTML={{ 
+                  __html: DOMPurify.sanitize(
+                    form.success_message && form.success_message.trim() 
+                      ? form.success_message 
+                      : '送信ありがとうございました。'
+                  )
+                }} 
               />
             </div>
           ) : (

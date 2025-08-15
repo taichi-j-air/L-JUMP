@@ -16,7 +16,6 @@ import FieldEditorPanel from "@/components/forms/FieldEditorPanel";
 import FormPreviewPanel from "@/components/forms/FormPreviewPanel";
 import FormListPanel from "@/components/forms/FormListPanel";
 import { FormShareDialog } from "@/components/FormShareDialog";
-import { getSuccessMessageForSave } from "@/utils/successMessageHelper";
 
 interface FormRow {
   id: string;
@@ -24,6 +23,9 @@ interface FormRow {
   description: string | null;
   is_public: boolean;
   success_message: string | null;
+  success_message_mode?: string;
+  success_message_plain?: string | null;
+  success_message_template_id?: string | null;
   submit_button_text?: string | null;
   submit_button_variant?: string | null;
   submit_button_bg_color?: string | null;
@@ -66,7 +68,12 @@ export default function FormsBuilder() {
   const [formName, setFormName] = useState("");
   const [description, setDescription] = useState("");
   const [isPublic, setIsPublic] = useState(false);
-  const [successMessage, setSuccessMessage] = useState("送信ありがとうございました。");
+  
+  // Success message state
+  const [successMessageMode, setSuccessMessageMode] = useState<'plain' | 'rich'>('plain');
+  const [successMessagePlain, setSuccessMessagePlain] = useState("送信ありがとうございました。");
+  const [successMessageTemplateId, setSuccessMessageTemplateId] = useState<string | null>(null);
+  
   const [fields, setFields] = useState<FormRow["fields"]>([]);
   const [requireLineFriend, setRequireLineFriend] = useState(false);
   const [preventDuplicate, setPreventDuplicate] = useState(false);
@@ -159,7 +166,9 @@ const resetCreator = () => {
   setFormName("");
   setDescription("");
   setIsPublic(false);
-  setSuccessMessage("送信ありがとうございました。");
+  setSuccessMessageMode('plain');
+  setSuccessMessagePlain("送信ありがとうございました。");
+  setSuccessMessageTemplateId(null);
   setFields([]);
   setRequireLineFriend(false);
   setPreventDuplicate(false);
@@ -172,6 +181,34 @@ const resetCreator = () => {
   setEditingId(null);
 };
 
+  // Helper function to get final success message for database save
+  const getFinalSuccessMessage = async (): Promise<string> => {
+    if (successMessageMode === 'plain') {
+      return successMessagePlain;
+    }
+    
+    if (successMessageMode === 'rich' && successMessageTemplateId) {
+      try {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) return successMessagePlain;
+
+        const { data } = await supabase
+          .from('success_message_templates')
+          .select('content_html')
+          .eq('id', successMessageTemplateId)
+          .eq('user_id', user.id)
+          .single();
+
+        return data?.content_html || successMessagePlain;
+      } catch (error) {
+        console.error('Error fetching template:', error);
+        return successMessagePlain;
+      }
+    }
+    
+    return successMessagePlain;
+  };
+
   const handleCreate = async () => {
     if (!formName.trim()) {
       toast.error('フォーム名を入力してください');
@@ -182,15 +219,18 @@ const resetCreator = () => {
 
 const cleanFields = fields.map(f => ({ id: f.id, label: f.label.trim(), name: f.name.trim(), type: f.type, required: !!f.required, options: Array.isArray(f.options) ? f.options : undefined, placeholder: f.placeholder?.trim() || undefined, rows: f.rows ? Number(f.rows) : undefined }));
 
-// SuccessMessageManagerの設定から実際の成功メッセージを取得
-const actualSuccessMessage = getSuccessMessageForSave('new');
+// Get final success message from template or plain text
+const finalSuccessMessage = await getFinalSuccessMessage();
 
 const { data: created, error } = await (supabase as any).from('forms').insert({
   user_id: user.id,
   name: formName.trim(),
   description: description.trim() || null,
   is_public: isPublic,
-  success_message: actualSuccessMessage.trim() || null,
+  success_message: finalSuccessMessage,
+  success_message_mode: successMessageMode,
+  success_message_plain: successMessagePlain,
+  success_message_template_id: successMessageTemplateId,
   fields: cleanFields,
   require_line_friend: requireLineFriend,
   prevent_duplicate_per_friend: preventDuplicate,
@@ -228,7 +268,12 @@ const startEdit = (f: FormRow) => {
   setFormName(f.name);
   setDescription(f.description || "");
   setIsPublic(!!f.is_public);
-  setSuccessMessage(f.success_message || "");
+  
+  // Set success message state from database
+  setSuccessMessageMode(f.success_message_mode === 'rich' ? 'rich' : 'plain');
+  setSuccessMessagePlain(f.success_message_plain || f.success_message || "送信ありがとうございました。");
+  setSuccessMessageTemplateId(f.success_message_template_id || null);
+  
   const normalized = Array.isArray(f.fields) ? f.fields : [];
   setFields(normalized);
   setSelectedFieldId(normalized[0]?.id ?? null);
@@ -256,14 +301,17 @@ const handleUpdate = async () => {
 
   const cleanFields = fields.map(f => ({ id: f.id, label: f.label.trim(), name: f.name.trim(), type: f.type, required: !!f.required, options: Array.isArray(f.options) ? f.options : undefined, placeholder: f.placeholder?.trim() || undefined, rows: f.rows ? Number(f.rows) : undefined }));
   
-  // SuccessMessageManagerの設定から実際の成功メッセージを取得
-  const actualSuccessMessage = getSuccessMessageForSave(editingId);
+  // Get final success message from template or plain text
+  const finalSuccessMessage = await getFinalSuccessMessage();
 
   const { error } = await (supabase as any).from('forms').update({
     name: formName.trim(),
     description: description.trim() || null,
     is_public: isPublic,
-    success_message: actualSuccessMessage.trim() || null,
+    success_message: finalSuccessMessage,
+    success_message_mode: successMessageMode,
+    success_message_plain: successMessagePlain,
+    success_message_template_id: successMessageTemplateId,
     fields: cleanFields,
     require_line_friend: requireLineFriend,
     prevent_duplicate_per_friend: preventDuplicate,
@@ -306,8 +354,31 @@ const handleUpdate = async () => {
               const { data: { user } } = await supabase.auth.getUser();
               if (!user) { toast.error('ログインが必要です'); return; }
               
-              // SuccessMessageManagerの設定から実際の成功メッセージを取得（新規フォームの場合）
-              const actualSuccessMessage = getSuccessMessageForSave('new');
+              // Get final success message from template or plain text
+              const getFinalMessage = async (): Promise<string> => {
+                if (successMessageMode === 'plain') {
+                  return successMessagePlain;
+                }
+                
+                if (successMessageMode === 'rich' && successMessageTemplateId) {
+                  try {
+                    const { data } = await supabase
+                      .from('success_message_templates')
+                      .select('content_html')
+                      .eq('id', successMessageTemplateId)
+                      .eq('user_id', user.id)
+                      .single();
+
+                    return data?.content_html || successMessagePlain;
+                  } catch (error) {
+                    return successMessagePlain;
+                  }
+                }
+                
+                return successMessagePlain;
+              };
+
+              const finalMessage = await getFinalMessage();
               
               // 即時DB作成
               const { data, error } = await (supabase as any)
@@ -317,7 +388,10 @@ const handleUpdate = async () => {
                   name: '無題のフォーム',
                   description: null,
                   is_public: false,
-                  success_message: actualSuccessMessage,
+                  success_message: finalMessage,
+                  success_message_mode: 'plain',
+                  success_message_plain: '送信ありがとうございました。',
+                  success_message_template_id: null,
                   fields: [],
                   require_line_friend: false,
                   prevent_duplicate_per_friend: false,
@@ -415,8 +489,12 @@ const handleUpdate = async () => {
                 setSubmitButtonTextColor={setSubmitButtonTextColor}
                 accentColor={accentColor}
                 setAccentColor={setAccentColor}
-                successMessage={successMessage}
-                setSuccessMessage={setSuccessMessage}
+                successMessageMode={successMessageMode}
+                setSuccessMessageMode={setSuccessMessageMode}
+                successMessagePlain={successMessagePlain}
+                setSuccessMessagePlain={setSuccessMessagePlain}
+                successMessageTemplateId={successMessageTemplateId}
+                setSuccessMessageTemplateId={setSuccessMessageTemplateId}
                 isPublic={isPublic}
                 setIsPublic={setIsPublic}
                 requireLineFriend={requireLineFriend}
