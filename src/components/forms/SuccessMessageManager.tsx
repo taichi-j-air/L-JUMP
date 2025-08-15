@@ -30,7 +30,7 @@ export function SuccessMessageManager({ successMessage, setSuccessMessage, formI
   const [editingMessage, setEditingMessage] = useState<SuccessMessage | null>(null);
   const [newMessageName, setNewMessageName] = useState("");
   const [newMessageContent, setNewMessageContent] = useState("");
-  const [plainTextMessage, setPlainTextMessage] = useState("");
+  const [plainTextMessage, setPlainTextMessage] = useState("送信ありがとうございます");
 
   // Load saved messages from localStorage
   useEffect(() => {
@@ -48,54 +48,57 @@ export function SuccessMessageManager({ successMessage, setSuccessMessage, formI
     }
     
     // Load rich editor setting for this specific form
+    let currentRichSetting = false;
     if (savedRichSettings) {
       try {
         const richSettings = JSON.parse(savedRichSettings);
-        const currentRichSetting = richSettings[formId];
-        if (currentRichSetting !== undefined) {
-          setIsRichEditor(currentRichSetting);
-        }
+        currentRichSetting = richSettings[formId] || false;
       } catch (error) {
         console.error('Failed to load rich settings:', error);
       }
     }
+    setIsRichEditor(currentRichSetting);
     
     // Load plain text message for this form
+    let currentPlainMessage = "送信ありがとうございます";
     if (savedPlainText) {
       try {
         const plainMessages = JSON.parse(savedPlainText);
-        const currentPlainMessage = plainMessages[formId];
-        if (currentPlainMessage) {
-          setPlainTextMessage(currentPlainMessage);
-        }
+        currentPlainMessage = plainMessages[formId] || "送信ありがとうございます";
       } catch (error) {
         console.error('Failed to load plain messages:', error);
       }
     }
+    setPlainTextMessage(currentPlainMessage);
     
+    // Load selection and set appropriate message
     if (savedSelections) {
       try {
         const selections = JSON.parse(savedSelections);
         const currentSelection = selections[formId];
-        if (currentSelection) {
+        if (currentSelection && currentRichSetting) {
           setSelectedMessageId(currentSelection);
-          // Set the success message content for this form
+          // Set the success message content for this form from rich message
           const savedMsg = JSON.parse(localStorage.getItem('form-success-messages') || '[]');
           const selectedMsg = savedMsg.find((msg: SuccessMessage) => msg.id === currentSelection);
           if (selectedMsg) {
             setSuccessMessage(selectedMsg.content);
-          }
-        } else {
-          // If no rich message selected, load plain text
-          const plainMessages = JSON.parse(localStorage.getItem('form-plain-text-messages') || '{}');
-          const currentPlainMessage = plainMessages[formId];
-          if (currentPlainMessage) {
+          } else {
+            // Rich message was deleted, fall back to plain text
             setSuccessMessage(currentPlainMessage);
           }
+        } else {
+          // No rich message selected or rich editor is off, use plain text
+          setSelectedMessageId(null);
+          setSuccessMessage(currentPlainMessage);
         }
       } catch (error) {
         console.error('Failed to load saved selections:', error);
+        setSuccessMessage(currentPlainMessage);
       }
+    } else {
+      // No selections saved, use plain text
+      setSuccessMessage(currentPlainMessage);
     }
   }, [formId, setSuccessMessage]);
 
@@ -210,7 +213,7 @@ export function SuccessMessageManager({ successMessage, setSuccessMessage, formI
       setSuccessMessage(message.content);
       saveSelection(message.id);
     } else {
-      setSuccessMessage("");
+      setSuccessMessage(plainTextMessage);
       saveSelection(null);
     }
   };
@@ -222,9 +225,9 @@ export function SuccessMessageManager({ successMessage, setSuccessMessage, formI
     const updated = savedMessages.filter(msg => msg.id !== id);
     saveMessages(updated);
     
-    // If deleting the currently selected message, clear selection
+    // If deleting the currently selected message, clear selection and restore plain text
     if (selectedMessageId === id) {
-      setSuccessMessage("");
+      setSuccessMessage(plainTextMessage);
       saveSelection(null);
     }
   };
@@ -251,18 +254,12 @@ export function SuccessMessageManager({ successMessage, setSuccessMessage, formI
                   setShowManager(true);
                 }
               } else {
-                // When switching to plain text, convert HTML to plain text
-                if (successMessage) {
-                  const plainText = stripHTMLTags(successMessage);
-                  setSuccessMessage(plainText);
-                  savePlainTextMessage(plainText);
-                } else {
-                  setSuccessMessage(plainTextMessage);
-                }
+                // When switching to plain text, restore saved plain text for this form
+                setSuccessMessage(plainTextMessage);
                 // Clear rich message selection
                 saveSelection(null);
               }
-            }} 
+            }}
           />
         </div>
       </div>
@@ -281,6 +278,9 @@ export function SuccessMessageManager({ successMessage, setSuccessMessage, formI
           >
             フォーム成功画面の新規作成/設定
           </Button>
+          <p className="text-xs text-muted-foreground text-center">
+            オフにした場合、リッチエディタで設定した内容がすべて無効になります
+          </p>
         </div>
       ) : (
         <Textarea 
