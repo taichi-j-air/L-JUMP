@@ -55,7 +55,7 @@ export default function LineLoginSettings() {
     try {
       const { data: profile } = await supabase
         .from('profiles')
-        .select('line_login_channel_id, line_login_channel_secret, line_channel_id, line_channel_secret, liff_id, liff_url')
+        .select('line_login_channel_id, line_login_channel_secret, line_channel_id, line_channel_secret, liff_id, liff_url, line_bot_id')
         .eq('user_id', userId)
         .maybeSingle()
 
@@ -66,9 +66,10 @@ export default function LineLoginSettings() {
         const loginUrl = generateLoginUrl(channelId)
         const liffId = profile.liff_id || ''
         const liffUrl = profile.liff_url || ''
+        const lineBotId = profile.line_bot_id || ''
         
-        // LIFF認証専用ページのエンドポイントURL生成（ユーザーごとに動的）
-        const liffEndpointUrl = liffId ? `${window.location.origin}/liff?userId=${userId}&liffId=${liffId}` : ''
+        // LIFF認証専用ページのエンドポイントURL生成（LINE Bot IDを使用してセキュリティ向上）
+        const liffEndpointUrl = `${window.location.origin}/liff?userId=${userId}&lineBotId=${lineBotId || '[LINE_BOT_ID]'}`
         
         setSettings({
           channelId,
@@ -160,9 +161,8 @@ export default function LineLoginSettings() {
 
       if (error) throw error
 
-      // LIFF設定保存後、エンドポイントURLを更新（ユーザーごとに動的）
-      const liffEndpointUrl = liffSettings.liffId ? `${window.location.origin}/liff?userId=${user.id}&liffId=${liffSettings.liffId}` : ''
-      setLiffSettings(prev => ({ ...prev, liffEndpointUrl }))
+      // LIFF設定保存後、エンドポイントURLを更新（LINE Bot IDを使用）
+      await loadSettings(user.id) // 設定を再読み込みして最新のLINE Bot IDを取得
 
       toast({
         title: "LIFF設定保存完了",
@@ -326,7 +326,7 @@ export default function LineLoginSettings() {
                 <Label>LIFFエンドポイントURL（設定用・自動生成）</Label>
                 <div className="flex items-center gap-2">
                   <Input 
-                    value={user ? `${window.location.origin}/liff?userId=${user.id}&liffId=${liffSettings.liffId || '[LIFF_ID]'}` : ''} 
+                    value={liffSettings.liffEndpointUrl} 
                     readOnly 
                     className="font-mono text-sm" 
                   />
@@ -334,23 +334,23 @@ export default function LineLoginSettings() {
                     variant="outline"
                     size="sm"
                     onClick={() => copyToClipboard(
-                      user ? `${window.location.origin}/liff?userId=${user.id}&liffId=${liffSettings.liffId || '[LIFF_ID]'}` : '', 
+                      liffSettings.liffEndpointUrl, 
                       "LIFFエンドポイントURL"
                     )}
-                    disabled={!user}
+                    disabled={!liffSettings.liffEndpointUrl}
                   >
                     <Copy className="h-4 w-4" />
                   </Button>
                 </div>
                 <p className="text-sm text-muted-foreground">
-                  {liffSettings.liffId ? (
+                  {liffSettings.liffEndpointUrl.includes('[LINE_BOT_ID]') ? (
                     <>
-                      <strong>完了：</strong> 上記URLがあなた専用のLIFFエンドポイントURLです。LINE Developers コンソールでLIFFアプリ作成時にそのまま設定してください。
+                      <strong>重要：</strong> 上記URLの「[LINE_BOT_ID]」部分にLINE Bot ID（@から始まるID）を設定後、LINE Developers コンソールでLIFFアプリ作成時のエンドポイントURLに設定してください。<br />
+                      セキュリティ向上のため、LIFF IDではなくLINE Bot IDをパラメーターに使用します。
                     </>
                   ) : (
                     <>
-                      <strong>重要：</strong> LIFF作成時に上記URLの「[LIFF_ID]」部分を実際のLIFF IDに置き換えてエンドポイントURLに設定してください。<br />
-                      例：{user ? `${window.location.origin}/liff?userId=${user.id}&liffId=2007859465-L5VQg5q9` : ''}
+                      <strong>完了：</strong> 上記URLがあなた専用のLIFFエンドポイントURLです。LINE Bot IDをパラメーターに使用してセキュリティが向上しています。LINE Developers コンソールでLIFFアプリ作成時にそのまま設定してください。
                     </>
                   )}
                 </p>
