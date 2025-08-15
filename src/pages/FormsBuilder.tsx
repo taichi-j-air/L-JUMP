@@ -279,7 +279,7 @@ const handleUpdate = async () => {
     <div className="container mx-auto max-w-7xl space-y-4">
       <header className="space-y-1">
         <h1 className="text-2xl font-bold tracking-tight">フォーム作成</h1>
-        <p className="text-muted-foreground">公開フォームを作成し、CMSへ埋め込みできます。</p>
+        <p className="text-muted-foreground">公開フォームを作成し、ブラウザへ埋め込みできます。</p>
       </header>
 
       <div className="grid gap-4 lg:grid-cols-12">
