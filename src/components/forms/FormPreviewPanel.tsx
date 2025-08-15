@@ -7,6 +7,8 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { ColorPicker } from "@/components/ui/color-picker";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
+import { useLiffValidation } from "@/hooks/useLiffValidation";
 
 // Keep props same to avoid refactor ripple, but name/description editing moved to middle column
 type Field = { id: string; label: string; name: string; type: string; required?: boolean; options?: string[]; placeholder?: string; rows?: number };
@@ -69,6 +71,8 @@ export default function FormPreviewPanel({
   scenarios,
 }: Props) {
   const [values, setValues] = useState<Record<string, any>>({});
+  const [showLiffDialog, setShowLiffDialog] = useState(false);
+  const { hasLiffConfig, loading: liffLoading } = useLiffValidation();
 
   const canSubmit = useMemo(() => {
     return fields.every((f) => {
@@ -206,9 +210,24 @@ export default function FormPreviewPanel({
             <label className="text-sm">アクセントカラー（ラジオ/チェック）</label>
             <ColorPicker color={accentColor} onChange={setAccentColor} />
           </div>
-          <div className="flex items-center justify-between gap-3 text-sm">
-            <span>LINE友だち限定</span>
-            <Switch checked={requireLineFriend} onCheckedChange={setRequireLineFriend} />
+          <div className="space-y-2">
+            <div className="flex items-center justify-between gap-3 text-sm">
+              <span>LINE友だち限定</span>
+              <Switch 
+                checked={requireLineFriend} 
+                onCheckedChange={(checked) => {
+                  if (checked && !liffLoading && !hasLiffConfig) {
+                    setShowLiffDialog(true);
+                    return;
+                  }
+                  setRequireLineFriend(checked);
+                }} 
+              />
+            </div>
+            <p className="text-xs text-muted-foreground">
+              オンにすると、LINEから開いた友だちのみ回答可能になり、匿名での回答ができなくなります。
+              LIFFが未設定の場合は設定が必要です。
+            </p>
           </div>
           <div className="flex items-center justify-between gap-3 text-sm">
             <span>同一友だちの重複回答を禁止</span>
@@ -230,6 +249,27 @@ export default function FormPreviewPanel({
           </div>
         </div>
       </div>
+
+      <AlertDialog open={showLiffDialog} onOpenChange={setShowLiffDialog}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>LIFF設定が必要です</AlertDialogTitle>
+            <AlertDialogDescription>
+              LINE友だち限定フォームを有効にするには、LINEログインチャネルとLIFFの設定が必要です。
+              設定画面に移動しますか？
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>キャンセル</AlertDialogCancel>
+            <AlertDialogAction onClick={() => {
+              window.open('/line-login-settings', '_blank');
+              setShowLiffDialog(false);
+            }}>
+              設定画面を開く
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
