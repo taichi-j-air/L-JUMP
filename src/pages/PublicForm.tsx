@@ -187,13 +187,13 @@ export default function PublicForm() {
   if (!form.is_public) return <div className={isMobile ? "p-4" : "container mx-auto max-w-3xl p-4"}>このフォームは非公開です</div>;
 
   return (
-    <div className={isMobile ? "min-h-screen" : "container mx-auto max-w-3xl p-4"}>
-      <Card className={isMobile ? "border-0 rounded-none min-h-screen" : ""}>
-        <CardHeader>
+    <div className={isMobile ? "min-h-screen px-4 pt-2" : "container mx-auto max-w-3xl p-4"}>
+      <Card className={isMobile ? "border-0 rounded-none min-h-screen shadow-none" : ""}>
+        <CardHeader className={isMobile ? "px-2 pt-4 pb-4" : ""}>
           <CardTitle>{form.name}</CardTitle>
           {form.description && <CardDescription>{form.description}</CardDescription>}
         </CardHeader>
-        <CardContent>
+        <CardContent className={isMobile ? "space-y-4 px-2" : "space-y-4"}>
           {submitted ? (
             <div className="py-8">
               <div 

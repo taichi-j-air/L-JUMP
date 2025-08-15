@@ -333,7 +333,14 @@ export function SuccessMessageManager({
                 <Button onClick={() => setShowManager(false)} variant="outline" className="h-8 px-4 text-xs">
                   閉じる
                 </Button>
-                <Button onClick={() => setShowManager(false)} className="h-8 px-4 text-xs">
+                <Button 
+                  onClick={() => {
+                    // 設定が保存されました（実際の保存はFormsBuilderで実行される）
+                    toast.success('設定が保存されました');
+                    setShowManager(false);
+                  }} 
+                  className="h-8 px-4 text-xs"
+                >
                   保存
                 </Button>
               </div>
