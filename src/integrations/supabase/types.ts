@@ -616,6 +616,163 @@ export type Database = {
         }
         Relationships: []
       }
+      product_actions: {
+        Row: {
+          action_type: string
+          add_tag_ids: string[] | null
+          created_at: string
+          failure_message: string | null
+          id: string
+          notification_method: string | null
+          notify_user: boolean | null
+          product_id: string
+          remove_tag_ids: string[] | null
+          scenario_action: string | null
+          target_scenario_id: string | null
+          updated_at: string
+        }
+        Insert: {
+          action_type: string
+          add_tag_ids?: string[] | null
+          created_at?: string
+          failure_message?: string | null
+          id?: string
+          notification_method?: string | null
+          notify_user?: boolean | null
+          product_id: string
+          remove_tag_ids?: string[] | null
+          scenario_action?: string | null
+          target_scenario_id?: string | null
+          updated_at?: string
+        }
+        Update: {
+          action_type?: string
+          add_tag_ids?: string[] | null
+          created_at?: string
+          failure_message?: string | null
+          id?: string
+          notification_method?: string | null
+          notify_user?: boolean | null
+          product_id?: string
+          remove_tag_ids?: string[] | null
+          scenario_action?: string | null
+          target_scenario_id?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "product_actions_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "products"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      product_settings: {
+        Row: {
+          button_color: string | null
+          button_text: string | null
+          cancel_redirect_url: string | null
+          created_at: string
+          custom_parameters: Json | null
+          id: string
+          landing_page_content: string | null
+          landing_page_image_url: string | null
+          landing_page_title: string | null
+          product_id: string
+          success_redirect_url: string | null
+          updated_at: string
+        }
+        Insert: {
+          button_color?: string | null
+          button_text?: string | null
+          cancel_redirect_url?: string | null
+          created_at?: string
+          custom_parameters?: Json | null
+          id?: string
+          landing_page_content?: string | null
+          landing_page_image_url?: string | null
+          landing_page_title?: string | null
+          product_id: string
+          success_redirect_url?: string | null
+          updated_at?: string
+        }
+        Update: {
+          button_color?: string | null
+          button_text?: string | null
+          cancel_redirect_url?: string | null
+          created_at?: string
+          custom_parameters?: Json | null
+          id?: string
+          landing_page_content?: string | null
+          landing_page_image_url?: string | null
+          landing_page_title?: string | null
+          product_id?: string
+          success_redirect_url?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "product_settings_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "products"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      products: {
+        Row: {
+          created_at: string
+          currency: string | null
+          description: string | null
+          id: string
+          interval: string | null
+          is_active: boolean | null
+          name: string
+          price: number | null
+          product_type: string
+          stripe_price_id: string | null
+          stripe_product_id: string | null
+          trial_period_days: number | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          currency?: string | null
+          description?: string | null
+          id?: string
+          interval?: string | null
+          is_active?: boolean | null
+          name: string
+          price?: number | null
+          product_type: string
+          stripe_price_id?: string | null
+          stripe_product_id?: string | null
+          trial_period_days?: number | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          currency?: string | null
+          description?: string | null
+          id?: string
+          interval?: string | null
+          is_active?: boolean | null
+          name?: string
+          price?: number | null
+          product_type?: string
+          stripe_price_id?: string | null
+          stripe_product_id?: string | null
+          trial_period_days?: number | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       profiles: {
         Row: {
           add_friend_url: string | null
@@ -1258,6 +1415,42 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      stripe_credentials: {
+        Row: {
+          created_at: string
+          id: string
+          is_live_mode: boolean | null
+          live_publishable_key: string | null
+          live_secret_key: string | null
+          test_publishable_key: string | null
+          test_secret_key: string | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          is_live_mode?: boolean | null
+          live_publishable_key?: string | null
+          live_secret_key?: string | null
+          test_publishable_key?: string | null
+          test_secret_key?: string | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          is_live_mode?: boolean | null
+          live_publishable_key?: string | null
+          live_secret_key?: string | null
+          test_publishable_key?: string | null
+          test_secret_key?: string | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
       }
       success_message_templates: {
         Row: {

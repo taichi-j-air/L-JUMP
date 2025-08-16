@@ -2,41 +2,108 @@ import { useState, useEffect } from "react"
 import { supabase } from "@/integrations/supabase/client"
 import { User } from "@supabase/supabase-js"
 import { AppHeader } from "@/components/AppHeader"
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { Textarea } from "@/components/ui/textarea"
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
-import { Badge } from "@/components/ui/badge"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Edit, Plus, Trash2, Save, CreditCard, ExternalLink } from "lucide-react"
+import { Textarea } from "@/components/ui/textarea"
+import { Badge } from "@/components/ui/badge"
+import { Separator } from "@/components/ui/separator"
+import { Plus, Package, Settings, Target, AlertTriangle } from "lucide-react"
 import { toast } from "sonner"
 
 interface Product {
   id: string
   name: string
-  description: string
+  description?: string
   price: number
   currency: string
-  payment_type: 'one_time' | 'subscription' | 'subscription_trial'
-  trial_days?: number
-  subscription_interval?: 'month' | 'year'
+  product_type: 'one_time' | 'subscription' | 'subscription_with_trial'
+  trial_period_days?: number
+  interval?: 'month' | 'year'
   is_active: boolean
+  stripe_product_id?: string
   stripe_price_id?: string
-  payment_page_url?: string
+}
+
+interface ProductSettings {
+  id?: string
+  product_id: string
+  landing_page_title?: string
+  landing_page_content?: string
+  landing_page_image_url?: string
   button_text: string
   button_color: string
-  created_at: string
+  success_redirect_url?: string
+  cancel_redirect_url?: string
+  custom_parameters: Record<string, any>
+}
+
+interface ProductAction {
+  id?: string
+  product_id: string
+  action_type: 'success' | 'failure'
+  add_tag_ids?: string[]
+  remove_tag_ids?: string[]
+  scenario_action?: 'add_to_existing' | 'replace_all'
+  target_scenario_id?: string
+  failure_message?: string
+  notify_user: boolean
+  notification_method?: 'line' | 'system'
 }
 
 export default function ProductManagement() {
   const [user, setUser] = useState<User | null>(null)
   const [loading, setLoading] = useState(true)
   const [products, setProducts] = useState<Product[]>([])
-  const [editingProduct, setEditingProduct] = useState<Product | null>(null)
-  const [isDialogOpen, setIsDialogOpen] = useState(false)
+  const [selectedProduct, setSelectedProduct] = useState<Product | null>(null)
+  const [isCreating, setIsCreating] = useState(false)
+  const [saving, setSaving] = useState(false)
+
+  // Product form state
+  const [productForm, setProductForm] = useState<Partial<Product>>({
+    name: '',
+    description: '',
+    price: 0,
+    currency: 'jpy',
+    product_type: 'one_time',
+    trial_period_days: undefined,
+    interval: 'month',
+    is_active: true
+  })
+
+  // Settings form state
+  const [settingsForm, setSettingsForm] = useState<ProductSettings>({
+    product_id: '',
+    landing_page_title: '',
+    landing_page_content: '',
+    landing_page_image_url: '',
+    button_text: '購入する',
+    button_color: '#0cb386',
+    success_redirect_url: '',
+    cancel_redirect_url: '',
+    custom_parameters: {}
+  })
+
+  // Actions form state
+  const [successAction, setSuccessAction] = useState<ProductAction>({
+    product_id: '',
+    action_type: 'success',
+    add_tag_ids: [],
+    remove_tag_ids: [],
+    scenario_action: 'add_to_existing',
+    target_scenario_id: '',
+    notify_user: false
+  })
+
+  const [failureAction, setFailureAction] = useState<ProductAction>({
+    product_id: '',
+    action_type: 'failure',
+    failure_message: '',
+    notify_user: true,
+    notification_method: 'line'
+  })
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
@@ -53,112 +120,165 @@ export default function ProductManagement() {
 
   const loadProducts = async () => {
     try {
-      // プレースホルダー: 実際の実装では商品データをデータベースから取得
-      const mockProducts: Product[] = [
-        {
-          id: "prod_1",
-          name: "ベーシックプラン",
-          description: "月額2,980円のベーシックプラン",
-          price: 2980,
-          currency: "JPY",
-          payment_type: "subscription",
-          subscription_interval: "month",
-          is_active: true,
-          button_text: "今すぐ購入",
-          button_color: "#0cb386",
-          created_at: "2024-01-15T10:30:00Z"
-        },
-        {
-          id: "prod_2", 
-          name: "プレミアムプラン（7日間トライアル）",
-          description: "7日間無料トライアル付きプレミアムプラン",
-          price: 9800,
-          currency: "JPY",
-          payment_type: "subscription_trial",
-          trial_days: 7,
-          subscription_interval: "month",
-          is_active: true,
-          button_text: "無料で試す",
-          button_color: "#f59e0b",
-          created_at: "2024-01-14T15:45:00Z"
-        }
-      ]
-      setProducts(mockProducts)
+      const { data, error } = await supabase
+        .from('products')
+        .select('*')
+        .order('created_at', { ascending: false })
+
+      if (error) throw error
+      setProducts((data || []) as Product[])
+    } catch (error: any) {
+      console.error('商品の読み込みに失敗:', error)
+      toast.error('商品の読み込みに失敗しました')
+    }
+  }
+
+  const handleCreateProduct = () => {
+    setIsCreating(true)
+    setSelectedProduct(null)
+    setProductForm({
+      name: '',
+      description: '',
+      price: 0,
+      currency: 'jpy',
+      product_type: 'one_time',
+      trial_period_days: undefined,
+      interval: 'month',
+      is_active: true
+    })
+    setSettingsForm({
+      product_id: '',
+      landing_page_title: '',
+      landing_page_content: '',
+      landing_page_image_url: '',
+      button_text: '購入する',
+      button_color: '#0cb386',
+      success_redirect_url: '',
+      cancel_redirect_url: '',
+      custom_parameters: {}
+    })
+  }
+
+  const handleSelectProduct = async (product: Product) => {
+    setSelectedProduct(product)
+    setIsCreating(false)
+    setProductForm(product)
+
+    // Load product settings and actions
+    try {
+      const [settingsRes, actionsRes] = await Promise.all([
+        supabase.from('product_settings').select('*').eq('product_id', product.id).single(),
+        supabase.from('product_actions').select('*').eq('product_id', product.id)
+      ])
+
+      if (settingsRes.data) {
+        setSettingsForm({
+          ...settingsRes.data,
+          custom_parameters: settingsRes.data.custom_parameters as Record<string, any> || {}
+        })
+      }
+
+      if (actionsRes.data) {
+        const success = actionsRes.data.find(a => a.action_type === 'success') as ProductAction
+        const failure = actionsRes.data.find(a => a.action_type === 'failure') as ProductAction
+        
+        if (success) setSuccessAction(success)
+        if (failure) setFailureAction(failure)
+      }
     } catch (error) {
-      console.error('Error loading products:', error)
-      toast.error('商品データの取得に失敗しました')
+      console.error('商品詳細の読み込みに失敗:', error)
     }
   }
 
   const handleSaveProduct = async () => {
-    if (!editingProduct) return
-
-    try {
-      // プレースホルダー: 実際の実装では商品データをデータベースに保存
-      console.log('Saving product:', editingProduct)
-      toast.success(editingProduct.id === 'new' ? '商品を作成しました' : '商品を更新しました')
-      setIsDialogOpen(false)
-      setEditingProduct(null)
-      loadProducts()
-    } catch (error) {
-      console.error('Error saving product:', error)
-      toast.error('商品の保存に失敗しました')
+    if (!user || !productForm.name) {
+      toast.error('商品名は必須です')
+      return
     }
-  }
 
-  const handleDeleteProduct = async (productId: string) => {
-    if (!confirm('この商品を削除しますか？')) return
-
+    setSaving(true)
     try {
-      // プレースホルダー: 実際の実装では商品をデータベースから削除
-      console.log('Deleting product:', productId)
-      toast.success('商品を削除しました')
-      loadProducts()
-    } catch (error) {
-      console.error('Error deleting product:', error)
-      toast.error('商品の削除に失敗しました')
-    }
-  }
+      let productId = selectedProduct?.id
 
-  const openEditDialog = (product?: Product) => {
-    if (product) {
-      setEditingProduct({ ...product })
-    } else {
-      setEditingProduct({
-        id: 'new',
-        name: '',
-        description: '',
-        price: 0,
-        currency: 'JPY',
-        payment_type: 'one_time',
-        is_active: true,
-        button_text: '今すぐ購入',
-        button_color: '#0cb386',
-        created_at: new Date().toISOString()
+      if (isCreating) {
+        // Create new product
+        const { data: newProduct, error } = await supabase
+          .from('products')
+          .insert({
+            name: productForm.name!,
+            description: productForm.description,
+            price: productForm.price || 0,
+            currency: productForm.currency || 'jpy',
+            product_type: productForm.product_type!,
+            trial_period_days: productForm.trial_period_days,
+            interval: productForm.interval,
+            is_active: productForm.is_active ?? true,
+            user_id: user.id
+          })
+          .select()
+          .single()
+
+        if (error) throw error
+        productId = newProduct.id
+        
+        // Update products list
+        setProducts(prev => [newProduct as Product, ...prev])
+        setSelectedProduct(newProduct as Product)
+        setIsCreating(false)
+      } else {
+        // Update existing product
+        const { error } = await supabase
+          .from('products')
+          .update(productForm)
+          .eq('id', productId)
+
+        if (error) throw error
+        
+        // Update products list
+        setProducts(prev => prev.map(p => p.id === productId ? { ...p, ...productForm } : p))
+      }
+
+      // Save settings
+      await supabase.from('product_settings').upsert({
+        ...settingsForm,
+        product_id: productId
       })
+
+      // Save actions
+      await Promise.all([
+        supabase.from('product_actions').upsert({
+          ...successAction,
+          product_id: productId
+        }),
+        supabase.from('product_actions').upsert({
+          ...failureAction,
+          product_id: productId
+        })
+      ])
+
+      toast.success('商品を保存しました')
+    } catch (error: any) {
+      console.error('商品の保存に失敗:', error)
+      toast.error('商品の保存に失敗しました')
+    } finally {
+      setSaving(false)
     }
-    setIsDialogOpen(true)
   }
 
-  const updateEditingProduct = (updates: Partial<Product>) => {
-    if (!editingProduct) return
-    setEditingProduct({ ...editingProduct, ...updates })
+  const getProductTypeLabel = (type: string) => {
+    switch (type) {
+      case 'one_time': return '単発決済'
+      case 'subscription': return '継続課金'
+      case 'subscription_with_trial': return 'トライアル付き継続課金'
+      default: return type
+    }
   }
 
   const formatPrice = (price: number, currency: string) => {
     return new Intl.NumberFormat('ja-JP', {
       style: 'currency',
-      currency: currency,
+      currency: currency.toUpperCase()
     }).format(price)
-  }
-
-  const getPaymentTypeLabel = (type: string) => {
-    switch (type) {
-      case 'one_time': return '単発課金'
-      case 'subscription': return 'サブスク課金'
-      case 'subscription_trial': return 'トライアル付きサブスク'
-      default: return type
-    }
   }
 
   if (loading) {
@@ -174,263 +294,326 @@ export default function ProductManagement() {
       <AppHeader user={user} />
       
       <div className="container mx-auto px-4">
-        <div className="mb-6 flex justify-between items-center">
-          <div>
-            <h1 className="text-2xl font-bold flex items-center gap-2">
-              <CreditCard className="h-6 w-6" />
-              商品管理
-            </h1>
-            <p className="text-muted-foreground">決済商品の作成・編集・管理を行います。</p>
-          </div>
-          <Button onClick={() => openEditDialog()}>
-            <Plus className="h-4 w-4 mr-2" />
-            新規商品作成
-          </Button>
+        <div className="mb-6">
+          <h1 className="text-2xl font-bold">商品管理</h1>
+          <p className="text-muted-foreground">Stripe決済商品の作成・管理を行います。</p>
         </div>
 
-        {/* 決済ページ情報カード */}
-        <Card className="mb-6">
-          <CardHeader>
-            <CardTitle>決済ページについて</CardTitle>
-            <CardDescription>LINEアカウントBAN対策について</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="p-4 border border-yellow-200 bg-yellow-50 rounded-lg">
-              <h3 className="text-lg font-semibold text-yellow-800 mb-2">決済フロー</h3>
-              <div className="text-sm text-yellow-700 space-y-2">
-                <p>1. ユーザーが商品ページにアクセス</p>
-                <p>2. 商品詳細・料金確認 → 「購入へ進む」ボタン</p>
-                <p>3. ブラウザ経由でStripe決済ページに移動（BAN対策）</p>
-                <p>4. 決済完了後、サービス利用開始</p>
-              </div>
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          {/* 左カラム: 商品リスト */}
+          <div className="lg:col-span-1 space-y-4">
+            <div className="flex justify-between items-center">
+              <h2 className="text-lg font-semibold">商品一覧</h2>
+              <Button onClick={handleCreateProduct} size="sm" className="gap-2">
+                <Plus className="h-4 w-4" />
+                商品追加
+              </Button>
             </div>
-          </CardContent>
-        </Card>
 
-        {/* 商品一覧 */}
-        <Card>
-          <CardHeader>
-            <CardTitle>商品一覧</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="overflow-x-auto">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>商品名</TableHead>
-                    <TableHead>料金</TableHead>
-                    <TableHead>決済タイプ</TableHead>
-                    <TableHead>ステータス</TableHead>
-                    <TableHead>決済ページ</TableHead>
-                    <TableHead>アクション</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {products.map((product) => (
-                    <TableRow key={product.id}>
-                      <TableCell>
-                        <div>
-                          <div className="font-medium">{product.name}</div>
-                          <div className="text-sm text-muted-foreground">{product.description}</div>
+            <div className="space-y-2">
+              {products.map((product) => (
+                <Card 
+                  key={product.id}
+                  className={`cursor-pointer transition-colors hover:bg-muted/50 ${
+                    selectedProduct?.id === product.id ? 'ring-2 ring-primary' : ''
+                  }`}
+                  onClick={() => handleSelectProduct(product)}
+                >
+                  <CardContent className="p-4">
+                    <div className="flex items-start justify-between">
+                      <div className="flex-1 min-w-0">
+                        <h3 className="font-medium truncate">{product.name}</h3>
+                        <div className="flex items-center gap-2 mt-1">
+                          <Badge variant="secondary" className="text-xs">
+                            {getProductTypeLabel(product.product_type)}
+                          </Badge>
+                          <span className="text-sm text-muted-foreground">
+                            {formatPrice(product.price, product.currency)}
+                          </span>
                         </div>
-                      </TableCell>
-                      <TableCell className="font-medium">
-                        {formatPrice(product.price, product.currency)}
-                        {product.subscription_interval && (
-                          <div className="text-xs text-muted-foreground">
-                            / {product.subscription_interval === 'month' ? '月' : '年'}
-                          </div>
-                        )}
-                        {product.trial_days && (
-                          <div className="text-xs text-green-600">
-                            {product.trial_days}日間無料
-                          </div>
-                        )}
-                      </TableCell>
-                      <TableCell>
-                        <Badge variant="secondary">{getPaymentTypeLabel(product.payment_type)}</Badge>
-                      </TableCell>
-                      <TableCell>
-                        <Badge variant={product.is_active ? 'default' : 'secondary'}>
-                          {product.is_active ? 'アクティブ' : '無効'}
-                        </Badge>
-                      </TableCell>
-                      <TableCell>
-                        {product.payment_page_url ? (
-                          <Button size="sm" variant="outline" asChild>
-                            <a href={product.payment_page_url} target="_blank" rel="noopener noreferrer">
-                              <ExternalLink className="h-4 w-4" />
-                            </a>
-                          </Button>
+                      </div>
+                      <div className="flex items-center gap-1">
+                        <Package className="h-4 w-4 text-muted-foreground" />
+                        {product.is_active ? (
+                          <div className="w-2 h-2 bg-green-500 rounded-full" />
                         ) : (
-                          <span className="text-xs text-muted-foreground">未設定</span>
+                          <div className="w-2 h-2 bg-gray-400 rounded-full" />
                         )}
-                      </TableCell>
-                      <TableCell>
-                        <div className="flex gap-2">
-                          <Button size="sm" variant="outline" onClick={() => openEditDialog(product)}>
-                            <Edit className="h-4 w-4" />
-                          </Button>
-                          <Button 
-                            size="sm" 
-                            variant="destructive" 
-                            onClick={() => handleDeleteProduct(product.id)}
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* 編集ダイアログ */}
-        <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-          <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
-            <DialogHeader>
-              <DialogTitle>
-                {editingProduct?.id === 'new' ? '商品作成' : '商品編集'}
-              </DialogTitle>
-            </DialogHeader>
-            {editingProduct && (
-              <div className="space-y-4">
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="name">商品名</Label>
-                    <Input
-                      id="name"
-                      value={editingProduct.name}
-                      onChange={(e) => updateEditingProduct({ name: e.target.value })}
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="price">価格</Label>
-                    <Input
-                      id="price"
-                      type="number"
-                      value={editingProduct.price}
-                      onChange={(e) => updateEditingProduct({ price: Number(e.target.value) })}
-                    />
-                  </div>
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="description">商品説明</Label>
-                  <Textarea
-                    id="description"
-                    value={editingProduct.description}
-                    onChange={(e) => updateEditingProduct({ description: e.target.value })}
-                    rows={3}
-                  />
-                </div>
-
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="payment_type">決済タイプ</Label>
-                    <Select
-                      value={editingProduct.payment_type}
-                      onValueChange={(value: any) => updateEditingProduct({ payment_type: value })}
-                    >
-                      <SelectTrigger>
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="one_time">単発課金</SelectItem>
-                        <SelectItem value="subscription">サブスク課金</SelectItem>
-                        <SelectItem value="subscription_trial">トライアル付きサブスク</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-
-                  {editingProduct.payment_type.startsWith('subscription') && (
-                    <div className="space-y-2">
-                      <Label htmlFor="subscription_interval">課金間隔</Label>
-                      <Select
-                        value={editingProduct.subscription_interval}
-                        onValueChange={(value: any) => updateEditingProduct({ subscription_interval: value })}
-                      >
-                        <SelectTrigger>
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="month">月額</SelectItem>
-                          <SelectItem value="year">年額</SelectItem>
-                        </SelectContent>
-                      </Select>
+                      </div>
                     </div>
-                  )}
-                </div>
+                  </CardContent>
+                </Card>
+              ))}
 
-                {editingProduct.payment_type === 'subscription_trial' && (
-                  <div className="space-y-2">
-                    <Label htmlFor="trial_days">トライアル期間（日数）</Label>
-                    <Input
-                      id="trial_days"
-                      type="number"
-                      value={editingProduct.trial_days || 0}
-                      onChange={(e) => updateEditingProduct({ trial_days: Number(e.target.value) })}
-                    />
-                  </div>
-                )}
+              {products.length === 0 && (
+                <Card>
+                  <CardContent className="p-8 text-center">
+                    <Package className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
+                    <p className="text-muted-foreground">商品がありません</p>
+                    <p className="text-sm text-muted-foreground mt-1">右上の「商品追加」から作成してください</p>
+                  </CardContent>
+                </Card>
+              )}
+            </div>
+          </div>
 
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="button_text">ボタンテキスト</Label>
-                    <Input
-                      id="button_text"
-                      value={editingProduct.button_text}
-                      onChange={(e) => updateEditingProduct({ button_text: e.target.value })}
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="button_color">ボタンカラー</Label>
-                    <Input
-                      id="button_color"
-                      type="color"
-                      value={editingProduct.button_color}
-                      onChange={(e) => updateEditingProduct({ button_color: e.target.value })}
-                    />
-                  </div>
-                </div>
+          {/* 右カラム: 商品設定 */}
+          <div className="lg:col-span-2">
+            {(selectedProduct || isCreating) ? (
+              <div className="space-y-6">
+                {/* 商品基本情報 */}
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="flex items-center gap-2">
+                      <Settings className="h-5 w-5" />
+                      商品基本設定
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-4">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div>
+                        <Label htmlFor="product-name">商品名 *</Label>
+                        <Input
+                          id="product-name"
+                          value={productForm.name || ''}
+                          onChange={(e) => setProductForm(prev => ({ ...prev, name: e.target.value }))}
+                          placeholder="商品名を入力"
+                        />
+                      </div>
+                      
+                      <div>
+                        <Label htmlFor="product-type">決済タイプ</Label>
+                        <Select
+                          value={productForm.product_type}
+                          onValueChange={(value) => setProductForm(prev => ({ ...prev, product_type: value as any }))}
+                        >
+                          <SelectTrigger>
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="one_time">単発決済</SelectItem>
+                            <SelectItem value="subscription">継続課金</SelectItem>
+                            <SelectItem value="subscription_with_trial">トライアル付き継続課金</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
 
-                <div className="space-y-2">
-                  <Label htmlFor="payment_page_url">決済ページURL（オプション）</Label>
-                  <Input
-                    id="payment_page_url"
-                    type="url"
-                    value={editingProduct.payment_page_url || ''}
-                    onChange={(e) => updateEditingProduct({ payment_page_url: e.target.value })}
-                    placeholder="https://example.com/product/123"
-                  />
-                </div>
+                      <div>
+                        <Label htmlFor="product-price">価格</Label>
+                        <Input
+                          id="product-price"
+                          type="number"
+                          value={productForm.price || 0}
+                          onChange={(e) => setProductForm(prev => ({ ...prev, price: Number(e.target.value) }))}
+                        />
+                      </div>
 
-                <div className="flex items-center space-x-2">
-                  <input
-                    type="checkbox"
-                    id="is_active"
-                    checked={editingProduct.is_active}
-                    onChange={(e) => updateEditingProduct({ is_active: e.target.checked })}
-                  />
-                  <Label htmlFor="is_active">アクティブ</Label>
-                </div>
+                      {productForm.product_type?.includes('subscription') && (
+                        <div>
+                          <Label htmlFor="product-interval">課金間隔</Label>
+                          <Select
+                            value={productForm.interval}
+                            onValueChange={(value) => setProductForm(prev => ({ ...prev, interval: value as any }))}
+                          >
+                            <SelectTrigger>
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="month">月次</SelectItem>
+                              <SelectItem value="year">年次</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
+                      )}
 
-                <div className="flex justify-end gap-2">
-                  <Button variant="outline" onClick={() => setIsDialogOpen(false)}>
-                    キャンセル
-                  </Button>
-                  <Button onClick={handleSaveProduct}>
-                    <Save className="h-4 w-4 mr-2" />
-                    保存
+                      {productForm.product_type === 'subscription_with_trial' && (
+                        <div>
+                          <Label htmlFor="trial-days">トライアル期間（日）</Label>
+                          <Input
+                            id="trial-days"
+                            type="number"
+                            value={productForm.trial_period_days || ''}
+                            onChange={(e) => setProductForm(prev => ({ ...prev, trial_period_days: Number(e.target.value) }))}
+                          />
+                        </div>
+                      )}
+                    </div>
+
+                    <div>
+                      <Label htmlFor="product-description">商品説明</Label>
+                      <Textarea
+                        id="product-description"
+                        value={productForm.description || ''}
+                        onChange={(e) => setProductForm(prev => ({ ...prev, description: e.target.value }))}
+                        placeholder="商品の説明を入力"
+                        rows={3}
+                      />
+                    </div>
+                  </CardContent>
+                </Card>
+
+                {/* ランディングページ設定 */}
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="flex items-center gap-2">
+                      <Target className="h-5 w-5" />
+                      ランディングページ設定
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-4">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div>
+                        <Label htmlFor="landing-title">ページタイトル</Label>
+                        <Input
+                          id="landing-title"
+                          value={settingsForm.landing_page_title || ''}
+                          onChange={(e) => setSettingsForm(prev => ({ ...prev, landing_page_title: e.target.value }))}
+                          placeholder="ランディングページのタイトル"
+                        />
+                      </div>
+
+                      <div>
+                        <Label htmlFor="button-text">ボタンテキスト</Label>
+                        <Input
+                          id="button-text"
+                          value={settingsForm.button_text}
+                          onChange={(e) => setSettingsForm(prev => ({ ...prev, button_text: e.target.value }))}
+                        />
+                      </div>
+
+                      <div>
+                        <Label htmlFor="button-color">ボタンカラー</Label>
+                        <Input
+                          id="button-color"
+                          type="color"
+                          value={settingsForm.button_color}
+                          onChange={(e) => setSettingsForm(prev => ({ ...prev, button_color: e.target.value }))}
+                        />
+                      </div>
+
+                      <div>
+                        <Label htmlFor="landing-image">画像URL</Label>
+                        <Input
+                          id="landing-image"
+                          value={settingsForm.landing_page_image_url || ''}
+                          onChange={(e) => setSettingsForm(prev => ({ ...prev, landing_page_image_url: e.target.value }))}
+                          placeholder="https://example.com/image.jpg"
+                        />
+                      </div>
+                    </div>
+
+                    <div>
+                      <Label htmlFor="landing-content">ページ内容</Label>
+                      <Textarea
+                        id="landing-content"
+                        value={settingsForm.landing_page_content || ''}
+                        onChange={(e) => setSettingsForm(prev => ({ ...prev, landing_page_content: e.target.value }))}
+                        placeholder="ランディングページの内容を入力"
+                        rows={4}
+                      />
+                    </div>
+                  </CardContent>
+                </Card>
+
+                {/* アクション設定 */}
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="flex items-center gap-2">
+                      <AlertTriangle className="h-5 w-5" />
+                      決済後アクション設定
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-6">
+                    <div>
+                      <h3 className="font-medium text-green-600 mb-3">決済成功時</h3>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                          <Label>シナリオアクション</Label>
+                          <Select
+                            value={successAction.scenario_action}
+                            onValueChange={(value) => setSuccessAction(prev => ({ ...prev, scenario_action: value as any }))}
+                          >
+                            <SelectTrigger>
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="add_to_existing">既存シナリオに追加</SelectItem>
+                              <SelectItem value="replace_all">全シナリオを置換</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
+
+                        <div>
+                          <Label htmlFor="target-scenario">対象シナリオID</Label>
+                          <Input
+                            id="target-scenario"
+                            value={successAction.target_scenario_id || ''}
+                            onChange={(e) => setSuccessAction(prev => ({ ...prev, target_scenario_id: e.target.value }))}
+                            placeholder="シナリオIDを入力"
+                          />
+                        </div>
+                      </div>
+                    </div>
+
+                    <Separator />
+
+                    <div>
+                      <h3 className="font-medium text-red-600 mb-3">決済失敗時</h3>
+                      <div className="space-y-4">
+                        <div>
+                          <Label htmlFor="failure-message">失敗メッセージ</Label>
+                          <Textarea
+                            id="failure-message"
+                            value={failureAction.failure_message || ''}
+                            onChange={(e) => setFailureAction(prev => ({ ...prev, failure_message: e.target.value }))}
+                            placeholder="決済失敗時に送信するメッセージ"
+                            rows={2}
+                          />
+                        </div>
+
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                          <div>
+                            <Label>通知方法</Label>
+                            <Select
+                              value={failureAction.notification_method}
+                              onValueChange={(value) => setFailureAction(prev => ({ ...prev, notification_method: value as any }))}
+                            >
+                              <SelectTrigger>
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="line">LINE通知</SelectItem>
+                                <SelectItem value="system">システム通知</SelectItem>
+                              </SelectContent>
+                            </Select>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+
+                {/* 保存ボタン */}
+                <div className="flex justify-end">
+                  <Button onClick={handleSaveProduct} disabled={saving} size="lg">
+                    {saving ? '保存中...' : (isCreating ? '商品を作成' : '変更を保存')}
                   </Button>
                 </div>
               </div>
+            ) : (
+              <Card>
+                <CardContent className="p-12 text-center">
+                  <Package className="h-16 w-16 text-muted-foreground mx-auto mb-4" />
+                  <h3 className="text-lg font-medium mb-2">商品を選択してください</h3>
+                  <p className="text-muted-foreground">
+                    左側の商品リストから編集したい商品を選択するか、<br />
+                    「商品追加」ボタンから新しい商品を作成してください。
+                  </p>
+                </CardContent>
+              </Card>
             )}
-          </DialogContent>
-        </Dialog>
+          </div>
+        </div>
       </div>
     </div>
   )

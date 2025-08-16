@@ -18,13 +18,11 @@ export default function StripeSettings() {
   const [testing, setTesting] = useState(false)
   const [stripeSettings, setStripeSettings] = useState({
     secretKey: '',
-    publishableKey: '',
-    webhookSecret: ''
+    publishableKey: ''
   })
   const [testStripeSettings, setTestStripeSettings] = useState({
     secretKey: '',
-    publishableKey: '',
-    webhookSecret: ''
+    publishableKey: ''
   })
   const [connectionStatus, setConnectionStatus] = useState<'not_configured' | 'configured' | 'error'>('not_configured')
   const [testConnectionStatus, setTestConnectionStatus] = useState<'not_configured' | 'configured' | 'error'>('not_configured')
@@ -43,8 +41,35 @@ export default function StripeSettings() {
   }, [user])
 
   const loadStripeSettings = async () => {
-    // プレースホルダー: 実際の実装では暗号化されたStripe設定を取得
-    // 現在はモック実装
+    try {
+      const { data, error } = await supabase
+        .from('stripe_credentials')
+        .select('*')
+        .eq('user_id', user?.id)
+        .single()
+
+      if (error && error.code !== 'PGRST116') {
+        console.error('Stripe設定の読み込みに失敗:', error)
+        return
+      }
+
+      if (data) {
+        setStripeSettings({
+          secretKey: data.live_secret_key || '',
+          publishableKey: data.live_publishable_key || ''
+        })
+        setTestStripeSettings({
+          secretKey: data.test_secret_key || '',
+          publishableKey: data.test_publishable_key || ''
+        })
+        
+        // Connection status based on whether keys exist
+        setConnectionStatus(data.live_secret_key && data.live_publishable_key ? 'configured' : 'not_configured')
+        setTestConnectionStatus(data.test_secret_key && data.test_publishable_key ? 'configured' : 'not_configured')
+      }
+    } catch (error) {
+      console.error('Stripe設定の読み込みエラー:', error)
+    }
   }
 
   const saveStripeSettings = async () => {
@@ -60,10 +85,19 @@ export default function StripeSettings() {
         throw new Error('Publishable Keyは pk_ で始まる必要があります')
       }
 
-      // プレースホルダー: 実際の実装では暗号化してStripe設定を保存
-      console.log('Stripe設定を保存:', stripeSettings)
+      // Upsert Stripe credentials
+      const { error } = await supabase
+        .from('stripe_credentials')
+        .upsert({
+          user_id: user.id,
+          live_secret_key: stripeSettings.secretKey,
+          live_publishable_key: stripeSettings.publishableKey,
+          updated_at: new Date().toISOString()
+        })
+
+      if (error) throw error
       
-      toast.success('Stripe設定を保存しました')
+      toast.success('本番環境のStripe設定を保存しました')
       setConnectionStatus('configured')
     } catch (error: any) {
       console.error('Stripe設定の保存に失敗:', error)
@@ -86,10 +120,19 @@ export default function StripeSettings() {
         throw new Error('テスト用Publishable Keyは pk_test_ で始まる必要があります')
       }
 
-      // プレースホルダー: 実際の実装では暗号化してStripe設定を保存
-      console.log('テスト用Stripe設定を保存:', testStripeSettings)
+      // Upsert Stripe credentials for test
+      const { error } = await supabase
+        .from('stripe_credentials')
+        .upsert({
+          user_id: user.id,
+          test_secret_key: testStripeSettings.secretKey,
+          test_publishable_key: testStripeSettings.publishableKey,
+          updated_at: new Date().toISOString()
+        })
+
+      if (error) throw error
       
-      toast.success('テスト用Stripe設定を保存しました')
+      toast.success('テスト環境のStripe設定を保存しました')
       setTestConnectionStatus('configured')
     } catch (error: any) {
       console.error('テスト用Stripe設定の保存に失敗:', error)
@@ -185,7 +228,7 @@ export default function StripeSettings() {
               </CardHeader>
               <CardContent className="p-4 border border-green-200 bg-green-50 rounded-lg space-y-4">
                 <div className="space-y-2">
-                  <Label htmlFor="live-secretKey">シークレットキー (本番)</Label>
+                  <Label htmlFor="live-secretKey">シークレットキー</Label>
                   <Input
                     id="live-secretKey"
                     type="password"
@@ -197,7 +240,7 @@ export default function StripeSettings() {
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="live-publishableKey">公開可能キー (本番)</Label>
+                  <Label htmlFor="live-publishableKey">公開可能キー</Label>
                   <Input
                     id="live-publishableKey"
                     placeholder="pk_live_..."
@@ -207,17 +250,6 @@ export default function StripeSettings() {
                   />
                 </div>
 
-                <div className="space-y-2">
-                  <Label htmlFor="live-webhookSecret">Webhook Secret (オプション)</Label>
-                  <Input
-                    id="live-webhookSecret"
-                    type="password"
-                    placeholder="whsec_..."
-                    value={stripeSettings.webhookSecret}
-                    onChange={(e) => setStripeSettings(prev => ({ ...prev, webhookSecret: e.target.value }))}
-                    className="font-mono text-sm"
-                  />
-                </div>
 
                 <div className="flex gap-2">
                   <Button 
@@ -254,7 +286,7 @@ export default function StripeSettings() {
               </CardHeader>
               <CardContent className="p-4 border border-orange-200 bg-orange-50 rounded-lg space-y-4">
                 <div className="space-y-2">
-                  <Label htmlFor="test-secretKey">シークレットキー (テスト)</Label>
+                  <Label htmlFor="test-secretKey">シークレットキー</Label>
                   <Input
                     id="test-secretKey"
                     type="password"
@@ -266,7 +298,7 @@ export default function StripeSettings() {
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="test-publishableKey">公開可能キー (テスト)</Label>
+                  <Label htmlFor="test-publishableKey">公開可能キー</Label>
                   <Input
                     id="test-publishableKey"
                     placeholder="pk_test_..."
@@ -276,17 +308,6 @@ export default function StripeSettings() {
                   />
                 </div>
 
-                <div className="space-y-2">
-                  <Label htmlFor="test-webhookSecret">Webhook Secret (オプション)</Label>
-                  <Input
-                    id="test-webhookSecret"
-                    type="password"
-                    placeholder="whsec_..."
-                    value={testStripeSettings.webhookSecret}
-                    onChange={(e) => setTestStripeSettings(prev => ({ ...prev, webhookSecret: e.target.value }))}
-                    className="font-mono text-sm"
-                  />
-                </div>
 
                 <div className="flex gap-2">
                   <Button 
@@ -356,15 +377,15 @@ export default function StripeSettings() {
                 <div className="space-y-2">
                   <p className="font-medium">Webhookについて</p>
                   <p className="text-sm">
-                    Webhookは決済の完了やサブスクリプションの変更をリアルタイムで受信するために使用されます。
-                    ProLineのような自動Webhook連携機能がない場合は、手動でWebhookエンドポイントを設定する必要があります。
+                    プロラインのような自動Webhook連携機能により、決済の完了やサブスクリプションの変更をリアルタイムで受信可能です。
+                    手動でWebhookエンドポイントを設定したい場合は下記をご利用ください。
                   </p>
                   <div className="mt-2 p-2 bg-blue-50 rounded text-sm">
                     <p className="font-medium">Webhookエンドポイント:</p>
                     <code className="text-xs">https://rtjxurmuaawyzjcdkqxt.supabase.co/functions/v1/stripe-webhook</code>
                   </div>
                   <p className="text-xs text-muted-foreground">
-                    ※ 上記エンドポイントをStripeダッシュボードで設定してください
+                    ※ 必要に応じてStripeダッシュボードで設定してください
                   </p>
                 </div>
               </AlertDescription>
