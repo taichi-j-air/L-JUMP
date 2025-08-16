@@ -67,33 +67,32 @@ export default function UserManagement() {
 
   const loadUsers = async () => {
     try {
-      // auth.usersからメールアドレスを取得するために、全ユーザーのプロフィールを取得
-      const { data: profiles, error: profilesError } = await supabase
-        .from('profiles')
-        .select(`
-          user_id,
-          display_name,
-          user_role,
-          line_api_status,
-          line_bot_id,
-          created_at
-        `)
-        .order('created_at', { ascending: false })
+      // 開発者・管理者権限でのみ実行可能なユーザー一覧取得用のEdge Functionを呼び出し
+      const { data: usersData, error: usersError } = await supabase.functions.invoke('get-all-users', {
+        body: { requestType: 'getUsersList' }
+      })
 
-      if (profilesError) throw profilesError
-
-      // auth.usersテーブルからメールアドレスを取得
-      const userIds = profiles?.map(p => p.user_id) || []
-      const { data: authUsers, error: authError } = await supabase.auth.admin.listUsers()
-      
-      const emailMap = new Map<string, string>()
-      if (!authError && authUsers?.users) {
-        authUsers.users.forEach((authUser: any) => {
-          emailMap.set(authUser.id, authUser.email || '未設定')
-        })
+      if (usersError) {
+        console.error('Error fetching users:', usersError)
+        toast.error('ユーザー情報の取得に失敗しました')
+        return
       }
 
+      if (!usersData?.profiles) {
+        console.error('No profiles data received')
+        return
+      }
+
+      const profiles = usersData.profiles
+      const authUsers = usersData.authUsers || []
+
+      const emailMap = new Map<string, string>()
+      authUsers.forEach((authUser: any) => {
+        emailMap.set(authUser.id, authUser.email || '未設定')
+      })
+
       // ユーザープラン情報も取得
+      const userIds = profiles?.map(p => p.user_id) || []
       const { data: plans } = await supabase
         .from('user_plans')
         .select('user_id, plan_type, monthly_revenue, is_active')
@@ -171,6 +170,32 @@ export default function UserManagement() {
     }
   }
 
+  const updateLineName = async (userId: string) => {
+    try {
+      toast.info('公式LINE名を取得中...')
+      
+      const { data, error } = await supabase.functions.invoke('get-line-bot-info', {
+        body: { userId }
+      })
+
+      if (error) {
+        console.error('Error fetching LINE bot info:', error)
+        toast.error('公式LINE名の取得に失敗しました')
+        return
+      }
+
+      if (data?.success) {
+        toast.success(`公式LINE名を更新しました: ${data.officialLineName}`)
+        loadUsers()
+      } else {
+        toast.error('公式LINE名の取得に失敗しました')
+      }
+    } catch (error) {
+      console.error('Error updating LINE name:', error)
+      toast.error('公式LINE名の更新に失敗しました')
+    }
+  }
+
   const filteredUsers = users.filter(userData => {
     const matchesSearch = !searchTerm || 
       userData.display_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -222,7 +247,7 @@ export default function UserManagement() {
             </h1>
             <p className="text-muted-foreground">システムの全ユーザーを管理できます。</p>
           </div>
-          {currentUserRole === 'admin' && (
+          {(currentUserRole === 'admin' || currentUserRole === 'developer') && (
             <Button 
               onClick={toggleMasterMode} 
               variant={isMasterMode ? "destructive" : "default"}
@@ -312,7 +337,7 @@ export default function UserManagement() {
                         <Select 
                           value={userData.user_role || 'user'} 
                           onValueChange={(value) => handleRoleChange(userData.user_id, value)}
-                          disabled={!isMasterMode && currentUserRole !== 'admin'}
+                          disabled={!isMasterMode && currentUserRole !== 'admin' && currentUserRole !== 'developer'}
                         >
                           <SelectTrigger className="w-[100px]">
                             <SelectValue />
@@ -381,10 +406,17 @@ export default function UserManagement() {
                             </DialogContent>
                           </Dialog>
                           
-                          {(isMasterMode || currentUserRole === 'admin') && (
+                          {(isMasterMode || currentUserRole === 'admin' || currentUserRole === 'developer') && (
                             <>
                               <Button size="sm" variant="outline">
                                 <Edit className="h-4 w-4" />
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant="secondary"
+                                onClick={() => updateLineName(userData.user_id)}
+                              >
+                                LINE名更新
                               </Button>
                               {userData.user_role !== 'developer' && userData.user_role !== 'admin' && (
                                 <Button size="sm" variant="outline" className="text-destructive">
