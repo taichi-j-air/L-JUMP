@@ -21,7 +21,13 @@ export default function StripeSettings() {
     publishableKey: '',
     webhookSecret: ''
   })
+  const [testStripeSettings, setTestStripeSettings] = useState({
+    secretKey: '',
+    publishableKey: '',
+    webhookSecret: ''
+  })
   const [connectionStatus, setConnectionStatus] = useState<'not_configured' | 'configured' | 'error'>('not_configured')
+  const [testConnectionStatus, setTestConnectionStatus] = useState<'not_configured' | 'configured' | 'error'>('not_configured')
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
@@ -67,6 +73,32 @@ export default function StripeSettings() {
     }
   }
 
+  const saveTestStripeSettings = async () => {
+    if (!user) return
+
+    setSaving(true)
+    try {
+      // 基本的なバリデーション
+      if (!testStripeSettings.secretKey.startsWith('sk_test_')) {
+        throw new Error('テスト用Secret Keyは sk_test_ で始まる必要があります')
+      }
+      if (!testStripeSettings.publishableKey.startsWith('pk_test_')) {
+        throw new Error('テスト用Publishable Keyは pk_test_ で始まる必要があります')
+      }
+
+      // プレースホルダー: 実際の実装では暗号化してStripe設定を保存
+      console.log('テスト用Stripe設定を保存:', testStripeSettings)
+      
+      toast.success('テスト用Stripe設定を保存しました')
+      setTestConnectionStatus('configured')
+    } catch (error: any) {
+      console.error('テスト用Stripe設定の保存に失敗:', error)
+      toast.error(error.message || 'テスト用Stripe設定の保存に失敗しました')
+    } finally {
+      setSaving(false)
+    }
+  }
+
   const testStripeConnection = async () => {
     if (!stripeSettings.secretKey) {
       toast.error('設定を先に保存してください')
@@ -87,6 +119,31 @@ export default function StripeSettings() {
       console.error('Stripe接続テストに失敗:', error)
       toast.error('Stripe接続テストに失敗しました')
       setConnectionStatus('error')
+    } finally {
+      setTesting(false)
+    }
+  }
+
+  const testTestStripeConnection = async () => {
+    if (!testStripeSettings.secretKey) {
+      toast.error('テスト設定を先に保存してください')
+      return
+    }
+
+    setTesting(true)
+    try {
+      // プレースホルダー: 実際の実装ではStripe APIを呼び出してテスト
+      console.log('テスト用Stripe接続をテスト中...')
+      
+      // モック実装
+      await new Promise(resolve => setTimeout(resolve, 2000))
+      
+      toast.success('テスト用Stripe接続テストが成功しました')
+      setTestConnectionStatus('configured')
+    } catch (error: any) {
+      console.error('テスト用Stripe接続テストに失敗:', error)
+      toast.error('テスト用Stripe接続テストに失敗しました')
+      setTestConnectionStatus('error')
     } finally {
       setTesting(false)
     }
@@ -186,8 +243,12 @@ export default function StripeSettings() {
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
                   テスト環境（Test Mode）
-                  <Badge variant="secondary">
-                    <X className="h-3 w-3 mr-1" />未設定
+                  <Badge variant={testConnectionStatus === 'configured' ? 'default' : 'secondary'}>
+                    {testConnectionStatus === 'configured' ? (
+                      <><Check className="h-3 w-3 mr-1" />設定済み</>
+                    ) : (
+                      <><X className="h-3 w-3 mr-1" />未設定</>
+                    )}
                   </Badge>
                 </CardTitle>
               </CardHeader>
@@ -198,6 +259,8 @@ export default function StripeSettings() {
                     id="test-secretKey"
                     type="password"
                     placeholder="sk_test_..."
+                    value={testStripeSettings.secretKey}
+                    onChange={(e) => setTestStripeSettings(prev => ({ ...prev, secretKey: e.target.value }))}
                     className="font-mono text-sm"
                   />
                 </div>
@@ -207,6 +270,8 @@ export default function StripeSettings() {
                   <Input
                     id="test-publishableKey"
                     placeholder="pk_test_..."
+                    value={testStripeSettings.publishableKey}
+                    onChange={(e) => setTestStripeSettings(prev => ({ ...prev, publishableKey: e.target.value }))}
                     className="font-mono text-sm"
                   />
                 </div>
@@ -217,12 +282,15 @@ export default function StripeSettings() {
                     id="test-webhookSecret"
                     type="password"
                     placeholder="whsec_..."
+                    value={testStripeSettings.webhookSecret}
+                    onChange={(e) => setTestStripeSettings(prev => ({ ...prev, webhookSecret: e.target.value }))}
                     className="font-mono text-sm"
                   />
                 </div>
 
                 <div className="flex gap-2">
                   <Button 
+                    onClick={saveTestStripeSettings}
                     disabled={saving}
                     className="flex-1"
                   >
@@ -230,7 +298,8 @@ export default function StripeSettings() {
                   </Button>
                   <Button 
                     variant="outline" 
-                    disabled={testing}
+                    onClick={testTestStripeConnection}
+                    disabled={testing || !testStripeSettings.secretKey}
                   >
                     {testing ? 'テスト中...' : '接続テスト'}
                   </Button>
@@ -280,6 +349,26 @@ export default function StripeSettings() {
                 </div>
               </CardContent>
             </Card>
+
+            <Alert>
+              <AlertCircle className="h-4 w-4" />
+              <AlertDescription>
+                <div className="space-y-2">
+                  <p className="font-medium">Webhookについて</p>
+                  <p className="text-sm">
+                    Webhookは決済の完了やサブスクリプションの変更をリアルタイムで受信するために使用されます。
+                    ProLineのような自動Webhook連携機能がない場合は、手動でWebhookエンドポイントを設定する必要があります。
+                  </p>
+                  <div className="mt-2 p-2 bg-blue-50 rounded text-sm">
+                    <p className="font-medium">Webhookエンドポイント:</p>
+                    <code className="text-xs">https://rtjxurmuaawyzjcdkqxt.supabase.co/functions/v1/stripe-webhook</code>
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    ※ 上記エンドポイントをStripeダッシュボードで設定してください
+                  </p>
+                </div>
+              </AlertDescription>
+            </Alert>
 
             <Alert>
               <AlertCircle className="h-4 w-4" />

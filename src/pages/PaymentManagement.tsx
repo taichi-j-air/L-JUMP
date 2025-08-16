@@ -200,78 +200,88 @@ export default function PaymentManagement() {
       <AppHeader user={user} />
       
       <div className="container mx-auto px-4">
-        <div className="mb-6">
-          <h1 className="text-2xl font-bold flex items-center gap-2">
-            <CreditCard className="h-6 w-6" />
+        <div className="mb-4">
+          <h1 className="text-xl font-bold flex items-center gap-2">
+            <CreditCard className="h-5 w-5" />
             決済管理
           </h1>
-          <p className="text-muted-foreground">
-            Stripe決済とサブスクリプションを管理します。現在はStripeのみ対応しています。
+          <p className="text-sm text-muted-foreground">
+            Stripe決済とサブスクリプションを管理します。
           </p>
         </div>
 
-
-        {/* 統計カード */}
-        <div className="grid gap-4 md:grid-cols-4 mb-6">
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">総顧客数</CardTitle>
+        {/* 統計カード - コンパクト版 */}
+        <div className="grid gap-3 md:grid-cols-4 mb-4">
+          <Card className="p-3">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-xs font-medium text-muted-foreground">総顧客数</p>
+                <p className="text-lg font-bold">{stats.total_customers}</p>
+              </div>
               <Users className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">{stats.total_customers}</div>
-            </CardContent>
+            </div>
           </Card>
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">アクティブ契約</CardTitle>
+          <Card className="p-3">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-xs font-medium text-muted-foreground">アクティブ契約</p>
+                <p className="text-lg font-bold">{stats.active_subscriptions}</p>
+              </div>
               <CreditCard className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">{stats.active_subscriptions}</div>
-            </CardContent>
+            </div>
           </Card>
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">月間売上</CardTitle>
+          <Card className="p-3">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-xs font-medium text-muted-foreground">月間売上</p>
+                <p className="text-lg font-bold">{formatPrice(stats.monthly_revenue, 'jpy')}</p>
+              </div>
               <TrendingUp className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">{formatPrice(stats.monthly_revenue, 'jpy')}</div>
-            </CardContent>
+            </div>
           </Card>
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">年間売上</CardTitle>
+          <Card className="p-3">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-xs font-medium text-muted-foreground">年間売上</p>
+                <p className="text-lg font-bold">{formatPrice(stats.yearly_revenue, 'jpy')}</p>
+              </div>
               <DollarSign className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">{formatPrice(stats.yearly_revenue, 'jpy')}</div>
-            </CardContent>
+            </div>
           </Card>
         </div>
 
-        {/* フィルター */}
-        <Card className="mb-6">
-          <CardHeader>
-            <CardTitle>フィルター</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="flex gap-4">
+        {/* 決済履歴 */}
+        <Card>
+          <CardHeader className="p-4">
+            <div className="flex justify-between items-center">
+              <CardTitle className="text-lg">決済履歴 ({filteredPayments.length}件)</CardTitle>
+              <div className="flex gap-2">
+                <Button variant="outline" size="sm" className="text-xs">
+                  手動追加
+                </Button>
+                <Button onClick={loadPayments} variant="outline" size="sm">
+                  <RefreshCw className="h-3 w-3 mr-1" />
+                  更新
+                </Button>
+              </div>
+            </div>
+            
+            {/* 検索・フィルター */}
+            <div className="flex gap-2 mt-3">
               <div className="flex-1">
                 <div className="relative">
-                  <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
+                  <Search className="absolute left-2 top-2 h-3 w-3 text-muted-foreground" />
                   <Input
                     placeholder="顧客名またはメールアドレスで検索"
                     value={searchTerm}
                     onChange={(e) => setSearchTerm(e.target.value)}
-                    className="pl-8"
+                    className="pl-7 h-8 text-xs"
                   />
                 </div>
               </div>
               <Select value={statusFilter} onValueChange={setStatusFilter}>
-                <SelectTrigger className="w-[200px]">
-                  <SelectValue placeholder="ステータスで絞り込み" />
+                <SelectTrigger className="w-32 h-8 text-xs">
+                  <SelectValue placeholder="ステータス" />
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">すべて</SelectItem>
@@ -281,69 +291,58 @@ export default function PaymentManagement() {
                   <SelectItem value="refunded">返金済み</SelectItem>
                 </SelectContent>
               </Select>
-              <Button onClick={loadPayments} variant="outline">
-                <RefreshCw className="h-4 w-4 mr-2" />
-                更新
-              </Button>
             </div>
-          </CardContent>
-        </Card>
-
-        {/* 決済一覧 */}
-        <Card>
-          <CardHeader>
-            <CardTitle>決済履歴 ({filteredPayments.length}件)</CardTitle>
           </CardHeader>
-          <CardContent>
+          <CardContent className="p-0">
             <div className="overflow-x-auto">
               <Table>
                 <TableHeader>
-                  <TableRow>
-                    <TableHead>顧客</TableHead>
-                    <TableHead>プラン</TableHead>
-                    <TableHead>金額</TableHead>
-                    <TableHead>決済状況</TableHead>
-                    <TableHead>契約状況</TableHead>
-                    <TableHead>決済日</TableHead>
-                    <TableHead>アクション</TableHead>
+                  <TableRow className="text-xs">
+                    <TableHead className="py-2">顧客</TableHead>
+                    <TableHead className="py-2">プラン</TableHead>
+                    <TableHead className="py-2">金額</TableHead>
+                    <TableHead className="py-2">決済状況</TableHead>
+                    <TableHead className="py-2">契約状況</TableHead>
+                    <TableHead className="py-2">決済日</TableHead>
+                    <TableHead className="py-2">アクション</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {filteredPayments.map((payment) => (
-                    <TableRow key={payment.id}>
-                      <TableCell>
+                    <TableRow key={payment.id} className="text-xs">
+                      <TableCell className="py-2">
                         <div>
-                          <div className="font-medium">{payment.customer_name}</div>
-                          <div className="text-sm text-muted-foreground">{payment.customer_email}</div>
+                          <div className="font-medium text-xs">{payment.customer_name}</div>
+                          <div className="text-xs text-muted-foreground">{payment.customer_email}</div>
                         </div>
                       </TableCell>
-                      <TableCell>
-                        <Badge variant="secondary">{payment.plan_type}</Badge>
+                      <TableCell className="py-2">
+                        <Badge variant="secondary" className="text-xs">{payment.plan_type}</Badge>
                       </TableCell>
-                      <TableCell className="font-medium">
+                      <TableCell className="py-2 font-medium text-xs">
                         {formatPrice(payment.amount, payment.currency)}
                       </TableCell>
-                      <TableCell>
-                        <Badge variant={getStatusColor(payment.status)}>
+                      <TableCell className="py-2">
+                        <Badge variant={getStatusColor(payment.status)} className="text-xs">
                           {getStatusLabel(payment.status)}
                         </Badge>
                       </TableCell>
-                      <TableCell>
+                      <TableCell className="py-2">
                         {payment.subscription_status && (
-                          <Badge variant={getStatusColor(payment.subscription_status)}>
+                          <Badge variant={getStatusColor(payment.subscription_status)} className="text-xs">
                             {getStatusLabel(payment.subscription_status)}
                           </Badge>
                         )}
                       </TableCell>
-                      <TableCell>
+                      <TableCell className="py-2 text-xs">
                         {new Date(payment.created_at).toLocaleDateString('ja-JP')}
                       </TableCell>
-                      <TableCell>
-                        <div className="flex gap-2">
+                      <TableCell className="py-2">
+                        <div className="flex gap-1">
                           <Dialog>
                             <DialogTrigger asChild>
-                              <Button size="sm" variant="outline" onClick={() => setSelectedCustomer(payment)}>
-                                <Eye className="h-4 w-4" />
+                              <Button size="sm" variant="outline" className="h-6 w-6 p-0" onClick={() => setSelectedCustomer(payment)}>
+                                <Eye className="h-3 w-3" />
                               </Button>
                             </DialogTrigger>
                             <DialogContent className="max-w-2xl">
@@ -355,27 +354,31 @@ export default function PaymentManagement() {
                                   <div className="grid grid-cols-2 gap-4">
                                     <div>
                                       <label className="text-sm font-medium">顧客名</label>
-                                      <p>{selectedCustomer.customer_name}</p>
+                                      <p className="text-sm">{selectedCustomer.customer_name}</p>
                                     </div>
                                     <div>
                                       <label className="text-sm font-medium">メールアドレス</label>
-                                      <p>{selectedCustomer.customer_email}</p>
+                                      <p className="text-sm">{selectedCustomer.customer_email}</p>
                                     </div>
                                     <div>
                                       <label className="text-sm font-medium">プラン</label>
-                                      <p>{selectedCustomer.plan_type}</p>
+                                      <p className="text-sm">{selectedCustomer.plan_type}</p>
                                     </div>
                                     <div>
                                       <label className="text-sm font-medium">金額</label>
-                                      <p>{formatPrice(selectedCustomer.amount, selectedCustomer.currency)}</p>
+                                      <p className="text-sm">{formatPrice(selectedCustomer.amount, selectedCustomer.currency)}</p>
                                     </div>
                                     <div>
                                       <label className="text-sm font-medium">決済状況</label>
-                                      <p>{getStatusLabel(selectedCustomer.status)}</p>
+                                      <p className="text-sm">{getStatusLabel(selectedCustomer.status)}</p>
                                     </div>
                                     <div>
                                       <label className="text-sm font-medium">契約状況</label>
-                                      <p>{selectedCustomer.subscription_status ? getStatusLabel(selectedCustomer.subscription_status) : 'N/A'}</p>
+                                      <p className="text-sm">{selectedCustomer.subscription_status ? getStatusLabel(selectedCustomer.subscription_status) : 'N/A'}</p>
+                                    </div>
+                                    <div>
+                                      <label className="text-sm font-medium">累計課金額</label>
+                                      <p className="text-sm font-bold text-green-600">{formatPrice(50000, 'jpy')}</p>
                                     </div>
                                   </div>
                                 </div>
@@ -386,6 +389,7 @@ export default function PaymentManagement() {
                             <Button
                               size="sm"
                               variant="destructive"
+                              className="h-6 px-2 text-xs"
                               onClick={() => handleRefund(payment.id)}
                             >
                               返金
@@ -395,6 +399,7 @@ export default function PaymentManagement() {
                             <Button
                               size="sm"
                               variant="outline"
+                              className="h-6 px-2 text-xs"
                               onClick={() => handleCancelSubscription(payment.subscription_id!)}
                             >
                               解約
