@@ -98,6 +98,34 @@ export default function UserManagement() {
     }
   }
 
+  const handlePremiumToggle = async (userId: string, makePremium: boolean) => {
+    try {
+      // 現在のプランを無効化
+      await supabase
+        .from('user_plans')
+        .update({ is_active: false })
+        .eq('user_id', userId)
+
+      // 新しいプランを作成
+      const { error } = await supabase
+        .from('user_plans')
+        .insert({
+          user_id: userId,
+          plan_type: makePremium ? 'premium' : 'free',
+          is_active: true,
+          monthly_revenue: makePremium ? 9800 : 0
+        })
+
+      if (error) throw error
+
+      toast.success(makePremium ? 'プレミアムアカウントに設定しました' : 'フリーアカウントに設定しました')
+      loadUsers()
+    } catch (error) {
+      console.error('Error updating premium status:', error)
+      toast.error('プレミアム設定の更新に失敗しました')
+    }
+  }
+
   const filteredUsers = users.filter(userData => {
     const matchesSearch = !searchTerm || 
       userData.display_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -242,6 +270,14 @@ export default function UserManagement() {
                               <Trash2 className="h-4 w-4" />
                             </Button>
                           )}
+                          {/* プレミアムアカウント設定ボタン */}
+                          <Button
+                            size="sm"
+                            variant={userData.plan_type === 'premium' ? 'secondary' : 'default'}
+                            onClick={() => handlePremiumToggle(userData.user_id, userData.plan_type !== 'premium')}
+                          >
+                            {userData.plan_type === 'premium' ? 'プレミアム解除' : 'プレミアム付与'}
+                          </Button>
                         </div>
                       </TableCell>
                     </TableRow>

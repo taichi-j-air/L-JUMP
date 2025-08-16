@@ -122,18 +122,18 @@ export function SortableScenarioItem({
             )}
             
             {/* 解除防止トグル */}
-            <div className="mt-1 flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
+            <div className="mt-1 flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
               <div className="flex items-center space-x-1">
-                <Shield className="h-3 w-3 text-muted-foreground" />
                 <Switch 
                   id={`prevent-auto-exit-${scenario.id}`}
                   checked={scenario.prevent_auto_exit || false}
                   onCheckedChange={handleToggle}
                   disabled={isUpdatingToggle}
+                  className="scale-75"
                 />
                 <Label 
                   htmlFor={`prevent-auto-exit-${scenario.id}`}
-                  className="text-xs text-muted-foreground"
+                  className="text-[10px] text-muted-foreground"
                 >
                   解除防止
                 </Label>

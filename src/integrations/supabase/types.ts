@@ -577,6 +577,45 @@ export type Database = {
         }
         Relationships: []
       }
+      plan_configs: {
+        Row: {
+          created_at: string
+          features: Json
+          id: string
+          is_active: boolean
+          message_limit: number
+          monthly_price: number
+          name: string
+          plan_type: Database["public"]["Enums"]["plan_type"]
+          updated_at: string
+          yearly_price: number
+        }
+        Insert: {
+          created_at?: string
+          features?: Json
+          id?: string
+          is_active?: boolean
+          message_limit?: number
+          monthly_price?: number
+          name: string
+          plan_type: Database["public"]["Enums"]["plan_type"]
+          updated_at?: string
+          yearly_price?: number
+        }
+        Update: {
+          created_at?: string
+          features?: Json
+          id?: string
+          is_active?: boolean
+          message_limit?: number
+          monthly_price?: number
+          name?: string
+          plan_type?: Database["public"]["Enums"]["plan_type"]
+          updated_at?: string
+          yearly_price?: number
+        }
+        Relationships: []
+      }
       profiles: {
         Row: {
           add_friend_url: string | null
@@ -1303,10 +1342,13 @@ export type Database = {
           created_at: string
           id: string
           is_active: boolean
+          is_yearly: boolean
           monthly_revenue: number | null
           plan_end_date: string | null
           plan_start_date: string
           plan_type: Database["public"]["Enums"]["plan_type"]
+          stripe_customer_id: string | null
+          stripe_subscription_id: string | null
           updated_at: string
           user_id: string
         }
@@ -1314,10 +1356,13 @@ export type Database = {
           created_at?: string
           id?: string
           is_active?: boolean
+          is_yearly?: boolean
           monthly_revenue?: number | null
           plan_end_date?: string | null
           plan_start_date?: string
           plan_type?: Database["public"]["Enums"]["plan_type"]
+          stripe_customer_id?: string | null
+          stripe_subscription_id?: string | null
           updated_at?: string
           user_id: string
         }
@@ -1325,10 +1370,13 @@ export type Database = {
           created_at?: string
           id?: string
           is_active?: boolean
+          is_yearly?: boolean
           monthly_revenue?: number | null
           plan_end_date?: string | null
           plan_start_date?: string
           plan_type?: Database["public"]["Enums"]["plan_type"]
+          stripe_customer_id?: string | null
+          stripe_subscription_id?: string | null
           updated_at?: string
           user_id?: string
         }
