@@ -54,7 +54,9 @@ export default function PlanManagement() {
       
       const formattedPlans = data?.map(plan => ({
         ...plan,
-        features: Array.isArray(plan.features) ? plan.features : []
+        features: Array.isArray(plan.features) 
+          ? plan.features.map(f => typeof f === 'string' ? f : String(f))
+          : []
       })) || []
       
       setPlans(formattedPlans)

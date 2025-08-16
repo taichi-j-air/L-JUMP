@@ -38,11 +38,12 @@ import PublicForm from "./pages/PublicForm";
 import LiffForm from "./pages/LiffForm";
 import FormResponses from "./pages/FormResponses";
 import StripeSettings from "./pages/StripeSettings";
-import ProductManagement from "./pages/ProductManagement";
 import PaymentManagement from "./pages/PaymentManagement";
-import PlanSettings from "./pages/PlanSettings";
+import PlanManagement from "./pages/developer/PlanManagement";
 import UserManagement from "./pages/developer/UserManagement";
 import MaintenanceSettings from "./pages/developer/MaintenanceSettings";
+import ProductManagement from "./pages/ProductManagement";
+import PlanSettings from "./pages/PlanSettings";
 
 const CMSFriendsPageBuilder = lazy(() => import('./pages/CMSFriendsPageBuilder'));
 const CMSPublicPageBuilder = lazy(() => import('./pages/CMSPublicPageBuilder'));
@@ -160,6 +161,10 @@ function AppContent() {
               <Route path="/payment/orders" element={<PaymentManagement />} />
               <Route path="/settings/plan" element={<PlanSettings />} />
               <Route path="/developer/users" element={<UserManagement />} />
+              <Route path="/developer/user-management" element={<UserManagement />} />
+              <Route path="/developer/plan-management" element={<PlanManagement />} />
+              <Route path="/stripe-settings" element={<StripeSettings />} />
+              <Route path="/payment-management" element={<PaymentManagement />} />
               <Route path="/developer/maintenance" element={<MaintenanceSettings />} />
               <Route path="/step-delivery" element={<StepDeliveryPage />} />
               <Route path="/chat-inbox" element={<ChatInboxPage />} />

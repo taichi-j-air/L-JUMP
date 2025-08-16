@@ -1,4 +1,4 @@
-import { Home, MessageSquare, Settings, FileImage, Webhook, User, Bot, Users, MessageCircle, ArrowRight, LogIn, ChevronRight, ChevronDown, FileText, BarChart3, CreditCard, Shield, Plus, Megaphone, DollarSign, ToggleLeft, Wrench } from "lucide-react"
+import { Home, MessageSquare, Settings, FileImage, Webhook, User, Bot, Users, MessageCircle, ArrowRight, LogIn, ChevronRight, ChevronDown, FileText, BarChart3, CreditCard, Shield, Plus, Megaphone, DollarSign, ToggleLeft, Wrench, Settings2 } from "lucide-react"
 import { NavLink, useLocation } from "react-router-dom"
 import { useState, useEffect } from "react"
 import { supabase } from "@/integrations/supabase/client"
@@ -436,22 +436,38 @@ export function AppSidebar({ user }: AppSidebarProps) {
               <SidebarGroupLabel className="text-sm font-semibold">開発者専用</SidebarGroupLabel>
               <SidebarGroupContent>
                 <SidebarMenu>
-                  <SidebarMenuItem>
-                    <SidebarMenuButton asChild>
-                      <NavLink to="/developer/users" end className={getNavClass}>
-                        <Users className="h-4 w-4" />
-                        {!collapsed && <span>ユーザー管理</span>}
-                      </NavLink>
-                    </SidebarMenuButton>
-                  </SidebarMenuItem>
-                  <SidebarMenuItem>
-                    <SidebarMenuButton asChild>
-                      <NavLink to="/developer/billing" end className={getNavClass}>
-                        <CreditCard className="h-4 w-4" />
-                        {!collapsed && <span>課金管理</span>}
-                      </NavLink>
-                    </SidebarMenuButton>
-                  </SidebarMenuItem>
+                   <SidebarMenuItem>
+                     <SidebarMenuButton asChild>
+                       <NavLink to="/developer/user-management" end className={getNavClass}>
+                         <Users className="h-4 w-4" />
+                         {!collapsed && <span>ユーザー管理</span>}
+                       </NavLink>
+                     </SidebarMenuButton>
+                   </SidebarMenuItem>
+                   <SidebarMenuItem>
+                     <SidebarMenuButton asChild>
+                       <NavLink to="/developer/plan-management" end className={getNavClass}>
+                         <Settings2 className="h-4 w-4" />
+                         {!collapsed && <span>プラン管理</span>}
+                       </NavLink>
+                     </SidebarMenuButton>
+                   </SidebarMenuItem>
+                   <SidebarMenuItem>
+                     <SidebarMenuButton asChild>
+                       <NavLink to="/stripe-settings" end className={getNavClass}>
+                         <CreditCard className="h-4 w-4" />
+                         {!collapsed && <span>Stripe設定</span>}
+                       </NavLink>
+                     </SidebarMenuButton>
+                   </SidebarMenuItem>
+                   <SidebarMenuItem>
+                     <SidebarMenuButton asChild>
+                       <NavLink to="/payment-management" end className={getNavClass}>
+                         <DollarSign className="h-4 w-4" />
+                         {!collapsed && <span>決済管理</span>}
+                       </NavLink>
+                     </SidebarMenuButton>
+                   </SidebarMenuItem>
                   <SidebarMenuItem>
                     <SidebarMenuButton asChild>
                       <NavLink to="/developer/announcements" end className={getNavClass}>
