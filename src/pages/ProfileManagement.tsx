@@ -24,10 +24,59 @@ const ProfileManagement = () => {
     line_channel_secret: "",
     line_channel_id: "",
     line_bot_id: "",
+    official_line_name: "",
   });
   const [userEmail, setUserEmail] = useState("");
   const navigate = useNavigate();
   const { toast } = useToast();
+  const [loadingBotInfo, setLoadingBotInfo] = useState(false);
+
+  const fetchBotInfo = async () => {
+    if (!currentUser) return;
+    
+    setLoadingBotInfo(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('get-line-bot-info', {
+        body: { userId: currentUser.id }
+      });
+
+      if (error) {
+        console.error('Error fetching LINE bot info:', error);
+        toast({
+          title: "エラー",
+          description: "公式LINE名の取得に失敗しました",
+          variant: "destructive",
+        });
+        return;
+      }
+
+      if (data?.success) {
+        setProfile(prev => ({
+          ...prev,
+          official_line_name: data.officialLineName
+        }));
+        toast({
+          title: "成功",
+          description: `公式LINE名を更新しました: ${data.officialLineName}`,
+        });
+      } else {
+        toast({
+          title: "エラー",
+          description: "公式LINE名の取得に失敗しました",
+          variant: "destructive",
+        });
+      }
+    } catch (error) {
+      console.error('Error fetching bot info:', error);
+      toast({
+        title: "エラー",
+        description: "公式LINE名の取得に失敗しました",
+        variant: "destructive",
+      });
+    } finally {
+      setLoadingBotInfo(false);
+    }
+  };
 
   useEffect(() => {
     loadProfile();
@@ -71,6 +120,7 @@ const ProfileManagement = () => {
           line_channel_secret: profileData.line_channel_secret || "",
           line_channel_id: profileData.line_channel_id || "",
           line_bot_id: profileData.line_bot_id || "",
+          official_line_name: profileData.display_name || "",
         });
       }
     } catch (error) {
@@ -330,6 +380,28 @@ const ProfileManagement = () => {
                   readOnly
                   className="bg-muted font-mono text-sm"
                 />
+              </div>
+
+              <div className="space-y-2">
+                <Label>公式LINE名</Label>
+                <div className="flex items-center gap-2">
+                  <Input
+                    value={profile.official_line_name || "未取得"}
+                    readOnly
+                    className="bg-muted font-mono text-sm"
+                  />
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={fetchBotInfo}
+                    disabled={loadingBotInfo || !profile.line_channel_access_token}
+                  >
+                    {loadingBotInfo ? "取得中..." : "更新"}
+                  </Button>
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  LINE APIから公式アカウント名を取得します
+                </p>
               </div>
 
               <div className="space-y-2">

@@ -22,6 +22,7 @@ interface UserData {
   created_at: string
   plan_type?: string
   total_revenue: number
+  user_suspended?: boolean
 }
 
 export default function UserManagement() {
@@ -167,6 +168,23 @@ export default function UserManagement() {
     } catch (error) {
       console.error('Error updating premium status:', error)
       toast.error('プレミアム設定の更新に失敗しました')
+    }
+  }
+
+  const handleUserSuspension = async (userId: string, suspend: boolean) => {
+    try {
+      const { error } = await supabase
+        .from('profiles')
+        .update({ user_suspended: suspend })
+        .eq('user_id', userId)
+
+      if (error) throw error
+
+      toast.success(suspend ? 'ユーザーを利用停止にしました' : 'ユーザーの利用を再開しました')
+      loadUsers()
+    } catch (error) {
+      console.error('Error updating user suspension:', error)
+      toast.error('ユーザー状態の更新に失敗しました')
     }
   }
 
@@ -350,89 +368,106 @@ export default function UserManagement() {
                         </Select>
                       </TableCell>
                       <TableCell>
-                        <div className="flex gap-2">
-                          <Dialog>
-                            <DialogTrigger asChild>
-                              <Button size="sm" variant="outline">
-                                <Eye className="h-4 w-4" />
-                              </Button>
-                            </DialogTrigger>
-                            <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
-                              <DialogHeader>
-                                <div className="flex items-center justify-between">
-                                  <DialogTitle>ユーザー詳細: {userData.display_name}</DialogTitle>
-                                </div>
-                              </DialogHeader>
-                              <div className="space-y-4">
-                                <div className="grid grid-cols-2 gap-4">
-                                  <div>
-                                    <label className="text-sm font-medium">ユーザーID</label>
-                                    <p className="text-sm font-mono bg-muted p-2 rounded">{userData.user_id}</p>
-                                  </div>
-                                  <div>
-                                    <label className="text-sm font-medium">メールアドレス</label>
-                                    <p className="text-sm bg-muted p-2 rounded">{userData.email}</p>
-                                  </div>
-                                  <div>
-                                    <label className="text-sm font-medium">LINE ID</label>
-                                    <p className="text-sm bg-muted p-2 rounded">{userData.line_bot_id || '未設定'}</p>
-                                  </div>
-                                  <div>
-                                    <label className="text-sm font-medium">LINE API状態</label>
-                                    <p className="text-sm bg-muted p-2 rounded">
-                                      {userData.line_api_status === 'configured' ? '設定済み' : '未設定'}
-                                    </p>
-                                  </div>
-                                  <div>
-                                    <label className="text-sm font-medium">プラン</label>
-                                    <p className="text-sm bg-muted p-2 rounded">{userData.plan_type}</p>
-                                  </div>
-                                  <div>
-                                    <label className="text-sm font-medium">累計課金金額</label>
-                                    <p className="text-sm bg-muted p-2 rounded">¥{userData.total_revenue.toLocaleString()}</p>
-                                  </div>
-                                  <div>
-                                    <label className="text-sm font-medium">登録日</label>
-                                    <p className="text-sm bg-muted p-2 rounded">
-                                      {new Date(userData.created_at).toLocaleDateString('ja-JP')}
-                                    </p>
-                                  </div>
-                                  <div>
-                                    <label className="text-sm font-medium">ロール</label>
-                                    <p className="text-sm bg-muted p-2 rounded">{userData.user_role}</p>
-                                  </div>
-                                </div>
-                              </div>
-                            </DialogContent>
-                          </Dialog>
-                          
-                          {(isMasterMode || currentUserRole === 'admin' || currentUserRole === 'developer') && (
-                            <>
-                              <Button size="sm" variant="outline">
-                                <Edit className="h-4 w-4" />
-                              </Button>
-                              <Button
-                                size="sm"
-                                variant="secondary"
-                                onClick={() => updateLineName(userData.user_id)}
-                              >
-                                LINE名更新
-                              </Button>
-                              {userData.user_role !== 'developer' && userData.user_role !== 'admin' && (
-                                <Button size="sm" variant="outline" className="text-destructive">
-                                  <Trash2 className="h-4 w-4" />
-                                </Button>
-                              )}
-                              <Button
-                                size="sm"
-                                variant={userData.plan_type === 'premium' ? 'secondary' : 'default'}
-                                onClick={() => handlePremiumToggle(userData.user_id, userData.plan_type !== 'premium')}
-                              >
-                                {userData.plan_type === 'premium' ? 'プレミアム解除' : 'プレミアム付与'}
-                              </Button>
-                            </>
-                          )}
-                        </div>
+                         <div className="flex gap-2">
+                           <Dialog>
+                             <DialogTrigger asChild>
+                               <Button size="sm" variant="outline">
+                                 <Eye className="h-4 w-4" />
+                               </Button>
+                             </DialogTrigger>
+                             <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
+                               <DialogHeader>
+                                 <div className="flex items-center justify-between">
+                                   <DialogTitle>ユーザー詳細: {userData.display_name}</DialogTitle>
+                                    <Button 
+                                      variant="ghost" 
+                                      size="sm" 
+                                      onClick={() => {
+                                        const closeBtn = document.querySelector('[data-dialog-close]') as HTMLButtonElement;
+                                        closeBtn?.click();
+                                      }}
+                                    >
+                                      <X className="h-4 w-4" />
+                                    </Button>
+                                 </div>
+                               </DialogHeader>
+                               <div className="space-y-4">
+                                 <div className="grid grid-cols-2 gap-4">
+                                   <div>
+                                     <label className="text-sm font-medium">ユーザーID</label>
+                                     <p className="text-sm font-mono bg-muted p-2 rounded">{userData.user_id}</p>
+                                   </div>
+                                   <div>
+                                     <label className="text-sm font-medium">メールアドレス</label>
+                                     <p className="text-sm bg-muted p-2 rounded">{userData.email}</p>
+                                   </div>
+                                   <div>
+                                     <label className="text-sm font-medium">LINE ID</label>
+                                     <p className="text-sm bg-muted p-2 rounded">{userData.line_bot_id || '未設定'}</p>
+                                   </div>
+                                   <div>
+                                     <label className="text-sm font-medium">LINE API状態</label>
+                                     <p className="text-sm bg-muted p-2 rounded">
+                                       {userData.line_api_status === 'configured' ? '設定済み' : '未設定'}
+                                     </p>
+                                   </div>
+                                   <div>
+                                     <label className="text-sm font-medium">プラン</label>
+                                     <p className="text-sm bg-muted p-2 rounded">{userData.plan_type}</p>
+                                   </div>
+                                   <div>
+                                     <label className="text-sm font-medium">累計課金金額</label>
+                                     <p className="text-sm bg-muted p-2 rounded">¥{userData.total_revenue.toLocaleString()}</p>
+                                   </div>
+                                   <div>
+                                     <label className="text-sm font-medium">登録日</label>
+                                     <p className="text-sm bg-muted p-2 rounded">
+                                       {new Date(userData.created_at).toLocaleDateString('ja-JP')}
+                                     </p>
+                                   </div>
+                                   <div>
+                                     <label className="text-sm font-medium">ロール</label>
+                                     <p className="text-sm bg-muted p-2 rounded">{userData.user_role}</p>
+                                   </div>
+                                 </div>
+                               </div>
+                             </DialogContent>
+                           </Dialog>
+                           
+                           {(isMasterMode || currentUserRole === 'admin' || currentUserRole === 'developer') && (
+                             <>
+                               <Button size="sm" variant="outline">
+                                 <Edit className="h-4 w-4" />
+                               </Button>
+                               <Button
+                                 size="sm"
+                                 variant="secondary"
+                                 onClick={() => updateLineName(userData.user_id)}
+                               >
+                                 LINE名更新
+                               </Button>
+                               <Button
+                                 size="sm"
+                                 variant={userData.user_suspended ? "default" : "destructive"}
+                                 onClick={() => handleUserSuspension(userData.user_id, !userData.user_suspended)}
+                               >
+                                 {userData.user_suspended ? "利用再開" : "利用停止"}
+                               </Button>
+                               {userData.user_role !== 'developer' && userData.user_role !== 'admin' && (
+                                 <Button size="sm" variant="outline" className="text-destructive">
+                                   <Trash2 className="h-4 w-4" />
+                                 </Button>
+                               )}
+                               <Button
+                                 size="sm"
+                                 variant={userData.plan_type === 'premium' ? 'secondary' : 'default'}
+                                 onClick={() => handlePremiumToggle(userData.user_id, userData.plan_type !== 'premium')}
+                               >
+                                 {userData.plan_type === 'premium' ? 'プレミアム解除' : 'プレミアム付与'}
+                               </Button>
+                             </>
+                           )}
+                         </div>
                       </TableCell>
                     </TableRow>
                   ))}
