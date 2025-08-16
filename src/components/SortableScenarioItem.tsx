@@ -62,6 +62,9 @@ export function SortableScenarioItem({
 
       console.log('Update success:', data)
 
+      // 即座にUIを更新
+      scenario.prevent_auto_exit = checked
+
       toast.success(
         checked 
           ? `${scenario.name}は他シナリオ移行時に解除されなくなりました` 
