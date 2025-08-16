@@ -268,7 +268,7 @@ export default function ProductManagement() {
   }
 
   const getProductUrl = (productId: string) => {
-    return `${window.location.origin}/product/${productId}?uid={uid}`
+    return `${window.location.origin}/product-landing/${productId}?uid={uid}`
   }
 
   const copyProductUrl = async (productId: string) => {
@@ -409,19 +409,41 @@ export default function ProductManagement() {
       // Create Stripe product if needed
       if (productForm.is_active && (!selectedProduct?.stripe_product_id || !selectedProduct?.stripe_price_id)) {
         try {
+          const isTestProduct = productForm.name?.includes('テスト') || productForm.name?.includes('test') || false
+          
           const { data: stripeResult } = await supabase.functions.invoke('create-stripe-product', {
             body: {
-              productId: productId,
-              isTest: productForm.name?.includes('テスト') || false
+              name: productForm.name,
+              description: productForm.description || '',
+              unitAmount: productForm.price || 0,
+              currency: productForm.currency || 'jpy',
+              interval: (productForm.product_type === 'subscription' || productForm.product_type === 'subscription_with_trial') 
+                ? productForm.interval : undefined,
+              metadata: {
+                product_id: productId,
+                product_type: productForm.product_type
+              },
+              isTest: isTestProduct
             }
           })
 
-          if (stripeResult?.success) {
-            toast.success('Stripe商品を作成しました')
+          if (stripeResult?.ok) {
+            // Update product with Stripe IDs
+            await supabase
+              .from('products')
+              .update({
+                stripe_product_id: stripeResult.productId,
+                stripe_price_id: stripeResult.priceId,
+              })
+              .eq('id', productId)
+
+            toast.success(`Stripe${isTestProduct ? 'テスト' : '本番'}商品を作成しました`)
+          } else {
+            throw new Error(stripeResult?.error || 'Stripe商品作成に失敗')
           }
-        } catch (stripeError) {
+        } catch (stripeError: any) {
           console.error('Stripe商品作成に失敗:', stripeError)
-          toast.error('Stripe商品の作成に失敗しました')
+          toast.error(`Stripe商品の作成に失敗しました: ${stripeError.message || stripeError}`)
         }
       }
 
@@ -845,105 +867,93 @@ export default function ProductManagement() {
                         </div>
                       </div>
 
-                      <div>
-                        <Label>タグ操作</Label>
-                        <div className="text-sm text-muted-foreground mb-2">
-                          決済成功時に友達にタグを着脱できます
-                        </div>
-                        <div className="grid grid-cols-2 gap-4">
-                          <div>
-                            <Label className="text-xs">追加するタグ</Label>
-                            <Select
-                              value=""
-                              onValueChange={(value) => {
-                                const currentTags = successAction.add_tag_ids || []
-                                if (!currentTags.includes(value)) {
-                                  setSuccessAction(prev => ({
-                                    ...prev,
-                                    add_tag_ids: [...currentTags, value]
-                                  }))
-                                }
-                              }}
-                            >
-                              <SelectTrigger>
-                                <SelectValue placeholder="タグを選択" />
-                              </SelectTrigger>
-                              <SelectContent>
-                                {tags.map((tag) => (
-                                  <SelectItem key={tag.id} value={tag.id}>
-                                    {tag.name}
-                                  </SelectItem>
-                                ))}
-                              </SelectContent>
-                            </Select>
-                            <div className="flex flex-wrap gap-1 mt-2">
-                              {(successAction.add_tag_ids || []).map((tagId) => {
-                                const tag = tags.find(t => t.id === tagId)
-                                return tag ? (
-                                  <Badge key={tagId} variant="secondary" className="text-xs">
-                                    {tag.name}
-                                    <button
-                                      onClick={() => setSuccessAction(prev => ({
-                                        ...prev,
-                                        add_tag_ids: (prev.add_tag_ids || []).filter(id => id !== tagId)
-                                      }))}
-                                      className="ml-1 hover:text-destructive"
-                                    >
-                                      ×
-                                    </button>
-                                  </Badge>
-                                ) : null
-                              })}
-                            </div>
-                          </div>
-
-                          <div>
-                            <Label className="text-xs">削除するタグ</Label>
-                            <Select
-                              value=""
-                              onValueChange={(value) => {
-                                const currentTags = successAction.remove_tag_ids || []
-                                if (!currentTags.includes(value)) {
-                                  setSuccessAction(prev => ({
-                                    ...prev,
-                                    remove_tag_ids: [...currentTags, value]
-                                  }))
-                                }
-                              }}
-                            >
-                              <SelectTrigger>
-                                <SelectValue placeholder="タグを選択" />
-                              </SelectTrigger>
-                              <SelectContent>
-                                {tags.map((tag) => (
-                                  <SelectItem key={tag.id} value={tag.id}>
-                                    {tag.name}
-                                  </SelectItem>
-                                ))}
-                              </SelectContent>
-                            </Select>
-                            <div className="flex flex-wrap gap-1 mt-2">
-                              {(successAction.remove_tag_ids || []).map((tagId) => {
-                                const tag = tags.find(t => t.id === tagId)
-                                return tag ? (
-                                  <Badge key={tagId} variant="destructive" className="text-xs">
-                                    {tag.name}
-                                    <button
-                                      onClick={() => setSuccessAction(prev => ({
-                                        ...prev,
-                                        remove_tag_ids: (prev.remove_tag_ids || []).filter(id => id !== tagId)
-                                      }))}
-                                      className="ml-1 hover:text-white"
-                                    >
-                                      ×
-                                    </button>
-                                  </Badge>
-                                ) : null
-                              })}
-                            </div>
-                          </div>
-                        </div>
-                      </div>
+                       <div>
+                         <Label>タグ操作</Label>
+                         <div className="text-sm text-muted-foreground mb-3">
+                           決済成功時に友達にタグを着脱できます
+                         </div>
+                         <div className="space-y-3">
+                           {tags.length === 0 ? (
+                             <p className="text-sm text-muted-foreground">タグが作成されていません</p>
+                           ) : (
+                             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                               {tags.map((tag) => {
+                                 const isAdded = (successAction.add_tag_ids || []).includes(tag.id)
+                                 const isRemoved = (successAction.remove_tag_ids || []).includes(tag.id)
+                                 const isNone = !isAdded && !isRemoved
+                                 
+                                 const getVariant = () => {
+                                   if (isAdded) return "default"
+                                   if (isRemoved) return "destructive"
+                                   return "outline"
+                                 }
+                                 
+                                 const getIcon = () => {
+                                   if (isAdded) return "+"
+                                   if (isRemoved) return "-"
+                                   return "="
+                                 }
+                                 
+                                 const handleToggle = () => {
+                                   if (isNone) {
+                                     // None -> Add
+                                     setSuccessAction(prev => ({
+                                       ...prev,
+                                       add_tag_ids: [...(prev.add_tag_ids || []), tag.id],
+                                       remove_tag_ids: (prev.remove_tag_ids || []).filter(id => id !== tag.id)
+                                     }))
+                                   } else if (isAdded) {
+                                     // Add -> Remove
+                                     setSuccessAction(prev => ({
+                                       ...prev,
+                                       add_tag_ids: (prev.add_tag_ids || []).filter(id => id !== tag.id),
+                                       remove_tag_ids: [...(prev.remove_tag_ids || []), tag.id]
+                                     }))
+                                   } else if (isRemoved) {
+                                     // Remove -> None
+                                     setSuccessAction(prev => ({
+                                       ...prev,
+                                       add_tag_ids: (prev.add_tag_ids || []).filter(id => id !== tag.id),
+                                       remove_tag_ids: (prev.remove_tag_ids || []).filter(id => id !== tag.id)
+                                     }))
+                                   }
+                                 }
+                                 
+                                 return (
+                                   <Button
+                                     key={tag.id}
+                                     variant={getVariant()}
+                                     size="sm"
+                                     onClick={handleToggle}
+                                     className="justify-between"
+                                   >
+                                     <span>{tag.name}</span>
+                                     <span className="ml-2 font-mono text-xs">
+                                       {getIcon()}
+                                     </span>
+                                   </Button>
+                                 )
+                               })}
+                             </div>
+                           )}
+                           {tags.length > 0 && (
+                             <div className="text-xs text-muted-foreground space-y-1">
+                               <div className="flex items-center gap-2">
+                                 <div className="w-3 h-3 bg-primary rounded"></div>
+                                 <span>クリックで追加 (+)</span>
+                               </div>
+                               <div className="flex items-center gap-2">
+                                 <div className="w-3 h-3 bg-destructive rounded"></div>
+                                 <span>もう一度クリックで削除 (-)</span>
+                               </div>
+                               <div className="flex items-center gap-2">
+                                 <div className="w-3 h-3 border border-border rounded"></div>
+                                 <span>さらにクリックで無効 (=)</span>
+                               </div>
+                             </div>
+                           )}
+                         </div>
+                       </div>
                     </div>
 
                     <Separator />

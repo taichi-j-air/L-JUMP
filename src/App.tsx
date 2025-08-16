@@ -44,6 +44,7 @@ import UserManagement from "./pages/developer/UserManagement";
 import MaintenanceSettings from "./pages/developer/MaintenanceSettings";
 import MasterMode from "./pages/developer/MasterMode";
 import ProductManagement from "./pages/ProductManagement";
+import ProductLandingPage from "./pages/ProductLandingPage";
 import PlanSettings from "./pages/PlanSettings";
 import RichMenuSettings from "./pages/RichMenuSettings";
 import GreetingMessageSettings from "./pages/GreetingMessageSettings";
@@ -90,9 +91,10 @@ function AppContent() {
   const isPublicFormPage = window.location.pathname.startsWith('/form/') || window.location.pathname.startsWith('/liff-form/')
   const isCMSPublicPath = window.location.pathname.startsWith('/cms/f/')
   const isCMSPreviewPath = window.location.pathname.startsWith('/cms/preview/')
+  const isProductLandingPage = window.location.pathname.startsWith('/product-landing/')
 
   // Show auth pages without sidebar/header  
-  if (isAuthPage || (!user && !isInvitePage && !isLoginPage && !hasLineLoginSuccess && !isPublicFormPage && !(isCMSPublicPath || isCMSPreviewPath))) {
+  if (isAuthPage || (!user && !isInvitePage && !isLoginPage && !hasLineLoginSuccess && !isPublicFormPage && !isProductLandingPage && !(isCMSPublicPath || isCMSPreviewPath))) {
     return (
       <div className="min-h-screen">
         <Routes>
@@ -108,6 +110,7 @@ function AppContent() {
           <Route path="/reset-password" element={<ResetPassword />} />
           <Route path="/form/:id" element={<PublicForm />} />
           <Route path="/liff-form/:id" element={<LiffForm />} />
+          <Route path="/product-landing/:productId" element={<ProductLandingPage />} />
           <Route path="/cms/f/:shareCode" element={<CMSFriendsPublicView />} />
           <Route path="/cms/preview/:pageId" element={<CMSFriendsPublicView />} />
           <Route path="/error" element={<ErrorPage />} />
@@ -181,6 +184,7 @@ function AppContent() {
               <Route path="/chat/:friendId" element={<IndividualChatPage />} />
               <Route path="/form/:id" element={<PublicForm />} />
               <Route path="/liff-form/:id" element={<LiffForm />} />
+              <Route path="/product-landing/:productId" element={<ProductLandingPage />} />
               <Route path="/forms" element={<FormsBuilder />} />
               <Route path="/forms/responses" element={<FormResponses />} />
               <Route path="/cms/friends-page" element={<CMSFriendsPageBuilder />} />

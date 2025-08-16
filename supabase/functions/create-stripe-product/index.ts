@@ -12,13 +12,25 @@ serve(async (req) => {
     return new Response(null, { headers: corsHeaders });
   }
 
+  if (req.method !== "POST") {
+    return new Response(JSON.stringify({ error: "Method Not Allowed" }), { 
+      status: 405, 
+      headers: { ...corsHeaders, "Content-Type": "application/json" } 
+    });
+  }
+
   try {
     const supabaseClient = createClient(
       Deno.env.get("SUPABASE_URL") ?? "",
-      Deno.env.get("SUPABASE_ANON_KEY") ?? ""
+      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "",
+      { auth: { persistSession: false } }
     );
 
-    const authHeader = req.headers.get("Authorization")!;
+    const authHeader = req.headers.get("Authorization");
+    if (!authHeader) {
+      throw new Error("No authorization header provided");
+    }
+
     const token = authHeader.replace("Bearer ", "");
     const { data } = await supabaseClient.auth.getUser(token);
     const user = data.user;
@@ -27,19 +39,13 @@ serve(async (req) => {
       throw new Error("User not authenticated");
     }
 
-    const { productId, isTest = false } = await req.json();
+    const { name, description, unitAmount, currency, interval, metadata = {}, isTest = false } = await req.json();
 
-    // Get product details
-    const { data: product, error: productError } = await supabaseClient
-      .from('products')
-      .select('*')
-      .eq('id', productId)
-      .eq('user_id', user.id)
-      .single();
-
-    if (productError || !product) {
-      throw new Error("Product not found");
+    if (!name || !unitAmount || !currency) {
+      throw new Error("Missing required fields: name, unitAmount, currency");
     }
+
+    console.log(`Creating ${isTest ? 'test' : 'live'} product:`, { name, unitAmount, currency, interval });
 
     // Get user's Stripe credentials
     const { data: stripeCredentials, error: credentialsError } = await supabaseClient
@@ -62,48 +68,35 @@ serve(async (req) => {
     }
 
     const stripe = new Stripe(stripeSecretKey, {
-      apiVersion: "2023-10-16",
+      apiVersion: "2024-06-20",
     });
 
-    // Create Stripe product
-    const stripeProduct = await stripe.products.create({
-      name: product.name,
-      description: product.description || undefined,
-    });
-
-    // Create Stripe price
-    const priceData: any = {
-      unit_amount: Math.round(product.price),
-      currency: product.currency.toLowerCase(),
-      product: stripeProduct.id,
+    // Create Stripe product with default_price_data
+    const productData: any = {
+      name,
+      description,
+      metadata,
+      default_price_data: {
+        unit_amount: Math.round(unitAmount),
+        currency: currency.toLowerCase()
+      }
     };
 
-    if (product.product_type === 'subscription' || product.product_type === 'subscription_with_trial') {
-      priceData.recurring = {
-        interval: product.interval || 'month',
-      };
+    // Add recurring data for subscriptions
+    if (interval) {
+      productData.default_price_data.recurring = { interval };
     }
 
-    const stripePrice = await stripe.prices.create(priceData);
-
-    // Update product with Stripe IDs
-    const { error: updateError } = await supabaseClient
-      .from('products')
-      .update({
-        stripe_product_id: stripeProduct.id,
-        stripe_price_id: stripePrice.id,
-      })
-      .eq('id', productId);
-
-    if (updateError) {
-      throw new Error("Failed to update product with Stripe IDs");
-    }
+    const stripeProduct = await stripe.products.create(productData);
+    
+    console.log(`Successfully created ${isTest ? 'test' : 'live'} Stripe product:`, stripeProduct.id);
 
     return new Response(
       JSON.stringify({
-        success: true,
-        stripeProductId: stripeProduct.id,
-        stripePriceId: stripePrice.id,
+        ok: true,
+        product: stripeProduct,
+        productId: stripeProduct.id,
+        priceId: stripeProduct.default_price
       }),
       {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
