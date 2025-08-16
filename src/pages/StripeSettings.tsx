@@ -128,7 +128,7 @@ export default function StripeSettings() {
               </CardHeader>
               <CardContent className="p-4 border border-green-200 bg-green-50 rounded-lg space-y-4">
                 <div className="space-y-2">
-                  <Label htmlFor="live-secretKey">Secret Key (本番)</Label>
+                  <Label htmlFor="live-secretKey">シークレットキー (本番)</Label>
                   <Input
                     id="live-secretKey"
                     type="password"
@@ -140,7 +140,7 @@ export default function StripeSettings() {
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="live-publishableKey">Publishable Key (本番)</Label>
+                  <Label htmlFor="live-publishableKey">公開可能キー (本番)</Label>
                   <Input
                     id="live-publishableKey"
                     placeholder="pk_live_..."
@@ -193,7 +193,7 @@ export default function StripeSettings() {
               </CardHeader>
               <CardContent className="p-4 border border-orange-200 bg-orange-50 rounded-lg space-y-4">
                 <div className="space-y-2">
-                  <Label htmlFor="test-secretKey">Secret Key (テスト)</Label>
+                  <Label htmlFor="test-secretKey">シークレットキー (テスト)</Label>
                   <Input
                     id="test-secretKey"
                     type="password"
@@ -203,7 +203,7 @@ export default function StripeSettings() {
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="test-publishableKey">Publishable Key (テスト)</Label>
+                  <Label htmlFor="test-publishableKey">公開可能キー (テスト)</Label>
                   <Input
                     id="test-publishableKey"
                     placeholder="pk_test_..."
