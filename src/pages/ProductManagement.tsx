@@ -147,6 +147,7 @@ export default function ProductManagement() {
         .from('step_scenarios')
         .select('id, name')
         .eq('is_active', true)
+        .eq('user_id', user?.id)
         .order('name')
 
       if (error) throw error
@@ -158,10 +159,16 @@ export default function ProductManagement() {
 
   const loadTags = async () => {
     try {
-      // Assuming there's a tags table - if not, we'll create a placeholder
-      setTags([]) // Placeholder for now
+      const { data, error } = await supabase
+        .from('line_friends')
+        .select('id, display_name')
+        .eq('user_id', user?.id)
+        .order('display_name')
+
+      if (error) throw error
+      setTags(data || [])
     } catch (error: any) {
-      console.error('タグの読み込みに失敗:', error)
+      console.error('友達リストの読み込みに失敗:', error)
     }
   }
 
@@ -261,7 +268,7 @@ export default function ProductManagement() {
   }
 
   const getProductUrl = (productId: string) => {
-    return `${window.location.origin}/product/${productId}`
+    return `${window.location.origin}/product/${productId}?uid={uid}`
   }
 
   const copyProductUrl = async (productId: string) => {

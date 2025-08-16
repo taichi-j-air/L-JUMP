@@ -25,11 +25,10 @@ export function ProductPreview({
   content
 }: ProductPreviewProps) {
   const formatPrice = (price: number, currency: string) => {
-    const taxIncludedPrice = Math.floor(price * 1.1)
     return new Intl.NumberFormat('ja-JP', {
       style: 'currency',
       currency: currency.toUpperCase()
-    }).format(taxIncludedPrice) + '（税込）'
+    }).format(price) + '（税込）'
   }
 
   return (
