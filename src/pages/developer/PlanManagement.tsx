@@ -190,6 +190,20 @@ export default function PlanManagement() {
             <CardTitle>プラン一覧</CardTitle>
           </CardHeader>
           <CardContent>
+            <div className="mb-6 p-4 border border-blue-200 bg-blue-50 rounded-lg">
+              <h3 className="text-lg font-semibold text-blue-800 mb-2">Stripe決済システム</h3>
+              <p className="text-sm text-blue-700 mb-4">
+                プランにStripe決済を埋め込むことができます。決済ページへの遷移前にブラウザ経由でのLINEアカウントBAN対策が含まれます。
+              </p>
+              <div className="space-y-2">
+                <p className="text-sm font-medium">対応決済タイプ:</p>
+                <ul className="text-sm text-blue-700 ml-4 space-y-1">
+                  <li>• 単発課金（一回限りの支払い）</li>
+                  <li>• サブスク課金（月額・年額）</li>
+                  <li>• トライアル付きサブスク（無料期間付き）</li>
+                </ul>
+              </div>
+            </div>
             <div className="overflow-x-auto">
               <Table>
                 <TableHeader>

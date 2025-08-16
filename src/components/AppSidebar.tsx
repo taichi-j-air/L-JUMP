@@ -527,11 +527,12 @@ export function AppSidebar({ user }: AppSidebarProps) {
                       </NavLink>
                     </SidebarMenuButton>
                   </SidebarMenuItem>
-                </SidebarMenu>
-              </SidebarGroupContent>
-            </SidebarGroup>
-          </>
-        )}
+                 </SidebarMenu>
+               </SidebarGroupContent>
+             </SidebarGroup>
+             <div className="h-6" />
+           </>
+         )}
       </SidebarContent>
     </Sidebar>
   )

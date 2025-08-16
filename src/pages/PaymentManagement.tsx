@@ -243,8 +243,8 @@ export default function PaymentManagement() {
             </div>
 
             {/* テスト環境設定 */}
-            <div className="p-4 border border-blue-200 bg-blue-50 rounded-lg">
-              <h3 className="text-lg font-semibold text-blue-800 mb-4">テスト環境（Test Mode）</h3>
+            <div className="p-4 border border-orange-200 bg-orange-50 rounded-lg">
+              <h3 className="text-lg font-semibold text-orange-800 mb-4">テスト環境（Test Mode）</h3>
               <div className="space-y-4">
                 <div>
                   <Label htmlFor="test-publishable-key">Publishable Key (テスト)</Label>

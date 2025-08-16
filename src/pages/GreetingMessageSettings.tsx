@@ -6,7 +6,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
-import { ArrowLeft, MessageCircle } from "lucide-react";
+import { ArrowLeft, MessageCircle, QrCode, Link } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 
@@ -23,11 +23,36 @@ const GreetingMessageSettings = () => {
   const [greetingMessage, setGreetingMessage] = useState("");
   const [selectedScenario, setSelectedScenario] = useState("");
   const [scenarios, setScenarios] = useState<Scenario[]>([]);
+  const [friendUrl, setFriendUrl] = useState("");
+  const [profile, setProfile] = useState<any>(null);
 
   useEffect(() => {
     loadGreetingMessage();
     loadScenarios();
+    loadProfile();
   }, []);
+
+  const loadProfile = async () => {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('line_bot_id, add_friend_url')
+        .eq('user_id', user.id)
+        .single();
+
+      if (!error && data) {
+        setProfile(data);
+        if (data.add_friend_url) {
+          setFriendUrl(data.add_friend_url);
+        }
+      }
+    } catch (error) {
+      console.error('Error loading profile:', error);
+    }
+  };
 
   const loadGreetingMessage = async () => {
     // TODO: Implement greeting message loading logic
@@ -36,10 +61,14 @@ const GreetingMessageSettings = () => {
 
   const loadScenarios = async () => {
     try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+
       const { data, error } = await supabase
         .from('step_scenarios')
         .select('id, name')
         .eq('is_active', true)
+        .eq('user_id', user.id)
         .order('name');
 
       if (!error && data) {
@@ -184,6 +213,53 @@ const GreetingMessageSettings = () => {
                   {loading ? "保存中..." : "設定を保存"}
                 </Button>
               </form>
+            </CardContent>
+          </Card>
+
+          {/* 友だち追加URL & QR */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Link className="w-5 h-5" />
+                友だち追加URL & QR
+              </CardTitle>
+              <CardDescription>
+                通常の友だち追加用のURLとQRコードです（LINEログイン無し）
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              {friendUrl ? (
+                <>
+                  <div className="space-y-2">
+                    <Label>友だち追加URL</Label>
+                    <div className="flex gap-2">
+                      <input 
+                        type="text" 
+                        value={friendUrl} 
+                        readOnly
+                        className="flex-1 px-3 py-2 border rounded-md bg-muted font-mono text-sm"
+                      />
+                      <Button 
+                        variant="outline" 
+                        onClick={() => navigator.clipboard.writeText(friendUrl)}
+                      >
+                        コピー
+                      </Button>
+                    </div>
+                  </div>
+                  <div className="flex items-center justify-center p-4 border rounded-lg bg-white">
+                    <QrCode className="w-32 h-32 text-muted-foreground" />
+                    <div className="ml-4 text-sm text-muted-foreground">
+                      QRコード生成機能は実装予定です
+                    </div>
+                  </div>
+                </>
+              ) : (
+                <div className="text-center text-muted-foreground py-8">
+                  <p>LINE Bot IDが設定されていません</p>
+                  <p className="text-sm">LINE API設定で先にBOT IDを設定してください</p>
+                </div>
+              )}
             </CardContent>
           </Card>
         </div>
