@@ -42,7 +42,10 @@ export function MediaLibrarySelector({ trigger, onSelect, selectedUrl }: MediaLi
           sortBy: { column: 'created_at', order: 'desc' }
         })
 
-      if (error) throw error
+      if (error) {
+        console.error('Storage list error:', error)
+        throw error
+      }
 
       const files = await Promise.all(
         (data || []).map(async (file) => {
@@ -59,7 +62,9 @@ export function MediaLibrarySelector({ trigger, onSelect, selectedUrl }: MediaLi
         })
       )
 
-      setMediaFiles(files.filter(f => f.name.match(/\.(jpg|jpeg|png|gif|webp)$/i)))
+      const imageFiles = files.filter(f => f.name.match(/\.(jpg|jpeg|png|gif|webp)$/i))
+      console.log('Loaded media files:', imageFiles)
+      setMediaFiles(imageFiles)
     } catch (error: any) {
       console.error('メディアファイルの読み込みに失敗:', error)
       toast.error('メディアファイルの読み込みに失敗しました')

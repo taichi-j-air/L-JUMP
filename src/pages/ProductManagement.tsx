@@ -160,15 +160,15 @@ export default function ProductManagement() {
   const loadTags = async () => {
     try {
       const { data, error } = await supabase
-        .from('line_friends')
-        .select('id, display_name')
+        .from('tags')
+        .select('*')
         .eq('user_id', user?.id)
-        .order('display_name')
+        .order('name')
 
       if (error) throw error
       setTags(data || [])
     } catch (error: any) {
-      console.error('友達リストの読み込みに失敗:', error)
+      console.error('タグの読み込みに失敗:', error)
     }
   }
 
@@ -406,6 +406,25 @@ export default function ProductManagement() {
         })
       ])
 
+      // Create Stripe product if needed
+      if (productForm.is_active && (!selectedProduct?.stripe_product_id || !selectedProduct?.stripe_price_id)) {
+        try {
+          const { data: stripeResult } = await supabase.functions.invoke('create-stripe-product', {
+            body: {
+              productId: productId,
+              isTest: productForm.name?.includes('テスト') || false
+            }
+          })
+
+          if (stripeResult?.success) {
+            toast.success('Stripe商品を作成しました')
+          }
+        } catch (stripeError) {
+          console.error('Stripe商品作成に失敗:', stripeError)
+          toast.error('Stripe商品の作成に失敗しました')
+        }
+      }
+
       toast.success('商品を保存しました')
     } catch (error: any) {
       console.error('商品の保存に失敗:', error)
@@ -472,13 +491,20 @@ export default function ProductManagement() {
                   key={product.id}
                   className={`cursor-pointer transition-colors hover:bg-muted/50 ${
                     selectedProduct?.id === product.id ? 'ring-2 ring-primary' : ''
-                  }`}
+                  } ${product.name.includes('テスト') ? 'border-orange-300 bg-orange-50' : ''}`}
                   onClick={() => handleSelectProduct(product)}
                 >
                   <CardContent className="p-4">
                     <div className="flex items-start justify-between">
                       <div className="flex-1 min-w-0">
-                        <h3 className="font-medium truncate">{product.name}</h3>
+                        <h3 className="font-medium truncate flex items-center gap-2">
+                          {product.name}
+                          {product.name.includes('テスト') && (
+                            <Badge variant="outline" className="text-xs border-orange-400 text-orange-600">
+                              TEST
+                            </Badge>
+                          )}
+                        </h3>
                         <div className="flex items-center gap-2 mt-1">
                           <Badge variant="secondary" className="text-xs">
                             {getProductTypeLabel(product.product_type)}
@@ -777,21 +803,27 @@ export default function ProductManagement() {
                       <h4 className="font-medium text-green-600">決済成功時のアクション</h4>
                       
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <div>
-                          <Label>シナリオアクション</Label>
-                          <Select
-                            value={successAction.scenario_action}
-                            onValueChange={(value) => setSuccessAction(prev => ({ ...prev, scenario_action: value as any }))}
-                          >
-                            <SelectTrigger>
-                              <SelectValue />
-                            </SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="add_to_existing">既存シナリオに追加</SelectItem>
-                              <SelectItem value="replace_all">全てのシナリオを解除して新規追加</SelectItem>
-                            </SelectContent>
-                          </Select>
-                        </div>
+                         <div>
+                           <Label>シナリオアクション</Label>
+                           <Select
+                             value={successAction.scenario_action}
+                             onValueChange={(value) => setSuccessAction(prev => ({ ...prev, scenario_action: value as any }))}
+                           >
+                             <SelectTrigger>
+                               <SelectValue />
+                             </SelectTrigger>
+                             <SelectContent>
+                               <SelectItem value="add_to_existing">既存シナリオに追加（現在配信中のシナリオはそのまま継続）</SelectItem>
+                               <SelectItem value="replace_all">シナリオを完全切り替え（現在のシナリオを停止して新しいシナリオに移行）</SelectItem>
+                             </SelectContent>
+                           </Select>
+                           <div className="text-xs text-muted-foreground mt-1">
+                             {successAction.scenario_action === 'add_to_existing' 
+                               ? '現在配信中のシナリオを継続しながら、指定したシナリオも並行して配信開始します。'
+                               : '現在配信中のすべてのシナリオを停止し、指定したシナリオのみ配信開始します。'
+                             }
+                           </div>
+                         </div>
 
                         <div>
                           <Label>移動先シナリオ</Label>
@@ -816,15 +848,100 @@ export default function ProductManagement() {
                       <div>
                         <Label>タグ操作</Label>
                         <div className="text-sm text-muted-foreground mb-2">
-                          決済成功時にタグを着脱できます（タグ機能が実装されている場合）
+                          決済成功時に友達にタグを着脱できます
                         </div>
-                        <div className="flex gap-4">
-                          <Button variant="outline" size="sm" disabled>
-                            追加タグを選択
-                          </Button>
-                          <Button variant="outline" size="sm" disabled>
-                            削除タグを選択
-                          </Button>
+                        <div className="grid grid-cols-2 gap-4">
+                          <div>
+                            <Label className="text-xs">追加するタグ</Label>
+                            <Select
+                              value=""
+                              onValueChange={(value) => {
+                                const currentTags = successAction.add_tag_ids || []
+                                if (!currentTags.includes(value)) {
+                                  setSuccessAction(prev => ({
+                                    ...prev,
+                                    add_tag_ids: [...currentTags, value]
+                                  }))
+                                }
+                              }}
+                            >
+                              <SelectTrigger>
+                                <SelectValue placeholder="タグを選択" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {tags.map((tag) => (
+                                  <SelectItem key={tag.id} value={tag.id}>
+                                    {tag.name}
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                            <div className="flex flex-wrap gap-1 mt-2">
+                              {(successAction.add_tag_ids || []).map((tagId) => {
+                                const tag = tags.find(t => t.id === tagId)
+                                return tag ? (
+                                  <Badge key={tagId} variant="secondary" className="text-xs">
+                                    {tag.name}
+                                    <button
+                                      onClick={() => setSuccessAction(prev => ({
+                                        ...prev,
+                                        add_tag_ids: (prev.add_tag_ids || []).filter(id => id !== tagId)
+                                      }))}
+                                      className="ml-1 hover:text-destructive"
+                                    >
+                                      ×
+                                    </button>
+                                  </Badge>
+                                ) : null
+                              })}
+                            </div>
+                          </div>
+
+                          <div>
+                            <Label className="text-xs">削除するタグ</Label>
+                            <Select
+                              value=""
+                              onValueChange={(value) => {
+                                const currentTags = successAction.remove_tag_ids || []
+                                if (!currentTags.includes(value)) {
+                                  setSuccessAction(prev => ({
+                                    ...prev,
+                                    remove_tag_ids: [...currentTags, value]
+                                  }))
+                                }
+                              }}
+                            >
+                              <SelectTrigger>
+                                <SelectValue placeholder="タグを選択" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {tags.map((tag) => (
+                                  <SelectItem key={tag.id} value={tag.id}>
+                                    {tag.name}
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                            <div className="flex flex-wrap gap-1 mt-2">
+                              {(successAction.remove_tag_ids || []).map((tagId) => {
+                                const tag = tags.find(t => t.id === tagId)
+                                return tag ? (
+                                  <Badge key={tagId} variant="destructive" className="text-xs">
+                                    {tag.name}
+                                    <button
+                                      onClick={() => setSuccessAction(prev => ({
+                                        ...prev,
+                                        remove_tag_ids: (prev.remove_tag_ids || []).filter(id => id !== tagId)
+                                      }))}
+                                      className="ml-1 hover:text-white"
+                                    >
+                                      ×
+                                    </button>
+                                  </Badge>
+                                ) : null
+                              })}
+                            </div>
+                          </div>
                         </div>
                       </div>
                     </div>
