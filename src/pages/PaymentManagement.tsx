@@ -210,69 +210,6 @@ export default function PaymentManagement() {
           </p>
         </div>
 
-        {/* Stripe設定カード */}
-        <Card className="mb-6">
-          <CardHeader>
-            <CardTitle>Stripe API設定</CardTitle>
-            <CardDescription>本番環境とテスト環境のAPI キーを設定します</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-6">
-            {/* 本番環境設定 */}
-            <div className="p-4 border border-green-200 bg-green-50 rounded-lg">
-              <h3 className="text-lg font-semibold text-green-800 mb-4">本番環境（Live Mode）</h3>
-              <div className="space-y-4">
-                <div>
-                  <Label htmlFor="live-publishable-key">Publishable Key (本番)</Label>
-                  <Input
-                    id="live-publishable-key"
-                    type="password"
-                    placeholder="pk_live_..."
-                    className="font-mono text-sm"
-                  />
-                </div>
-                <div>
-                  <Label htmlFor="live-secret-key">Secret Key (本番)</Label>
-                  <Input
-                    id="live-secret-key"
-                    type="password"
-                    placeholder="sk_live_..."
-                    className="font-mono text-sm"
-                  />
-                </div>
-              </div>
-            </div>
-
-            {/* テスト環境設定 */}
-            <div className="p-4 border border-orange-200 bg-orange-50 rounded-lg">
-              <h3 className="text-lg font-semibold text-orange-800 mb-4">テスト環境（Test Mode）</h3>
-              <div className="space-y-4">
-                <div>
-                  <Label htmlFor="test-publishable-key">Publishable Key (テスト)</Label>
-                  <Input
-                    id="test-publishable-key"
-                    type="password"
-                    placeholder="pk_test_..."
-                    className="font-mono text-sm"
-                  />
-                </div>
-                <div>
-                  <Label htmlFor="test-secret-key">Secret Key (テスト)</Label>
-                  <Input
-                    id="test-secret-key"
-                    type="password"
-                    placeholder="sk_test_..."
-                    className="font-mono text-sm"
-                  />
-                </div>
-              </div>
-            </div>
-
-            <div className="flex gap-4">
-              <Button className="flex-1">設定を保存</Button>
-              <Button variant="outline">接続テスト</Button>
-            </div>
-          </CardContent>
-        </Card>
 
         {/* 統計カード */}
         <div className="grid gap-4 md:grid-cols-4 mb-6">

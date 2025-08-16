@@ -112,10 +112,11 @@ export default function StripeSettings() {
 
         <div className="grid gap-6 md:grid-cols-2">
           <div className="space-y-6">
+            {/* 本番環境設定 */}
             <Card>
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
-                  Stripe API設定
+                  本番環境（Live Mode）
                   <Badge variant={connectionStatus === 'configured' ? 'default' : 'secondary'}>
                     {connectionStatus === 'configured' ? (
                       <><Check className="h-3 w-3 mr-1" />設定済み</>
@@ -125,36 +126,39 @@ export default function StripeSettings() {
                   </Badge>
                 </CardTitle>
               </CardHeader>
-              <CardContent className="space-y-4">
+              <CardContent className="p-4 border border-green-200 bg-green-50 rounded-lg space-y-4">
                 <div className="space-y-2">
-                  <Label htmlFor="secretKey">Secret Key</Label>
+                  <Label htmlFor="live-secretKey">Secret Key (本番)</Label>
                   <Input
-                    id="secretKey"
+                    id="live-secretKey"
                     type="password"
-                    placeholder="sk_test_... または sk_live_..."
+                    placeholder="sk_live_..."
                     value={stripeSettings.secretKey}
                     onChange={(e) => setStripeSettings(prev => ({ ...prev, secretKey: e.target.value }))}
+                    className="font-mono text-sm"
                   />
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="publishableKey">Publishable Key</Label>
+                  <Label htmlFor="live-publishableKey">Publishable Key (本番)</Label>
                   <Input
-                    id="publishableKey"
-                    placeholder="pk_test_... または pk_live_..."
+                    id="live-publishableKey"
+                    placeholder="pk_live_..."
                     value={stripeSettings.publishableKey}
                     onChange={(e) => setStripeSettings(prev => ({ ...prev, publishableKey: e.target.value }))}
+                    className="font-mono text-sm"
                   />
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="webhookSecret">Webhook Secret (オプション)</Label>
+                  <Label htmlFor="live-webhookSecret">Webhook Secret (オプション)</Label>
                   <Input
-                    id="webhookSecret"
+                    id="live-webhookSecret"
                     type="password"
                     placeholder="whsec_..."
                     value={stripeSettings.webhookSecret}
                     onChange={(e) => setStripeSettings(prev => ({ ...prev, webhookSecret: e.target.value }))}
+                    className="font-mono text-sm"
                   />
                 </div>
 
@@ -164,12 +168,69 @@ export default function StripeSettings() {
                     disabled={saving}
                     className="flex-1"
                   >
-                    {saving ? '保存中...' : '設定を保存'}
+                    {saving ? '保存中...' : '本番設定を保存'}
                   </Button>
                   <Button 
                     variant="outline" 
                     onClick={testStripeConnection}
                     disabled={testing || !stripeSettings.secretKey}
+                  >
+                    {testing ? 'テスト中...' : '接続テスト'}
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* テスト環境設定 */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  テスト環境（Test Mode）
+                  <Badge variant="secondary">
+                    <X className="h-3 w-3 mr-1" />未設定
+                  </Badge>
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="p-4 border border-orange-200 bg-orange-50 rounded-lg space-y-4">
+                <div className="space-y-2">
+                  <Label htmlFor="test-secretKey">Secret Key (テスト)</Label>
+                  <Input
+                    id="test-secretKey"
+                    type="password"
+                    placeholder="sk_test_..."
+                    className="font-mono text-sm"
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="test-publishableKey">Publishable Key (テスト)</Label>
+                  <Input
+                    id="test-publishableKey"
+                    placeholder="pk_test_..."
+                    className="font-mono text-sm"
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="test-webhookSecret">Webhook Secret (オプション)</Label>
+                  <Input
+                    id="test-webhookSecret"
+                    type="password"
+                    placeholder="whsec_..."
+                    className="font-mono text-sm"
+                  />
+                </div>
+
+                <div className="flex gap-2">
+                  <Button 
+                    disabled={saving}
+                    className="flex-1"
+                  >
+                    {saving ? '保存中...' : 'テスト設定を保存'}
+                  </Button>
+                  <Button 
+                    variant="outline" 
+                    disabled={testing}
                   >
                     {testing ? 'テスト中...' : '接続テスト'}
                   </Button>
