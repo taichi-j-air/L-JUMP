@@ -10,8 +10,11 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Textarea } from "@/components/ui/textarea"
 import { Badge } from "@/components/ui/badge"
 import { Separator } from "@/components/ui/separator"
-import { Plus, Package, Settings, Target, AlertTriangle } from "lucide-react"
+import { Plus, Package, Settings, Target, AlertTriangle, Trash2, Copy, Check, Link, FileText } from "lucide-react"
 import { toast } from "sonner"
+import { ProductPreview } from "@/components/ProductPreview"
+import { MediaLibrarySelector } from "@/components/MediaLibrarySelector"
+import { FieldInsertionDialog } from "@/components/FieldInsertionDialog"
 
 interface Product {
   id: string
@@ -60,6 +63,9 @@ export default function ProductManagement() {
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null)
   const [isCreating, setIsCreating] = useState(false)
   const [saving, setSaving] = useState(false)
+  const [scenarios, setScenarios] = useState<any[]>([])
+  const [tags, setTags] = useState<any[]>([])
+  const [copiedUrl, setCopiedUrl] = useState<string | null>(null)
 
   // Product form state
   const [productForm, setProductForm] = useState<Partial<Product>>({
@@ -115,6 +121,8 @@ export default function ProductManagement() {
   useEffect(() => {
     if (user) {
       loadProducts()
+      loadScenarios()
+      loadTags()
     }
   }, [user])
 
@@ -133,7 +141,142 @@ export default function ProductManagement() {
     }
   }
 
-  const handleCreateProduct = () => {
+  const loadScenarios = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('step_scenarios')
+        .select('id, name')
+        .eq('is_active', true)
+        .order('name')
+
+      if (error) throw error
+      setScenarios(data || [])
+    } catch (error: any) {
+      console.error('シナリオの読み込みに失敗:', error)
+    }
+  }
+
+  const loadTags = async () => {
+    try {
+      // Assuming there's a tags table - if not, we'll create a placeholder
+      setTags([]) // Placeholder for now
+    } catch (error: any) {
+      console.error('タグの読み込みに失敗:', error)
+    }
+  }
+
+  const handleCreateProduct = async () => {
+    if (!user) return
+
+    // Create product immediately when button is clicked
+    setSaving(true)
+    try {
+      const { data: newProduct, error } = await supabase
+        .from('products')
+        .insert({
+          name: '新しい商品',
+          description: '',
+          price: 1000,
+          currency: 'jpy',
+          product_type: 'one_time',
+          is_active: true,
+          user_id: user.id
+        })
+        .select()
+        .single()
+
+      if (error) throw error
+
+      // Update products list
+      setProducts(prev => [newProduct as Product, ...prev])
+      
+      // Select the new product
+      await handleSelectProduct(newProduct as Product)
+      
+      toast.success('商品を作成しました')
+    } catch (error: any) {
+      console.error('商品の作成に失敗:', error)
+      toast.error('商品の作成に失敗しました')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const handleCreateTestProduct = async () => {
+    if (!user) return
+
+    setSaving(true)
+    try {
+      const { data: newProduct, error } = await supabase
+        .from('products')
+        .insert({
+          name: 'テスト商品',
+          description: 'これはテスト用の商品です。実際の決済は発生しません。',
+          price: 100,
+          currency: 'jpy',
+          product_type: 'one_time',
+          is_active: true,
+          user_id: user.id
+        })
+        .select()
+        .single()
+
+      if (error) throw error
+
+      setProducts(prev => [newProduct as Product, ...prev])
+      await handleSelectProduct(newProduct as Product)
+      
+      toast.success('テスト商品を作成しました')
+    } catch (error: any) {
+      console.error('テスト商品の作成に失敗:', error)
+      toast.error('テスト商品の作成に失敗しました')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const handleDeleteProduct = async (productId: string) => {
+    if (!confirm('この商品を削除してもよろしいですか？')) return
+
+    try {
+      const { error } = await supabase
+        .from('products')
+        .delete()
+        .eq('id', productId)
+
+      if (error) throw error
+
+      setProducts(prev => prev.filter(p => p.id !== productId))
+      
+      if (selectedProduct?.id === productId) {
+        setSelectedProduct(null)
+        setIsCreating(false)
+      }
+
+      toast.success('商品を削除しました')
+    } catch (error: any) {
+      console.error('商品の削除に失敗:', error)
+      toast.error('商品の削除に失敗しました')
+    }
+  }
+
+  const getProductUrl = (productId: string) => {
+    return `${window.location.origin}/product/${productId}`
+  }
+
+  const copyProductUrl = async (productId: string) => {
+    const url = getProductUrl(productId)
+    try {
+      await navigator.clipboard.writeText(url)
+      setCopiedUrl(productId)
+      toast.success('URLをコピーしました')
+      setTimeout(() => setCopiedUrl(null), 2000)
+    } catch (error) {
+      toast.error('URLのコピーに失敗しました')
+    }
+  }
+
+  const oldHandleCreateProduct = () => {
     setIsCreating(true)
     setSelectedProduct(null)
     setProductForm({
@@ -304,10 +447,16 @@ export default function ProductManagement() {
           <div className="lg:col-span-1 space-y-4">
             <div className="flex justify-between items-center">
               <h2 className="text-lg font-semibold">商品一覧</h2>
-              <Button onClick={handleCreateProduct} size="sm" className="gap-2">
-                <Plus className="h-4 w-4" />
-                商品追加
-              </Button>
+              <div className="flex gap-2">
+                <Button onClick={handleCreateTestProduct} size="sm" variant="outline" className="gap-2">
+                  <Package className="h-4 w-4" />
+                  テスト商品
+                </Button>
+                <Button onClick={handleCreateProduct} size="sm" className="gap-2" disabled={saving}>
+                  <Plus className="h-4 w-4" />
+                  {saving ? '作成中...' : '商品追加'}
+                </Button>
+              </div>
             </div>
 
             <div className="space-y-2">
@@ -331,14 +480,51 @@ export default function ProductManagement() {
                             {formatPrice(product.price, product.currency)}
                           </span>
                         </div>
+                        
+                        {/* Product URL */}
+                        <div className="mt-2 flex items-center gap-2">
+                          <div className="flex-1 min-w-0 bg-muted rounded px-2 py-1">
+                            <p className="text-xs text-muted-foreground truncate">
+                              {getProductUrl(product.id)}
+                            </p>
+                          </div>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              copyProductUrl(product.id)
+                            }}
+                            className="h-6 w-6 p-0"
+                          >
+                            {copiedUrl === product.id ? (
+                              <Check className="h-3 w-3" />
+                            ) : (
+                              <Copy className="h-3 w-3" />
+                            )}
+                          </Button>
+                        </div>
                       </div>
-                      <div className="flex items-center gap-1">
-                        <Package className="h-4 w-4 text-muted-foreground" />
-                        {product.is_active ? (
-                          <div className="w-2 h-2 bg-green-500 rounded-full" />
-                        ) : (
-                          <div className="w-2 h-2 bg-gray-400 rounded-full" />
-                        )}
+                      <div className="flex items-center gap-1 flex-col">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            handleDeleteProduct(product.id)
+                          }}
+                          className="h-6 w-6 p-0 text-destructive hover:text-destructive"
+                        >
+                          <Trash2 className="h-3 w-3" />
+                        </Button>
+                        <div className="flex items-center gap-1">
+                          <Package className="h-4 w-4 text-muted-foreground" />
+                          {product.is_active ? (
+                            <div className="w-2 h-2 bg-green-500 rounded-full" />
+                          ) : (
+                            <div className="w-2 h-2 bg-gray-400 rounded-full" />
+                          )}
+                        </div>
                       </div>
                     </div>
                   </CardContent>
@@ -419,10 +605,16 @@ export default function ProductManagement() {
                               <SelectValue />
                             </SelectTrigger>
                             <SelectContent>
-                              <SelectItem value="month">月次</SelectItem>
-                              <SelectItem value="year">年次</SelectItem>
+                              <SelectItem value="month">月次（毎月同日に請求）</SelectItem>
+                              <SelectItem value="year">年次（毎年同日に請求）</SelectItem>
                             </SelectContent>
                           </Select>
+                          <p className="text-xs text-muted-foreground mt-1">
+                            {productForm.interval === 'month' 
+                              ? '初回請求は購入直後、2回目は購入日の翌月同日となります' 
+                              : '初回請求は購入直後、2回目は購入日の翌年同日となります'
+                            }
+                          </p>
                         </div>
                       )}
 
@@ -434,7 +626,11 @@ export default function ProductManagement() {
                             type="number"
                             value={productForm.trial_period_days || ''}
                             onChange={(e) => setProductForm(prev => ({ ...prev, trial_period_days: Number(e.target.value) }))}
+                            placeholder="14"
                           />
+                          <p className="text-xs text-muted-foreground mt-1">
+                            トライアル期間終了後から継続課金が開始されます（例：14日間無料、その後月額課金）
+                          </p>
                         </div>
                       )}
                     </div>
@@ -461,71 +657,118 @@ export default function ProductManagement() {
                     </CardTitle>
                   </CardHeader>
                   <CardContent className="space-y-4">
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      <div>
-                        <Label htmlFor="landing-title">ページタイトル</Label>
-                        <Input
-                          id="landing-title"
-                          value={settingsForm.landing_page_title || ''}
-                          onChange={(e) => setSettingsForm(prev => ({ ...prev, landing_page_title: e.target.value }))}
-                          placeholder="ランディングページのタイトル"
-                        />
-                      </div>
+                     <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                       {/* Settings Form */}
+                       <div className="lg:col-span-2 space-y-4">
+                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                           <div>
+                             <Label htmlFor="landing-title">ページタイトル</Label>
+                             <Input
+                               id="landing-title"
+                               value={settingsForm.landing_page_title || ''}
+                               onChange={(e) => setSettingsForm(prev => ({ ...prev, landing_page_title: e.target.value }))}
+                               placeholder="ランディングページのタイトル"
+                             />
+                           </div>
 
-                      <div>
-                        <Label htmlFor="button-text">ボタンテキスト</Label>
-                        <Input
-                          id="button-text"
-                          value={settingsForm.button_text}
-                          onChange={(e) => setSettingsForm(prev => ({ ...prev, button_text: e.target.value }))}
-                        />
-                      </div>
+                           <div>
+                             <Label htmlFor="button-text">ボタンテキスト</Label>
+                             <Input
+                               id="button-text"
+                               value={settingsForm.button_text}
+                               onChange={(e) => setSettingsForm(prev => ({ ...prev, button_text: e.target.value }))}
+                             />
+                           </div>
 
-                      <div>
-                        <Label htmlFor="button-color">ボタンカラー</Label>
-                        <Input
-                          id="button-color"
-                          type="color"
-                          value={settingsForm.button_color}
-                          onChange={(e) => setSettingsForm(prev => ({ ...prev, button_color: e.target.value }))}
-                        />
-                      </div>
+                           <div>
+                             <Label htmlFor="landing-image">商品画像</Label>
+                             <div className="flex gap-2">
+                               <Input
+                                 value={settingsForm.landing_page_image_url || ''}
+                                 onChange={(e) => setSettingsForm(prev => ({ ...prev, landing_page_image_url: e.target.value }))}
+                                 placeholder="画像URLまたはメディアライブラリから選択"
+                                 className="flex-1"
+                               />
+                               <MediaLibrarySelector
+                                 trigger={
+                                   <Button variant="outline" type="button">
+                                     <Package className="h-4 w-4" />
+                                   </Button>
+                                 }
+                                 onSelect={(url) => setSettingsForm(prev => ({ ...prev, landing_page_image_url: url }))}
+                                 selectedUrl={settingsForm.landing_page_image_url}
+                               />
+                             </div>
+                           </div>
 
-                      <div>
-                        <Label htmlFor="landing-image">画像URL</Label>
-                        <Input
-                          id="landing-image"
-                          value={settingsForm.landing_page_image_url || ''}
-                          onChange={(e) => setSettingsForm(prev => ({ ...prev, landing_page_image_url: e.target.value }))}
-                          placeholder="https://example.com/image.jpg"
-                        />
-                      </div>
-                    </div>
+                           <div>
+                             <Label htmlFor="button-color">ボタンカラー</Label>
+                             <Input
+                               id="button-color"
+                               type="color"
+                               value={settingsForm.button_color}
+                               onChange={(e) => setSettingsForm(prev => ({ ...prev, button_color: e.target.value }))}
+                             />
+                           </div>
+                         </div>
 
-                    <div>
-                      <Label htmlFor="landing-content">ページ内容</Label>
-                      <Textarea
-                        id="landing-content"
-                        value={settingsForm.landing_page_content || ''}
-                        onChange={(e) => setSettingsForm(prev => ({ ...prev, landing_page_content: e.target.value }))}
-                        placeholder="ランディングページの内容を入力"
-                        rows={4}
-                      />
-                    </div>
+                         <div>
+                           <Label htmlFor="landing-content">ページ内容</Label>
+                           <div className="flex gap-2">
+                             <Textarea
+                               id="landing-content"
+                               value={settingsForm.landing_page_content || ''}
+                               onChange={(e) => setSettingsForm(prev => ({ ...prev, landing_page_content: e.target.value }))}
+                               placeholder="ランディングページの説明文"
+                               rows={4}
+                               className="flex-1"
+                             />
+                             <FieldInsertionDialog
+                               trigger={
+                                 <Button variant="outline" type="button" className="gap-2">
+                                   <FileText className="h-4 w-4" />
+                                   フィールド挿入
+                                 </Button>
+                               }
+                               productName={productForm.name}
+                               productPrice={productForm.price}
+                               currency={productForm.currency}
+                               productUrl={selectedProduct ? getProductUrl(selectedProduct.id) : undefined}
+                             />
+                           </div>
+                         </div>
+                       </div>
+
+                       {/* Preview */}
+                       <div className="lg:col-span-1">
+                         <ProductPreview
+                           productName={productForm.name || '商品名'}
+                           price={productForm.price || 0}
+                           currency={productForm.currency || 'jpy'}
+                           imageUrl={settingsForm.landing_page_image_url}
+                           buttonText={settingsForm.button_text}
+                           buttonColor={settingsForm.button_color}
+                           title={settingsForm.landing_page_title}
+                           content={settingsForm.landing_page_content}
+                         />
+                       </div>
+                     </div>
                   </CardContent>
                 </Card>
 
-                {/* アクション設定 */}
+                {/* 決済アクション設定 */}
                 <Card>
                   <CardHeader>
                     <CardTitle className="flex items-center gap-2">
-                      <AlertTriangle className="h-5 w-5" />
-                      決済後アクション設定
+                      <Target className="h-5 w-5" />
+                      決済アクション設定
                     </CardTitle>
                   </CardHeader>
                   <CardContent className="space-y-6">
-                    <div>
-                      <h3 className="font-medium text-green-600 mb-3">決済成功時</h3>
+                    {/* 決済成功時 */}
+                    <div className="space-y-4">
+                      <h4 className="font-medium text-green-600">決済成功時のアクション</h4>
+                      
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <div>
                           <Label>シナリオアクション</Label>
@@ -538,40 +781,92 @@ export default function ProductManagement() {
                             </SelectTrigger>
                             <SelectContent>
                               <SelectItem value="add_to_existing">既存シナリオに追加</SelectItem>
-                              <SelectItem value="replace_all">全シナリオを置換</SelectItem>
+                              <SelectItem value="replace_all">全てのシナリオを解除して新規追加</SelectItem>
                             </SelectContent>
                           </Select>
                         </div>
 
                         <div>
-                          <Label htmlFor="target-scenario">対象シナリオID</Label>
-                          <Input
-                            id="target-scenario"
-                            value={successAction.target_scenario_id || ''}
-                            onChange={(e) => setSuccessAction(prev => ({ ...prev, target_scenario_id: e.target.value }))}
-                            placeholder="シナリオIDを入力"
-                          />
+                          <Label>移動先シナリオ</Label>
+                          <Select
+                            value={successAction.target_scenario_id}
+                            onValueChange={(value) => setSuccessAction(prev => ({ ...prev, target_scenario_id: value }))}
+                          >
+                            <SelectTrigger>
+                              <SelectValue placeholder="シナリオを選択" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {scenarios.map((scenario) => (
+                                <SelectItem key={scenario.id} value={scenario.id}>
+                                  {scenario.name}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                      </div>
+
+                      <div>
+                        <Label>タグ操作</Label>
+                        <div className="text-sm text-muted-foreground mb-2">
+                          決済成功時にタグを着脱できます（タグ機能が実装されている場合）
+                        </div>
+                        <div className="flex gap-4">
+                          <Button variant="outline" size="sm" disabled>
+                            追加タグを選択
+                          </Button>
+                          <Button variant="outline" size="sm" disabled>
+                            削除タグを選択
+                          </Button>
                         </div>
                       </div>
                     </div>
 
                     <Separator />
 
-                    <div>
-                      <h3 className="font-medium text-red-600 mb-3">決済失敗時</h3>
-                      <div className="space-y-4">
-                        <div>
-                          <Label htmlFor="failure-message">失敗メッセージ</Label>
+                    {/* 決済失敗時 */}
+                    <div className="space-y-4">
+                      <h4 className="font-medium text-red-600">決済失敗時のアクション</h4>
+                      
+                      <div>
+                        <Label htmlFor="failure-message">失敗メッセージ</Label>
+                        <div className="flex gap-2">
                           <Textarea
                             id="failure-message"
                             value={failureAction.failure_message || ''}
                             onChange={(e) => setFailureAction(prev => ({ ...prev, failure_message: e.target.value }))}
-                            placeholder="決済失敗時に送信するメッセージ"
-                            rows={2}
+                            placeholder="決済に失敗しました。再度お試しください。"
+                            rows={3}
+                            className="flex-1"
+                          />
+                          <FieldInsertionDialog
+                            trigger={
+                              <Button variant="outline" type="button" className="gap-2">
+                                <FileText className="h-4 w-4" />
+                                フィールド挿入
+                              </Button>
+                            }
+                            productName={productForm.name}
+                            productPrice={productForm.price}
+                            currency={productForm.currency}
+                            productUrl={selectedProduct ? getProductUrl(selectedProduct.id) : undefined}
                           />
                         </div>
+                      </div>
 
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div className="flex items-center space-x-2">
+                          <input
+                            type="checkbox"
+                            id="notify-user"
+                            checked={failureAction.notify_user}
+                            onChange={(e) => setFailureAction(prev => ({ ...prev, notify_user: e.target.checked }))}
+                            className="rounded"
+                          />
+                          <Label htmlFor="notify-user">失敗時に通知する</Label>
+                        </div>
+
+                        {failureAction.notify_user && (
                           <div>
                             <Label>通知方法</Label>
                             <Select
@@ -583,11 +878,11 @@ export default function ProductManagement() {
                               </SelectTrigger>
                               <SelectContent>
                                 <SelectItem value="line">LINE通知</SelectItem>
-                                <SelectItem value="system">システム通知</SelectItem>
+                                <SelectItem value="system">システム内通知</SelectItem>
                               </SelectContent>
                             </Select>
                           </div>
-                        </div>
+                        )}
                       </div>
                     </div>
                   </CardContent>

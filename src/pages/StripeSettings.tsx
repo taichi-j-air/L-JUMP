@@ -85,7 +85,7 @@ export default function StripeSettings() {
         throw new Error('Publishable Keyは pk_ で始まる必要があります')
       }
 
-      // Upsert Stripe credentials
+      // Upsert Stripe credentials using user_id as the unique key
       const { error } = await supabase
         .from('stripe_credentials')
         .upsert({
@@ -93,6 +93,8 @@ export default function StripeSettings() {
           live_secret_key: stripeSettings.secretKey,
           live_publishable_key: stripeSettings.publishableKey,
           updated_at: new Date().toISOString()
+        }, {
+          onConflict: 'user_id'
         })
 
       if (error) throw error
@@ -120,7 +122,7 @@ export default function StripeSettings() {
         throw new Error('テスト用Publishable Keyは pk_test_ で始まる必要があります')
       }
 
-      // Upsert Stripe credentials for test
+      // Upsert Stripe credentials for test using user_id as the unique key
       const { error } = await supabase
         .from('stripe_credentials')
         .upsert({
@@ -128,6 +130,8 @@ export default function StripeSettings() {
           test_secret_key: testStripeSettings.secretKey,
           test_publishable_key: testStripeSettings.publishableKey,
           updated_at: new Date().toISOString()
+        }, {
+          onConflict: 'user_id'
         })
 
       if (error) throw error
