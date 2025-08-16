@@ -278,9 +278,9 @@ export default function MasterMode() {
                       <TableCell className="font-medium">
                         {userData.display_name || '未設定'}
                       </TableCell>
-                      <TableCell>
-                        {userData.display_name || '未設定'}
-                      </TableCell>
+                       <TableCell>
+                         {userData.line_bot_id || '未設定'}
+                       </TableCell>
                       <TableCell className="text-sm">
                         {userData.email}
                       </TableCell>

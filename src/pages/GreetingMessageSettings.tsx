@@ -4,17 +4,29 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { ArrowLeft, MessageCircle } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { supabase } from "@/integrations/supabase/client";
+
+interface Scenario {
+  id: string;
+  name: string;
+}
 
 const GreetingMessageSettings = () => {
   const navigate = useNavigate();
   const { toast } = useToast();
   const [loading, setLoading] = useState(false);
+  const [greetingType, setGreetingType] = useState<"message" | "scenario">("message");
   const [greetingMessage, setGreetingMessage] = useState("");
+  const [selectedScenario, setSelectedScenario] = useState("");
+  const [scenarios, setScenarios] = useState<Scenario[]>([]);
 
   useEffect(() => {
     loadGreetingMessage();
+    loadScenarios();
   }, []);
 
   const loadGreetingMessage = async () => {
@@ -22,15 +34,57 @@ const GreetingMessageSettings = () => {
     setGreetingMessage("");
   };
 
+  const loadScenarios = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('step_scenarios')
+        .select('id, name')
+        .eq('is_active', true)
+        .order('name');
+
+      if (!error && data) {
+        setScenarios(data);
+      }
+    } catch (error) {
+      console.error('Error loading scenarios:', error);
+    }
+  };
+
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
 
     try {
-      // TODO: Implement save logic
+      // Check if greeting type is scenario and validate selection
+      if (greetingType === "scenario" && !selectedScenario) {
+        toast({
+          title: "エラー",
+          description: "シナリオを選択してください",
+          variant: "destructive",
+        });
+        return;
+      }
+
+      // Check if greeting type is message and validate content
+      if (greetingType === "message" && !greetingMessage.trim()) {
+        toast({
+          title: "エラー",
+          description: "あいさつメッセージを入力してください",
+          variant: "destructive",
+        });
+        return;
+      }
+
+      // TODO: Implement save logic based on greeting type
+      if (greetingType === "message") {
+        console.log('Saving greeting message:', greetingMessage);
+      } else {
+        console.log('Saving greeting scenario:', selectedScenario);
+      }
+
       toast({
         title: "成功",
-        description: "あいさつメッセージを保存しました",
+        description: "あいさつメッセージ設定を保存しました",
       });
     } catch (error) {
       console.error('Error saving greeting message:', error);
@@ -74,23 +128,60 @@ const GreetingMessageSettings = () => {
               </CardDescription>
             </CardHeader>
             <CardContent>
-              <form onSubmit={handleSave} className="space-y-4">
-                <div className="space-y-2">
-                  <Label htmlFor="greeting">あいさつメッセージ</Label>
-                  <Textarea
-                    id="greeting"
-                    value={greetingMessage}
-                    onChange={(e) => setGreetingMessage(e.target.value)}
-                    placeholder="友だち追加ありがとうございます！"
-                    rows={6}
-                  />
-                  <p className="text-xs text-muted-foreground">
-                    最大500文字まで入力できます
-                  </p>
+              <form onSubmit={handleSave} className="space-y-6">
+                <div className="space-y-4">
+                  <Label className="text-base font-medium">あいさつメッセージの設定方法</Label>
+                  <RadioGroup value={greetingType} onValueChange={(value: "message" | "scenario") => setGreetingType(value)}>
+                    <div className="flex items-center space-x-2">
+                      <RadioGroupItem value="message" id="message" />
+                      <Label htmlFor="message">任意のメッセージを設定</Label>
+                    </div>
+                    <div className="flex items-center space-x-2">
+                      <RadioGroupItem value="scenario" id="scenario" />
+                      <Label htmlFor="scenario">作成済みのシナリオを利用</Label>
+                    </div>
+                  </RadioGroup>
                 </div>
 
+                {greetingType === "message" && (
+                  <div className="space-y-2">
+                    <Label htmlFor="greeting">あいさつメッセージ</Label>
+                    <Textarea
+                      id="greeting"
+                      value={greetingMessage}
+                      onChange={(e) => setGreetingMessage(e.target.value)}
+                      placeholder="友だち追加ありがとうございます！"
+                      rows={6}
+                    />
+                    <p className="text-xs text-muted-foreground">
+                      最大500文字まで入力できます
+                    </p>
+                  </div>
+                )}
+
+                {greetingType === "scenario" && (
+                  <div className="space-y-2">
+                    <Label htmlFor="scenario-select">シナリオを選択</Label>
+                    <Select value={selectedScenario} onValueChange={setSelectedScenario}>
+                      <SelectTrigger>
+                        <SelectValue placeholder="シナリオを選択してください" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {scenarios.map((scenario) => (
+                          <SelectItem key={scenario.id} value={scenario.id}>
+                            {scenario.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <p className="text-xs text-muted-foreground">
+                      選択したシナリオが友だち追加時に自動実行されます
+                    </p>
+                  </div>
+                )}
+
                 <Button type="submit" disabled={loading} className="w-full">
-                  {loading ? "保存中..." : "メッセージを保存"}
+                  {loading ? "保存中..." : "設定を保存"}
                 </Button>
               </form>
             </CardContent>

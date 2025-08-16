@@ -342,7 +342,7 @@ export default function UserManagement() {
                         {userData.display_name || '未設定'}
                       </TableCell>
                       <TableCell className="text-sm">
-                        {userData.display_name || '未設定'}
+                        {userData.line_bot_id || '未設定'}
                       </TableCell>
                       <TableCell className="text-xs">
                         {userData.email}

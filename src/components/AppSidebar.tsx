@@ -489,53 +489,48 @@ export function AppSidebar({ user }: AppSidebarProps) {
 
         {/* Developer menu */}
         {(isDeveloper || isAdmin) && (
-          <SidebarMenuItem>
-            <SidebarMenuButton onClick={() => setDeveloperOpen((v) => !v)} isActive={groupActiveDeveloper}>
-              <Wrench className="h-4 w-4" />
-              {!collapsed && (
-                <span className="flex items-center gap-1">
-                  開発者メニュー
-                  <ChevronDown className="h-3 w-3" />
-                </span>
-              )}
-            </SidebarMenuButton>
-            {developerOpen && (
-              <SidebarMenuSub>
-                <SidebarMenuSubItem>
-                  <SidebarMenuSubButton asChild>
-                    <NavLink to="/developer/master-mode" end className={({ isActive }) => getNavClass({ isActive })}>
-                      <Crown className="h-4 w-4" />
-                      <span>MASTERモード</span>
-                    </NavLink>
-                  </SidebarMenuSubButton>
-                </SidebarMenuSubItem>
-                <SidebarMenuSubItem>
-                  <SidebarMenuSubButton asChild>
-                    <NavLink to="/developer/user-management" end className={({ isActive }) => getNavClass({ isActive })}>
-                      <Users className="h-4 w-4" />
-                      <span>ユーザー管理</span>
-                    </NavLink>
-                  </SidebarMenuSubButton>
-                </SidebarMenuSubItem>
-                <SidebarMenuSubItem>
-                  <SidebarMenuSubButton asChild>
-                    <NavLink to="/developer/plan-management" end className={({ isActive }) => getNavClass({ isActive })}>
-                      <Settings2 className="h-4 w-4" />
-                      <span>プラン管理</span>
-                    </NavLink>
-                  </SidebarMenuSubButton>
-                </SidebarMenuSubItem>
-                <SidebarMenuSubItem>
-                  <SidebarMenuSubButton asChild>
-                    <NavLink to="/developer/maintenance" end className={({ isActive }) => getNavClass({ isActive })}>
-                      <ToggleLeft className="h-4 w-4" />
-                      <span>メンテナンス設定</span>
-                    </NavLink>
-                  </SidebarMenuSubButton>
-                </SidebarMenuSubItem>
-              </SidebarMenuSub>
-            )}
-          </SidebarMenuItem>
+          <>
+            <SidebarSeparator />
+            <SidebarGroup>
+              <SidebarGroupLabel className="text-sm font-semibold text-muted-foreground">開発者メニュー</SidebarGroupLabel>
+              <SidebarGroupContent>
+                <SidebarMenu>
+                  <SidebarMenuItem>
+                    <SidebarMenuButton asChild>
+                      <NavLink to="/developer/master-mode" end className={getNavClass}>
+                        <Crown className="h-4 w-4" />
+                        {!collapsed && <span>MASTERモード</span>}
+                      </NavLink>
+                    </SidebarMenuButton>
+                  </SidebarMenuItem>
+                  <SidebarMenuItem>
+                    <SidebarMenuButton asChild>
+                      <NavLink to="/developer/user-management" end className={getNavClass}>
+                        <Users className="h-4 w-4" />
+                        {!collapsed && <span>ユーザー管理</span>}
+                      </NavLink>
+                    </SidebarMenuButton>
+                  </SidebarMenuItem>
+                  <SidebarMenuItem>
+                    <SidebarMenuButton asChild>
+                      <NavLink to="/developer/plan-management" end className={getNavClass}>
+                        <DollarSign className="h-4 w-4" />
+                        {!collapsed && <span>プラン管理</span>}
+                      </NavLink>
+                    </SidebarMenuButton>
+                  </SidebarMenuItem>
+                  <SidebarMenuItem>
+                    <SidebarMenuButton asChild>
+                      <NavLink to="/developer/maintenance" end className={getNavClass}>
+                        <Settings2 className="h-4 w-4" />
+                        {!collapsed && <span>メンテナンス設定</span>}
+                      </NavLink>
+                    </SidebarMenuButton>
+                  </SidebarMenuItem>
+                </SidebarMenu>
+              </SidebarGroupContent>
+            </SidebarGroup>
+          </>
         )}
       </SidebarContent>
     </Sidebar>
