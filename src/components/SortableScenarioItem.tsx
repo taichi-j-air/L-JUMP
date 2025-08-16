@@ -45,20 +45,31 @@ export function SortableScenarioItem({
   const handleToggle = async (checked: boolean) => {
     if (isUpdatingToggle) return
 
+    console.log('Toggle clicked:', { scenarioId: scenario.id, currentValue: scenario.prevent_auto_exit, newValue: checked })
+    
     setIsUpdatingToggle(true)
     try {
-      const { error } = await supabase
+      const { data, error } = await supabase
         .from('step_scenarios')
         .update({ prevent_auto_exit: checked })
         .eq('id', scenario.id)
+        .select()
 
-      if (error) throw error
+      if (error) {
+        console.error('Update error:', error)
+        throw error
+      }
+
+      console.log('Update success:', data)
 
       toast.success(
         checked 
           ? `${scenario.name}は他シナリオ移行時に解除されなくなりました` 
           : `${scenario.name}は他シナリオ移行時に解除されるようになりました`
       )
+      
+      // データの再読み込みをトリガー
+      window.dispatchEvent(new CustomEvent('scenario-updated'))
     } catch (error: any) {
       console.error('シナリオ解除防止設定の更新に失敗しました:', error)
       toast.error('設定の更新に失敗しました')

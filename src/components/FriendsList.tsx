@@ -56,6 +56,7 @@ export function FriendsList({ user }: FriendsListProps) {
   const [selectedScenario, setSelectedScenario] = useState<string>("all")
   const [friendTagMap, setFriendTagMap] = useState<Record<string, string[]>>({})
   const [friendScenarioMap, setFriendScenarioMap] = useState<Record<string, string[]>>({})
+  const [friendProtectedScenarioMap, setFriendProtectedScenarioMap] = useState<Record<string, string[]>>({})
 
   // Bulk actions
   const [bulkScenarioId, setBulkScenarioId] = useState<string>("")
@@ -97,16 +98,30 @@ export function FriendsList({ user }: FriendsListProps) {
         if (ids.length) {
           const { data: tracks } = await supabase
             .from('step_delivery_tracking')
-            .select('friend_id, scenario_id, status')
+            .select(`
+              friend_id, 
+              scenario_id, 
+              status,
+              step_scenarios!inner(prevent_auto_exit)
+            `)
             .in('friend_id', ids)
             .neq('status','exited')
           const map: Record<string,string[]> = {}
+          const protectedMap: Record<string,string[]> = {}
           for (const t of (tracks||[]) as any[]) {
             const arr = map[t.friend_id] || []
             if (!arr.includes(t.scenario_id)) arr.push(t.scenario_id)
             map[t.friend_id] = arr
+            
+            // 解除防止シナリオの追跡
+            if (t.step_scenarios?.prevent_auto_exit) {
+              const protectedArr = protectedMap[t.friend_id] || []
+              if (!protectedArr.includes(t.scenario_id)) protectedArr.push(t.scenario_id)
+              protectedMap[t.friend_id] = protectedArr
+            }
           }
           setFriendScenarioMap(map)
+          setFriendProtectedScenarioMap(protectedMap)
         }
         // build tag map
         if (ids.length) {
@@ -395,6 +410,11 @@ export function FriendsList({ user }: FriendsListProps) {
                         </Badge>
                         {blockedSet.has(friend.line_user_id) && (
                           <Badge variant="destructive" className="text-xs">ブロック中</Badge>
+                        )}
+                        {(friendProtectedScenarioMap[friend.id]?.length || 0) > 0 && (
+                          <Badge variant="outline" className="text-xs border-orange-500 text-orange-600">
+                            🛡️ 解除防止
+                          </Badge>
                         )}
                       </div>
                       <div className="text-xs text-muted-foreground">

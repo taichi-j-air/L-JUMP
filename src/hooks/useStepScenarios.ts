@@ -83,6 +83,14 @@ export const useStepScenarios = (userId: string | undefined) => {
         .order('scenario_order', { ascending: true })
 
       if (error) throw error
+      
+      // prevent_auto_exitフィールドが正しく取得されているかログで確認
+      console.log('Fetched scenarios with prevent_auto_exit:', data?.map(s => ({ 
+        id: s.id, 
+        name: s.name, 
+        prevent_auto_exit: s.prevent_auto_exit 
+      })))
+      
       setScenarios(data || [])
     } catch (error) {
       console.error('シナリオの取得に失敗しました:', error)

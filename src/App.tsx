@@ -40,6 +40,9 @@ import FormResponses from "./pages/FormResponses";
 import StripeSettings from "./pages/StripeSettings";
 import ProductManagement from "./pages/ProductManagement";
 import PaymentManagement from "./pages/PaymentManagement";
+import PlanSettings from "./pages/PlanSettings";
+import UserManagement from "./pages/developer/UserManagement";
+import MaintenanceSettings from "./pages/developer/MaintenanceSettings";
 
 const CMSFriendsPageBuilder = lazy(() => import('./pages/CMSFriendsPageBuilder'));
 const CMSPublicPageBuilder = lazy(() => import('./pages/CMSPublicPageBuilder'));
@@ -155,6 +158,9 @@ function AppContent() {
               <Route path="/payment/stripe-settings" element={<StripeSettings />} />
               <Route path="/payment/products" element={<ProductManagement />} />
               <Route path="/payment/orders" element={<PaymentManagement />} />
+              <Route path="/settings/plan" element={<PlanSettings />} />
+              <Route path="/developer/users" element={<UserManagement />} />
+              <Route path="/developer/maintenance" element={<MaintenanceSettings />} />
               <Route path="/step-delivery" element={<StepDeliveryPage />} />
               <Route path="/chat-inbox" element={<ChatInboxPage />} />
               <Route path="/chat/:friendId" element={<IndividualChatPage />} />

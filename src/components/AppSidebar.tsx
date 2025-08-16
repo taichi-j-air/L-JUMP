@@ -1,4 +1,4 @@
-import { Home, MessageSquare, Settings, FileImage, Webhook, User, Bot, Users, MessageCircle, ArrowRight, LogIn, ChevronRight, ChevronDown, FileText, BarChart3, CreditCard } from "lucide-react"
+import { Home, MessageSquare, Settings, FileImage, Webhook, User, Bot, Users, MessageCircle, ArrowRight, LogIn, ChevronRight, ChevronDown, FileText, BarChart3, CreditCard, Shield, Plus, Megaphone, DollarSign, ToggleLeft, Wrench } from "lucide-react"
 import { NavLink, useLocation } from "react-router-dom"
 import { useState, useEffect } from "react"
 import { supabase } from "@/integrations/supabase/client"
@@ -19,6 +19,7 @@ import {
   SidebarTrigger,
   useSidebar,
 } from "@/components/ui/sidebar"
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -62,22 +63,28 @@ export function AppSidebar({ user }: AppSidebarProps) {
   const [responsesHasNew, setResponsesHasNew] = useState(false)
   const [cmsOpen, setCmsOpen] = useState(false)
   const [paymentOpen, setPaymentOpen] = useState(false)
+  const [settingsOpen, setSettingsOpen] = useState(false)
+  const [profile, setProfile] = useState<any>(null)
   const collapsed = state === "collapsed"
   const groupActiveFriends = currentPath.startsWith('/friends-list') || currentPath.startsWith('/tags')
   const groupActiveForms = currentPath.startsWith('/forms')
   const groupActiveCMS = currentPath.startsWith('/cms')
   const groupActivePayment = currentPath.startsWith('/payment')
+  const groupActiveSettings = currentPath.startsWith('/settings')
+  const isDeveloper = profile?.user_role === 'developer'
 
   useEffect(() => {
     setFriendsOpen(groupActiveFriends)
     setFormsOpen(groupActiveForms)
     setCmsOpen(groupActiveCMS)
     setPaymentOpen(groupActivePayment)
-  }, [groupActiveFriends, groupActiveForms, groupActiveCMS, groupActivePayment])
+    setSettingsOpen(groupActiveSettings)
+  }, [groupActiveFriends, groupActiveForms, groupActiveCMS, groupActivePayment, groupActiveSettings])
 
   useEffect(() => {
     loadFriends()
     loadUnreadCount()
+    loadProfile()
 
     // Chat messages realtime subscription
     const messageSubscription = supabase
@@ -134,6 +141,22 @@ export function AppSidebar({ user }: AppSidebarProps) {
     window.addEventListener('unread-responses-updated', handleUnreadUpdate)
     handleUnreadUpdate()
   }, [user.id])
+
+  const loadProfile = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('user_role')
+        .eq('user_id', user.id)
+        .single()
+      
+      if (!error && data) {
+        setProfile(data)
+      }
+    } catch (error) {
+      console.error('Error loading profile:', error)
+    }
+  }
 
   const loadFriends = async () => {
     try {
@@ -372,9 +395,108 @@ export function AppSidebar({ user }: AppSidebarProps) {
                   </SidebarMenuButton>
                 </SidebarMenuItem>
               ))}
+              
+              {/* ツール利用設定 */}
+              <SidebarMenuItem>
+                <Collapsible open={settingsOpen} onOpenChange={setSettingsOpen}>
+                  <CollapsibleTrigger asChild>
+                    <SidebarMenuButton>
+                      <Settings className="h-4 w-4" />
+                      {!collapsed && (
+                        <span className="flex items-center gap-1">
+                          ツール利用設定
+                          <ChevronDown className="h-3 w-3" />
+                        </span>
+                      )}
+                    </SidebarMenuButton>
+                  </CollapsibleTrigger>
+                  <CollapsibleContent>
+                    <SidebarMenuSub>
+                      <SidebarMenuSubItem>
+                        <SidebarMenuSubButton asChild>
+                          <NavLink to="/settings/plan" end className={getNavClass}>
+                            <Shield className="h-4 w-4" />
+                            {!collapsed && <span>プラン設定</span>}
+                          </NavLink>
+                        </SidebarMenuSubButton>
+                      </SidebarMenuSubItem>
+                    </SidebarMenuSub>
+                  </CollapsibleContent>
+                </Collapsible>
+              </SidebarMenuItem>
             </SidebarMenu>
           </SidebarGroupContent>
         </SidebarGroup>
+
+        {/* 開発者専用セクション */}
+        {isDeveloper && (
+          <>
+            <SidebarSeparator className="my-2" />
+            <SidebarGroup>
+              <SidebarGroupLabel className="text-sm font-semibold">開発者専用</SidebarGroupLabel>
+              <SidebarGroupContent>
+                <SidebarMenu>
+                  <SidebarMenuItem>
+                    <SidebarMenuButton asChild>
+                      <NavLink to="/developer/users" end className={getNavClass}>
+                        <Users className="h-4 w-4" />
+                        {!collapsed && <span>ユーザー管理</span>}
+                      </NavLink>
+                    </SidebarMenuButton>
+                  </SidebarMenuItem>
+                  <SidebarMenuItem>
+                    <SidebarMenuButton asChild>
+                      <NavLink to="/developer/billing" end className={getNavClass}>
+                        <CreditCard className="h-4 w-4" />
+                        {!collapsed && <span>課金管理</span>}
+                      </NavLink>
+                    </SidebarMenuButton>
+                  </SidebarMenuItem>
+                  <SidebarMenuItem>
+                    <SidebarMenuButton asChild>
+                      <NavLink to="/developer/announcements" end className={getNavClass}>
+                        <Megaphone className="h-4 w-4" />
+                        {!collapsed && <span>投稿管理</span>}
+                      </NavLink>
+                    </SidebarMenuButton>
+                  </SidebarMenuItem>
+                  <SidebarMenuItem>
+                    <SidebarMenuButton asChild>
+                      <NavLink to="/developer/accounts" end className={getNavClass}>
+                        <Plus className="h-4 w-4" />
+                        {!collapsed && <span>開発者アカウント追加</span>}
+                      </NavLink>
+                    </SidebarMenuButton>
+                  </SidebarMenuItem>
+                  <SidebarMenuItem>
+                    <SidebarMenuButton asChild>
+                      <NavLink to="/developer/master" end className={getNavClass}>
+                        <User className="h-4 w-4" />
+                        {!collapsed && <span>MASTERモード</span>}
+                      </NavLink>
+                    </SidebarMenuButton>
+                  </SidebarMenuItem>
+                  <SidebarMenuItem>
+                    <SidebarMenuButton asChild>
+                      <NavLink to="/developer/revenue" end className={getNavClass}>
+                        <DollarSign className="h-4 w-4" />
+                        {!collapsed && <span>売上ランキング</span>}
+                      </NavLink>
+                    </SidebarMenuButton>
+                  </SidebarMenuItem>
+                  <SidebarMenuItem>
+                    <SidebarMenuButton asChild>
+                      <NavLink to="/developer/maintenance" end className={getNavClass}>
+                        <ToggleLeft className="h-4 w-4" />
+                        {!collapsed && <span>メンテナンス設定</span>}
+                      </NavLink>
+                    </SidebarMenuButton>
+                  </SidebarMenuItem>
+                </SidebarMenu>
+              </SidebarGroupContent>
+            </SidebarGroup>
+          </>
+        )}
       </SidebarContent>
     </Sidebar>
   )

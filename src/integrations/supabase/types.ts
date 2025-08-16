@@ -14,6 +14,39 @@ export type Database = {
   }
   public: {
     Tables: {
+      announcements: {
+        Row: {
+          author_id: string
+          content: string
+          created_at: string
+          id: string
+          is_published: boolean
+          published_at: string | null
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          author_id: string
+          content: string
+          created_at?: string
+          id?: string
+          is_published?: boolean
+          published_at?: string | null
+          title: string
+          updated_at?: string
+        }
+        Update: {
+          author_id?: string
+          content?: string
+          created_at?: string
+          id?: string
+          is_published?: boolean
+          published_at?: string | null
+          title?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       chat_messages: {
         Row: {
           created_at: string
@@ -1208,6 +1241,33 @@ export type Database = {
         }
         Relationships: []
       }
+      system_settings: {
+        Row: {
+          created_at: string
+          description: string | null
+          id: string
+          setting_key: string
+          setting_value: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          description?: string | null
+          id?: string
+          setting_key: string
+          setting_value: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          description?: string | null
+          id?: string
+          setting_key?: string
+          setting_value?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       tags: {
         Row: {
           color: string | null
@@ -1233,6 +1293,42 @@ export type Database = {
           description?: string | null
           id?: string
           name?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      user_plans: {
+        Row: {
+          created_at: string
+          id: string
+          is_active: boolean
+          monthly_revenue: number | null
+          plan_end_date: string | null
+          plan_start_date: string
+          plan_type: Database["public"]["Enums"]["plan_type"]
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          monthly_revenue?: number | null
+          plan_end_date?: string | null
+          plan_start_date?: string
+          plan_type?: Database["public"]["Enums"]["plan_type"]
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          monthly_revenue?: number | null
+          plan_end_date?: string | null
+          plan_start_date?: string
+          plan_type?: Database["public"]["Enums"]["plan_type"]
           updated_at?: string
           user_id?: string
         }
@@ -1367,6 +1463,19 @@ export type Database = {
           user_role: string
         }[]
       }
+      get_user_revenue_stats: {
+        Args: Record<PropertyKey, never>
+        Returns: {
+          display_name: string
+          is_active: boolean
+          monthly_revenue: number
+          plan_end_date: string
+          plan_start_date: string
+          plan_type: Database["public"]["Enums"]["plan_type"]
+          revenue_rank: number
+          user_id: string
+        }[]
+      }
       log_security_event: {
         Args: {
           p_action?: string
@@ -1437,6 +1546,7 @@ export type Database = {
     Enums: {
       message_kind: "incoming" | "outgoing"
       page_visibility: "friends_only" | "public"
+      plan_type: "free" | "basic" | "premium" | "developer"
       step_message_type: "text" | "media" | "flex"
     }
     CompositeTypes: {
@@ -1567,6 +1677,7 @@ export const Constants = {
     Enums: {
       message_kind: ["incoming", "outgoing"],
       page_visibility: ["friends_only", "public"],
+      plan_type: ["free", "basic", "premium", "developer"],
       step_message_type: ["text", "media", "flex"],
     },
   },
