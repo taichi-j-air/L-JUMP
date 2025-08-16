@@ -132,11 +132,11 @@ export function SortableScenarioItem({
                   checked={scenario.prevent_auto_exit || false}
                   onCheckedChange={handleToggle}
                   disabled={isUpdatingToggle}
-                  className="scale-75"
+                  className="scale-[0.65]"
                 />
                 <Label 
                   htmlFor={`prevent-auto-exit-${scenario.id}`}
-                  className="text-[10px] text-muted-foreground"
+                  className="text-[9px] text-muted-foreground"
                 >
                   解除防止
                 </Label>
