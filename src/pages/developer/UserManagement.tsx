@@ -175,7 +175,7 @@ export default function UserManagement() {
     try {
       const { error } = await supabase
         .from('profiles')
-        .update({ user_suspended: suspend })
+        .update({ user_suspended: suspend } as any)
         .eq('user_id', userId)
 
       if (error) throw error

@@ -1,4 +1,4 @@
-import { Home, MessageSquare, Settings, FileImage, Webhook, User, Bot, Users, MessageCircle, ArrowRight, LogIn, ChevronRight, ChevronDown, FileText, BarChart3, CreditCard, Shield, Plus, Megaphone, DollarSign, ToggleLeft, Wrench, Settings2 } from "lucide-react"
+import { Home, MessageSquare, Settings, FileImage, Webhook, User, Bot, Users, MessageCircle, ArrowRight, LogIn, ChevronRight, ChevronDown, FileText, BarChart3, CreditCard, Shield, Plus, Megaphone, DollarSign, ToggleLeft, Wrench, Settings2, Menu, Globe } from "lucide-react"
 import { NavLink, useLocation } from "react-router-dom"
 import { useState, useEffect } from "react"
 import { supabase } from "@/integrations/supabase/client"
@@ -232,6 +232,59 @@ export function AppSidebar({ user }: AppSidebarProps) {
           <SidebarGroupLabel className="text-sm font-semibold">メインメニュー</SidebarGroupLabel>
           <SidebarGroupContent>
             <SidebarMenu>
+              {/* Rich Menu & Greeting Messages */}
+              <SidebarMenuItem>
+                <SidebarMenuButton asChild>
+                  <NavLink to="/rich-menu" end className={getNavClass}>
+                    <Menu className="h-4 w-4" />
+                    {!collapsed && <span>リッチメニュー</span>}
+                  </NavLink>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+              <SidebarMenuItem>
+                <SidebarMenuButton asChild>
+                  <NavLink to="/greeting-message" end className={getNavClass}>
+                    <MessageCircle className="h-4 w-4" />
+                    {!collapsed && <span>あいさつメッセージ設定</span>}
+                  </NavLink>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+
+              {/* Member Sites dropdown */}
+              <SidebarMenuItem>
+                <Collapsible>
+                  <CollapsibleTrigger asChild>
+                    <SidebarMenuButton>
+                      <Globe className="h-4 w-4" />
+                      {!collapsed && (
+                        <span className="flex items-center gap-1">
+                          会員サイト
+                          <ChevronDown className="h-3 w-3" />
+                        </span>
+                      )}
+                    </SidebarMenuButton>
+                  </CollapsibleTrigger>
+                  <CollapsibleContent>
+                    <SidebarMenuSub>
+                      <SidebarMenuSubItem>
+                        <SidebarMenuSubButton asChild>
+                          <NavLink to="/member-sites" end className={({ isActive }) => getNavClass({ isActive })}>
+                            <span>会員サイト一覧/作成</span>
+                          </NavLink>
+                        </SidebarMenuSubButton>
+                      </SidebarMenuSubItem>
+                      <SidebarMenuSubItem>
+                        <SidebarMenuSubButton asChild>
+                          <NavLink to="/member-sites/management" end className={({ isActive }) => getNavClass({ isActive })}>
+                            <span>サイト別/管理</span>
+                          </NavLink>
+                        </SidebarMenuSubButton>
+                      </SidebarMenuSubItem>
+                    </SidebarMenuSub>
+                  </CollapsibleContent>
+                </Collapsible>
+              </SidebarMenuItem>
+
               {/* Friends dropdown */}
               <SidebarMenuItem>
                 <SidebarMenuButton onClick={() => setFriendsOpen((v) => !v)} isActive={groupActiveFriends}>
@@ -457,6 +510,34 @@ export function AppSidebar({ user }: AppSidebarProps) {
                          {!collapsed && <span>プラン管理</span>}
                        </NavLink>
                      </SidebarMenuButton>
+                   </SidebarMenuItem>
+                   {/* MASTER Mode for developers */}
+                   <SidebarMenuItem>
+                     <Collapsible open={developerOpen} onOpenChange={setDeveloperOpen}>
+                       <CollapsibleTrigger asChild>
+                         <SidebarMenuButton>
+                           <Shield className="h-4 w-4" />
+                           {!collapsed && (
+                             <span className="flex items-center gap-1">
+                               MASTERモード
+                               <ChevronDown className="h-3 w-3" />
+                             </span>
+                           )}
+                         </SidebarMenuButton>
+                       </CollapsibleTrigger>
+                       <CollapsibleContent>
+                         <SidebarMenuSub>
+                           <SidebarMenuSubItem>
+                             <SidebarMenuSubButton asChild>
+                               <NavLink to="/developer/maintenance" end className={getNavClass}>
+                                 <ToggleLeft className="h-4 w-4" />
+                                 {!collapsed && <span>メンテナンス設定</span>}
+                               </NavLink>
+                             </SidebarMenuSubButton>
+                           </SidebarMenuSubItem>
+                         </SidebarMenuSub>
+                       </CollapsibleContent>
+                     </Collapsible>
                    </SidebarMenuItem>
                    <SidebarMenuItem>
                      <SidebarMenuButton asChild>

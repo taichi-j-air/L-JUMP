@@ -643,6 +643,7 @@ export type Database = {
           updated_at: string
           user_id: string
           user_role: string | null
+          user_suspended: boolean
           webhook_url: string | null
         }
         Insert: {
@@ -671,6 +672,7 @@ export type Database = {
           updated_at?: string
           user_id: string
           user_role?: string | null
+          user_suspended?: boolean
           webhook_url?: string | null
         }
         Update: {
@@ -699,6 +701,7 @@ export type Database = {
           updated_at?: string
           user_id?: string
           user_role?: string | null
+          user_suspended?: boolean
           webhook_url?: string | null
         }
         Relationships: []

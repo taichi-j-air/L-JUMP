@@ -44,6 +44,10 @@ import UserManagement from "./pages/developer/UserManagement";
 import MaintenanceSettings from "./pages/developer/MaintenanceSettings";
 import ProductManagement from "./pages/ProductManagement";
 import PlanSettings from "./pages/PlanSettings";
+import RichMenuSettings from "./pages/RichMenuSettings";
+import GreetingMessageSettings from "./pages/GreetingMessageSettings";
+import MemberSitesList from "./pages/MemberSitesList";
+import MemberSiteManagement from "./pages/MemberSiteManagement";
 
 const CMSFriendsPageBuilder = lazy(() => import('./pages/CMSFriendsPageBuilder'));
 const CMSPublicPageBuilder = lazy(() => import('./pages/CMSPublicPageBuilder'));
@@ -140,6 +144,10 @@ function AppContent() {
           <main className="flex-1 p-2">
             <Suspense fallback={<div className="flex items-center justify-center p-8">読み込み中...</div>}>
               <Routes>
+              <Route path="/rich-menu" element={<RichMenuSettings />} />
+              <Route path="/greeting-message" element={<GreetingMessageSettings />} />
+              <Route path="/member-sites" element={<MemberSitesList />} />
+              <Route path="/member-sites/management" element={<MemberSiteManagement />} />
               <Route path="/" element={<Index />} />
               <Route path="/liff" element={<LiffAuth />} />
               <Route path="/liff-handler" element={<LiffHandler />} />
