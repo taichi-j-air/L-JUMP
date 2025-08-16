@@ -320,7 +320,7 @@ export default function StripeSettings() {
                   
                   
                   <div className="mt-2 p-2 bg-blue-50 rounded text-sm">
-                    <p className="font-medium">Webhookエンドポイント:</p>
+                    <p className="font-medium">Stripe用　Webhookエンドポイント:</p>
                     <code className="text-xs">https://rtjxurmuaawyzjcdkqxt.supabase.co/functions/v1/stripe-webhook</code>
                   </div>
                   <p className="text-xs text-muted-foreground">
