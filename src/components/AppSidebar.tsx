@@ -64,6 +64,8 @@ export function AppSidebar({ user }: AppSidebarProps) {
   const [cmsOpen, setCmsOpen] = useState(false)
   const [paymentOpen, setPaymentOpen] = useState(false)
   const [settingsOpen, setSettingsOpen] = useState(false)
+  const [developerOpen, setDeveloperOpen] = useState(false)
+  const [adminOpen, setAdminOpen] = useState(false)
   const [profile, setProfile] = useState<any>(null)
   const collapsed = state === "collapsed"
   const groupActiveFriends = currentPath.startsWith('/friends-list') || currentPath.startsWith('/tags')
@@ -71,7 +73,9 @@ export function AppSidebar({ user }: AppSidebarProps) {
   const groupActiveCMS = currentPath.startsWith('/cms')
   const groupActivePayment = currentPath.startsWith('/payment')
   const groupActiveSettings = currentPath.startsWith('/settings')
+  const groupActiveDeveloper = currentPath.startsWith('/developer')
   const isDeveloper = profile?.user_role === 'developer'
+  const isAdmin = profile?.user_role === 'admin'
 
   useEffect(() => {
     setFriendsOpen(groupActiveFriends)
@@ -79,7 +83,9 @@ export function AppSidebar({ user }: AppSidebarProps) {
     setCmsOpen(groupActiveCMS)
     setPaymentOpen(groupActivePayment)
     setSettingsOpen(groupActiveSettings)
-  }, [groupActiveFriends, groupActiveForms, groupActiveCMS, groupActivePayment, groupActiveSettings])
+    setDeveloperOpen(groupActiveDeveloper)
+    setAdminOpen(currentPath.startsWith('/admin'))
+  }, [groupActiveFriends, groupActiveForms, groupActiveCMS, groupActivePayment, groupActiveSettings, groupActiveDeveloper])
 
   useEffect(() => {
     loadFriends()
@@ -476,37 +482,62 @@ export function AppSidebar({ user }: AppSidebarProps) {
                       </NavLink>
                     </SidebarMenuButton>
                   </SidebarMenuItem>
+                </SidebarMenu>
+              </SidebarGroupContent>
+            </SidebarGroup>
+          </>
+        )}
+
+        {/* 管理者専用セクション */}
+        {isAdmin && (
+          <>
+            <SidebarSeparator className="my-2" />
+            <SidebarGroup>
+              <SidebarGroupLabel className="text-sm font-semibold">管理者専用</SidebarGroupLabel>
+              <SidebarGroupContent>
+                <SidebarMenu>
                   <SidebarMenuItem>
-                    <SidebarMenuButton asChild>
-                      <NavLink to="/developer/accounts" end className={getNavClass}>
-                        <Plus className="h-4 w-4" />
-                        {!collapsed && <span>開発者アカウント追加</span>}
-                      </NavLink>
-                    </SidebarMenuButton>
-                  </SidebarMenuItem>
-                  <SidebarMenuItem>
-                    <SidebarMenuButton asChild>
-                      <NavLink to="/developer/master" end className={getNavClass}>
-                        <User className="h-4 w-4" />
-                        {!collapsed && <span>MASTERモード</span>}
-                      </NavLink>
-                    </SidebarMenuButton>
-                  </SidebarMenuItem>
-                  <SidebarMenuItem>
-                    <SidebarMenuButton asChild>
-                      <NavLink to="/developer/revenue" end className={getNavClass}>
-                        <DollarSign className="h-4 w-4" />
-                        {!collapsed && <span>売上ランキング</span>}
-                      </NavLink>
-                    </SidebarMenuButton>
-                  </SidebarMenuItem>
-                  <SidebarMenuItem>
-                    <SidebarMenuButton asChild>
-                      <NavLink to="/developer/maintenance" end className={getNavClass}>
-                        <ToggleLeft className="h-4 w-4" />
-                        {!collapsed && <span>メンテナンス設定</span>}
-                      </NavLink>
-                    </SidebarMenuButton>
+                    <Collapsible open={adminOpen} onOpenChange={setAdminOpen}>
+                      <CollapsibleTrigger asChild>
+                        <SidebarMenuButton>
+                          <Shield className="h-4 w-4" />
+                          {!collapsed && (
+                            <span className="flex items-center gap-1">
+                              MASTERモード
+                              <ChevronDown className="h-3 w-3" />
+                            </span>
+                          )}
+                        </SidebarMenuButton>
+                      </CollapsibleTrigger>
+                      <CollapsibleContent>
+                        <SidebarMenuSub>
+                          <SidebarMenuSubItem>
+                            <SidebarMenuSubButton asChild>
+                              <NavLink to="/developer/user-management" end className={getNavClass}>
+                                <Users className="h-4 w-4" />
+                                {!collapsed && <span>全ユーザー管理</span>}
+                              </NavLink>
+                            </SidebarMenuSubButton>
+                          </SidebarMenuSubItem>
+                          <SidebarMenuSubItem>
+                            <SidebarMenuSubButton asChild>
+                              <NavLink to="/developer/revenue" end className={getNavClass}>
+                                <DollarSign className="h-4 w-4" />
+                                {!collapsed && <span>売上ランキング</span>}
+                              </NavLink>
+                            </SidebarMenuSubButton>
+                          </SidebarMenuSubItem>
+                          <SidebarMenuSubItem>
+                            <SidebarMenuSubButton asChild>
+                              <NavLink to="/developer/maintenance" end className={getNavClass}>
+                                <ToggleLeft className="h-4 w-4" />
+                                {!collapsed && <span>メンテナンス設定</span>}
+                              </NavLink>
+                            </SidebarMenuSubButton>
+                          </SidebarMenuSubItem>
+                        </SidebarMenuSub>
+                      </CollapsibleContent>
+                    </Collapsible>
                   </SidebarMenuItem>
                 </SidebarMenu>
               </SidebarGroupContent>

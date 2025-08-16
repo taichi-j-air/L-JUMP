@@ -8,7 +8,8 @@ import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Eye, Edit, Trash2, Search } from "lucide-react"
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
+import { Eye, Edit, Trash2, Search, Crown, X } from "lucide-react"
 import { toast } from "sonner"
 
 interface UserData {
@@ -16,10 +17,11 @@ interface UserData {
   display_name: string
   user_role: string
   line_api_status: string
+  line_bot_id: string | null
+  email: string
   created_at: string
-  monthly_message_used: number
-  monthly_message_limit: number
   plan_type?: string
+  total_revenue: number
 }
 
 export default function UserManagement() {
@@ -28,13 +30,34 @@ export default function UserManagement() {
   const [loading, setLoading] = useState(true)
   const [searchTerm, setSearchTerm] = useState("")
   const [roleFilter, setRoleFilter] = useState("all")
+  const [isMasterMode, setIsMasterMode] = useState(false)
+  const [currentUserRole, setCurrentUserRole] = useState<string>("")
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
       setUser(session?.user ?? null)
+      if (session?.user) {
+        loadCurrentUserRole(session.user.id)
+      }
       setLoading(false)
     })
   }, [])
+
+  const loadCurrentUserRole = async (userId: string) => {
+    try {
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('user_role')
+        .eq('user_id', userId)
+        .single()
+      
+      if (!error && data) {
+        setCurrentUserRole(data.user_role)
+      }
+    } catch (error) {
+      console.error('Error loading current user role:', error)
+    }
+  }
 
   useEffect(() => {
     if (user) {
@@ -44,37 +67,59 @@ export default function UserManagement() {
 
   const loadUsers = async () => {
     try {
-      const { data: profiles, error } = await supabase
+      // auth.usersからメールアドレスを取得するために、全ユーザーのプロフィールを取得
+      const { data: profiles, error: profilesError } = await supabase
         .from('profiles')
         .select(`
           user_id,
           display_name,
           user_role,
           line_api_status,
-          created_at,
-          monthly_message_used,
-          monthly_message_limit
+          line_bot_id,
+          created_at
         `)
         .order('created_at', { ascending: false })
 
-      if (error) throw error
+      if (profilesError) throw profilesError
+
+      // auth.usersテーブルからメールアドレスを取得
+      const userIds = profiles?.map(p => p.user_id) || []
+      const { data: authUsers, error: authError } = await supabase.auth.admin.listUsers()
+      
+      const emailMap = new Map<string, string>()
+      if (!authError && authUsers?.users) {
+        authUsers.users.forEach((authUser: any) => {
+          emailMap.set(authUser.id, authUser.email || '未設定')
+        })
+      }
 
       // ユーザープラン情報も取得
-      const userIds = profiles?.map(p => p.user_id) || []
       const { data: plans } = await supabase
         .from('user_plans')
-        .select('user_id, plan_type')
+        .select('user_id, plan_type, monthly_revenue, is_active')
         .in('user_id', userIds)
-        .eq('is_active', true)
 
-      const planMap = new Map(plans?.map(p => [p.user_id, p.plan_type]) || [])
+      // 累計課金額計算のためのマップ
+      const totalRevenueMap = new Map()
+      const activePlanMap = new Map()
+      
+      plans?.forEach(plan => {
+        if (plan.is_active) {
+          activePlanMap.set(plan.user_id, plan.plan_type)
+        }
+        
+        const currentTotal = totalRevenueMap.get(plan.user_id) || 0
+        totalRevenueMap.set(plan.user_id, currentTotal + (plan.monthly_revenue || 0))
+      })
 
-      const usersWithPlans = profiles?.map(profile => ({
+      const usersWithData = profiles?.map(profile => ({
         ...profile,
-        plan_type: planMap.get(profile.user_id) || 'free'
+        email: emailMap.get(profile.user_id) || '未設定',
+        plan_type: activePlanMap.get(profile.user_id) || 'free',
+        total_revenue: totalRevenueMap.get(profile.user_id) || 0
       })) || []
 
-      setUsers(usersWithPlans)
+      setUsers(usersWithData)
     } catch (error) {
       console.error('Error loading users:', error)
       toast.error('ユーザー情報の取得に失敗しました')
@@ -129,12 +174,27 @@ export default function UserManagement() {
   const filteredUsers = users.filter(userData => {
     const matchesSearch = !searchTerm || 
       userData.display_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      userData.user_id.toLowerCase().includes(searchTerm.toLowerCase())
+      userData.user_id.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      userData.email?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      userData.line_bot_id?.toLowerCase().includes(searchTerm.toLowerCase())
     
     const matchesRole = roleFilter === "all" || userData.user_role === roleFilter
     
     return matchesSearch && matchesRole
   })
+
+  const toggleMasterMode = () => {
+    setIsMasterMode(!isMasterMode)
+    if (!isMasterMode) {
+      toast.success('MASTERモードを有効にしました', {
+        description: '全システム権限で操作できます'
+      })
+    } else {
+      toast.info('MASTERモードを終了しました', {
+        description: '通常の開発者権限に戻りました'
+      })
+    }
+  }
 
   if (loading) {
     return <div className="p-4">読み込み中...</div>
@@ -149,9 +209,29 @@ export default function UserManagement() {
       <AppHeader user={user} />
       
       <div className="container mx-auto px-4">
-        <div className="mb-6">
-          <h1 className="text-2xl font-bold">ユーザー管理</h1>
-          <p className="text-muted-foreground">システムの全ユーザーを管理できます。</p>
+        <div className="mb-6 flex items-center justify-between">
+          <div>
+            <h1 className="text-2xl font-bold flex items-center gap-2">
+              ユーザー管理
+              {isMasterMode && (
+                <Badge variant="destructive" className="flex items-center gap-1">
+                  <Crown className="h-3 w-3" />
+                  MASTER
+                </Badge>
+              )}
+            </h1>
+            <p className="text-muted-foreground">システムの全ユーザーを管理できます。</p>
+          </div>
+          {currentUserRole === 'admin' && (
+            <Button 
+              onClick={toggleMasterMode} 
+              variant={isMasterMode ? "destructive" : "default"}
+              className="flex items-center gap-2"
+            >
+              <Crown className="h-4 w-4" />
+              {isMasterMode ? 'MASTERモード終了' : 'MASTERモード開始'}
+            </Button>
+          )}
         </div>
 
         <Card className="mb-6">
@@ -196,12 +276,12 @@ export default function UserManagement() {
                 <TableHeader>
                   <TableRow>
                     <TableHead>ユーザー名</TableHead>
-                    <TableHead>ユーザーID</TableHead>
+                    <TableHead>LINE ID</TableHead>
+                    <TableHead>公式LINE名</TableHead>
+                    <TableHead>メールアドレス</TableHead>
+                    <TableHead>プラン内容</TableHead>
+                    <TableHead>累計課金金額</TableHead>
                     <TableHead>ロール</TableHead>
-                    <TableHead>プラン</TableHead>
-                    <TableHead>LINE API</TableHead>
-                    <TableHead>メッセージ使用量</TableHead>
-                    <TableHead>登録日</TableHead>
                     <TableHead>アクション</TableHead>
                   </TableRow>
                 </TableHeader>
@@ -211,13 +291,28 @@ export default function UserManagement() {
                       <TableCell className="font-medium">
                         {userData.display_name || '未設定'}
                       </TableCell>
-                      <TableCell className="font-mono text-xs">
-                        {userData.user_id.substring(0, 8)}...
+                      <TableCell className="font-mono text-sm">
+                        {userData.line_bot_id || '未設定'}
+                      </TableCell>
+                      <TableCell>
+                        {userData.line_bot_id ? `${userData.display_name}の公式LINE` : '未設定'}
+                      </TableCell>
+                      <TableCell className="text-sm">
+                        {userData.email}
+                      </TableCell>
+                      <TableCell>
+                        <Badge variant={userData.plan_type === 'free' ? 'secondary' : 'default'}>
+                          {userData.plan_type === 'free' ? 'フリー' : userData.plan_type}
+                        </Badge>
+                      </TableCell>
+                      <TableCell className="text-right">
+                        ¥{userData.total_revenue.toLocaleString()}
                       </TableCell>
                       <TableCell>
                         <Select 
                           value={userData.user_role || 'user'} 
                           onValueChange={(value) => handleRoleChange(userData.user_id, value)}
+                          disabled={!isMasterMode && currentUserRole !== 'admin'}
                         >
                           <SelectTrigger className="w-[100px]">
                             <SelectValue />
@@ -230,54 +325,81 @@ export default function UserManagement() {
                         </Select>
                       </TableCell>
                       <TableCell>
-                        <Badge variant={userData.plan_type === 'free' ? 'secondary' : 'default'}>
-                          {userData.plan_type}
-                        </Badge>
-                      </TableCell>
-                      <TableCell>
-                        <Badge variant={
-                          userData.line_api_status === 'configured' ? 'default' : 'secondary'
-                        }>
-                          {userData.line_api_status === 'configured' ? '設定済み' : '未設定'}
-                        </Badge>
-                      </TableCell>
-                      <TableCell>
-                        <div className="text-sm">
-                          {userData.monthly_message_used} / {userData.monthly_message_limit}
-                          <div className="w-full bg-secondary rounded-full h-2 mt-1">
-                            <div 
-                              className="bg-primary h-2 rounded-full" 
-                              style={{ 
-                                width: `${Math.min(100, (userData.monthly_message_used / userData.monthly_message_limit) * 100)}%` 
-                              }}
-                            />
-                          </div>
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        {new Date(userData.created_at).toLocaleDateString('ja-JP')}
-                      </TableCell>
-                      <TableCell>
                         <div className="flex gap-2">
-                          <Button size="sm" variant="outline">
-                            <Eye className="h-4 w-4" />
-                          </Button>
-                          <Button size="sm" variant="outline">
-                            <Edit className="h-4 w-4" />
-                          </Button>
-                          {userData.user_role !== 'developer' && (
-                            <Button size="sm" variant="outline" className="text-destructive">
-                              <Trash2 className="h-4 w-4" />
-                            </Button>
+                          <Dialog>
+                            <DialogTrigger asChild>
+                              <Button size="sm" variant="outline">
+                                <Eye className="h-4 w-4" />
+                              </Button>
+                            </DialogTrigger>
+                            <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
+                              <DialogHeader>
+                                <div className="flex items-center justify-between">
+                                  <DialogTitle>ユーザー詳細: {userData.display_name}</DialogTitle>
+                                </div>
+                              </DialogHeader>
+                              <div className="space-y-4">
+                                <div className="grid grid-cols-2 gap-4">
+                                  <div>
+                                    <label className="text-sm font-medium">ユーザーID</label>
+                                    <p className="text-sm font-mono bg-muted p-2 rounded">{userData.user_id}</p>
+                                  </div>
+                                  <div>
+                                    <label className="text-sm font-medium">メールアドレス</label>
+                                    <p className="text-sm bg-muted p-2 rounded">{userData.email}</p>
+                                  </div>
+                                  <div>
+                                    <label className="text-sm font-medium">LINE ID</label>
+                                    <p className="text-sm bg-muted p-2 rounded">{userData.line_bot_id || '未設定'}</p>
+                                  </div>
+                                  <div>
+                                    <label className="text-sm font-medium">LINE API状態</label>
+                                    <p className="text-sm bg-muted p-2 rounded">
+                                      {userData.line_api_status === 'configured' ? '設定済み' : '未設定'}
+                                    </p>
+                                  </div>
+                                  <div>
+                                    <label className="text-sm font-medium">プラン</label>
+                                    <p className="text-sm bg-muted p-2 rounded">{userData.plan_type}</p>
+                                  </div>
+                                  <div>
+                                    <label className="text-sm font-medium">累計課金金額</label>
+                                    <p className="text-sm bg-muted p-2 rounded">¥{userData.total_revenue.toLocaleString()}</p>
+                                  </div>
+                                  <div>
+                                    <label className="text-sm font-medium">登録日</label>
+                                    <p className="text-sm bg-muted p-2 rounded">
+                                      {new Date(userData.created_at).toLocaleDateString('ja-JP')}
+                                    </p>
+                                  </div>
+                                  <div>
+                                    <label className="text-sm font-medium">ロール</label>
+                                    <p className="text-sm bg-muted p-2 rounded">{userData.user_role}</p>
+                                  </div>
+                                </div>
+                              </div>
+                            </DialogContent>
+                          </Dialog>
+                          
+                          {(isMasterMode || currentUserRole === 'admin') && (
+                            <>
+                              <Button size="sm" variant="outline">
+                                <Edit className="h-4 w-4" />
+                              </Button>
+                              {userData.user_role !== 'developer' && userData.user_role !== 'admin' && (
+                                <Button size="sm" variant="outline" className="text-destructive">
+                                  <Trash2 className="h-4 w-4" />
+                                </Button>
+                              )}
+                              <Button
+                                size="sm"
+                                variant={userData.plan_type === 'premium' ? 'secondary' : 'default'}
+                                onClick={() => handlePremiumToggle(userData.user_id, userData.plan_type !== 'premium')}
+                              >
+                                {userData.plan_type === 'premium' ? 'プレミアム解除' : 'プレミアム付与'}
+                              </Button>
+                            </>
                           )}
-                          {/* プレミアムアカウント設定ボタン */}
-                          <Button
-                            size="sm"
-                            variant={userData.plan_type === 'premium' ? 'secondary' : 'default'}
-                            onClick={() => handlePremiumToggle(userData.user_id, userData.plan_type !== 'premium')}
-                          >
-                            {userData.plan_type === 'premium' ? 'プレミアム解除' : 'プレミアム付与'}
-                          </Button>
                         </div>
                       </TableCell>
                     </TableRow>
