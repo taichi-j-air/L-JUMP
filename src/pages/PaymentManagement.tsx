@@ -199,8 +199,13 @@ export default function PaymentManagement() {
       
       <div className="container mx-auto px-4">
         <div className="mb-6">
-          <h1 className="text-2xl font-bold">決済管理</h1>
-          <p className="text-muted-foreground">Stripe決済とサブスクリプションを管理します。</p>
+          <h1 className="text-2xl font-bold flex items-center gap-2">
+            <CreditCard className="h-6 w-6" />
+            決済管理
+          </h1>
+          <p className="text-muted-foreground">
+            Stripe決済とサブスクリプションを管理します。現在はStripeのみ対応しています。
+          </p>
         </div>
 
         {/* 統計カード */}

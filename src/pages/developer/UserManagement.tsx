@@ -9,7 +9,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
-import { Eye, Edit, Trash2, Search, Crown, X } from "lucide-react"
+import { Eye, Edit, Trash2, Search, Crown, X, ChevronLeft, ChevronRight } from "lucide-react"
 import { toast } from "sonner"
 
 interface UserData {
@@ -226,6 +226,12 @@ export default function UserManagement() {
     return matchesSearch && matchesRole
   })
 
+  const USERS_PER_PAGE = 20
+  const [currentPage, setCurrentPage] = useState(1)
+  const totalPages = Math.ceil(filteredUsers.length / USERS_PER_PAGE)
+  const startIndex = (currentPage - 1) * USERS_PER_PAGE
+  const paginatedUsers = filteredUsers.slice(startIndex, startIndex + USERS_PER_PAGE)
+
   const toggleMasterMode = () => {
     setIsMasterMode(!isMasterMode)
     if (!isMasterMode) {
@@ -311,7 +317,9 @@ export default function UserManagement() {
 
         <Card>
           <CardHeader>
-            <CardTitle>ユーザー一覧 ({filteredUsers.length}件)</CardTitle>
+            <CardTitle>
+              ユーザー一覧 ({filteredUsers.length}件中 {Math.min(startIndex + 1, filteredUsers.length)}-{Math.min(startIndex + USERS_PER_PAGE, filteredUsers.length)}件表示)
+            </CardTitle>
           </CardHeader>
           <CardContent>
             <div className="overflow-x-auto">
@@ -319,36 +327,32 @@ export default function UserManagement() {
                 <TableHeader>
                   <TableRow>
                     <TableHead>ユーザー名</TableHead>
-                    <TableHead>LINE ID</TableHead>
-                    <TableHead>公式LINE名</TableHead>
-                    <TableHead>メールアドレス</TableHead>
-                    <TableHead>プラン内容</TableHead>
-                    <TableHead>累計課金金額</TableHead>
+                    <TableHead>LINE名</TableHead>
+                    <TableHead>メール</TableHead>
+                    <TableHead>プラン</TableHead>
+                    <TableHead>累計課金</TableHead>
                     <TableHead>ロール</TableHead>
                     <TableHead>アクション</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {filteredUsers.map((userData) => (
+                  {paginatedUsers.map((userData) => (
                     <TableRow key={userData.user_id}>
-                      <TableCell className="font-medium">
+                      <TableCell className="font-medium text-sm">
                         {userData.display_name || '未設定'}
                       </TableCell>
-                      <TableCell className="font-mono text-sm">
-                        {userData.line_bot_id || '未設定'}
-                      </TableCell>
-                      <TableCell>
-                        {userData.line_bot_id ? `${userData.display_name}の公式LINE` : '未設定'}
-                      </TableCell>
                       <TableCell className="text-sm">
+                        {userData.display_name || '未設定'}
+                      </TableCell>
+                      <TableCell className="text-xs">
                         {userData.email}
                       </TableCell>
                       <TableCell>
-                        <Badge variant={userData.plan_type === 'free' ? 'secondary' : 'default'}>
+                        <Badge variant={userData.plan_type === 'free' ? 'secondary' : 'default'} className="text-xs">
                           {userData.plan_type === 'free' ? 'フリー' : userData.plan_type}
                         </Badge>
                       </TableCell>
-                      <TableCell className="text-right">
+                      <TableCell className="text-right text-sm">
                         ¥{userData.total_revenue.toLocaleString()}
                       </TableCell>
                       <TableCell>
@@ -474,6 +478,35 @@ export default function UserManagement() {
                 </TableBody>
               </Table>
             </div>
+
+            {/* ページネーション */}
+            {totalPages > 1 && (
+              <div className="flex items-center justify-between mt-4">
+                <div className="text-sm text-muted-foreground">
+                  ページ {currentPage} / {totalPages}
+                </div>
+                <div className="flex gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setCurrentPage(Math.max(1, currentPage - 1))}
+                    disabled={currentPage === 1}
+                  >
+                    <ChevronLeft className="h-4 w-4" />
+                    前へ
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setCurrentPage(Math.min(totalPages, currentPage + 1))}
+                    disabled={currentPage === totalPages}
+                  >
+                    次へ
+                    <ChevronRight className="h-4 w-4" />
+                  </Button>
+                </div>
+              </div>
+            )}
           </CardContent>
         </Card>
       </div>

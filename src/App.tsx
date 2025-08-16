@@ -42,6 +42,7 @@ import PaymentManagement from "./pages/PaymentManagement";
 import PlanManagement from "./pages/developer/PlanManagement";
 import UserManagement from "./pages/developer/UserManagement";
 import MaintenanceSettings from "./pages/developer/MaintenanceSettings";
+import MasterMode from "./pages/developer/MasterMode";
 import ProductManagement from "./pages/ProductManagement";
 import PlanSettings from "./pages/PlanSettings";
 import RichMenuSettings from "./pages/RichMenuSettings";
@@ -168,6 +169,7 @@ function AppContent() {
               <Route path="/payment/products" element={<ProductManagement />} />
               <Route path="/payment/orders" element={<PaymentManagement />} />
               <Route path="/settings/plan" element={<PlanSettings />} />
+              <Route path="/developer/master-mode" element={<MasterMode />} />
               <Route path="/developer/users" element={<UserManagement />} />
               <Route path="/developer/user-management" element={<UserManagement />} />
               <Route path="/developer/plan-management" element={<PlanManagement />} />

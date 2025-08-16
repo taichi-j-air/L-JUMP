@@ -1,4 +1,4 @@
-import { Home, MessageSquare, Settings, FileImage, Webhook, User, Bot, Users, MessageCircle, ArrowRight, LogIn, ChevronRight, ChevronDown, FileText, BarChart3, CreditCard, Shield, Plus, Megaphone, DollarSign, ToggleLeft, Wrench, Settings2, Menu, Globe } from "lucide-react"
+import { Home, MessageSquare, Settings, FileImage, Webhook, User, Bot, Users, MessageCircle, ArrowRight, LogIn, ChevronRight, ChevronDown, FileText, BarChart3, CreditCard, Shield, Plus, Megaphone, DollarSign, ToggleLeft, Wrench, Settings2, Menu, Globe, Crown } from "lucide-react"
 import { NavLink, useLocation } from "react-router-dom"
 import { useState, useEffect } from "react"
 import { supabase } from "@/integrations/supabase/client"
@@ -487,143 +487,55 @@ export function AppSidebar({ user }: AppSidebarProps) {
           </SidebarGroupContent>
         </SidebarGroup>
 
-        {/* 開発者専用セクション */}
-        {isDeveloper && (
-          <>
-            <SidebarSeparator className="my-2" />
-            <SidebarGroup>
-              <SidebarGroupLabel className="text-sm font-semibold">開発者専用</SidebarGroupLabel>
-              <SidebarGroupContent>
-                <SidebarMenu>
-                   <SidebarMenuItem>
-                     <SidebarMenuButton asChild>
-                       <NavLink to="/developer/user-management" end className={getNavClass}>
-                         <Users className="h-4 w-4" />
-                         {!collapsed && <span>ユーザー管理</span>}
-                       </NavLink>
-                     </SidebarMenuButton>
-                   </SidebarMenuItem>
-                   <SidebarMenuItem>
-                     <SidebarMenuButton asChild>
-                       <NavLink to="/developer/plan-management" end className={getNavClass}>
-                         <Settings2 className="h-4 w-4" />
-                         {!collapsed && <span>プラン管理</span>}
-                       </NavLink>
-                     </SidebarMenuButton>
-                   </SidebarMenuItem>
-                   {/* MASTER Mode for developers */}
-                   <SidebarMenuItem>
-                     <Collapsible open={developerOpen} onOpenChange={setDeveloperOpen}>
-                       <CollapsibleTrigger asChild>
-                         <SidebarMenuButton>
-                           <Shield className="h-4 w-4" />
-                           {!collapsed && (
-                             <span className="flex items-center gap-1">
-                               MASTERモード
-                               <ChevronDown className="h-3 w-3" />
-                             </span>
-                           )}
-                         </SidebarMenuButton>
-                       </CollapsibleTrigger>
-                       <CollapsibleContent>
-                         <SidebarMenuSub>
-                           <SidebarMenuSubItem>
-                             <SidebarMenuSubButton asChild>
-                               <NavLink to="/developer/maintenance" end className={getNavClass}>
-                                 <ToggleLeft className="h-4 w-4" />
-                                 {!collapsed && <span>メンテナンス設定</span>}
-                               </NavLink>
-                             </SidebarMenuSubButton>
-                           </SidebarMenuSubItem>
-                         </SidebarMenuSub>
-                       </CollapsibleContent>
-                     </Collapsible>
-                   </SidebarMenuItem>
-                   <SidebarMenuItem>
-                     <SidebarMenuButton asChild>
-                       <NavLink to="/stripe-settings" end className={getNavClass}>
-                         <CreditCard className="h-4 w-4" />
-                         {!collapsed && <span>Stripe設定</span>}
-                       </NavLink>
-                     </SidebarMenuButton>
-                   </SidebarMenuItem>
-                   <SidebarMenuItem>
-                     <SidebarMenuButton asChild>
-                       <NavLink to="/payment-management" end className={getNavClass}>
-                         <DollarSign className="h-4 w-4" />
-                         {!collapsed && <span>決済管理</span>}
-                       </NavLink>
-                     </SidebarMenuButton>
-                   </SidebarMenuItem>
-                  <SidebarMenuItem>
-                    <SidebarMenuButton asChild>
-                      <NavLink to="/developer/announcements" end className={getNavClass}>
-                        <Megaphone className="h-4 w-4" />
-                        {!collapsed && <span>投稿管理</span>}
-                      </NavLink>
-                    </SidebarMenuButton>
-                  </SidebarMenuItem>
-                </SidebarMenu>
-              </SidebarGroupContent>
-            </SidebarGroup>
-          </>
-        )}
-
-        {/* 管理者専用セクション */}
-        {isAdmin && (
-          <>
-            <SidebarSeparator className="my-2" />
-            <SidebarGroup>
-              <SidebarGroupLabel className="text-sm font-semibold">管理者専用</SidebarGroupLabel>
-              <SidebarGroupContent>
-                <SidebarMenu>
-                  <SidebarMenuItem>
-                    <Collapsible open={adminOpen} onOpenChange={setAdminOpen}>
-                      <CollapsibleTrigger asChild>
-                        <SidebarMenuButton>
-                          <Shield className="h-4 w-4" />
-                          {!collapsed && (
-                            <span className="flex items-center gap-1">
-                              MASTERモード
-                              <ChevronDown className="h-3 w-3" />
-                            </span>
-                          )}
-                        </SidebarMenuButton>
-                      </CollapsibleTrigger>
-                      <CollapsibleContent>
-                        <SidebarMenuSub>
-                          <SidebarMenuSubItem>
-                            <SidebarMenuSubButton asChild>
-                              <NavLink to="/developer/user-management" end className={getNavClass}>
-                                <Users className="h-4 w-4" />
-                                {!collapsed && <span>全ユーザー管理</span>}
-                              </NavLink>
-                            </SidebarMenuSubButton>
-                          </SidebarMenuSubItem>
-                          <SidebarMenuSubItem>
-                            <SidebarMenuSubButton asChild>
-                              <NavLink to="/developer/revenue" end className={getNavClass}>
-                                <DollarSign className="h-4 w-4" />
-                                {!collapsed && <span>売上ランキング</span>}
-                              </NavLink>
-                            </SidebarMenuSubButton>
-                          </SidebarMenuSubItem>
-                          <SidebarMenuSubItem>
-                            <SidebarMenuSubButton asChild>
-                              <NavLink to="/developer/maintenance" end className={getNavClass}>
-                                <ToggleLeft className="h-4 w-4" />
-                                {!collapsed && <span>メンテナンス設定</span>}
-                              </NavLink>
-                            </SidebarMenuSubButton>
-                          </SidebarMenuSubItem>
-                        </SidebarMenuSub>
-                      </CollapsibleContent>
-                    </Collapsible>
-                  </SidebarMenuItem>
-                </SidebarMenu>
-              </SidebarGroupContent>
-            </SidebarGroup>
-          </>
+        {/* Developer menu */}
+        {(isDeveloper || isAdmin) && (
+          <SidebarMenuItem>
+            <SidebarMenuButton onClick={() => setDeveloperOpen((v) => !v)} isActive={groupActiveDeveloper}>
+              <Wrench className="h-4 w-4" />
+              {!collapsed && (
+                <span className="flex items-center gap-1">
+                  開発者メニュー
+                  <ChevronDown className="h-3 w-3" />
+                </span>
+              )}
+            </SidebarMenuButton>
+            {developerOpen && (
+              <SidebarMenuSub>
+                <SidebarMenuSubItem>
+                  <SidebarMenuSubButton asChild>
+                    <NavLink to="/developer/master-mode" end className={({ isActive }) => getNavClass({ isActive })}>
+                      <Crown className="h-4 w-4" />
+                      <span>MASTERモード</span>
+                    </NavLink>
+                  </SidebarMenuSubButton>
+                </SidebarMenuSubItem>
+                <SidebarMenuSubItem>
+                  <SidebarMenuSubButton asChild>
+                    <NavLink to="/developer/user-management" end className={({ isActive }) => getNavClass({ isActive })}>
+                      <Users className="h-4 w-4" />
+                      <span>ユーザー管理</span>
+                    </NavLink>
+                  </SidebarMenuSubButton>
+                </SidebarMenuSubItem>
+                <SidebarMenuSubItem>
+                  <SidebarMenuSubButton asChild>
+                    <NavLink to="/developer/plan-management" end className={({ isActive }) => getNavClass({ isActive })}>
+                      <Settings2 className="h-4 w-4" />
+                      <span>プラン管理</span>
+                    </NavLink>
+                  </SidebarMenuSubButton>
+                </SidebarMenuSubItem>
+                <SidebarMenuSubItem>
+                  <SidebarMenuSubButton asChild>
+                    <NavLink to="/developer/maintenance" end className={({ isActive }) => getNavClass({ isActive })}>
+                      <ToggleLeft className="h-4 w-4" />
+                      <span>メンテナンス設定</span>
+                    </NavLink>
+                  </SidebarMenuSubButton>
+                </SidebarMenuSubItem>
+              </SidebarMenuSub>
+            )}
+          </SidebarMenuItem>
         )}
       </SidebarContent>
     </Sidebar>
