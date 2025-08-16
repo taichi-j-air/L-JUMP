@@ -308,10 +308,7 @@ export default function StripeSettings() {
                       {connectionStatus === 'configured' ? '正常' : '未接続'}
                     </Badge>
                   </div>
-                  <div className="flex justify-between items-center">
-                    <span>Webhook</span>
-                    <Badge variant="secondary">未設定</Badge>
-                  </div>
+                  
                 </div>
               </CardContent>
             </Card>
@@ -333,18 +330,7 @@ export default function StripeSettings() {
               </AlertDescription>
             </Alert>
 
-            <Alert>
-              <AlertCircle className="h-4 w-4" />
-              <AlertDescription className="text-sm">
-                <p className="font-medium mb-2">重要な注意事項:</p>
-                <ul className="list-disc list-inside space-y-1">
-                  <li>APIキーは安全に管理してください</li>
-                  <li>本番環境では必ずliveキーを使用</li>
-                  <li>Webhookは必要に応じて設定</li>
-                  <li>定期的にキーを更新することを推奨</li>
-                </ul>
-              </AlertDescription>
-            </Alert>
+            
           </div>
         </div>
       </div>
