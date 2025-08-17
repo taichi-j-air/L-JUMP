@@ -74,13 +74,17 @@ serve(async (req) => {
     // Create Stripe product with default_price_data
     const productData: any = {
       name,
-      description,
       metadata,
       default_price_data: {
         unit_amount: Math.round(unitAmount),
         currency: currency.toLowerCase()
       }
     };
+
+    // Only include description if it's not empty
+    if (description && description.trim() !== '') {
+      productData.description = description;
+    }
 
     // Add recurring data for subscriptions
     if (interval) {
