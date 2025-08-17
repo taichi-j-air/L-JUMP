@@ -459,9 +459,60 @@ export default function ProductManagement() {
           console.error('Stripe商品作成に失敗:', stripeError)
           toast.error(`Stripe商品の作成に失敗しました: ${stripeError.message || stripeError}`)
         }
-      } else if (!isCreating && selectedProduct?.stripe_product_id) {
-        // For existing products with Stripe ID, just show a message that Stripe product exists
-        console.log('既存商品の編集: Stripe商品は更新されません')
+      } else if (!isCreating && selectedProduct?.stripe_product_id && selectedProduct?.stripe_price_id) {
+        // For existing products with Stripe ID, update the Stripe product
+        try {
+          const isTestProduct = productForm.name?.includes('テスト') || productForm.name?.includes('test') || false
+          
+          const { data: updateResult } = await supabase.functions.invoke('update-stripe-product', {
+            body: {
+              stripeProductId: selectedProduct.stripe_product_id,
+              stripePriceId: selectedProduct.stripe_price_id,
+              name: productForm.name,
+              description: productForm.description || '',
+              unitAmount: productForm.price || 0,
+              currency: productForm.currency || 'jpy',
+              interval: (productForm.product_type === 'subscription' || productForm.product_type === 'subscription_with_trial') 
+                ? productForm.interval : undefined,
+              metadata: {
+                product_id: productId,
+                product_type: productForm.product_type
+              },
+              isTest: isTestProduct
+            }
+          })
+
+          if (updateResult?.ok) {
+            // Update product with new price ID if changed
+            if (updateResult.priceChanged) {
+              await supabase
+                .from('products')
+                .update({
+                  stripe_price_id: updateResult.priceId,
+                })
+                .eq('id', productId)
+
+              // Update local state
+              setProducts(prev => prev.map(p => p.id === productId ? { 
+                ...p, 
+                stripe_price_id: updateResult.priceId
+              } : p))
+              setSelectedProduct(prev => prev ? { 
+                ...prev, 
+                stripe_price_id: updateResult.priceId
+              } : null)
+            }
+
+            toast.success(`Stripe${isTestProduct ? 'テスト' : '本番'}商品を更新しました`)
+          } else {
+            throw new Error(updateResult?.error || 'Stripe商品更新に失敗')
+          }
+        } catch (stripeError: any) {
+          console.error('Stripe商品更新に失敗:', stripeError)
+          toast.error(`Stripe商品の更新に失敗しました: ${stripeError.message || stripeError}`)
+        }
+      } else if (!isCreating) {
+        console.log('既存商品の編集: Stripe商品IDまたは価格IDが見つかりません')
       }
 
       toast.success('商品を保存しました')
@@ -633,54 +684,60 @@ export default function ProductManagement() {
                         <Label htmlFor="product-name">商品名 *</Label>
                         <Input
                           id="product-name"
+                          name="product-name"
+                          autoComplete="off"
                           value={productForm.name || ''}
                           onChange={(e) => setProductForm(prev => ({ ...prev, name: e.target.value }))}
                           placeholder="商品名を入力"
                         />
                       </div>
                       
-                      <div>
-                        <Label htmlFor="product-type">決済タイプ</Label>
-                        <Select
-                          value={productForm.product_type}
-                          onValueChange={(value) => setProductForm(prev => ({ ...prev, product_type: value as any }))}
-                        >
-                          <SelectTrigger>
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="one_time">単発決済</SelectItem>
-                            <SelectItem value="subscription">継続課金</SelectItem>
-                            <SelectItem value="subscription_with_trial">トライアル付き継続課金</SelectItem>
-                          </SelectContent>
-                        </Select>
-                      </div>
+                        <div>
+                          <Label htmlFor="product-type-select">決済タイプ</Label>
+                          <Select
+                            value={productForm.product_type}
+                            onValueChange={(value) => setProductForm(prev => ({ ...prev, product_type: value as any }))}
+                          >
+                            <SelectTrigger id="product-type-select">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="one_time">単発決済</SelectItem>
+                              <SelectItem value="subscription">継続課金</SelectItem>
+                              <SelectItem value="subscription_with_trial">トライアル付き継続課金</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
 
                       <div>
                         <Label htmlFor="product-price">価格</Label>
                         <Input
                           id="product-price"
+                          name="product-price"
                           type="number"
+                          min="0"
+                          step="1"
+                          autoComplete="off"
                           value={productForm.price || 0}
                           onChange={(e) => setProductForm(prev => ({ ...prev, price: Number(e.target.value) }))}
                         />
                       </div>
 
-                      {productForm.product_type?.includes('subscription') && (
-                        <div>
-                          <Label htmlFor="product-interval">課金間隔</Label>
-                          <Select
-                            value={productForm.interval}
-                            onValueChange={(value) => setProductForm(prev => ({ ...prev, interval: value as any }))}
-                          >
-                            <SelectTrigger>
-                              <SelectValue />
-                            </SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="month">月次（毎月同日に請求）</SelectItem>
-                              <SelectItem value="year">年次（毎年同日に請求）</SelectItem>
-                            </SelectContent>
-                          </Select>
+                        {productForm.product_type?.includes('subscription') && (
+                          <div>
+                            <Label htmlFor="product-interval-select">課金間隔</Label>
+                            <Select
+                              value={productForm.interval}
+                              onValueChange={(value) => setProductForm(prev => ({ ...prev, interval: value as any }))}
+                            >
+                              <SelectTrigger id="product-interval-select">
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="month">月次（毎月同日に請求）</SelectItem>
+                                <SelectItem value="year">年次（毎年同日に請求）</SelectItem>
+                              </SelectContent>
+                            </Select>
                           <p className="text-xs text-muted-foreground mt-1">
                             {productForm.interval === 'month' 
                               ? '初回請求は購入直後、2回目は購入日の翌月同日となります' 
@@ -695,7 +752,11 @@ export default function ProductManagement() {
                           <Label htmlFor="trial-days">トライアル期間（日）</Label>
                           <Input
                             id="trial-days"
+                            name="trial-days"
                             type="number"
+                            min="1"
+                            step="1"
+                            autoComplete="off"
                             value={productForm.trial_period_days || ''}
                             onChange={(e) => setProductForm(prev => ({ ...prev, trial_period_days: Number(e.target.value) }))}
                             placeholder="14"
@@ -711,6 +772,8 @@ export default function ProductManagement() {
                       <Label htmlFor="product-description">商品説明</Label>
                       <Textarea
                         id="product-description"
+                        name="product-description"
+                        autoComplete="off"
                         value={productForm.description || ''}
                         onChange={(e) => setProductForm(prev => ({ ...prev, description: e.target.value }))}
                         placeholder="商品の説明を入力"
@@ -735,32 +798,39 @@ export default function ProductManagement() {
                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                            <div>
                              <Label htmlFor="landing-title">ページタイトル</Label>
-                             <Input
-                               id="landing-title"
-                               value={settingsForm.landing_page_title || ''}
-                               onChange={(e) => setSettingsForm(prev => ({ ...prev, landing_page_title: e.target.value }))}
-                               placeholder="ランディングページのタイトル"
-                             />
+                              <Input
+                                id="landing-title"
+                                name="landing-title"
+                                autoComplete="off"
+                                value={settingsForm.landing_page_title || ''}
+                                onChange={(e) => setSettingsForm(prev => ({ ...prev, landing_page_title: e.target.value }))}
+                                placeholder="ランディングページのタイトル"
+                              />
                            </div>
 
                            <div>
                              <Label htmlFor="button-text">ボタンテキスト</Label>
-                             <Input
-                               id="button-text"
-                               value={settingsForm.button_text}
-                               onChange={(e) => setSettingsForm(prev => ({ ...prev, button_text: e.target.value }))}
-                             />
+                              <Input
+                                id="button-text"
+                                name="button-text"
+                                autoComplete="off"
+                                value={settingsForm.button_text}
+                                onChange={(e) => setSettingsForm(prev => ({ ...prev, button_text: e.target.value }))}
+                              />
                            </div>
 
                            <div>
                              <Label htmlFor="landing-image">商品画像</Label>
-                             <div className="flex gap-2">
-                               <Input
-                                 value={settingsForm.landing_page_image_url || ''}
-                                 onChange={(e) => setSettingsForm(prev => ({ ...prev, landing_page_image_url: e.target.value }))}
-                                 placeholder="画像URLまたはメディアライブラリから選択"
-                                 className="flex-1"
-                               />
+                              <div className="flex gap-2">
+                                <Input
+                                  id="landing-image-url"
+                                  name="landing-image-url"
+                                  autoComplete="url"
+                                  value={settingsForm.landing_page_image_url || ''}
+                                  onChange={(e) => setSettingsForm(prev => ({ ...prev, landing_page_image_url: e.target.value }))}
+                                  placeholder="画像URLまたはメディアライブラリから選択"
+                                  className="flex-1"
+                                />
                                <MediaLibrarySelector
                                  trigger={
                                    <Button variant="outline" type="button">
@@ -775,26 +845,29 @@ export default function ProductManagement() {
 
                            <div>
                              <Label htmlFor="button-color">ボタンカラー</Label>
-                             <Input
-                               id="button-color"
-                               type="color"
-                               value={settingsForm.button_color}
-                               onChange={(e) => setSettingsForm(prev => ({ ...prev, button_color: e.target.value }))}
-                             />
+                              <Input
+                                id="button-color"
+                                name="button-color"
+                                type="color"
+                                value={settingsForm.button_color}
+                                onChange={(e) => setSettingsForm(prev => ({ ...prev, button_color: e.target.value }))}
+                              />
                            </div>
                          </div>
 
                          <div>
                            <Label htmlFor="landing-content">ページ内容</Label>
                            <div className="flex gap-2">
-                             <Textarea
-                               id="landing-content"
-                               value={settingsForm.landing_page_content || ''}
-                               onChange={(e) => setSettingsForm(prev => ({ ...prev, landing_page_content: e.target.value }))}
-                               placeholder="ランディングページの説明文"
-                               rows={4}
-                               className="flex-1"
-                             />
+                              <Textarea
+                                id="landing-content"
+                                name="landing-content"
+                                autoComplete="off"
+                                value={settingsForm.landing_page_content || ''}
+                                onChange={(e) => setSettingsForm(prev => ({ ...prev, landing_page_content: e.target.value }))}
+                                placeholder="ランディングページの説明文"
+                                rows={4}
+                                className="flex-1"
+                              />
                              <FieldInsertionDialog
                                trigger={
                                  <Button variant="outline" type="button" className="gap-2">
@@ -842,20 +915,20 @@ export default function ProductManagement() {
                       <h4 className="font-medium text-green-600">決済成功時のアクション</h4>
                       
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                         <div>
-                           <Label>シナリオアクション</Label>
-                           <Select
-                             value={successAction.scenario_action}
-                             onValueChange={(value) => setSuccessAction(prev => ({ ...prev, scenario_action: value as any }))}
-                           >
-                             <SelectTrigger>
-                               <SelectValue />
-                             </SelectTrigger>
-                             <SelectContent>
-                               <SelectItem value="add_to_existing">既存シナリオに追加（現在配信中のシナリオはそのまま継続）</SelectItem>
-                               <SelectItem value="replace_all">シナリオを完全切り替え（現在のシナリオを停止して新しいシナリオに移行）</SelectItem>
-                             </SelectContent>
-                           </Select>
+                          <div>
+                            <Label htmlFor="scenario-action-select">シナリオアクション</Label>
+                            <Select
+                              value={successAction.scenario_action}
+                              onValueChange={(value) => setSuccessAction(prev => ({ ...prev, scenario_action: value as any }))}
+                            >
+                              <SelectTrigger id="scenario-action-select">
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="add_to_existing">既存シナリオに追加（現在配信中のシナリオはそのまま継続）</SelectItem>
+                                <SelectItem value="replace_all">シナリオを完全切り替え（現在のシナリオを停止して新しいシナリオに移行）</SelectItem>
+                              </SelectContent>
+                            </Select>
                            <div className="text-xs text-muted-foreground mt-1">
                              {successAction.scenario_action === 'add_to_existing' 
                                ? '現在配信中のシナリオを継続しながら、指定したシナリオも並行して配信開始します。'
@@ -864,24 +937,24 @@ export default function ProductManagement() {
                            </div>
                          </div>
 
-                        <div>
-                          <Label>移動先シナリオ</Label>
-                          <Select
-                            value={successAction.target_scenario_id}
-                            onValueChange={(value) => setSuccessAction(prev => ({ ...prev, target_scenario_id: value }))}
-                          >
-                            <SelectTrigger>
-                              <SelectValue placeholder="シナリオを選択" />
-                            </SelectTrigger>
-                            <SelectContent>
-                              {scenarios.map((scenario) => (
-                                <SelectItem key={scenario.id} value={scenario.id}>
-                                  {scenario.name}
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                        </div>
+                         <div>
+                           <Label htmlFor="target-scenario-select">移動先シナリオ</Label>
+                           <Select
+                             value={successAction.target_scenario_id}
+                             onValueChange={(value) => setSuccessAction(prev => ({ ...prev, target_scenario_id: value }))}
+                           >
+                             <SelectTrigger id="target-scenario-select">
+                               <SelectValue placeholder="シナリオを選択" />
+                             </SelectTrigger>
+                             <SelectContent>
+                               {scenarios.map((scenario) => (
+                                 <SelectItem key={scenario.id} value={scenario.id}>
+                                   {scenario.name}
+                                 </SelectItem>
+                               ))}
+                             </SelectContent>
+                           </Select>
+                         </div>
                       </div>
 
                        <div>
@@ -984,6 +1057,8 @@ export default function ProductManagement() {
                         <div className="flex gap-2">
                           <Textarea
                             id="failure-message"
+                            name="failure-message"
+                            autoComplete="off"
                             value={failureAction.failure_message || ''}
                             onChange={(e) => setFailureAction(prev => ({ ...prev, failure_message: e.target.value }))}
                             placeholder="決済に失敗しました。再度お試しください。"
@@ -1010,6 +1085,7 @@ export default function ProductManagement() {
                           <input
                             type="checkbox"
                             id="notify-user"
+                            name="notify-user"
                             checked={failureAction.notify_user}
                             onChange={(e) => setFailureAction(prev => ({ ...prev, notify_user: e.target.checked }))}
                             className="rounded"
@@ -1019,19 +1095,19 @@ export default function ProductManagement() {
 
                         {failureAction.notify_user && (
                           <div>
-                            <Label>通知方法</Label>
-                            <Select
-                              value={failureAction.notification_method}
-                              onValueChange={(value) => setFailureAction(prev => ({ ...prev, notification_method: value as any }))}
-                            >
-                              <SelectTrigger>
-                                <SelectValue />
-                              </SelectTrigger>
-                              <SelectContent>
-                                <SelectItem value="line">LINE通知</SelectItem>
-                                <SelectItem value="system">システム内通知</SelectItem>
-                              </SelectContent>
-                            </Select>
+                            <Label htmlFor="notification-method-select">通知方法</Label>
+                             <Select
+                               value={failureAction.notification_method}
+                               onValueChange={(value) => setFailureAction(prev => ({ ...prev, notification_method: value as any }))}
+                             >
+                               <SelectTrigger id="notification-method-select">
+                                 <SelectValue />
+                               </SelectTrigger>
+                               <SelectContent>
+                                 <SelectItem value="line">LINE通知</SelectItem>
+                                 <SelectItem value="system">システム内通知</SelectItem>
+                               </SelectContent>
+                             </Select>
                           </div>
                         )}
                       </div>

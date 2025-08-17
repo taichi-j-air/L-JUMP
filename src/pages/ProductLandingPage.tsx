@@ -54,7 +54,7 @@ export default function ProductLandingPage() {
         .select('*')
         .eq('id', productId)
         .eq('is_active', true)
-        .single()
+        .maybeSingle()
 
       if (productError) throw productError
 
@@ -62,7 +62,7 @@ export default function ProductLandingPage() {
         .from('product_settings')
         .select('*')
         .eq('product_id', productId)
-        .single()
+        .maybeSingle()
 
       setProduct(productData as Product)
       setSettings(settingsData as ProductSettings)
