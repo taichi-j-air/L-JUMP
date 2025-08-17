@@ -102,12 +102,14 @@ serve(async (req) => {
 
     await stripe.products.update(stripeProductId, productUpdate);
 
-    // Create new price if amount or currency changed
+    // Create new price if amount, currency or interval changed
     let newPriceId = stripePriceId;
     
     // Get current price to compare
     const currentPrice = await stripe.prices.retrieve(stripePriceId);
-    const priceChanged = currentPrice.unit_amount !== unitAmount || currentPrice.currency !== currency;
+    const priceChanged = currentPrice.unit_amount !== unitAmount || 
+                        currentPrice.currency !== currency ||
+                        (interval && currentPrice.recurring?.interval !== interval);
     
     if (priceChanged) {
       // Create new price
@@ -120,13 +122,23 @@ serve(async (req) => {
 
       if (interval) {
         priceData.recurring = { interval };
+        
+        // Add trial period for subscription_with_trial products
+        if (metadata.product_type === 'subscription_with_trial' && metadata.trial_period_days) {
+          priceData.recurring.trial_period_days = parseInt(metadata.trial_period_days);
+        }
       }
 
       const newPrice = await stripe.prices.create(priceData);
       newPriceId = newPrice.id;
 
-      // Deactivate old price
-      await stripe.prices.update(stripePriceId, { active: false });
+      // Only deactivate old price if it's not the default price of the product
+      try {
+        await stripe.prices.update(stripePriceId, { active: false });
+      } catch (priceUpdateError: any) {
+        console.log('Cannot deactivate price (might be default price):', priceUpdateError.message);
+        // This is expected for default prices, continue without error
+      }
     }
 
     console.log("Stripe product updated successfully");

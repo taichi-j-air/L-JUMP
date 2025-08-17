@@ -89,6 +89,11 @@ serve(async (req) => {
     // Add recurring data for subscriptions
     if (interval) {
       productData.default_price_data.recurring = { interval };
+      
+      // Add trial period for subscription_with_trial products
+      if (metadata.product_type === 'subscription_with_trial' && metadata.trial_period_days) {
+        productData.default_price_data.recurring.trial_period_days = parseInt(metadata.trial_period_days);
+      }
     }
 
     const stripeProduct = await stripe.products.create(productData);

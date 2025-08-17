@@ -194,6 +194,46 @@ export default function ProductManagement() {
 
       if (error) throw error
 
+      // Create Stripe product immediately
+      try {
+        const isTestProduct = false // Default to live mode for new products
+        
+        const { data: stripeResult } = await supabase.functions.invoke('create-stripe-product', {
+          body: {
+            name: '新しい商品',
+            description: '',
+            unitAmount: 1000,
+            currency: 'jpy',
+            interval: undefined, // one_time products don't have intervals
+            metadata: {
+              product_id: newProduct.id,
+              product_type: 'one_time'
+            },
+            isTest: isTestProduct
+          }
+        })
+
+        if (stripeResult?.ok) {
+          // Update product with Stripe IDs
+          const { error: updateError } = await supabase
+            .from('products')
+            .update({
+              stripe_product_id: stripeResult.productId,
+              stripe_price_id: stripeResult.priceId,
+            })
+            .eq('id', newProduct.id)
+
+          if (updateError) throw updateError
+
+          // Update the newProduct object with Stripe IDs
+          newProduct.stripe_product_id = stripeResult.productId
+          newProduct.stripe_price_id = stripeResult.priceId
+        }
+      } catch (stripeError: any) {
+        console.error('Stripe商品作成に失敗:', stripeError)
+        toast.error(`Stripe商品の作成に失敗しました: ${stripeError.message || stripeError}`)
+      }
+
       // Update products list
       setProducts(prev => [newProduct as Product, ...prev])
       
@@ -317,7 +357,7 @@ export default function ProductManagement() {
     // Load product settings and actions
     try {
       const [settingsRes, actionsRes] = await Promise.all([
-        supabase.from('product_settings').select('*').eq('product_id', product.id).single(),
+        supabase.from('product_settings').select('*').eq('product_id', product.id).maybeSingle(),
         supabase.from('product_actions').select('*').eq('product_id', product.id)
       ])
 
@@ -325,6 +365,19 @@ export default function ProductManagement() {
         setSettingsForm({
           ...settingsRes.data,
           custom_parameters: settingsRes.data.custom_parameters as Record<string, any> || {}
+        })
+      } else {
+        // Reset settings form for new products
+        setSettingsForm({
+          product_id: product.id,
+          landing_page_title: '',
+          landing_page_content: '',
+          landing_page_image_url: '',
+          button_text: '購入する',
+          button_color: '#0cb386',
+          success_redirect_url: '',
+          cancel_redirect_url: '',
+          custom_parameters: {}
         })
       }
 
@@ -421,7 +474,8 @@ export default function ProductManagement() {
                 ? productForm.interval : undefined,
               metadata: {
                 product_id: productId,
-                product_type: productForm.product_type
+                product_type: productForm.product_type,
+                trial_period_days: productForm.trial_period_days?.toString() || undefined
               },
               isTest: isTestProduct
             }
@@ -476,7 +530,8 @@ export default function ProductManagement() {
                 ? productForm.interval : undefined,
               metadata: {
                 product_id: productId,
-                product_type: productForm.product_type
+                product_type: productForm.product_type,
+                trial_period_days: productForm.trial_period_days?.toString() || undefined
               },
               isTest: isTestProduct
             }
@@ -819,18 +874,18 @@ export default function ProductManagement() {
                               />
                            </div>
 
-                           <div>
-                             <Label htmlFor="landing-image">商品画像</Label>
-                              <div className="flex gap-2">
-                                <Input
-                                  id="landing-image-url"
-                                  name="landing-image-url"
-                                  autoComplete="url"
-                                  value={settingsForm.landing_page_image_url || ''}
-                                  onChange={(e) => setSettingsForm(prev => ({ ...prev, landing_page_image_url: e.target.value }))}
-                                  placeholder="画像URLまたはメディアライブラリから選択"
-                                  className="flex-1"
-                                />
+                            <div>
+                              <Label htmlFor="landing-image-url">商品画像</Label>
+                               <div className="flex gap-2">
+                                 <Input
+                                   id="landing-image-url"
+                                   name="landing-image-url"
+                                   autoComplete="url"
+                                   value={settingsForm.landing_page_image_url || ''}
+                                   onChange={(e) => setSettingsForm(prev => ({ ...prev, landing_page_image_url: e.target.value }))}
+                                   placeholder="画像URLまたはメディアライブラリから選択"
+                                   className="flex-1"
+                                 />
                                <MediaLibrarySelector
                                  trigger={
                                    <Button variant="outline" type="button">
