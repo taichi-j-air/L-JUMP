@@ -23,8 +23,8 @@ export function MessageQuotaDisplay({ user }: MessageQuotaDisplayProps) {
 
   useEffect(() => {
     loadQuota()
-    // 1時間ごとに更新
-    const interval = setInterval(loadQuota, 3600000)
+    // 10分ごとに更新（頻度を下げる）
+    const interval = setInterval(loadQuota, 600000)
     return () => clearInterval(interval)
   }, [user.id])
 
@@ -46,6 +46,8 @@ export function MessageQuotaDisplay({ user }: MessageQuotaDisplayProps) {
       })
 
       if (error) throw error
+      
+      console.log('Received quota data:', data) // ログを一つに統一
       setQuota(data)
     } catch (error) {
       console.error('Error loading quota:', error)

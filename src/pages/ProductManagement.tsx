@@ -406,8 +406,8 @@ export default function ProductManagement() {
         })
       ])
 
-      // Create Stripe product if needed
-      if (productForm.is_active && (!selectedProduct?.stripe_product_id || !selectedProduct?.stripe_price_id)) {
+      // Create Stripe product only for new products
+      if (isCreating && productForm.is_active) {
         try {
           const isTestProduct = productForm.name?.includes('テスト') || productForm.name?.includes('test') || false
           
@@ -437,6 +437,20 @@ export default function ProductManagement() {
               })
               .eq('id', productId)
 
+            // Update local state
+            if (isCreating && productId) {
+              setProducts(prev => prev.map(p => p.id === productId ? { 
+                ...p, 
+                stripe_product_id: stripeResult.productId,
+                stripe_price_id: stripeResult.priceId
+              } : p))
+              setSelectedProduct(prev => prev ? { 
+                ...prev, 
+                stripe_product_id: stripeResult.productId,
+                stripe_price_id: stripeResult.priceId
+              } : null)
+            }
+
             toast.success(`Stripe${isTestProduct ? 'テスト' : '本番'}商品を作成しました`)
           } else {
             throw new Error(stripeResult?.error || 'Stripe商品作成に失敗')
@@ -445,6 +459,9 @@ export default function ProductManagement() {
           console.error('Stripe商品作成に失敗:', stripeError)
           toast.error(`Stripe商品の作成に失敗しました: ${stripeError.message || stripeError}`)
         }
+      } else if (!isCreating && selectedProduct?.stripe_product_id) {
+        // For existing products with Stripe ID, just show a message that Stripe product exists
+        console.log('既存商品の編集: Stripe商品は更新されません')
       }
 
       toast.success('商品を保存しました')
