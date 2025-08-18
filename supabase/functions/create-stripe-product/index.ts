@@ -67,19 +67,16 @@ serve(async (req) => {
       throw new Error(`Stripe ${isTest ? 'test' : 'live'} secret key not configured`);
     }
 
-    const stripe = new Stripe(stripeSecretKey, {
-      apiVersion: "2024-06-20",
-    });
+   const stripe = new Stripe(stripeSecretKey, { apiVersion: "2024-06-20" });
 
-    // Create Stripe product with default_price_data
-    const productData: any = {
-      name,
-      metadata,
-      default_price_data: {
-        unit_amount: Math.round(unitAmount),
-        currency: currency.toLowerCase()
-      }
-    };
+const productData: any = {
+  name,
+  metadata,
+  default_price_data: {
+    unit_amount: Math.round(unitAmount),
+    currency: (currency || "jpy").toLowerCase(),
+  },
+};
 
     // Only include description if it's not empty
     if (description && description.trim() !== '') {
