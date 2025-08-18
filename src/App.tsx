@@ -50,6 +50,8 @@ import RichMenuSettings from "./pages/RichMenuSettings";
 import GreetingMessageSettings from "./pages/GreetingMessageSettings";
 import MemberSitesList from "./pages/MemberSitesList";
 import MemberSiteManagement from "./pages/MemberSiteManagement";
+import CheckoutSuccess from "./pages/CheckoutSuccess";
+import CheckoutCancel from "./pages/CheckoutCancel";
 
 const CMSFriendsPageBuilder = lazy(() => import('./pages/CMSFriendsPageBuilder'));
 const CMSPublicPageBuilder = lazy(() => import('./pages/CMSPublicPageBuilder'));
@@ -92,29 +94,32 @@ function AppContent() {
   const isCMSPublicPath = window.location.pathname.startsWith('/cms/f/')
   const isCMSPreviewPath = window.location.pathname.startsWith('/cms/preview/')
   const isProductLandingPage = window.location.pathname.startsWith('/product-landing/')
+  const isCheckoutPage = window.location.pathname.startsWith('/checkout/')
 
   // Show auth pages without sidebar/header  
-  if (isAuthPage || (!user && !isInvitePage && !isLoginPage && !hasLineLoginSuccess && !isPublicFormPage && !isProductLandingPage && !(isCMSPublicPath || isCMSPreviewPath))) {
+  if (isAuthPage || (!user && !isInvitePage && !isLoginPage && !hasLineLoginSuccess && !isPublicFormPage && !isProductLandingPage && !isCheckoutPage && !(isCMSPublicPath || isCMSPreviewPath))) {
     return (
       <div className="min-h-screen">
         <Routes>
           <Route path="/liff" element={<LiffAuth />} />
           <Route path="/liff-handler" element={<LiffHandler />} />
           <Route path="/liff-invite" element={<LiffInvitePage />} />
-          <Route path="/invite" element={<InvitePage />} />
-          <Route path="/invite/:inviteCode" element={<InvitePage />} />
-          <Route path="/login" element={<LineLoginPage />} />
-          <Route path="/login-success" element={<LoginSuccess />} />
-          <Route path="/auth" element={<Auth />} />
-          <Route path="/verify" element={<EmailVerify />} />
-          <Route path="/reset-password" element={<ResetPassword />} />
-          <Route path="/form/:id" element={<PublicForm />} />
-          <Route path="/liff-form/:id" element={<LiffForm />} />
-          <Route path="/product-landing/:productId" element={<ProductLandingPage />} />
-          <Route path="/cms/f/:shareCode" element={<CMSFriendsPublicView />} />
-          <Route path="/cms/preview/:pageId" element={<CMSFriendsPublicView />} />
-          <Route path="/error" element={<ErrorPage />} />
-          <Route path="*" element={<Auth />} />
+              <Route path="/invite" element={<InvitePage />} />
+              <Route path="/invite/:inviteCode" element={<InvitePage />} />
+              <Route path="/login" element={<LineLoginPage />} />
+              <Route path="/login-success" element={<LoginSuccess />} />
+              <Route path="/auth" element={<Auth />} />
+              <Route path="/verify" element={<EmailVerify />} />
+              <Route path="/reset-password" element={<ResetPassword />} />
+              <Route path="/form/:id" element={<PublicForm />} />
+              <Route path="/liff-form/:id" element={<LiffForm />} />
+              <Route path="/product-landing/:productId" element={<ProductLandingPage />} />
+              <Route path="/checkout/success" element={<CheckoutSuccess />} />
+              <Route path="/checkout/cancel" element={<CheckoutCancel />} />
+              <Route path="/cms/f/:shareCode" element={<CMSFriendsPublicView />} />
+              <Route path="/cms/preview/:pageId" element={<CMSFriendsPublicView />} />
+              <Route path="/error" element={<ErrorPage />} />
+              <Route path="*" element={<Auth />} />
         </Routes>
       </div>
     )
@@ -185,6 +190,8 @@ function AppContent() {
               <Route path="/form/:id" element={<PublicForm />} />
               <Route path="/liff-form/:id" element={<LiffForm />} />
               <Route path="/product-landing/:productId" element={<ProductLandingPage />} />
+              <Route path="/checkout/success" element={<CheckoutSuccess />} />
+              <Route path="/checkout/cancel" element={<CheckoutCancel />} />
               <Route path="/forms" element={<FormsBuilder />} />
               <Route path="/forms/responses" element={<FormResponses />} />
               <Route path="/cms/friends-page" element={<CMSFriendsPageBuilder />} />

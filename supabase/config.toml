@@ -63,3 +63,18 @@ verify_jwt = true
 
 [functions.cms-page-view]
 verify_jwt = false
+
+[functions.public-get-product]
+verify_jwt = false
+
+[functions.create-checkout-session]
+verify_jwt = false
+
+[functions.stripe-webhook]
+verify_jwt = false
+
+[functions.create-stripe-product]
+verify_jwt = true
+
+[functions.update-stripe-product]
+verify_jwt = true
