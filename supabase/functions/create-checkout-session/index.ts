@@ -116,9 +116,13 @@ serve(async (req) => {
       cancel_url: cancelUrl,
       metadata: metadata,
       client_reference_id: uid || 'no-uid',
-      customer_creation: 'always',
       allow_promotion_codes: true,
     };
+
+    // Only set customer_creation for payment mode (one_time products)
+    if (product.product_type === 'one_time') {
+      sessionParams.customer_creation = 'always';
+    }
 
     const session = await stripe.checkout.sessions.create(sessionParams);
 

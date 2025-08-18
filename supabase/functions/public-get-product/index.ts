@@ -46,7 +46,7 @@ serve(async (req) => {
         currency,
         is_active,
         user_id,
-        product_settings (
+        product_settings!inner (
           landing_page_title,
           landing_page_content,
           landing_page_image_url,
@@ -58,6 +58,7 @@ serve(async (req) => {
       `)
       .eq("id", product_id)
       .eq("is_active", true)
+      .order('created_at', { referencedTable: 'product_settings', ascending: false })
       .single();
 
     if (error || !product) throw new Error("Product not found or inactive");
