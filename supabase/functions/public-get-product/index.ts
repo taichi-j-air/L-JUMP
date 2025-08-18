@@ -44,9 +44,10 @@ serve(async (req) => {
         product_type,
         price,
         currency,
+        trial_period_days,
         is_active,
         user_id,
-        product_settings!inner (
+        product_settings (
           landing_page_title,
           landing_page_content,
           landing_page_image_url,
@@ -58,12 +59,15 @@ serve(async (req) => {
       `)
       .eq("id", product_id)
       .eq("is_active", true)
-      .order('created_at', { referencedTable: 'product_settings', ascending: false })
       .single();
 
     if (error || !product) throw new Error("Product not found or inactive");
 
-    const settings = (product as any).product_settings?.[0] ?? {};
+    // Get the latest settings (in case of multiple records)
+    const settings = Array.isArray((product as any).product_settings) 
+      ? (product as any).product_settings[0] 
+      : ((product as any).product_settings || {});
+      
     const productData = {
       id: product.id,
       name: product.name,
@@ -72,6 +76,7 @@ serve(async (req) => {
       product_type: product.product_type,
       price: product.price,
       currency: product.currency,
+      trial_period_days: product.trial_period_days,
       is_active: product.is_active,
       user_id: product.user_id,
       landing_page_title: settings.landing_page_title ?? "",

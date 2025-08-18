@@ -288,19 +288,52 @@ export default function ProductManagement() {
   }
 
   const handleDeleteProduct = async (productId: string) => {
-    if (!confirm('この商品を削除してもよろしいですか？')) return
+    const productToDelete = products.find(p => p.id === productId);
+    if (!productToDelete) return;
+    
+    const hasStripeProduct = !!(productToDelete.stripe_product_id);
+    const isTestProduct = !!(productToDelete.name?.includes('テスト') || productToDelete.name?.toLowerCase().includes('test'));
+    
+    const confirmMessage = hasStripeProduct 
+      ? 'この商品を削除してもよろしいですか？\n\nStripe側の商品も非アクティブ化されます。\n既存のサブスクリプション購読者は引き続き課金されます。'
+      : 'この商品を削除してもよろしいですか？';
+      
+    if (!confirm(confirmMessage)) return;
+    
     try {
-      const { error } = await supabase.from('products').delete().eq('id', productId)
-      if (error) throw error
-      setProducts(prev => prev.filter(p => p.id !== productId))
-      if (selectedProduct?.id === productId) {
-        setSelectedProduct(null)
-        setIsCreating(false)
+      // Stripe商品も削除（非アクティブ化）
+      if (hasStripeProduct) {
+        try {
+          const { data: deleteResult } = await supabase.functions.invoke('delete-stripe-product', {
+            body: {
+              stripeProductId: productToDelete.stripe_product_id,
+              productId: productId,
+              isTest: isTestProduct
+            }
+          });
+          
+          if (deleteResult?.success) {
+            toast.success('Stripe商品を非アクティブ化しました');
+          }
+        } catch (stripeError: any) {
+          console.warn('Stripe商品の削除に失敗:', stripeError);
+          toast.error(`Stripe商品の削除に失敗: ${stripeError.message || stripeError}`);
+        }
       }
-      toast.success('商品を削除しました')
+      
+      // Supabase商品削除
+      const { error } = await supabase.from('products').delete().eq('id', productId);
+      if (error) throw error;
+      
+      setProducts(prev => prev.filter(p => p.id !== productId));
+      if (selectedProduct?.id === productId) {
+        setSelectedProduct(null);
+        setIsCreating(false);
+      }
+      toast.success('商品を削除しました');
     } catch (e: any) {
-      console.error('商品の削除に失敗:', e)
-      toast.error('商品の削除に失敗しました')
+      console.error('商品の削除に失敗:', e);
+      toast.error('商品の削除に失敗しました');
     }
   }
 

@@ -109,7 +109,11 @@ serve(async (req) => {
       };
       if (nextIsRecurring) {
         priceData.recurring = { interval };
-        // ※ trial は Checkout/Subscription 作成時に付けるのが安全
+        
+        // Add trial period for subscription_with_trial products
+        if (metadata.product_type === 'subscription_with_trial' && metadata.trial_period_days) {
+          priceData.recurring.trial_period_days = parseInt(metadata.trial_period_days);
+        }
       }
 
       const newPrice = await stripe.prices.create(priceData);

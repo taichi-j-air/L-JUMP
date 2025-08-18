@@ -17,6 +17,7 @@ interface ProductData {
   product_type: ProductType;
   price: number;
   currency: string;
+  trial_period_days?: number;
   is_active: boolean;
   user_id: string;
   // settings
@@ -181,8 +182,10 @@ export default function ProductLandingPage() {
               {product.product_type === "subscription" && (
                 <p className="text-sm text-muted-foreground">毎月課金</p>
               )}
-              {product.product_type === "subscription_with_trial" && (
-                <p className="text-sm text-muted-foreground">トライアル期間あり</p>
+              {product.product_type === "subscription_with_trial" && product.trial_period_days && (
+                <p className="text-sm text-muted-foreground">
+                  {product.trial_period_days}日間の無料トライアルあり
+                </p>
               )}
             </div>
 
