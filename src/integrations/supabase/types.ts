@@ -577,6 +577,57 @@ export type Database = {
         }
         Relationships: []
       }
+      orders: {
+        Row: {
+          amount: number | null
+          created_at: string
+          currency: string | null
+          friend_uid: string | null
+          id: string
+          livemode: boolean | null
+          metadata: Json | null
+          product_id: string | null
+          status: string | null
+          stripe_customer_id: string | null
+          stripe_payment_intent_id: string | null
+          stripe_session_id: string | null
+          updated_at: string
+          user_id: string | null
+        }
+        Insert: {
+          amount?: number | null
+          created_at?: string
+          currency?: string | null
+          friend_uid?: string | null
+          id?: string
+          livemode?: boolean | null
+          metadata?: Json | null
+          product_id?: string | null
+          status?: string | null
+          stripe_customer_id?: string | null
+          stripe_payment_intent_id?: string | null
+          stripe_session_id?: string | null
+          updated_at?: string
+          user_id?: string | null
+        }
+        Update: {
+          amount?: number | null
+          created_at?: string
+          currency?: string | null
+          friend_uid?: string | null
+          id?: string
+          livemode?: boolean | null
+          metadata?: Json | null
+          product_id?: string | null
+          status?: string | null
+          stripe_customer_id?: string | null
+          stripe_payment_intent_id?: string | null
+          stripe_session_id?: string | null
+          updated_at?: string
+          user_id?: string | null
+        }
+        Relationships: []
+      }
       plan_configs: {
         Row: {
           created_at: string
@@ -1449,6 +1500,33 @@ export type Database = {
           test_secret_key?: string | null
           updated_at?: string
           user_id?: string
+        }
+        Relationships: []
+      }
+      stripe_events: {
+        Row: {
+          event_id: string
+          event_type: string
+          id: string
+          livemode: boolean | null
+          metadata: Json | null
+          processed_at: string
+        }
+        Insert: {
+          event_id: string
+          event_type: string
+          id?: string
+          livemode?: boolean | null
+          metadata?: Json | null
+          processed_at?: string
+        }
+        Update: {
+          event_id?: string
+          event_type?: string
+          id?: string
+          livemode?: boolean | null
+          metadata?: Json | null
+          processed_at?: string
         }
         Relationships: []
       }
