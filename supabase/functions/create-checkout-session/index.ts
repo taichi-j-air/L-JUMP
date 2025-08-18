@@ -129,7 +129,7 @@ serve(async (req) => {
         user_id: product.user_id,
         product_id: product_id,
         status: 'pending',
-        amount: product.amount,
+        amount: product.price,
         currency: product.currency,
         friend_uid: uid,
         livemode: detectedLivemode,
