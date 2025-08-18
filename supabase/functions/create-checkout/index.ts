@@ -1,10 +1,12 @@
+// supabase/functions/create-checkout-session/index.ts
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import Stripe from "https://esm.sh/stripe@14.21.0";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+  "Access-Control-Allow-Headers":
+    "authorization, x-client-info, apikey, content-type",
 };
 
 serve(async (req) => {
@@ -12,146 +14,161 @@ serve(async (req) => {
     return new Response(null, { headers: corsHeaders });
   }
 
-  const supabaseClient = createClient(
-    Deno.env.get("SUPABASE_URL") ?? "",
-    Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "",
-    { auth: { persistSession: false } }
-  );
+  if (req.method !== "POST") {
+    return new Response(JSON.stringify({ error: "Method Not Allowed" }), {
+      status: 405,
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
+  }
 
   try {
-    const body = await req.json();
-    
-    // Check if this is a product purchase (has priceId) or plan subscription
-    if (body.priceId) {
-      // Handle product purchase
-      const { priceId, successUrl, cancelUrl, metadata = {} } = body;
-      
-      console.log("Create product checkout request:", { priceId, successUrl, cancelUrl, metadata });
+    const supabase = createClient(
+      Deno.env.get("SUPABASE_URL") ?? "",
+      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "",
+      { auth: { persistSession: false } },
+    );
 
-      // Get the product from metadata to determine which Stripe account to use
-      if (!metadata.product_id) {
-        throw new Error('Product ID is required in metadata');
-      }
+    const { product_id, uid, utm_source, utm_medium, utm_campaign } =
+      await req.json();
 
-      // Get product details
-      const { data: product, error: productError } = await supabaseClient
-        .from('products')
-        .select('*, user_id')
-        .eq('id', metadata.product_id)
-        .single();
+    if (!product_id) throw new Error("product_id is required");
 
-      if (productError || !product) {
-        throw new Error('Product not found');
-      }
-
-      // Get user's Stripe credentials
-      const { data: credentials, error: credError } = await supabaseClient
-        .from('stripe_credentials')
-        .select('test_secret_key, live_secret_key')
-        .eq('user_id', product.user_id)
-        .single();
-
-      if (credError || !credentials) {
-        throw new Error('Stripe credentials not found. Please configure your Stripe settings first.');
-      }
-
-      // Determine if this is a test product
-      const isTestProduct = product.name.includes('テスト') || product.name.includes('test');
-      const secretKey = isTestProduct ? credentials.test_secret_key : credentials.live_secret_key;
-      
-      if (!secretKey) {
-        throw new Error(`Stripe ${isTestProduct ? 'test' : 'live'} secret key not configured.`);
-      }
-
-      // Initialize Stripe with the user's secret key
-      const stripe = new Stripe(secretKey, {
-        apiVersion: "2023-10-16",
-      });
-
-      console.log(`Using Stripe ${isTestProduct ? 'test' : 'live'} mode for checkout`);
-
-      // Create Stripe checkout session
-      const session = await stripe.checkout.sessions.create({
-        line_items: [
-          {
-            price: priceId,
-            quantity: 1,
-          },
-        ],
-        mode: product.product_type === 'one_time' ? 'payment' : 'subscription',
-        success_url: successUrl,
-        cancel_url: cancelUrl,
-        metadata: metadata,
-        billing_address_collection: 'required',
-        customer_creation: 'always',
-      });
-
-      console.log("Product checkout session created:", session.id);
-
-      return new Response(JSON.stringify({ 
-        url: session.url 
-      }), {
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-        status: 200,
-      });
-    } else {
-      // Handle plan subscription (original logic)
-      const authHeader = req.headers.get("Authorization")!;
-      const token = authHeader.replace("Bearer ", "");
-      const { data } = await supabaseClient.auth.getUser(token);
-      const user = data.user;
-      if (!user?.email) throw new Error("User not authenticated or email not available");
-
-      const { plan_type, is_yearly, amount, success_url, cancel_url } = body;
-
-      const stripe = new Stripe(Deno.env.get("STRIPE_SECRET_KEY") || "", { 
-        apiVersion: "2023-10-16" 
-      });
-
-      const customers = await stripe.customers.list({ email: user.email, limit: 1 });
-      let customerId;
-      if (customers.data.length > 0) {
-        customerId = customers.data[0].id;
-      }
-
-      const session = await stripe.checkout.sessions.create({
-        customer: customerId,
-        customer_email: customerId ? undefined : user.email,
-        line_items: [
-          {
-            price_data: {
-              currency: "jpy",
-              product_data: { 
-                name: `${plan_type === 'basic' ? 'ベーシック' : 'プレミアム'}プラン${is_yearly ? '（年額）' : '（月額）'}` 
-              },
-              unit_amount: amount,
-              ...(is_yearly ? {} : { recurring: { interval: "month" } })
-            },
-            quantity: 1,
-          },
-        ],
-        mode: is_yearly ? "payment" : "subscription",
-        success_url: success_url || `${req.headers.get("origin")}/plan-settings?success=true`,
-        cancel_url: cancel_url || `${req.headers.get("origin")}/plan-settings?canceled=true`,
-        metadata: {
-          user_id: user.id,
-          plan_type: plan_type,
-          is_yearly: is_yearly.toString()
-        }
-      });
-
-      console.log("Plan checkout session created:", session.id);
-
-      return new Response(JSON.stringify({ url: session.url }), {
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-        status: 200,
-      });
-    }
-  } catch (error: any) {
-    console.error('Stripe checkout error:', error);
-    return new Response(JSON.stringify({ error: error.message }), {
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
-      status: 500,
+    console.log("create-checkout-session payload", {
+      product_id,
+      uid,
+      utm_source,
+      utm_medium,
+      utm_campaign,
     });
+
+    // 商品 + 設定
+    const { data: product, error: productError } = await supabase
+      .from("products")
+      .select(
+        `
+        id,
+        user_id,
+        name,
+        description,
+        stripe_price_id,
+        product_type,
+        price,
+        currency,
+        is_active,
+        product_settings (
+          success_redirect_url,
+          cancel_redirect_url
+        )
+      `,
+      )
+      .eq("id", product_id)
+      .eq("is_active", true)
+      .single();
+
+    if (productError || !product) {
+      throw new Error("Product not found or inactive");
+    }
+    if (!product.stripe_price_id) {
+      throw new Error("stripe_price_id is not set for this product");
+    }
+
+    // 管理者のStripe鍵
+    const { data: creds, error: credErr } = await supabase
+      .from("stripe_credentials")
+      .select("test_secret_key, live_secret_key")
+      .eq("user_id", product.user_id)
+      .single();
+    if (credErr || !creds)
+      throw new Error("Stripe credentials not found for product owner");
+
+    const testStripe = new Stripe(creds.test_secret_key || "", {
+      apiVersion: "2024-06-20",
+    });
+    const liveStripe = new Stripe(creds.live_secret_key || "", {
+      apiVersion: "2024-06-20",
+    });
+
+    // price の livemode から自動判定
+    let stripe: Stripe;
+    let detectedLivemode = false;
+    try {
+      await testStripe.prices.retrieve(product.stripe_price_id);
+      stripe = testStripe;
+      detectedLivemode = false;
+    } catch {
+      try {
+        await liveStripe.prices.retrieve(product.stripe_price_id);
+        stripe = liveStripe;
+        detectedLivemode = true;
+      } catch {
+        throw new Error("Price not found in either test or live mode");
+      }
+    }
+    console.log("create-checkout-session detected_livemode", detectedLivemode);
+
+    const nonce = crypto.randomUUID();
+
+    const metadata: Record<string, string> = {
+      product_id: product.id,
+      manager_user_id: product.user_id,
+      product_type: product.product_type,
+      nonce,
+    };
+    if (uid) metadata.uid = uid;
+    if (utm_source) metadata.utm_source = utm_source;
+    if (utm_medium) metadata.utm_medium = utm_medium;
+    if (utm_campaign) metadata.utm_campaign = utm_campaign;
+
+    const settings = (product as any).product_settings?.[0] ?? {};
+    const origin =
+      req.headers.get("origin") ||
+      "https://rtjxurmuaawyzjcdkqxt.lovable.app"; // fallback
+    const successUrl = settings.success_redirect_url || `${origin}/checkout/success`;
+    const cancelUrl = settings.cancel_redirect_url || `${origin}/checkout/cancel`;
+
+    const mode: Stripe.Checkout.SessionCreateParams.Mode =
+      product.product_type === "one_time" ? "payment" : "subscription";
+
+    const sessionParams: Stripe.Checkout.SessionCreateParams = {
+      line_items: [{ price: product.stripe_price_id, quantity: 1 }],
+      mode,
+      success_url: successUrl,
+      cancel_url: cancelUrl,
+      metadata,
+      client_reference_id: uid || "no-uid",
+      customer_creation: "always",
+      allow_promotion_codes: true,
+    };
+
+    const session = await stripe.checkout.sessions.create(sessionParams);
+
+    // 注文レコード（金額はproducts.priceを保存）
+    await supabase.from("orders").insert({
+      user_id: product.user_id,
+      product_id: product.id,
+      status: "pending",
+      amount: product.price, // ← amount ではなく price を保存
+      currency: product.currency,
+      friend_uid: uid,
+      livemode: detectedLivemode,
+      stripe_session_id: session.id,
+      metadata,
+    });
+
+    console.log("[create-checkout-session] Created session:", session.id);
+
+    return new Response(
+      JSON.stringify({ ok: true, url: session.url, id: session.id }),
+      { headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 200 },
+    );
+  } catch (e) {
+    console.error("Error creating checkout session:", e);
+    return new Response(
+      JSON.stringify({
+        success: false,
+        error: e instanceof Error ? e.message : "Unknown error",
+      }),
+      { headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 500 },
+    );
   }
 });
