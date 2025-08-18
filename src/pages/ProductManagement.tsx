@@ -10,7 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Textarea } from "@/components/ui/textarea"
 import { Badge } from "@/components/ui/badge"
 import { Separator } from "@/components/ui/separator"
-import { Plus, Package, Settings, Target, AlertTriangle, Trash2, Copy, Check, Link, FileText } from "lucide-react"
+import { Plus, Package, Settings, Target, Trash2, Copy, Check, FileText } from "lucide-react"
 import { toast } from "sonner"
 import { ProductPreview } from "@/components/ProductPreview"
 import { MediaLibrarySelector } from "@/components/MediaLibrarySelector"
@@ -67,7 +67,6 @@ export default function ProductManagement() {
   const [tags, setTags] = useState<any[]>([])
   const [copiedUrl, setCopiedUrl] = useState<string | null>(null)
 
-  // Product form state
   const [productForm, setProductForm] = useState<Partial<Product>>({
     name: '',
     description: '',
@@ -79,7 +78,6 @@ export default function ProductManagement() {
     is_active: true
   })
 
-  // Settings form state
   const [settingsForm, setSettingsForm] = useState<ProductSettings>({
     product_id: '',
     landing_page_title: '',
@@ -92,7 +90,6 @@ export default function ProductManagement() {
     custom_parameters: {}
   })
 
-  // Actions form state
   const [successAction, setSuccessAction] = useState<ProductAction>({
     product_id: '',
     action_type: 'success',
@@ -174,8 +171,6 @@ export default function ProductManagement() {
 
   const handleCreateProduct = async () => {
     if (!user) return
-
-    // Create product immediately when button is clicked
     setSaving(true)
     try {
       const { data: newProduct, error } = await supabase
@@ -194,55 +189,39 @@ export default function ProductManagement() {
 
       if (error) throw error
 
-      // Create Stripe product immediately
+      // Stripe（本番）同時作成
       try {
-        const isTestProduct = false // Default to live mode for new products
-        
         const { data: stripeResult } = await supabase.functions.invoke('create-stripe-product', {
           body: {
             name: '新しい商品',
             description: '',
             unitAmount: 1000,
             currency: 'jpy',
-            interval: undefined, // one_time products don't have intervals
-            metadata: {
-              product_id: newProduct.id,
-              product_type: 'one_time'
-            },
-            isTest: isTestProduct
+            interval: undefined,
+            metadata: { product_id: newProduct.id, product_type: 'one_time' },
+            isTest: false
           }
         })
 
         if (stripeResult?.ok) {
-          // Update product with Stripe IDs
-          const { error: updateError } = await supabase
-            .from('products')
-            .update({
-              stripe_product_id: stripeResult.productId,
-              stripe_price_id: stripeResult.priceId,
-            })
-            .eq('id', newProduct.id)
+          await supabase.from('products').update({
+            stripe_product_id: stripeResult.productId,
+            stripe_price_id: stripeResult.priceId,
+          }).eq('id', newProduct.id)
 
-          if (updateError) throw updateError
-
-          // Update the newProduct object with Stripe IDs
           newProduct.stripe_product_id = stripeResult.productId
           newProduct.stripe_price_id = stripeResult.priceId
         }
-      } catch (stripeError: any) {
-        console.error('Stripe商品作成に失敗:', stripeError)
-        toast.error(`Stripe商品の作成に失敗しました: ${stripeError.message || stripeError}`)
+      } catch (e: any) {
+        console.error('Stripe商品作成に失敗:', e)
+        toast.error(`Stripe商品の作成に失敗しました: ${e.message || e}`)
       }
 
-      // Update products list
       setProducts(prev => [newProduct as Product, ...prev])
-      
-      // Select the new product
       await handleSelectProduct(newProduct as Product)
-      
       toast.success('商品を作成しました')
-    } catch (error: any) {
-      console.error('商品の作成に失敗:', error)
+    } catch (e: any) {
+      console.error('商品の作成に失敗:', e)
       toast.error('商品の作成に失敗しました')
     } finally {
       setSaving(false)
@@ -251,7 +230,6 @@ export default function ProductManagement() {
 
   const handleCreateTestProduct = async () => {
     if (!user) return
-
     setSaving(true)
     try {
       const { data: newProduct, error } = await supabase
@@ -270,12 +248,39 @@ export default function ProductManagement() {
 
       if (error) throw error
 
+      // Stripe（テスト）同時作成
+      try {
+        const { data: stripeResult } = await supabase.functions.invoke('create-stripe-product', {
+          body: {
+            name: 'テスト商品',
+            description: 'これはテスト用の商品です。実際の決済は発生しません。',
+            unitAmount: 100,
+            currency: 'jpy',
+            interval: undefined,
+            metadata: { product_id: newProduct.id, product_type: 'one_time' },
+            isTest: true
+          }
+        })
+
+        if (stripeResult?.ok) {
+          await supabase.from('products').update({
+            stripe_product_id: stripeResult.productId,
+            stripe_price_id: stripeResult.priceId,
+          }).eq('id', newProduct.id)
+
+          newProduct.stripe_product_id = stripeResult.productId
+          newProduct.stripe_price_id = stripeResult.priceId
+        }
+      } catch (e: any) {
+        console.error('Stripeテスト商品作成に失敗:', e)
+        toast.error(`Stripeテスト商品の作成に失敗しました: ${e.message || e}`)
+      }
+
       setProducts(prev => [newProduct as Product, ...prev])
       await handleSelectProduct(newProduct as Product)
-      
       toast.success('テスト商品を作成しました')
-    } catch (error: any) {
-      console.error('テスト商品の作成に失敗:', error)
+    } catch (e: any) {
+      console.error('テスト商品の作成に失敗:', e)
       toast.error('テスト商品の作成に失敗しました')
     } finally {
       setSaving(false)
@@ -284,31 +289,24 @@ export default function ProductManagement() {
 
   const handleDeleteProduct = async (productId: string) => {
     if (!confirm('この商品を削除してもよろしいですか？')) return
-
     try {
-      const { error } = await supabase
-        .from('products')
-        .delete()
-        .eq('id', productId)
-
+      const { error } = await supabase.from('products').delete().eq('id', productId)
       if (error) throw error
-
       setProducts(prev => prev.filter(p => p.id !== productId))
-      
       if (selectedProduct?.id === productId) {
         setSelectedProduct(null)
         setIsCreating(false)
       }
-
       toast.success('商品を削除しました')
-    } catch (error: any) {
-      console.error('商品の削除に失敗:', error)
+    } catch (e: any) {
+      console.error('商品の削除に失敗:', e)
       toast.error('商品の削除に失敗しました')
     }
   }
 
   const getProductUrl = (productId: string) => {
-    return `${window.location.origin}/product-landing/${productId}?uid={uid}`
+    // 必要なら {uid} → [[uid]] に変更してください
+    return `${window.location.origin}/product-landing/${productId}?uid=[UID]`
   }
 
   const copyProductUrl = async (productId: string) => {
@@ -318,35 +316,9 @@ export default function ProductManagement() {
       setCopiedUrl(productId)
       toast.success('URLをコピーしました')
       setTimeout(() => setCopiedUrl(null), 2000)
-    } catch (error) {
+    } catch {
       toast.error('URLのコピーに失敗しました')
     }
-  }
-
-  const oldHandleCreateProduct = () => {
-    setIsCreating(true)
-    setSelectedProduct(null)
-    setProductForm({
-      name: '',
-      description: '',
-      price: 0,
-      currency: 'jpy',
-      product_type: 'one_time',
-      trial_period_days: undefined,
-      interval: 'month',
-      is_active: true
-    })
-    setSettingsForm({
-      product_id: '',
-      landing_page_title: '',
-      landing_page_content: '',
-      landing_page_image_url: '',
-      button_text: '購入する',
-      button_color: '#0cb386',
-      success_redirect_url: '',
-      cancel_redirect_url: '',
-      custom_parameters: {}
-    })
   }
 
   const handleSelectProduct = async (product: Product) => {
@@ -354,7 +326,6 @@ export default function ProductManagement() {
     setIsCreating(false)
     setProductForm(product)
 
-    // Load product settings and actions
     try {
       const [settingsRes, actionsRes] = await Promise.all([
         supabase.from('product_settings').select('*').eq('product_id', product.id).maybeSingle(),
@@ -364,10 +335,9 @@ export default function ProductManagement() {
       if (settingsRes.data) {
         setSettingsForm({
           ...settingsRes.data,
-          custom_parameters: settingsRes.data.custom_parameters as Record<string, any> || {}
+          custom_parameters: (settingsRes.data.custom_parameters as Record<string, any>) || {}
         })
       } else {
-        // Reset settings form for new products
         setSettingsForm({
           product_id: product.id,
           landing_page_title: '',
@@ -384,12 +354,11 @@ export default function ProductManagement() {
       if (actionsRes.data) {
         const success = actionsRes.data.find(a => a.action_type === 'success') as ProductAction
         const failure = actionsRes.data.find(a => a.action_type === 'failure') as ProductAction
-        
         if (success) setSuccessAction(success)
         if (failure) setFailureAction(failure)
       }
-    } catch (error) {
-      console.error('商品詳細の読み込みに失敗:', error)
+    } catch (e) {
+      console.error('商品詳細の読み込みに失敗:', e)
     }
   }
 
@@ -404,7 +373,7 @@ export default function ProductManagement() {
       let productId = selectedProduct?.id
 
       if (isCreating) {
-        // Create new product
+        // 新規作成
         const { data: newProduct, error } = await supabase
           .from('products')
           .insert({
@@ -420,58 +389,42 @@ export default function ProductManagement() {
           })
           .select()
           .single()
-
         if (error) throw error
         productId = newProduct.id
-        
-        // Update products list
+
         setProducts(prev => [newProduct as Product, ...prev])
         setSelectedProduct(newProduct as Product)
         setIsCreating(false)
       } else {
-        // Update existing product
-        const { error } = await supabase
-          .from('products')
-          .update(productForm)
-          .eq('id', productId)
-
+        // 既存更新
+        const { error } = await supabase.from('products').update(productForm).eq('id', productId)
         if (error) throw error
-        
-        // Update products list
         setProducts(prev => prev.map(p => p.id === productId ? { ...p, ...productForm } : p))
       }
 
-      // Save settings
-      await supabase.from('product_settings').upsert({
-        ...settingsForm,
-        product_id: productId
-      })
-
-      // Save actions
+      // 設定保存
+      await supabase.from('product_settings').upsert({ ...settingsForm, product_id: productId })
+      // アクション保存
       await Promise.all([
-        supabase.from('product_actions').upsert({
-          ...successAction,
-          product_id: productId
-        }),
-        supabase.from('product_actions').upsert({
-          ...failureAction,
-          product_id: productId
-        })
+        supabase.from('product_actions').upsert({ ...successAction, product_id: productId }),
+        supabase.from('product_actions').upsert({ ...failureAction, product_id: productId })
       ])
 
-      // Create Stripe product only for new products
+      // Stripe 同期
+      const isTestProduct = !!(productForm.name?.includes('テスト') || productForm.name?.toLowerCase().includes('test'))
+
+      // 1) 新規作成時は Stripe も新規作成
       if (isCreating && productForm.is_active) {
         try {
-          const isTestProduct = productForm.name?.includes('テスト') || productForm.name?.includes('test') || false
-          
           const { data: stripeResult } = await supabase.functions.invoke('create-stripe-product', {
             body: {
               name: productForm.name,
               description: productForm.description || '',
               unitAmount: productForm.price || 0,
               currency: productForm.currency || 'jpy',
-              interval: (productForm.product_type === 'subscription' || productForm.product_type === 'subscription_with_trial') 
-                ? productForm.interval : undefined,
+              interval: (productForm.product_type === 'subscription' || productForm.product_type === 'subscription_with_trial')
+                ? productForm.interval
+                : undefined,
               metadata: {
                 product_id: productId,
                 product_type: productForm.product_type,
@@ -482,97 +435,125 @@ export default function ProductManagement() {
           })
 
           if (stripeResult?.ok) {
-            // Update product with Stripe IDs
-            await supabase
-              .from('products')
-              .update({
-                stripe_product_id: stripeResult.productId,
-                stripe_price_id: stripeResult.priceId,
-              })
-              .eq('id', productId)
+            await supabase.from('products').update({
+              stripe_product_id: stripeResult.productId,
+              stripe_price_id: stripeResult.priceId,
+            }).eq('id', productId)
 
-            // Update local state
-            if (isCreating && productId) {
-              setProducts(prev => prev.map(p => p.id === productId ? { 
-                ...p, 
-                stripe_product_id: stripeResult.productId,
-                stripe_price_id: stripeResult.priceId
-              } : p))
-              setSelectedProduct(prev => prev ? { 
-                ...prev, 
-                stripe_product_id: stripeResult.productId,
-                stripe_price_id: stripeResult.priceId
-              } : null)
-            }
-
+            setProducts(prev => prev.map(p => p.id === productId ? {
+              ...p,
+              stripe_product_id: stripeResult.productId,
+              stripe_price_id: stripeResult.priceId
+            } : p))
+            setSelectedProduct(prev => prev ? {
+              ...prev,
+              stripe_product_id: stripeResult.productId,
+              stripe_price_id: stripeResult.priceId
+            } as Product : prev)
             toast.success(`Stripe${isTestProduct ? 'テスト' : '本番'}商品を作成しました`)
           } else {
             throw new Error(stripeResult?.error || 'Stripe商品作成に失敗')
           }
-        } catch (stripeError: any) {
-          console.error('Stripe商品作成に失敗:', stripeError)
-          toast.error(`Stripe商品の作成に失敗しました: ${stripeError.message || stripeError}`)
+        } catch (e: any) {
+          console.error('Stripe商品作成に失敗:', e)
+          toast.error(`Stripe商品の作成に失敗しました: ${e.message || e}`)
         }
-      } else if (!isCreating && selectedProduct?.stripe_product_id && selectedProduct?.stripe_price_id) {
-        // For existing products with Stripe ID, update the Stripe product
+      }
+      // 2) 既存商品の編集：Stripe ID があるなら更新、無いなら新規作成
+      else if (!isCreating) {
+        const hasStripe = !!(selectedProduct?.stripe_product_id && selectedProduct?.stripe_price_id)
         try {
-          const isTestProduct = productForm.name?.includes('テスト') || productForm.name?.includes('test') || false
-          
-          const { data: updateResult } = await supabase.functions.invoke('update-stripe-product', {
-            body: {
-              stripeProductId: selectedProduct.stripe_product_id,
-              stripePriceId: selectedProduct.stripe_price_id,
-              name: productForm.name,
-              description: productForm.description || '',
-              unitAmount: productForm.price || 0,
-              currency: productForm.currency || 'jpy',
-              interval: (productForm.product_type === 'subscription' || productForm.product_type === 'subscription_with_trial') 
-                ? productForm.interval : undefined,
-              metadata: {
-                product_id: productId,
-                product_type: productForm.product_type,
-                trial_period_days: productForm.trial_period_days?.toString() || undefined
-              },
-              isTest: isTestProduct
+          if (hasStripe) {
+            const { data: updateResult } = await supabase.functions.invoke('update-stripe-product', {
+              body: {
+                stripeProductId: selectedProduct!.stripe_product_id,
+                stripePriceId: selectedProduct!.stripe_price_id,
+                name: productForm.name,
+                description: productForm.description || '',
+                unitAmount: productForm.price || 0,
+                currency: productForm.currency || 'jpy',
+                interval: (productForm.product_type === 'subscription' || productForm.product_type === 'subscription_with_trial')
+                  ? productForm.interval
+                  : undefined,
+                metadata: {
+                  product_id: productId,
+                  product_type: productForm.product_type,
+                  trial_period_days: productForm.trial_period_days?.toString() || undefined
+                },
+                isTest: isTestProduct
+              }
+            })
+
+            if (updateResult?.ok) {
+              if (updateResult.priceChanged && updateResult.priceId) {
+                await supabase.from('products').update({
+                  stripe_price_id: updateResult.priceId
+                }).eq('id', productId)
+
+                setProducts(prev => prev.map(p => p.id === productId ? ({
+                  ...p,
+                  stripe_price_id: updateResult.priceId
+                }) : p))
+                setSelectedProduct(prev => prev ? ({
+                  ...prev,
+                  stripe_price_id: updateResult.priceId
+                } as Product) : prev)
+              }
+              toast.success(`Stripe${isTestProduct ? 'テスト' : '本番'}商品を更新しました`)
+            } else {
+              throw new Error(updateResult?.error || 'Stripe商品更新に失敗')
             }
-          })
+          } else if (productForm.is_active) {
+            // 既存だが Stripe 未連携 → 新規作成
+            const { data: createResult } = await supabase.functions.invoke('create-stripe-product', {
+              body: {
+                name: productForm.name,
+                description: productForm.description || '',
+                unitAmount: productForm.price || 0,
+                currency: productForm.currency || 'jpy',
+                interval: (productForm.product_type === 'subscription' || productForm.product_type === 'subscription_with_trial')
+                  ? productForm.interval
+                  : undefined,
+                metadata: {
+                  product_id: productId,
+                  product_type: productForm.product_type,
+                  trial_period_days: productForm.trial_period_days?.toString() || undefined
+                },
+                isTest: isTestProduct
+              }
+            })
+            if (createResult?.ok) {
+              await supabase.from('products').update({
+                stripe_product_id: createResult.productId,
+                stripe_price_id: createResult.priceId,
+              }).eq('id', productId)
 
-          if (updateResult?.ok) {
-            // Update product with new price ID if changed
-            if (updateResult.priceChanged) {
-              await supabase
-                .from('products')
-                .update({
-                  stripe_price_id: updateResult.priceId,
-                })
-                .eq('id', productId)
-
-              // Update local state
-              setProducts(prev => prev.map(p => p.id === productId ? { 
-                ...p, 
-                stripe_price_id: updateResult.priceId
+              setProducts(prev => prev.map(p => p.id === productId ? {
+                ...p,
+                stripe_product_id: createResult.productId,
+                stripe_price_id: createResult.priceId
               } : p))
-              setSelectedProduct(prev => prev ? { 
-                ...prev, 
-                stripe_price_id: updateResult.priceId
-              } : null)
+              setSelectedProduct(prev => prev ? {
+                ...prev,
+                stripe_product_id: createResult.productId,
+                stripe_price_id: createResult.priceId
+              } as Product : prev)
+              toast.success(`Stripe${isTestProduct ? 'テスト' : '本番'}商品を作成しました`)
+            } else {
+              throw new Error(createResult?.error || 'Stripe商品作成に失敗')
             }
-
-            toast.success(`Stripe${isTestProduct ? 'テスト' : '本番'}商品を更新しました`)
           } else {
-            throw new Error(updateResult?.error || 'Stripe商品更新に失敗')
+            console.log('既存商品の編集: Stripe未連携かつ非アクティブのため、Stripe作成はスキップ')
           }
-        } catch (stripeError: any) {
-          console.error('Stripe商品更新に失敗:', stripeError)
-          toast.error(`Stripe商品の更新に失敗しました: ${stripeError.message || stripeError}`)
+        } catch (e: any) {
+          console.error('Stripe同期に失敗:', e)
+          toast.error(`Stripe同期に失敗しました: ${e.message || e}`)
         }
-      } else if (!isCreating) {
-        console.log('既存商品の編集: Stripe商品IDまたは価格IDが見つかりません')
       }
 
       toast.success('商品を保存しました')
-    } catch (error: any) {
-      console.error('商品の保存に失敗:', error)
+    } catch (e: any) {
+      console.error('商品の保存に失敗:', e)
       toast.error('商品の保存に失敗しました')
     } finally {
       setSaving(false)
@@ -595,18 +576,12 @@ export default function ProductManagement() {
     }).format(price)
   }
 
-  if (loading) {
-    return <div className="p-4">読み込み中...</div>
-  }
-
-  if (!user) {
-    return <div className="p-4">ログインが必要です</div>
-  }
+  if (loading) return <div className="p-4">読み込み中...</div>
+  if (!user) return <div className="p-4">ログインが必要です</div>
 
   return (
     <div className="space-y-6">
       <AppHeader user={user} />
-      
       <div className="container mx-auto px-4">
         <div className="mb-6">
           <h1 className="text-2xl font-bold">商品管理</h1>
@@ -632,7 +607,7 @@ export default function ProductManagement() {
 
             <div className="space-y-2">
               {products.map((product) => (
-                <Card 
+                <Card
                   key={product.id}
                   className={`cursor-pointer transition-colors hover:bg-muted/50 ${
                     selectedProduct?.id === product.id ? 'ring-2 ring-primary' : ''
@@ -658,7 +633,7 @@ export default function ProductManagement() {
                             {formatPrice(product.price, product.currency)}
                           </span>
                         </div>
-                        
+
                         {/* Product URL */}
                         <div className="mt-2 flex items-center gap-2">
                           <div className="flex-1 min-w-0 bg-muted rounded px-2 py-1">
@@ -675,11 +650,7 @@ export default function ProductManagement() {
                             }}
                             className="h-6 w-6 p-0"
                           >
-                            {copiedUrl === product.id ? (
-                              <Check className="h-3 w-3" />
-                            ) : (
-                              <Copy className="h-3 w-3" />
-                            )}
+                            {copiedUrl === product.id ? <Check className="h-3 w-3" /> : <Copy className="h-3 w-3" />}
                           </Button>
                         </div>
                       </div>
@@ -697,11 +668,10 @@ export default function ProductManagement() {
                         </Button>
                         <div className="flex items-center gap-1">
                           <Package className="h-4 w-4 text-muted-foreground" />
-                          {product.is_active ? (
-                            <div className="w-2 h-2 bg-green-500 rounded-full" />
-                          ) : (
-                            <div className="w-2 h-2 bg-gray-400 rounded-full" />
-                          )}
+                          {product.is_active
+                            ? <div className="w-2 h-2 bg-green-500 rounded-full" />
+                            : <div className="w-2 h-2 bg-gray-400 rounded-full" />
+                          }
                         </div>
                       </div>
                     </div>
@@ -739,65 +709,60 @@ export default function ProductManagement() {
                         <Label htmlFor="product-name">商品名 *</Label>
                         <Input
                           id="product-name"
-                          name="product-name"
-                          autoComplete="off"
                           value={productForm.name || ''}
                           onChange={(e) => setProductForm(prev => ({ ...prev, name: e.target.value }))}
                           placeholder="商品名を入力"
                         />
                       </div>
-                      
-                        <div>
-                          <Label htmlFor="product-type-select">決済タイプ</Label>
-                          <Select
-                            value={productForm.product_type}
-                            onValueChange={(value) => setProductForm(prev => ({ ...prev, product_type: value as any }))}
-                          >
-                            <SelectTrigger id="product-type-select">
-                              <SelectValue />
-                            </SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="one_time">単発決済</SelectItem>
-                              <SelectItem value="subscription">継続課金</SelectItem>
-                              <SelectItem value="subscription_with_trial">トライアル付き継続課金</SelectItem>
-                            </SelectContent>
-                          </Select>
-                        </div>
+
+                      <div>
+                        <Label htmlFor="product-type-select">決済タイプ</Label>
+                        <Select
+                          value={productForm.product_type}
+                          onValueChange={(value) => setProductForm(prev => ({ ...prev, product_type: value as any }))}
+                        >
+                          <SelectTrigger id="product-type-select">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="one_time">単発決済</SelectItem>
+                            <SelectItem value="subscription">継続課金</SelectItem>
+                            <SelectItem value="subscription_with_trial">トライアル付き継続課金</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
 
                       <div>
                         <Label htmlFor="product-price">価格</Label>
                         <Input
                           id="product-price"
-                          name="product-price"
                           type="number"
                           min="0"
                           step="1"
-                          autoComplete="off"
                           value={productForm.price || 0}
                           onChange={(e) => setProductForm(prev => ({ ...prev, price: Number(e.target.value) }))}
                         />
                       </div>
 
-                        {productForm.product_type?.includes('subscription') && (
-                          <div>
-                            <Label htmlFor="product-interval-select">課金間隔</Label>
-                            <Select
-                              value={productForm.interval}
-                              onValueChange={(value) => setProductForm(prev => ({ ...prev, interval: value as any }))}
-                            >
-                              <SelectTrigger id="product-interval-select">
-                                <SelectValue />
-                              </SelectTrigger>
-                              <SelectContent>
-                                <SelectItem value="month">月次（毎月同日に請求）</SelectItem>
-                                <SelectItem value="year">年次（毎年同日に請求）</SelectItem>
-                              </SelectContent>
-                            </Select>
+                      {(productForm.product_type === 'subscription' || productForm.product_type === 'subscription_with_trial') && (
+                        <div>
+                          <Label htmlFor="product-interval-select">課金間隔</Label>
+                          <Select
+                            value={productForm.interval}
+                            onValueChange={(value) => setProductForm(prev => ({ ...prev, interval: value as any }))}
+                          >
+                            <SelectTrigger id="product-interval-select">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="month">月次（毎月同日に請求）</SelectItem>
+                              <SelectItem value="year">年次（毎年同日に請求）</SelectItem>
+                            </SelectContent>
+                          </Select>
                           <p className="text-xs text-muted-foreground mt-1">
-                            {productForm.interval === 'month' 
-                              ? '初回請求は購入直後、2回目は購入日の翌月同日となります' 
-                              : '初回請求は購入直後、2回目は購入日の翌年同日となります'
-                            }
+                            {productForm.interval === 'month'
+                              ? '初回請求は購入直後、2回目は購入日の翌月同日となります'
+                              : '初回請求は購入直後、2回目は購入日の翌年同日となります'}
                           </p>
                         </div>
                       )}
@@ -807,17 +772,15 @@ export default function ProductManagement() {
                           <Label htmlFor="trial-days">トライアル期間（日）</Label>
                           <Input
                             id="trial-days"
-                            name="trial-days"
                             type="number"
                             min="1"
                             step="1"
-                            autoComplete="off"
                             value={productForm.trial_period_days || ''}
                             onChange={(e) => setProductForm(prev => ({ ...prev, trial_period_days: Number(e.target.value) }))}
                             placeholder="14"
                           />
                           <p className="text-xs text-muted-foreground mt-1">
-                            トライアル期間終了後から継続課金が開始されます（例：14日間無料、その後月額課金）
+                            トライアル終了後から継続課金が開始されます（例：14日間無料、その後月額課金）
                           </p>
                         </div>
                       )}
@@ -827,8 +790,6 @@ export default function ProductManagement() {
                       <Label htmlFor="product-description">商品説明</Label>
                       <Textarea
                         id="product-description"
-                        name="product-description"
-                        autoComplete="off"
                         value={productForm.description || ''}
                         onChange={(e) => setProductForm(prev => ({ ...prev, description: e.target.value }))}
                         placeholder="商品の説明を入力"
@@ -847,112 +808,94 @@ export default function ProductManagement() {
                     </CardTitle>
                   </CardHeader>
                   <CardContent className="space-y-4">
-                     <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                       {/* Settings Form */}
-                       <div className="lg:col-span-2 space-y-4">
-                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                           <div>
-                             <Label htmlFor="landing-title">ページタイトル</Label>
+                    <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                      <div className="lg:col-span-2 space-y-4">
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                          <div>
+                            <Label htmlFor="landing-title">ページタイトル</Label>
+                            <Input
+                              id="landing-title"
+                              value={settingsForm.landing_page_title || ''}
+                              onChange={(e) => setSettingsForm(prev => ({ ...prev, landing_page_title: e.target.value }))}
+                              placeholder="ランディングページのタイトル"
+                            />
+                          </div>
+
+                          <div>
+                            <Label htmlFor="button-text">ボタンテキスト</Label>
+                            <Input
+                              id="button-text"
+                              value={settingsForm.button_text}
+                              onChange={(e) => setSettingsForm(prev => ({ ...prev, button_text: e.target.value }))}
+                            />
+                          </div>
+
+                          <div>
+                            <Label htmlFor="landing-image-url">商品画像</Label>
+                            <div className="flex gap-2">
                               <Input
-                                id="landing-title"
-                                name="landing-title"
-                                autoComplete="off"
-                                value={settingsForm.landing_page_title || ''}
-                                onChange={(e) => setSettingsForm(prev => ({ ...prev, landing_page_title: e.target.value }))}
-                                placeholder="ランディングページのタイトル"
-                              />
-                           </div>
-
-                           <div>
-                             <Label htmlFor="button-text">ボタンテキスト</Label>
-                              <Input
-                                id="button-text"
-                                name="button-text"
-                                autoComplete="off"
-                                value={settingsForm.button_text}
-                                onChange={(e) => setSettingsForm(prev => ({ ...prev, button_text: e.target.value }))}
-                              />
-                           </div>
-
-                            <div>
-                              <Label htmlFor="landing-image-url">商品画像</Label>
-                               <div className="flex gap-2">
-                                 <Input
-                                   id="landing-image-url"
-                                   name="landing-image-url"
-                                   autoComplete="url"
-                                   value={settingsForm.landing_page_image_url || ''}
-                                   onChange={(e) => setSettingsForm(prev => ({ ...prev, landing_page_image_url: e.target.value }))}
-                                   placeholder="画像URLまたはメディアライブラリから選択"
-                                   className="flex-1"
-                                 />
-                               <MediaLibrarySelector
-                                 trigger={
-                                   <Button variant="outline" type="button">
-                                     <Package className="h-4 w-4" />
-                                   </Button>
-                                 }
-                                 onSelect={(url) => setSettingsForm(prev => ({ ...prev, landing_page_image_url: url }))}
-                                 selectedUrl={settingsForm.landing_page_image_url}
-                               />
-                             </div>
-                           </div>
-
-                           <div>
-                             <Label htmlFor="button-color">ボタンカラー</Label>
-                              <Input
-                                id="button-color"
-                                name="button-color"
-                                type="color"
-                                value={settingsForm.button_color}
-                                onChange={(e) => setSettingsForm(prev => ({ ...prev, button_color: e.target.value }))}
-                              />
-                           </div>
-                         </div>
-
-                         <div>
-                           <Label htmlFor="landing-content">ページ内容</Label>
-                           <div className="flex gap-2">
-                              <Textarea
-                                id="landing-content"
-                                name="landing-content"
-                                autoComplete="off"
-                                value={settingsForm.landing_page_content || ''}
-                                onChange={(e) => setSettingsForm(prev => ({ ...prev, landing_page_content: e.target.value }))}
-                                placeholder="ランディングページの説明文"
-                                rows={4}
+                                id="landing-image-url"
+                                autoComplete="url"
+                                value={settingsForm.landing_page_image_url || ''}
+                                onChange={(e) => setSettingsForm(prev => ({ ...prev, landing_page_image_url: e.target.value }))}
+                                placeholder="画像URLまたはメディアライブラリから選択"
                                 className="flex-1"
                               />
-                             <FieldInsertionDialog
-                               trigger={
-                                 <Button variant="outline" type="button" className="gap-2">
-                                   <FileText className="h-4 w-4" />
-                                   フィールド挿入
-                                 </Button>
-                               }
-                               productName={productForm.name}
-                               productPrice={productForm.price}
-                               currency={productForm.currency}
-                               productUrl={selectedProduct ? getProductUrl(selectedProduct.id) : undefined}
-                             />
-                           </div>
-                         </div>
-                       </div>
+                              <MediaLibrarySelector
+                                trigger={<Button variant="outline" type="button"><Package className="h-4 w-4" /></Button>}
+                                onSelect={(url) => setSettingsForm(prev => ({ ...prev, landing_page_image_url: url }))}
+                                selectedUrl={settingsForm.landing_page_image_url}
+                              />
+                            </div>
+                          </div>
 
-                       {/* Preview */}
-                       <div className="lg:col-span-1">
-                         <ProductPreview
-                           productName={productForm.name || '商品名'}
-                           price={productForm.price || 0}
-                           currency={productForm.currency || 'jpy'}
-                           imageUrl={settingsForm.landing_page_image_url}
-                           buttonText={settingsForm.button_text}
-                           buttonColor={settingsForm.button_color}
-                           title={settingsForm.landing_page_title}
-                           content={settingsForm.landing_page_content}
-                         />
-                       </div>
-                     </div>
+                          <div>
+                            <Label htmlFor="button-color">ボタンカラー</Label>
+                            <Input
+                              id="button-color"
+                              type="color"
+                              value={settingsForm.button_color}
+                              onChange={(e) => setSettingsForm(prev => ({ ...prev, button_color: e.target.value }))}
+                            />
+                          </div>
+                        </div>
+
+                        <div>
+                          <Label htmlFor="landing-content">ページ内容</Label>
+                          <div className="flex gap-2">
+                            <Textarea
+                              id="landing-content"
+                              value={settingsForm.landing_page_content || ''}
+                              onChange={(e) => setSettingsForm(prev => ({ ...prev, landing_page_content: e.target.value }))}
+                              placeholder="ランディングページの説明文"
+                              rows={4}
+                              className="flex-1"
+                            />
+                            <FieldInsertionDialog
+                              trigger={<Button variant="outline" type="button" className="gap-2"><FileText className="h-4 w-4" />フィールド挿入</Button>}
+                              productName={productForm.name}
+                              productPrice={productForm.price}
+                              currency={productForm.currency}
+                              productUrl={selectedProduct ? getProductUrl(selectedProduct.id) : undefined}
+                            />
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* プレビュー */}
+                      <div className="lg:col-span-1">
+                        <ProductPreview
+                          productName={productForm.name || '商品名'}
+                          price={productForm.price || 0}
+                          currency={productForm.currency || 'jpy'}
+                          imageUrl={settingsForm.landing_page_image_url}
+                          buttonText={settingsForm.button_text}
+                          buttonColor={settingsForm.button_color}
+                          title={settingsForm.landing_page_title}
+                          content={settingsForm.landing_page_content}
+                        />
+                      </div>
+                    </div>
                   </CardContent>
                 </Card>
 
@@ -965,155 +908,139 @@ export default function ProductManagement() {
                     </CardTitle>
                   </CardHeader>
                   <CardContent className="space-y-6">
-                    {/* 決済成功時 */}
+                    {/* 成功時 */}
                     <div className="space-y-4">
                       <h4 className="font-medium text-green-600">決済成功時のアクション</h4>
-                      
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                          <div>
-                            <Label htmlFor="scenario-action-select">シナリオアクション</Label>
-                            <Select
-                              value={successAction.scenario_action}
-                              onValueChange={(value) => setSuccessAction(prev => ({ ...prev, scenario_action: value as any }))}
-                            >
-                              <SelectTrigger id="scenario-action-select">
-                                <SelectValue />
-                              </SelectTrigger>
-                              <SelectContent>
-                                <SelectItem value="add_to_existing">既存シナリオに追加（現在配信中のシナリオはそのまま継続）</SelectItem>
-                                <SelectItem value="replace_all">シナリオを完全切り替え（現在のシナリオを停止して新しいシナリオに移行）</SelectItem>
-                              </SelectContent>
-                            </Select>
-                           <div className="text-xs text-muted-foreground mt-1">
-                             {successAction.scenario_action === 'add_to_existing' 
-                               ? '現在配信中のシナリオを継続しながら、指定したシナリオも並行して配信開始します。'
-                               : '現在配信中のすべてのシナリオを停止し、指定したシナリオのみ配信開始します。'
-                             }
-                           </div>
-                         </div>
+                        <div>
+                          <Label htmlFor="scenario-action-select">シナリオアクション</Label>
+                          <Select
+                            value={successAction.scenario_action}
+                            onValueChange={(value) => setSuccessAction(prev => ({ ...prev, scenario_action: value as any }))}
+                          >
+                            <SelectTrigger id="scenario-action-select">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="add_to_existing">既存シナリオに追加</SelectItem>
+                              <SelectItem value="replace_all">シナリオを完全切り替え</SelectItem>
+                            </SelectContent>
+                          </Select>
+                          <div className="text-xs text-muted-foreground mt-1">
+                            {successAction.scenario_action === 'add_to_existing'
+                              ? '現在配信中のシナリオを継続しながら並行配信します。'
+                              : '現在のシナリオを停止し、指定シナリオのみ配信します。'}
+                          </div>
+                        </div>
 
-                         <div>
-                           <Label htmlFor="target-scenario-select">移動先シナリオ</Label>
-                           <Select
-                             value={successAction.target_scenario_id}
-                             onValueChange={(value) => setSuccessAction(prev => ({ ...prev, target_scenario_id: value }))}
-                           >
-                             <SelectTrigger id="target-scenario-select">
-                               <SelectValue placeholder="シナリオを選択" />
-                             </SelectTrigger>
-                             <SelectContent>
-                               {scenarios.map((scenario) => (
-                                 <SelectItem key={scenario.id} value={scenario.id}>
-                                   {scenario.name}
-                                 </SelectItem>
-                               ))}
-                             </SelectContent>
-                           </Select>
-                         </div>
+                        <div>
+                          <Label htmlFor="target-scenario-select">移動先シナリオ</Label>
+                          <Select
+                            value={successAction.target_scenario_id}
+                            onValueChange={(value) => setSuccessAction(prev => ({ ...prev, target_scenario_id: value }))}
+                          >
+                            <SelectTrigger id="target-scenario-select">
+                              <SelectValue placeholder="シナリオを選択" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {scenarios.map((s) => (
+                                <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
                       </div>
 
-                       <div>
-                         <Label>タグ操作</Label>
-                         <div className="text-sm text-muted-foreground mb-3">
-                           決済成功時に友達にタグを着脱できます
-                         </div>
-                         <div className="space-y-3">
-                           {tags.length === 0 ? (
-                             <p className="text-sm text-muted-foreground">タグが作成されていません</p>
-                           ) : (
-                             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                               {tags.map((tag) => {
-                                 const isAdded = (successAction.add_tag_ids || []).includes(tag.id)
-                                 const isRemoved = (successAction.remove_tag_ids || []).includes(tag.id)
-                                 const isNone = !isAdded && !isRemoved
-                                 
-                                 const getVariant = () => {
-                                   if (isAdded) return "default"
-                                   if (isRemoved) return "destructive"
-                                   return "outline"
-                                 }
-                                 
-                                 const getIcon = () => {
-                                   if (isAdded) return "+"
-                                   if (isRemoved) return "-"
-                                   return "="
-                                 }
-                                 
-                                 const handleToggle = () => {
-                                   if (isNone) {
-                                     // None -> Add
-                                     setSuccessAction(prev => ({
-                                       ...prev,
-                                       add_tag_ids: [...(prev.add_tag_ids || []), tag.id],
-                                       remove_tag_ids: (prev.remove_tag_ids || []).filter(id => id !== tag.id)
-                                     }))
-                                   } else if (isAdded) {
-                                     // Add -> Remove
-                                     setSuccessAction(prev => ({
-                                       ...prev,
-                                       add_tag_ids: (prev.add_tag_ids || []).filter(id => id !== tag.id),
-                                       remove_tag_ids: [...(prev.remove_tag_ids || []), tag.id]
-                                     }))
-                                   } else if (isRemoved) {
-                                     // Remove -> None
-                                     setSuccessAction(prev => ({
-                                       ...prev,
-                                       add_tag_ids: (prev.add_tag_ids || []).filter(id => id !== tag.id),
-                                       remove_tag_ids: (prev.remove_tag_ids || []).filter(id => id !== tag.id)
-                                     }))
-                                   }
-                                 }
-                                 
-                                 return (
-                                   <Button
-                                     key={tag.id}
-                                     variant={getVariant()}
-                                     size="sm"
-                                     onClick={handleToggle}
-                                     className="justify-between"
-                                   >
-                                     <span>{tag.name}</span>
-                                     <span className="ml-2 font-mono text-xs">
-                                       {getIcon()}
-                                     </span>
-                                   </Button>
-                                 )
-                               })}
-                             </div>
-                           )}
-                           {tags.length > 0 && (
-                             <div className="text-xs text-muted-foreground space-y-1">
-                               <div className="flex items-center gap-2">
-                                 <div className="w-3 h-3 bg-primary rounded"></div>
-                                 <span>クリックで追加 (+)</span>
-                               </div>
-                               <div className="flex items-center gap-2">
-                                 <div className="w-3 h-3 bg-destructive rounded"></div>
-                                 <span>もう一度クリックで削除 (-)</span>
-                               </div>
-                               <div className="flex items-center gap-2">
-                                 <div className="w-3 h-3 border border-border rounded"></div>
-                                 <span>さらにクリックで無効 (=)</span>
-                               </div>
-                             </div>
-                           )}
-                         </div>
-                       </div>
+                      <div>
+                        <Label>タグ操作</Label>
+                        <div className="text-sm text-muted-foreground mb-3">
+                          決済成功時に友達にタグを着脱できます
+                        </div>
+                        <div className="space-y-3">
+                          {tags.length === 0 ? (
+                            <p className="text-sm text-muted-foreground">タグが作成されていません</p>
+                          ) : (
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                              {tags.map((tag) => {
+                                const isAdded = (successAction.add_tag_ids || []).includes(tag.id)
+                                const isRemoved = (successAction.remove_tag_ids || []).includes(tag.id)
+                                const isNone = !isAdded && !isRemoved
+
+                                const getVariant = () => {
+                                  if (isAdded) return "default"
+                                  if (isRemoved) return "destructive"
+                                  return "outline"
+                                }
+                                const getIcon = () => (isAdded ? "+" : isRemoved ? "-" : "=")
+
+                                const handleToggle = () => {
+                                  if (isNone) {
+                                    setSuccessAction(prev => ({
+                                      ...prev,
+                                      add_tag_ids: [...(prev.add_tag_ids || []), tag.id],
+                                      remove_tag_ids: (prev.remove_tag_ids || []).filter(id => id !== tag.id)
+                                    }))
+                                  } else if (isAdded) {
+                                    setSuccessAction(prev => ({
+                                      ...prev,
+                                      add_tag_ids: (prev.add_tag_ids || []).filter(id => id !== tag.id),
+                                      remove_tag_ids: [...(prev.remove_tag_ids || []), tag.id]
+                                    }))
+                                  } else if (isRemoved) {
+                                    setSuccessAction(prev => ({
+                                      ...prev,
+                                      add_tag_ids: (prev.add_tag_ids || []).filter(id => id !== tag.id),
+                                      remove_tag_ids: (prev.remove_tag_ids || []).filter(id => id !== tag.id)
+                                    }))
+                                  }
+                                }
+
+                                return (
+                                  <Button
+                                    key={tag.id}
+                                    variant={getVariant()}
+                                    size="sm"
+                                    onClick={handleToggle}
+                                    className="justify-between"
+                                  >
+                                    <span>{tag.name}</span>
+                                    <span className="ml-2 font-mono text-xs">{getIcon()}</span>
+                                  </Button>
+                                )
+                              })}
+                            </div>
+                          )}
+                          {tags.length > 0 && (
+                            <div className="text-xs text-muted-foreground space-y-1">
+                              <div className="flex items-center gap-2">
+                                <div className="w-3 h-3 bg-primary rounded"></div>
+                                <span>クリックで追加 (+)</span>
+                              </div>
+                              <div className="flex items-center gap-2">
+                                <div className="w-3 h-3 bg-destructive rounded"></div>
+                                <span>もう一度クリックで削除 (-)</span>
+                              </div>
+                              <div className="flex items-center gap-2">
+                                <div className="w-3 h-3 border border-border rounded"></div>
+                                <span>さらにクリックで無効 (=)</span>
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      </div>
                     </div>
 
                     <Separator />
 
-                    {/* 決済失敗時 */}
+                    {/* 失敗時 */}
                     <div className="space-y-4">
                       <h4 className="font-medium text-red-600">決済失敗時のアクション</h4>
-                      
+
                       <div>
                         <Label htmlFor="failure-message">失敗メッセージ</Label>
                         <div className="flex gap-2">
                           <Textarea
                             id="failure-message"
-                            name="failure-message"
-                            autoComplete="off"
                             value={failureAction.failure_message || ''}
                             onChange={(e) => setFailureAction(prev => ({ ...prev, failure_message: e.target.value }))}
                             placeholder="決済に失敗しました。再度お試しください。"
@@ -1121,12 +1048,7 @@ export default function ProductManagement() {
                             className="flex-1"
                           />
                           <FieldInsertionDialog
-                            trigger={
-                              <Button variant="outline" type="button" className="gap-2">
-                                <FileText className="h-4 w-4" />
-                                フィールド挿入
-                              </Button>
-                            }
+                            trigger={<Button variant="outline" type="button" className="gap-2"><FileText className="h-4 w-4" />フィールド挿入</Button>}
                             productName={productForm.name}
                             productPrice={productForm.price}
                             currency={productForm.currency}
@@ -1140,7 +1062,6 @@ export default function ProductManagement() {
                           <input
                             type="checkbox"
                             id="notify-user"
-                            name="notify-user"
                             checked={failureAction.notify_user}
                             onChange={(e) => setFailureAction(prev => ({ ...prev, notify_user: e.target.checked }))}
                             className="rounded"
@@ -1151,18 +1072,18 @@ export default function ProductManagement() {
                         {failureAction.notify_user && (
                           <div>
                             <Label htmlFor="notification-method-select">通知方法</Label>
-                             <Select
-                               value={failureAction.notification_method}
-                               onValueChange={(value) => setFailureAction(prev => ({ ...prev, notification_method: value as any }))}
-                             >
-                               <SelectTrigger id="notification-method-select">
-                                 <SelectValue />
-                               </SelectTrigger>
-                               <SelectContent>
-                                 <SelectItem value="line">LINE通知</SelectItem>
-                                 <SelectItem value="system">システム内通知</SelectItem>
-                               </SelectContent>
-                             </Select>
+                            <Select
+                              value={failureAction.notification_method}
+                              onValueChange={(value) => setFailureAction(prev => ({ ...prev, notification_method: value as any }))}
+                            >
+                              <SelectTrigger id="notification-method-select">
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="line">LINE通知</SelectItem>
+                                <SelectItem value="system">システム内通知</SelectItem>
+                              </SelectContent>
+                            </Select>
                           </div>
                         )}
                       </div>
@@ -1170,7 +1091,6 @@ export default function ProductManagement() {
                   </CardContent>
                 </Card>
 
-                {/* 保存ボタン */}
                 <div className="flex justify-end">
                   <Button onClick={handleSaveProduct} disabled={saving} size="lg">
                     {saving ? '保存中...' : (isCreating ? '商品を作成' : '変更を保存')}
