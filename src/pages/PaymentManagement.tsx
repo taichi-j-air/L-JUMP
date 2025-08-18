@@ -33,8 +33,12 @@ interface OrderRecord {
 
 interface CustomerStats {
   total_orders: number
-  successful_orders: number
   total_revenue: number
+  monthly_revenue: number
+  active_subscriptions: number
+  total_subscriptions: number
+  successful_one_time: number
+  total_one_time: number
   pending_orders: number
 }
 
@@ -44,8 +48,12 @@ export default function PaymentManagement() {
   const [orders, setOrders] = useState<OrderRecord[]>([])
   const [stats, setStats] = useState<CustomerStats>({
     total_orders: 0,
-    successful_orders: 0,
     total_revenue: 0,
+    monthly_revenue: 0,
+    active_subscriptions: 0,
+    total_subscriptions: 0,
+    successful_one_time: 0,
+    total_one_time: 0,
     pending_orders: 0
   })
   const [searchTerm, setSearchTerm] = useState("")
@@ -76,7 +84,7 @@ export default function PaymentManagement() {
 
       const { data, error } = await supabase
         .from('orders')
-        .select('*, products(name, description)')
+        .select('*')
         .eq('user_id', user.id)
         .eq('livemode', !showTestMode)
         .order('created_at', { ascending: false })
@@ -89,10 +97,40 @@ export default function PaymentManagement() {
       const successful = data?.filter(order => order.status === 'paid') || []
       const totalRevenue = successful.reduce((sum, order) => sum + (order.amount || 0), 0)
       
+      // 今月の売上を計算
+      const currentMonth = new Date().getMonth()
+      const currentYear = new Date().getFullYear()
+      const monthlyRevenue = successful
+        .filter(order => {
+          const orderDate = new Date(order.created_at)
+          return orderDate.getMonth() === currentMonth && orderDate.getFullYear() === currentYear
+        })
+        .reduce((sum, order) => sum + (order.amount || 0), 0)
+
+      // サブスクリプション統計
+      const subscriptionOrders = data?.filter(order => {
+        const metadata = order.metadata as any
+        return metadata?.product_type?.includes('subscription')
+      }) || []
+      const activeSubscriptions = subscriptionOrders.filter(order => order.status === 'paid').length
+      const totalSubscriptions = subscriptionOrders.length
+
+      // 単発決済統計  
+      const oneTimeOrders = data?.filter(order => {
+        const metadata = order.metadata as any
+        return !metadata?.product_type?.includes('subscription')
+      }) || []
+      const successfulOneTime = oneTimeOrders.filter(order => order.status === 'paid').length
+      const totalOneTime = oneTimeOrders.length
+      
       setStats({
         total_orders: data?.length || 0,
-        successful_orders: successful.length,
         total_revenue: totalRevenue,
+        monthly_revenue: monthlyRevenue,
+        active_subscriptions: activeSubscriptions,
+        total_subscriptions: totalSubscriptions,
+        successful_one_time: successfulOneTime,
+        total_one_time: totalOneTime,
         pending_orders: data?.filter(order => order.status === 'pending').length || 0
       })
     } catch (error) {
@@ -237,14 +275,22 @@ export default function PaymentManagement() {
           </div>
           
           <div className="flex items-center gap-2">
-            <span className="text-sm text-muted-foreground">
+            <span className={`text-sm font-medium px-2 py-1 rounded ${
+              showTestMode 
+                ? 'bg-amber-100 text-amber-800 border border-amber-300' 
+                : 'bg-emerald-100 text-emerald-800 border border-emerald-300'
+            }`}>
               {showTestMode ? 'テストモード' : '本番環境'}
             </span>
             <Button
               variant="outline"
               size="sm"
               onClick={() => setShowTestMode(!showTestMode)}
-              className="flex items-center gap-2"
+              className={`flex items-center gap-2 ${
+                showTestMode 
+                  ? 'border-amber-300 hover:bg-amber-50' 
+                  : 'border-emerald-300 hover:bg-emerald-50'
+              }`}
             >
               <ToggleLeft className="h-4 w-4" />
               {showTestMode ? '本番環境に切り替え' : 'テストモードに切り替え'}
@@ -253,7 +299,7 @@ export default function PaymentManagement() {
         </div>
 
         {/* 統計カード */}
-        <div className="grid gap-3 md:grid-cols-4 mb-4">
+        <div className="grid gap-3 md:grid-cols-6 mb-4">
           <Card className="p-3">
             <div className="flex items-center justify-between">
               <div>
@@ -263,24 +309,46 @@ export default function PaymentManagement() {
               <Users className="h-4 w-4 text-muted-foreground" />
             </div>
           </Card>
-          <Card className="p-3">
+          
+          <Card className="p-3 md:col-span-2">
             <div className="flex items-center justify-between">
-              <div>
-                <p className="text-xs font-medium text-muted-foreground">成功注文</p>
-                <p className="text-lg font-bold">{stats.successful_orders}</p>
-              </div>
-              <CreditCard className="h-4 w-4 text-muted-foreground" />
-            </div>
-          </Card>
-          <Card className="p-3">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-xs font-medium text-muted-foreground">総売上</p>
-                <p className="text-lg font-bold">{formatPrice(stats.total_revenue, 'jpy')}</p>
+              <div className="flex-1">
+                <div className="flex items-center gap-3">
+                  <div className="flex-1">
+                    <p className="text-xs font-medium text-muted-foreground">総売上</p>
+                    <p className="text-lg font-bold">¥{stats.total_revenue.toLocaleString('ja-JP')}</p>
+                  </div>
+                  <div className="w-px h-8 bg-border"></div>
+                  <div className="flex-1">
+                    <p className="text-xs font-medium text-muted-foreground">今月売上</p>
+                    <p className="text-lg font-bold">¥{stats.monthly_revenue.toLocaleString('ja-JP')}</p>
+                  </div>
+                </div>
               </div>
               <DollarSign className="h-4 w-4 text-muted-foreground" />
             </div>
           </Card>
+
+          <Card className="p-3">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-xs font-medium text-muted-foreground">サブスク会員数</p>
+                <p className="text-lg font-bold">{stats.active_subscriptions}/{stats.total_subscriptions}</p>
+              </div>
+              <CreditCard className="h-4 w-4 text-muted-foreground" />
+            </div>
+          </Card>
+
+          <Card className="p-3">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-xs font-medium text-muted-foreground">単発決済数</p>
+                <p className="text-lg font-bold">{stats.successful_one_time}/{stats.total_one_time}</p>
+              </div>
+              <TrendingUp className="h-4 w-4 text-muted-foreground" />
+            </div>
+          </Card>
+
           <Card className="p-3">
             <div className="flex items-center justify-between">
               <div>
