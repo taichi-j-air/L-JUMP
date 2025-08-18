@@ -1,12 +1,8 @@
 import React from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { CheckCircle } from 'lucide-react';
-import { Button } from '@/components/ui/button';
-import { useNavigate } from 'react-router-dom';
 
 export default function CheckoutSuccess() {
-  const navigate = useNavigate();
-
   return (
     <div className="min-h-screen bg-background flex items-center justify-center p-4">
       <Card className="w-full max-w-md">
@@ -23,12 +19,9 @@ export default function CheckoutSuccess() {
             お支払いが正常に完了しました。
             ありがとうございました。
           </p>
-          <Button 
-            onClick={() => navigate('/')}
-            className="w-full"
-          >
-            ホームに戻る
-          </Button>
+          <p className="text-sm text-muted-foreground border-t pt-4">
+            このままこのページを閉じてください
+          </p>
         </CardContent>
       </Card>
     </div>

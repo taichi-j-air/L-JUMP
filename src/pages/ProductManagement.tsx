@@ -800,23 +800,6 @@ export default function ProductManagement() {
                         </div>
                       )}
 
-                      {productForm.product_type === 'subscription_with_trial' && (
-                        <div>
-                          <Label htmlFor="trial-days">トライアル期間（日）</Label>
-                          <Input
-                            id="trial-days"
-                            type="number"
-                            min="1"
-                            step="1"
-                            value={productForm.trial_period_days || ''}
-                            onChange={(e) => setProductForm(prev => ({ ...prev, trial_period_days: Number(e.target.value) }))}
-                            placeholder="14"
-                          />
-                          <p className="text-xs text-muted-foreground mt-1">
-                            トライアル終了後から継続課金が開始されます（例：14日間無料、その後月額課金）
-                          </p>
-                        </div>
-                      )}
                     </div>
 
                     <div>

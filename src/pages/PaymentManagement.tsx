@@ -10,44 +10,51 @@ import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
 import { Label } from "@/components/ui/label"
-import { CardDescription } from "@/components/ui/card"
-import { Eye, RefreshCw, CreditCard, Users, TrendingUp, DollarSign, Search } from "lucide-react"
+import { Eye, RefreshCw, CreditCard, Users, TrendingUp, DollarSign, Search, Plus, ToggleLeft } from "lucide-react"
 import { toast } from "sonner"
 
-interface PaymentRecord {
+interface OrderRecord {
   id: string
-  customer_email: string
-  customer_name: string
+  user_id: string
+  product_id: string
+  stripe_session_id: string
+  stripe_customer_id: string | null
+  stripe_payment_intent_id: string | null
   amount: number
   currency: string
-  status: 'succeeded' | 'pending' | 'failed' | 'refunded'
-  subscription_status?: 'active' | 'canceled' | 'past_due' | 'unpaid'
-  plan_type: 'basic' | 'premium'
-  payment_method: string
+  status: string
+  livemode: boolean
+  metadata: any
   created_at: string
-  subscription_id?: string
+  updated_at: string
+  friend_uid?: string
+  products?: any
 }
 
 interface CustomerStats {
-  total_customers: number
-  active_subscriptions: number
-  monthly_revenue: number
-  yearly_revenue: number
+  total_orders: number
+  successful_orders: number
+  total_revenue: number
+  pending_orders: number
 }
 
 export default function PaymentManagement() {
   const [user, setUser] = useState<User | null>(null)
   const [loading, setLoading] = useState(true)
-  const [payments, setPayments] = useState<PaymentRecord[]>([])
+  const [orders, setOrders] = useState<OrderRecord[]>([])
   const [stats, setStats] = useState<CustomerStats>({
-    total_customers: 0,
-    active_subscriptions: 0,
-    monthly_revenue: 0,
-    yearly_revenue: 0
+    total_orders: 0,
+    successful_orders: 0,
+    total_revenue: 0,
+    pending_orders: 0
   })
   const [searchTerm, setSearchTerm] = useState("")
   const [statusFilter, setStatusFilter] = useState("all")
-  const [selectedCustomer, setSelectedCustomer] = useState<PaymentRecord | null>(null)
+  const [selectedOrder, setSelectedOrder] = useState<OrderRecord | null>(null)
+  const [showTestMode, setShowTestMode] = useState(false)
+  const [showAddDialog, setShowAddDialog] = useState(false)
+  const [friendUid, setFriendUid] = useState("")
+  const [friends, setFriends] = useState<any[]>([])
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
@@ -58,95 +65,118 @@ export default function PaymentManagement() {
 
   useEffect(() => {
     if (user) {
-      loadPayments()
-      loadStats()
+      loadOrders()
+      loadFriends()
     }
-  }, [user])
+  }, [user, showTestMode])
 
-  const loadPayments = async () => {
+  const loadOrders = async () => {
     try {
-      // プレースホルダー: 実際の実装ではStripe APIから決済データを取得
-      const mockPayments: PaymentRecord[] = [
-        {
-          id: "pm_1234567890",
-          customer_email: "user1@example.com",
-          customer_name: "田中太郎",
-          amount: 2980,
-          currency: "jpy",
-          status: "succeeded",
-          subscription_status: "active",
-          plan_type: "basic",
-          payment_method: "card",
-          created_at: "2024-01-15T10:30:00Z",
-          subscription_id: "sub_1234567890"
-        },
-        {
-          id: "pm_1234567891",
-          customer_email: "user2@example.com", 
-          customer_name: "佐藤花子",
-          amount: 9800,
-          currency: "jpy",
-          status: "succeeded",
-          subscription_status: "active",
-          plan_type: "premium",
-          payment_method: "card",
-          created_at: "2024-01-14T15:45:00Z",
-          subscription_id: "sub_1234567891"
-        }
-      ]
-      setPayments(mockPayments)
+      if (!user) return
+
+      const { data, error } = await supabase
+        .from('orders')
+        .select('*, products(name, description)')
+        .eq('user_id', user.id)
+        .eq('livemode', !showTestMode)
+        .order('created_at', { ascending: false })
+
+      if (error) throw error
+
+      setOrders(data || [])
+
+      // 統計を計算
+      const successful = data?.filter(order => order.status === 'paid') || []
+      const totalRevenue = successful.reduce((sum, order) => sum + (order.amount || 0), 0)
+      
+      setStats({
+        total_orders: data?.length || 0,
+        successful_orders: successful.length,
+        total_revenue: totalRevenue,
+        pending_orders: data?.filter(order => order.status === 'pending').length || 0
+      })
     } catch (error) {
-      console.error('Error loading payments:', error)
-      toast.error('決済データの取得に失敗しました')
+      console.error('Error loading orders:', error)
+      toast.error('注文データの取得に失敗しました')
     }
   }
 
-  const loadStats = async () => {
+  const loadFriends = async () => {
     try {
-      // プレースホルダー: 実際の実装ではStripe APIから統計データを取得
-      const mockStats: CustomerStats = {
-        total_customers: 150,
-        active_subscriptions: 120,
-        monthly_revenue: 450000,
-        yearly_revenue: 5400000
-      }
-      setStats(mockStats)
+      if (!user) return
+
+      const { data, error } = await supabase
+        .from('line_friends')
+        .select('id, display_name, short_uid, line_user_id')
+        .eq('user_id', user.id)
+        .order('display_name')
+
+      if (error) throw error
+      setFriends(data || [])
     } catch (error) {
-      console.error('Error loading stats:', error)
-      toast.error('統計データの取得に失敗しました')
+      console.error('Error loading friends:', error)
     }
   }
 
-  const handleRefund = async (paymentId: string) => {
+  const handleRefund = async (orderId: string) => {
     try {
-      // プレースホルダー: 実際の実装ではStripe APIで返金処理
-      console.log('Processing refund for payment:', paymentId)
+      // Stripe返金処理のエッジ関数を呼び出し
+      const { error } = await supabase.functions.invoke('stripe-refund', {
+        body: { orderId }
+      })
+
+      if (error) throw error
+
       toast.success('返金処理を開始しました')
-      loadPayments() // データを再読み込み
+      loadOrders()
     } catch (error) {
       console.error('Error processing refund:', error)
       toast.error('返金処理に失敗しました')
     }
   }
 
-  const handleCancelSubscription = async (subscriptionId: string) => {
+  const handleCancelSubscription = async (customerId: string) => {
     try {
-      // プレースホルダー: 実際の実装ではStripe APIでサブスクリプション解約
-      console.log('Canceling subscription:', subscriptionId)
+      // Stripeサブスクリプション解約のエッジ関数を呼び出し
+      const { error } = await supabase.functions.invoke('stripe-cancel-subscription', {
+        body: { customerId }
+      })
+
+      if (error) throw error
+
       toast.success('サブスクリプションの解約処理を開始しました')
-      loadPayments() // データを再読み込み
+      loadOrders()
     } catch (error) {
       console.error('Error canceling subscription:', error)
       toast.error('サブスクリプションの解約に失敗しました')
     }
   }
 
-  const filteredPayments = payments.filter(payment => {
+  const handleAddOrderManually = async () => {
+    try {
+      const selectedFriend = friends.find(f => f.short_uid === friendUid.toUpperCase())
+      if (!selectedFriend) {
+        toast.error('指定されたUIDの友達が見つかりません')
+        return
+      }
+
+      // 手動で注文を追加するロジック（必要に応じて実装）
+      toast.success(`${selectedFriend.display_name}の注文を手動追加しました`)
+      setShowAddDialog(false)
+      setFriendUid("")
+      loadOrders()
+    } catch (error) {
+      console.error('Error adding order manually:', error)
+      toast.error('手動追加に失敗しました')
+    }
+  }
+
+  const filteredOrders = orders.filter(order => {
     const matchesSearch = !searchTerm || 
-      payment.customer_email.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      payment.customer_name.toLowerCase().includes(searchTerm.toLowerCase())
+      order.stripe_session_id?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      order.friend_uid?.toLowerCase().includes(searchTerm.toLowerCase())
     
-    const matchesStatus = statusFilter === "all" || payment.status === statusFilter
+    const matchesStatus = statusFilter === "all" || order.status === statusFilter
     
     return matchesSearch && matchesStatus
   })
@@ -160,13 +190,12 @@ export default function PaymentManagement() {
 
   const getStatusColor = (status: string) => {
     switch (status) {
-      case 'succeeded':
-      case 'active':
+      case 'paid':
         return 'default'
       case 'pending':
         return 'secondary'
       case 'failed':
-      case 'canceled':
+      case 'refunded':
         return 'destructive'
       default:
         return 'secondary'
@@ -175,14 +204,10 @@ export default function PaymentManagement() {
 
   const getStatusLabel = (status: string) => {
     switch (status) {
-      case 'succeeded': return '成功'
+      case 'paid': return '成功'
       case 'pending': return '保留中'
       case 'failed': return '失敗'
       case 'refunded': return '返金済み'
-      case 'active': return 'アクティブ'
-      case 'canceled': return '解約済み'
-      case 'past_due': return '支払い遅延'
-      case 'unpaid': return '未払い'
       default: return status
     }
   }
@@ -200,23 +225,40 @@ export default function PaymentManagement() {
       <AppHeader user={user} />
       
       <div className="container mx-auto px-4">
-        <div className="mb-4">
-          <h1 className="text-xl font-bold flex items-center gap-2">
-            <CreditCard className="h-5 w-5" />
-            決済管理
-          </h1>
-          <p className="text-sm text-muted-foreground">
-            Stripe決済とサブスクリプションを管理します。
-          </p>
+        <div className="mb-4 flex justify-between items-center">
+          <div>
+            <h1 className="text-xl font-bold flex items-center gap-2">
+              <CreditCard className="h-5 w-5" />
+              決済管理
+            </h1>
+            <p className="text-sm text-muted-foreground">
+              Stripe決済とサブスクリプションを管理します。
+            </p>
+          </div>
+          
+          <div className="flex items-center gap-2">
+            <span className="text-sm text-muted-foreground">
+              {showTestMode ? 'テストモード' : '本番環境'}
+            </span>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setShowTestMode(!showTestMode)}
+              className="flex items-center gap-2"
+            >
+              <ToggleLeft className="h-4 w-4" />
+              {showTestMode ? '本番環境に切り替え' : 'テストモードに切り替え'}
+            </Button>
+          </div>
         </div>
 
-        {/* 統計カード - コンパクト版 */}
+        {/* 統計カード */}
         <div className="grid gap-3 md:grid-cols-4 mb-4">
           <Card className="p-3">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-xs font-medium text-muted-foreground">総顧客数</p>
-                <p className="text-lg font-bold">{stats.total_customers}</p>
+                <p className="text-xs font-medium text-muted-foreground">総注文数</p>
+                <p className="text-lg font-bold">{stats.total_orders}</p>
               </div>
               <Users className="h-4 w-4 text-muted-foreground" />
             </div>
@@ -224,8 +266,8 @@ export default function PaymentManagement() {
           <Card className="p-3">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-xs font-medium text-muted-foreground">アクティブ契約</p>
-                <p className="text-lg font-bold">{stats.active_subscriptions}</p>
+                <p className="text-xs font-medium text-muted-foreground">成功注文</p>
+                <p className="text-lg font-bold">{stats.successful_orders}</p>
               </div>
               <CreditCard className="h-4 w-4 text-muted-foreground" />
             </div>
@@ -233,33 +275,60 @@ export default function PaymentManagement() {
           <Card className="p-3">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-xs font-medium text-muted-foreground">月間売上</p>
-                <p className="text-lg font-bold">{formatPrice(stats.monthly_revenue, 'jpy')}</p>
+                <p className="text-xs font-medium text-muted-foreground">総売上</p>
+                <p className="text-lg font-bold">{formatPrice(stats.total_revenue, 'jpy')}</p>
               </div>
-              <TrendingUp className="h-4 w-4 text-muted-foreground" />
+              <DollarSign className="h-4 w-4 text-muted-foreground" />
             </div>
           </Card>
           <Card className="p-3">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-xs font-medium text-muted-foreground">年間売上</p>
-                <p className="text-lg font-bold">{formatPrice(stats.yearly_revenue, 'jpy')}</p>
+                <p className="text-xs font-medium text-muted-foreground">保留中</p>
+                <p className="text-lg font-bold">{stats.pending_orders}</p>
               </div>
-              <DollarSign className="h-4 w-4 text-muted-foreground" />
+              <TrendingUp className="h-4 w-4 text-muted-foreground" />
             </div>
           </Card>
         </div>
 
-        {/* 決済履歴 */}
+        {/* 注文履歴 */}
         <Card>
           <CardHeader className="p-4">
             <div className="flex justify-between items-center">
-              <CardTitle className="text-lg">決済履歴 ({filteredPayments.length}件)</CardTitle>
+              <CardTitle className="text-lg">注文履歴 ({filteredOrders.length}件)</CardTitle>
               <div className="flex gap-2">
-                <Button variant="outline" size="sm" className="text-xs">
-                  手動追加
-                </Button>
-                <Button onClick={loadPayments} variant="outline" size="sm">
+                <Dialog open={showAddDialog} onOpenChange={setShowAddDialog}>
+                  <DialogTrigger asChild>
+                    <Button variant="outline" size="sm" className="text-xs">
+                      <Plus className="h-3 w-3 mr-1" />
+                      手動追加
+                    </Button>
+                  </DialogTrigger>
+                  <DialogContent>
+                    <DialogHeader>
+                      <DialogTitle>注文手動追加</DialogTitle>
+                    </DialogHeader>
+                    <div className="space-y-4">
+                      <div>
+                        <Label htmlFor="friend-uid">友達UID</Label>
+                        <Input
+                          id="friend-uid"
+                          value={friendUid}
+                          onChange={(e) => setFriendUid(e.target.value)}
+                          placeholder="友達のUIDを入力"
+                        />
+                        <p className="text-xs text-muted-foreground mt-1">
+                          友達一覧のUIDを入力してください
+                        </p>
+                      </div>
+                      <Button onClick={handleAddOrderManually} className="w-full">
+                        追加
+                      </Button>
+                    </div>
+                  </DialogContent>
+                </Dialog>
+                <Button onClick={loadOrders} variant="outline" size="sm">
                   <RefreshCw className="h-3 w-3 mr-1" />
                   更新
                 </Button>
@@ -272,7 +341,7 @@ export default function PaymentManagement() {
                 <div className="relative">
                   <Search className="absolute left-2 top-2 h-3 w-3 text-muted-foreground" />
                   <Input
-                    placeholder="顧客名またはメールアドレスで検索"
+                    placeholder="セッションIDまたは友達UIDで検索"
                     value={searchTerm}
                     onChange={(e) => setSearchTerm(e.target.value)}
                     className="pl-7 h-8 text-xs"
@@ -285,7 +354,7 @@ export default function PaymentManagement() {
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">すべて</SelectItem>
-                  <SelectItem value="succeeded">成功</SelectItem>
+                  <SelectItem value="paid">成功</SelectItem>
                   <SelectItem value="pending">保留中</SelectItem>
                   <SelectItem value="failed">失敗</SelectItem>
                   <SelectItem value="refunded">返金済み</SelectItem>
@@ -298,109 +367,91 @@ export default function PaymentManagement() {
               <Table>
                 <TableHeader>
                   <TableRow className="text-xs">
-                    <TableHead className="py-2">顧客</TableHead>
-                    <TableHead className="py-2">プラン</TableHead>
+                    <TableHead className="py-2">商品名</TableHead>
                     <TableHead className="py-2">金額</TableHead>
-                    <TableHead className="py-2">決済状況</TableHead>
-                    <TableHead className="py-2">契約状況</TableHead>
-                    <TableHead className="py-2">決済日</TableHead>
+                    <TableHead className="py-2">ステータス</TableHead>
+                    <TableHead className="py-2">モード</TableHead>
+                    <TableHead className="py-2">注文日</TableHead>
                     <TableHead className="py-2">アクション</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {filteredPayments.map((payment) => (
-                    <TableRow key={payment.id} className="text-xs">
+                  {filteredOrders.map((order) => (
+                    <TableRow key={order.id} className="text-xs">
                       <TableCell className="py-2">
                         <div>
-                          <div className="font-medium text-xs">{payment.customer_name}</div>
-                          <div className="text-xs text-muted-foreground">{payment.customer_email}</div>
+                          <div className="font-medium text-xs">{order.metadata?.product_name || 'Unknown Product'}</div>
+                          <div className="text-xs text-muted-foreground">{order.stripe_session_id}</div>
                         </div>
                       </TableCell>
-                      <TableCell className="py-2">
-                        <Badge variant="secondary" className="text-xs">{payment.plan_type}</Badge>
-                      </TableCell>
                       <TableCell className="py-2 font-medium text-xs">
-                        {formatPrice(payment.amount, payment.currency)}
+                        {formatPrice(order.amount, order.currency)}
                       </TableCell>
                       <TableCell className="py-2">
-                        <Badge variant={getStatusColor(payment.status)} className="text-xs">
-                          {getStatusLabel(payment.status)}
+                        <Badge variant={getStatusColor(order.status)} className="text-xs">
+                          {getStatusLabel(order.status)}
                         </Badge>
                       </TableCell>
                       <TableCell className="py-2">
-                        {payment.subscription_status && (
-                          <Badge variant={getStatusColor(payment.subscription_status)} className="text-xs">
-                            {getStatusLabel(payment.subscription_status)}
-                          </Badge>
-                        )}
+                        <Badge variant={order.livemode ? 'default' : 'secondary'} className="text-xs">
+                          {order.livemode ? '本番' : 'テスト'}
+                        </Badge>
                       </TableCell>
                       <TableCell className="py-2 text-xs">
-                        {new Date(payment.created_at).toLocaleDateString('ja-JP')}
+                        {new Date(order.created_at).toLocaleDateString('ja-JP')}
                       </TableCell>
                       <TableCell className="py-2">
                         <div className="flex gap-1">
                           <Dialog>
                             <DialogTrigger asChild>
-                              <Button size="sm" variant="outline" className="h-6 w-6 p-0" onClick={() => setSelectedCustomer(payment)}>
+                              <Button size="sm" variant="outline" className="h-6 w-6 p-0" onClick={() => setSelectedOrder(order)}>
                                 <Eye className="h-3 w-3" />
                               </Button>
                             </DialogTrigger>
                             <DialogContent className="max-w-2xl">
                               <DialogHeader>
-                                <DialogTitle>顧客詳細</DialogTitle>
+                                <DialogTitle>注文詳細</DialogTitle>
                               </DialogHeader>
-                              {selectedCustomer && (
+                              {selectedOrder && (
                                 <div className="space-y-4">
                                   <div className="grid grid-cols-2 gap-4">
                                     <div>
-                                      <label className="text-sm font-medium">顧客名</label>
-                                      <p className="text-sm">{selectedCustomer.customer_name}</p>
-                                    </div>
-                                    <div>
-                                      <label className="text-sm font-medium">メールアドレス</label>
-                                      <p className="text-sm">{selectedCustomer.customer_email}</p>
-                                    </div>
-                                    <div>
-                                      <label className="text-sm font-medium">プラン</label>
-                                      <p className="text-sm">{selectedCustomer.plan_type}</p>
+                                      <label className="text-sm font-medium">商品名</label>
+                                      <p className="text-sm">{selectedOrder.metadata?.product_name || 'Unknown'}</p>
                                     </div>
                                     <div>
                                       <label className="text-sm font-medium">金額</label>
-                                      <p className="text-sm">{formatPrice(selectedCustomer.amount, selectedCustomer.currency)}</p>
+                                      <p className="text-sm">{formatPrice(selectedOrder.amount, selectedOrder.currency)}</p>
                                     </div>
                                     <div>
-                                      <label className="text-sm font-medium">決済状況</label>
-                                      <p className="text-sm">{getStatusLabel(selectedCustomer.status)}</p>
+                                      <label className="text-sm font-medium">ステータス</label>
+                                      <p className="text-sm">{getStatusLabel(selectedOrder.status)}</p>
                                     </div>
                                     <div>
-                                      <label className="text-sm font-medium">契約状況</label>
-                                      <p className="text-sm">{selectedCustomer.subscription_status ? getStatusLabel(selectedCustomer.subscription_status) : 'N/A'}</p>
-                                    </div>
-                                    <div>
-                                      <label className="text-sm font-medium">累計課金額</label>
-                                      <p className="text-sm font-bold text-green-600">{formatPrice(50000, 'jpy')}</p>
+                                      <label className="text-sm font-medium">Stripe Customer ID</label>
+                                      <p className="text-sm">{selectedOrder.stripe_customer_id || 'N/A'}</p>
                                     </div>
                                   </div>
                                 </div>
                               )}
                             </DialogContent>
                           </Dialog>
-                          {payment.status === 'succeeded' && (
+                          {order.status === 'paid' && (
                             <Button
                               size="sm"
                               variant="destructive"
                               className="h-6 px-2 text-xs"
-                              onClick={() => handleRefund(payment.id)}
+                              onClick={() => handleRefund(order.id)}
                             >
                               返金
                             </Button>
                           )}
-                          {payment.subscription_id && payment.subscription_status === 'active' && (
+                          {order.stripe_customer_id && order.status === 'paid' && order.metadata?.product_type?.includes('subscription') && (
                             <Button
                               size="sm"
                               variant="outline"
                               className="h-6 px-2 text-xs"
-                              onClick={() => handleCancelSubscription(payment.subscription_id!)}
+                              onClick={() => handleCancelSubscription(order.stripe_customer_id)}
                             >
                               解約
                             </Button>

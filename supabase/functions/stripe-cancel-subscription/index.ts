@@ -1,0 +1,108 @@
+import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
+import Stripe from "https://esm.sh/stripe@14.21.0";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
+
+const corsHeaders = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+};
+
+serve(async (req) => {
+  if (req.method === "OPTIONS") {
+    return new Response(null, { headers: corsHeaders });
+  }
+
+  try {
+    const { customerId } = await req.json();
+
+    if (!customerId) {
+      throw new Error("customerId is required");
+    }
+
+    // Supabase クライアント（サービスロール）
+    const supabaseClient = createClient(
+      Deno.env.get("SUPABASE_URL") ?? "",
+      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "",
+      { auth: { persistSession: false } }
+    );
+
+    // カスタマーのライブモードを確認（注文履歴から判定）
+    const { data: orders, error: ordersError } = await supabaseClient
+      .from('orders')
+      .select('livemode')
+      .eq('stripe_customer_id', customerId)
+      .limit(1);
+
+    if (ordersError || !orders || orders.length === 0) {
+      throw new Error("Customer orders not found");
+    }
+
+    const isLiveMode = orders[0].livemode;
+
+    // Stripe 初期化
+    const stripeKey = isLiveMode 
+      ? Deno.env.get("STRIPE_LIVE_SECRET_KEY")
+      : Deno.env.get("STRIPE_TEST_SECRET_KEY");
+    
+    if (!stripeKey) {
+      throw new Error("Stripe secret key not configured");
+    }
+
+    const stripe = new Stripe(stripeKey, { apiVersion: "2023-10-16" });
+
+    // アクティブなサブスクリプションを取得
+    const subscriptions = await stripe.subscriptions.list({
+      customer: customerId,
+      status: 'active',
+      limit: 10
+    });
+
+    if (subscriptions.data.length === 0) {
+      throw new Error("No active subscriptions found for this customer");
+    }
+
+    const cancelledSubscriptions = [];
+
+    // すべてのアクティブなサブスクリプションを解約
+    for (const subscription of subscriptions.data) {
+      const cancelledSubscription = await stripe.subscriptions.cancel(subscription.id);
+      cancelledSubscriptions.push({
+        id: cancelledSubscription.id,
+        status: cancelledSubscription.status,
+        cancelled_at: cancelledSubscription.canceled_at
+      });
+    }
+
+    // 該当する注文のステータスを更新（必要に応じて）
+    await supabaseClient
+      .from('orders')
+      .update({ 
+        updated_at: new Date().toISOString() 
+      })
+      .eq('stripe_customer_id', customerId)
+      .eq('status', 'paid');
+
+    console.log(`[stripe-cancel-subscription] Cancelled subscriptions for customer: ${customerId}`);
+
+    return new Response(JSON.stringify({
+      success: true,
+      customerId,
+      cancelledSubscriptions
+    }), {
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+      status: 200,
+    });
+
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    console.error(`[stripe-cancel-subscription] Error: ${errorMessage}`);
+    
+    return new Response(JSON.stringify({ 
+      success: false, 
+      error: errorMessage 
+    }), {
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+      status: 500,
+    });
+  }
+});

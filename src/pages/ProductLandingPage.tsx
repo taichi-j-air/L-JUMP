@@ -181,19 +181,8 @@ export default function ProductLandingPage() {
                   {formatPrice(product.price, product.currency)}
                 </div>
                 
-                {product.product_type === "subscription" && (
+                {(product.product_type === "subscription" || product.product_type === "subscription_with_trial") && (
                   <p className="text-sm text-muted-foreground mb-2">毎月課金</p>
-                )}
-                
-                {product.product_type === "subscription_with_trial" && product.trial_period_days && (
-                  <div className="mb-3">
-                    <Badge variant="secondary" className="text-xs px-3 py-1">
-                      {product.trial_period_days}日間 無料トライアル
-                    </Badge>
-                    <p className="text-xs text-muted-foreground mt-1">
-                      トライアル後 {formatPrice(product.price, product.currency)}/月
-                    </p>
-                  </div>
                 )}
 
                 {(product.landing_page_content || product.description) && (
