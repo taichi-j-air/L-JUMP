@@ -15,71 +15,72 @@ const Index = () => {
   const navigate = useNavigate();
 
   // デバッグメッセージとLINEログイン成功を処理
-  const debugType = searchParams.get('debug');
-  const debugCode = searchParams.get('code');
-  const debugState = searchParams.get('state');
-  const debugError = searchParams.get('error');
-  const debugMessage = searchParams.get('message');
-  const debugUrl = searchParams.get('url');
-  
+  const debugType = searchParams.get("debug");
+  const debugCode = searchParams.get("code");
+  const debugState = searchParams.get("state");
+  const debugError = searchParams.get("error");
+  const debugMessage = searchParams.get("message");
+  const debugUrl = searchParams.get("url");
+
   // LINEログイン成功の処理
-  const lineLogin = searchParams.get('line_login');
-  const scenarioRegistered = searchParams.get('scenario_registered');
-  const userName = searchParams.get('user_name');
+  const lineLogin = searchParams.get("line_login");
+  const scenarioRegistered = searchParams.get("scenario_registered");
+  const userName = searchParams.get("user_name");
 
   const getDebugMessage = () => {
-    // LINEログイン成功の場合
-    if (lineLogin === 'success') {
+    // LINEログイン成功
+    if (lineLogin === "success") {
       return {
-        type: 'success' as const,
+        type: "success" as const,
         icon: CheckCircle,
-        title: 'LINEログイン成功',
-        message: scenarioRegistered === 'true' 
-          ? `${userName ? decodeURIComponent(userName) : 'ユーザー'}さんがシナリオに登録されました！ステップ配信が開始されます。`
-          : `${userName ? decodeURIComponent(userName) : 'ユーザー'}さんのLINEログインが完了しました。`
+        title: "LINEログイン成功",
+        message:
+          scenarioRegistered === "true"
+            ? `${userName ? decodeURIComponent(userName) : "ユーザー"}さんがシナリオに登録されました！ステップ配信が開始されます。`
+            : `${userName ? decodeURIComponent(userName) : "ユーザー"}さんのLINEログインが完了しました。`,
       };
     }
-    
-    // LINEログインエラーの場合
-    if (lineLogin === 'error') {
-      const errorMsg = searchParams.get('error');
+
+    // LINEログインエラー
+    if (lineLogin === "error") {
+      const errorMsg = searchParams.get("error");
       return {
-        type: 'error' as const,
+        type: "error" as const,
         icon: AlertTriangle,
-        title: 'LINEログインエラー',
-        message: errorMsg ? `エラー: ${errorMsg}` : 'LINEログイン中にエラーが発生しました。'
+        title: "LINEログインエラー",
+        message: errorMsg ? `エラー: ${errorMsg}` : "LINEログイン中にエラーが発生しました。",
       };
     }
-    
-    // 既存のデバッグメッセージ処理
+
+    // 既存のデバッグメッセージ
     switch (debugType) {
-      case 'line_success':
+      case "line_success":
         return {
-          type: 'success' as const,
+          type: "success" as const,
           icon: CheckCircle,
-          title: 'LINE Login コールバック成功',
-          message: `認証コード: ${debugCode}、State: ${debugState}`
+          title: "LINE Login コールバック成功",
+          message: `認証コード: ${debugCode}、State: ${debugState}`,
         };
-      case 'line_error':
+      case "line_error":
         return {
-          type: 'error' as const,
+          type: "error" as const,
           icon: AlertTriangle,
-          title: 'LINE認証エラー',
-          message: `エラー: ${debugError}${debugMessage ? ` - ${decodeURIComponent(debugMessage)}` : ''}`
+          title: "LINE認証エラー",
+          message: `エラー: ${debugError}${debugMessage ? ` - ${decodeURIComponent(debugMessage)}` : ""}`,
         };
-      case 'function_error':
+      case "function_error":
         return {
-          type: 'error' as const,
+          type: "error" as const,
           icon: AlertTriangle,
-          title: 'Edge Functionエラー',
-          message: `エラー: ${debugMessage ? decodeURIComponent(debugMessage) : '不明なエラー'}`
+          title: "Edge Functionエラー",
+          message: `エラー: ${debugMessage ? decodeURIComponent(debugMessage) : "不明なエラー"}`,
         };
-      case 'no_params':
+      case "no_params":
         return {
-          type: 'warning' as const,
+          type: "warning" as const,
           icon: Info,
-          title: 'パラメータなし',
-          message: `URL: ${debugUrl ? decodeURIComponent(debugUrl) : '不明'}`
+          title: "パラメータなし",
+          message: `URL: ${debugUrl ? decodeURIComponent(debugUrl) : "不明"}`,
         };
       default:
         return null;
@@ -87,18 +88,17 @@ const Index = () => {
   };
 
   const debugInfo = getDebugMessage();
+  const DebugIcon = debugInfo?.icon; // ← 動的コンポーネントは変数にして使う
 
   useEffect(() => {
-    // Set up auth state listener FIRST
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      (event, session) => {
-        setSession(session);
-        setUser(session?.user ?? null);
-        setLoading(false);
-      }
-    );
+    // 認証リスナー
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      setSession(session);
+      setUser(session?.user ?? null);
+      setLoading(false);
+    });
 
-    // THEN check for existing session
+    // 既存セッション取得
     supabase.auth.getSession().then(({ data: { session } }) => {
       setSession(session);
       setUser(session?.user ?? null);
@@ -107,6 +107,23 @@ const Index = () => {
 
     return () => subscription.unsubscribe();
   }, []);
+
+  // （任意）成功・エラーのクエリは一度表示したらURLから消す
+  useEffect(() => {
+    if (lineLogin) {
+      const u = new URL(window.location.href);
+      u.searchParams.delete("line_login");
+      u.searchParams.delete("scenario_registered");
+      u.searchParams.delete("user_name");
+      u.searchParams.delete("debug");
+      u.searchParams.delete("code");
+      u.searchParams.delete("state");
+      u.searchParams.delete("error");
+      u.searchParams.delete("message");
+      u.searchParams.delete("url");
+      window.history.replaceState({}, "", u.toString());
+    }
+  }, [lineLogin]);
 
   const handleSignOut = async () => {
     await supabase.auth.signOut();
@@ -126,8 +143,8 @@ const Index = () => {
     );
   }
 
-  // LINEログイン成功の場合は、認証なしでも特別な画面を表示
-  if (!user && lineLogin === 'success') {
+  // LINEログイン成功の特別ページ（未ログインでも表示）
+  if (!user && lineLogin === "success") {
     return (
       <div className="min-h-screen bg-background">
         <header className="border-b">
@@ -135,40 +152,37 @@ const Index = () => {
             <h1 className="text-2xl font-bold">FlexMaster</h1>
           </div>
         </header>
-        
+
         <main className="container mx-auto px-4 py-8">
           {debugInfo && (
             <Alert className={`mb-6 border-green-500 bg-green-50`}>
               <CheckCircle className="h-4 w-4 text-green-600" />
               <AlertDescription>
-                <strong>{debugInfo.title}</strong><br />
+                <strong>{debugInfo.title}</strong>
+                <br />
                 {debugInfo.message}
               </AlertDescription>
             </Alert>
           )}
-          
+
           <div className="text-center">
             <Card className="w-full max-w-md mx-auto">
               <CardHeader>
                 <CardTitle className="text-2xl font-bold text-green-600">登録完了！</CardTitle>
-                <CardDescription className="text-lg">
-                  LINEでのシナリオ登録が完了しました
-                </CardDescription>
+                <CardDescription className="text-lg">LINEでのシナリオ登録が完了しました</CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
                 <div className="text-center">
                   <CheckCircle className="h-16 w-16 text-green-600 mx-auto mb-4" />
                   <p className="text-muted-foreground">
-                    {userName ? decodeURIComponent(userName) : 'あなた'}さん、ありがとうございます！<br />
-                    シナリオに登録されました。<br />
+                    {userName ? decodeURIComponent(userName) : "あなた"}さん、ありがとうございます！
+                    <br />
+                    シナリオに登録されました。
+                    <br />
                     LINEでメッセージの配信を開始します。
                   </p>
                 </div>
-                <Button 
-                  onClick={() => window.close()} 
-                  className="w-full" 
-                  size="lg"
-                >
+                <Button onClick={() => window.close()} className="w-full" size="lg">
                   このページを閉じる
                 </Button>
               </CardContent>
@@ -185,14 +199,11 @@ const Index = () => {
         <Card className="w-full max-w-md text-center">
           <CardHeader>
             <CardTitle className="text-3xl font-bold">FlexMaster</CardTitle>
-            <CardDescription className="text-lg">
-              LINE APIを活用したフレキシブルなチャットボット管理システム
-            </CardDescription>
+            <CardDescription className="text-lg">LINE APIを活用したフレキシブルなチャットボット管理システム</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
             <p className="text-muted-foreground">
-              LINE Bot APIの設定・管理から、チャットボットの動作制御まで、
-              すべてを一箇所で管理できる統合プラットフォームです。
+              LINE Bot APIの設定・管理から、チャットボットの動作制御まで、 すべてを一箇所で管理できる統合プラットフォームです。
             </p>
             <Button onClick={handleGoToAuth} className="w-full" size="lg">
               ログイン / サインアップ
@@ -209,110 +220,94 @@ const Index = () => {
         <div className="container mx-auto px-4 py-4 flex justify-between items-center">
           <h1 className="text-2xl font-bold">FlexMaster</h1>
           <div className="flex items-center gap-4">
-            <span className="text-sm text-muted-foreground">
-              ようこそ、{user.email}
-            </span>
+            <span className="text-sm text-muted-foreground">ようこそ、{user.email}</span>
             <Button variant="outline" onClick={handleSignOut}>
               ログアウト
             </Button>
           </div>
         </div>
       </header>
-      
+
       <main className="container mx-auto px-4 py-8">
         {/* デバッグ情報の表示 */}
         {debugInfo && (
-          <Alert className={`mb-6 ${
-            debugInfo.type === 'success' ? 'border-green-500 bg-green-50' :
-            debugInfo.type === 'error' ? 'border-red-500 bg-red-50' :
-            'border-yellow-500 bg-yellow-50'
-          }`}>
-            <debugInfo.icon className={`h-4 w-4 ${
-              debugInfo.type === 'success' ? 'text-green-600' :
-              debugInfo.type === 'error' ? 'text-red-600' :
-              'text-yellow-600'
-            }`} />
+          <Alert
+            className={`mb-6 ${
+              debugInfo.type === "success"
+                ? "border-green-500 bg-green-50"
+                : debugInfo.type === "error"
+                ? "border-red-500 bg-red-50"
+                : "border-yellow-500 bg-yellow-50"
+            }`}
+          >
+            {DebugIcon && (
+              <DebugIcon
+                className={`h-4 w-4 ${
+                  debugInfo.type === "success"
+                    ? "text-green-600"
+                    : debugInfo.type === "error"
+                    ? "text-red-600"
+                    : "text-yellow-600"
+                }`}
+              />
+            )}
             <AlertDescription>
-              <strong>{debugInfo.title}</strong><br />
+              <strong>{debugInfo.title}</strong>
+              <br />
               {debugInfo.message}
             </AlertDescription>
           </Alert>
         )}
-        
+
         <div className="text-center mb-8">
           <h2 className="text-3xl font-bold mb-4">ダッシュボード</h2>
-          <p className="text-xl text-muted-foreground">
-            LINE Botの設定と管理をここから始めましょう
-          </p>
+          <p className="text-xl text-muted-foreground">LINE Botの設定と管理をここから始めましょう</p>
         </div>
-        
+
         <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
           <Card>
             <CardHeader>
               <CardTitle>LINE API設定</CardTitle>
-              <CardDescription>
-                Channel Access TokenとChannel Secretの設定
-              </CardDescription>
+              <CardDescription>Channel Access TokenとChannel Secretの設定</CardDescription>
             </CardHeader>
             <CardContent>
-              <Button 
-                className="w-full" 
-                onClick={() => navigate("/line-api-settings")}
-              >
+              <Button className="w-full" onClick={() => navigate("/line-api-settings")}>
                 設定開始
               </Button>
             </CardContent>
           </Card>
-          
+
           <Card>
             <CardHeader>
               <CardTitle>Webhook設定</CardTitle>
-              <CardDescription>
-                LINE PlatformからのWebhook URLの設定
-              </CardDescription>
+              <CardDescription>LINE PlatformからのWebhook URLの設定</CardDescription>
             </CardHeader>
             <CardContent>
-              <Button 
-                className="w-full" 
-                variant="outline"
-                onClick={() => navigate("/webhook-settings")}
-              >
+              <Button className="w-full" variant="outline" onClick={() => navigate("/webhook-settings")}>
                 設定確認
               </Button>
             </CardContent>
           </Card>
-          
+
           <Card>
             <CardHeader>
               <CardTitle>プロファイル管理</CardTitle>
-              <CardDescription>
-                ユーザー情報とAPI設定の管理
-              </CardDescription>
+              <CardDescription>ユーザー情報とAPI設定の管理</CardDescription>
             </CardHeader>
             <CardContent>
-              <Button 
-                className="w-full" 
-                variant="outline"
-                onClick={() => navigate("/profile-management")}
-              >
+              <Button className="w-full" variant="outline" onClick={() => navigate("/profile-management")}>
                 管理画面
               </Button>
             </CardContent>
           </Card>
-          
+
           <Card className="md:col-span-2 lg:col-span-3">
             <CardHeader>
               <CardTitle className="text-primary">Flexメッセージデザイナー</CardTitle>
-              <CardDescription>
-                インタラクティブなFlexメッセージを作成・配信
-              </CardDescription>
+              <CardDescription>インタラクティブなFlexメッセージを作成・配信</CardDescription>
             </CardHeader>
             <CardContent>
-              <Button 
-                className="w-full" 
-                size="lg"
-                onClick={() => navigate("/flex-message-designer")}
-              >
+              <Button className="w-full" size="lg" onClick={() => navigate("/flex-message-designer")}>
                 メッセージを作成
               </Button>
             </CardContent>
