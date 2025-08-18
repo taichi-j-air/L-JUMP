@@ -10,6 +10,7 @@ import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
 import { Label } from "@/components/ui/label"
+import { Checkbox } from "@/components/ui/checkbox"
 import { Eye, RefreshCw, CreditCard, Users, TrendingUp, DollarSign, Search, Plus, ToggleLeft } from "lucide-react"
 import { toast } from "sonner"
 
@@ -28,7 +29,7 @@ interface OrderRecord {
   created_at: string
   updated_at: string
   friend_uid?: string
-  products?: any
+  line_user_id?: string
 }
 
 interface CustomerStats {
@@ -40,6 +41,13 @@ interface CustomerStats {
   successful_one_time: number
   total_one_time: number
   pending_orders: number
+}
+
+interface Friend {
+  id: string
+  display_name: string
+  short_uid: string
+  line_user_id: string
 }
 
 export default function PaymentManagement() {
@@ -62,7 +70,11 @@ export default function PaymentManagement() {
   const [showTestMode, setShowTestMode] = useState(false)
   const [showAddDialog, setShowAddDialog] = useState(false)
   const [friendUid, setFriendUid] = useState("")
-  const [friends, setFriends] = useState<any[]>([])
+  const [friends, setFriends] = useState<Friend[]>([])
+  const [showPendingOrders, setShowPendingOrders] = useState(false)
+  const [selectedFriend, setSelectedFriend] = useState<Friend | null>(null)
+  const [manualAmount, setManualAmount] = useState("")
+  const [manualProductName, setManualProductName] = useState("")
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
@@ -107,18 +119,18 @@ export default function PaymentManagement() {
         })
         .reduce((sum, order) => sum + (order.amount || 0), 0)
 
-      // サブスクリプション統計
+      // サブスクリプション統計（保留中を除く）
       const subscriptionOrders = data?.filter(order => {
         const metadata = order.metadata as any
-        return metadata?.product_type?.includes('subscription')
+        return metadata?.product_type?.includes('subscription') && order.status !== 'pending'
       }) || []
       const activeSubscriptions = subscriptionOrders.filter(order => order.status === 'paid').length
       const totalSubscriptions = subscriptionOrders.length
 
-      // 単発決済統計  
+      // 単発決済統計（保留中を除く）
       const oneTimeOrders = data?.filter(order => {
         const metadata = order.metadata as any
-        return !metadata?.product_type?.includes('subscription')
+        return !metadata?.product_type?.includes('subscription') && order.status !== 'pending'
       }) || []
       const successfulOneTime = oneTimeOrders.filter(order => order.status === 'paid').length
       const totalOneTime = oneTimeOrders.length
@@ -190,18 +202,49 @@ export default function PaymentManagement() {
     }
   }
 
+  const handleFriendSearch = () => {
+    const friend = friends.find(f => f.line_user_id === friendUid)
+    if (friend) {
+      setSelectedFriend(friend)
+    } else {
+      toast.error('指定されたLINE IDの友達が見つかりません')
+      setSelectedFriend(null)
+    }
+  }
+
   const handleAddOrderManually = async () => {
     try {
-      const selectedFriend = friends.find(f => f.short_uid === friendUid.toUpperCase())
-      if (!selectedFriend) {
-        toast.error('指定されたUIDの友達が見つかりません')
+      if (!selectedFriend || !manualAmount || !manualProductName) {
+        toast.error('すべての項目を入力してください')
         return
       }
 
-      // 手動で注文を追加するロジック（必要に応じて実装）
+      // 手動で注文を追加
+      const { error } = await supabase
+        .from('orders')
+        .insert({
+          user_id: user?.id,
+          line_user_id: selectedFriend.line_user_id,
+          friend_uid: selectedFriend.short_uid,
+          amount: parseInt(manualAmount),
+          currency: 'jpy',
+          status: 'paid',
+          livemode: !showTestMode,
+          metadata: {
+            product_name: manualProductName,
+            manual_entry: true
+          },
+          stripe_session_id: `manual_${Date.now()}`
+        })
+
+      if (error) throw error
+
       toast.success(`${selectedFriend.display_name}の注文を手動追加しました`)
       setShowAddDialog(false)
       setFriendUid("")
+      setSelectedFriend(null)
+      setManualAmount("")
+      setManualProductName("")
       loadOrders()
     } catch (error) {
       console.error('Error adding order manually:', error)
@@ -216,8 +259,23 @@ export default function PaymentManagement() {
     
     const matchesStatus = statusFilter === "all" || order.status === statusFilter
     
-    return matchesSearch && matchesStatus
+    // 保留中の表示/非表示フィルター
+    const matchesPendingFilter = showPendingOrders || order.status !== 'pending'
+    
+    return matchesSearch && matchesStatus && matchesPendingFilter
   })
+
+  const getFriendName = (order: OrderRecord) => {
+    if (order.friend_uid) {
+      const friend = friends.find(f => f.short_uid === order.friend_uid)
+      return friend?.display_name || order.friend_uid
+    }
+    if (order.line_user_id) {
+      const friend = friends.find(f => f.line_user_id === order.line_user_id)
+      return friend?.display_name || 'LINE友達'
+    }
+    return '不明'
+  }
 
   const formatPrice = (amount: number, currency: string) => {
     return new Intl.NumberFormat('ja-JP', {
@@ -379,18 +437,53 @@ export default function PaymentManagement() {
                     </DialogHeader>
                     <div className="space-y-4">
                       <div>
-                        <Label htmlFor="friend-uid">友達UID</Label>
-                        <Input
-                          id="friend-uid"
-                          value={friendUid}
-                          onChange={(e) => setFriendUid(e.target.value)}
-                          placeholder="友達のUIDを入力"
-                        />
-                        <p className="text-xs text-muted-foreground mt-1">
-                          友達一覧のUIDを入力してください
-                        </p>
+                        <Label htmlFor="friend-line-id">LINE ID</Label>
+                        <div className="flex gap-2">
+                          <Input
+                            id="friend-line-id"
+                            value={friendUid}
+                            onChange={(e) => setFriendUid(e.target.value)}
+                            placeholder="LINE IDを入力"
+                          />
+                          <Button onClick={handleFriendSearch} size="sm">
+                            検索
+                          </Button>
+                        </div>
                       </div>
-                      <Button onClick={handleAddOrderManually} className="w-full">
+                      
+                      {selectedFriend && (
+                        <div className="p-3 bg-muted rounded-md">
+                          <p className="font-medium">{selectedFriend.display_name}</p>
+                          <p className="text-sm text-muted-foreground">UID: {selectedFriend.short_uid}</p>
+                        </div>
+                      )}
+
+                      <div>
+                        <Label htmlFor="product-name">商品名</Label>
+                        <Input
+                          id="product-name"
+                          value={manualProductName}
+                          onChange={(e) => setManualProductName(e.target.value)}
+                          placeholder="商品名を入力"
+                        />
+                      </div>
+
+                      <div>
+                        <Label htmlFor="amount">金額（円）</Label>
+                        <Input
+                          id="amount"
+                          type="number"
+                          value={manualAmount}
+                          onChange={(e) => setManualAmount(e.target.value)}
+                          placeholder="金額を入力"
+                        />
+                      </div>
+
+                      <Button 
+                        onClick={handleAddOrderManually} 
+                        className="w-full"
+                        disabled={!selectedFriend || !manualAmount || !manualProductName}
+                      >
                         追加
                       </Button>
                     </div>
@@ -404,30 +497,43 @@ export default function PaymentManagement() {
             </div>
             
             {/* 検索・フィルター */}
-            <div className="flex gap-2 mt-3">
-              <div className="flex-1">
-                <div className="relative">
-                  <Search className="absolute left-2 top-2 h-3 w-3 text-muted-foreground" />
-                  <Input
-                    placeholder="セッションIDまたは友達UIDで検索"
-                    value={searchTerm}
-                    onChange={(e) => setSearchTerm(e.target.value)}
-                    className="pl-7 h-8 text-xs"
-                  />
+            <div className="space-y-3 mt-3">
+              <div className="flex gap-2">
+                <div className="flex-1">
+                  <div className="relative">
+                    <Search className="absolute left-2 top-2 h-3 w-3 text-muted-foreground" />
+                    <Input
+                      placeholder="セッションIDまたは友達UIDで検索"
+                      value={searchTerm}
+                      onChange={(e) => setSearchTerm(e.target.value)}
+                      className="pl-7 h-8 text-xs"
+                    />
+                  </div>
                 </div>
+                <Select value={statusFilter} onValueChange={setStatusFilter}>
+                  <SelectTrigger className="w-32 h-8 text-xs">
+                    <SelectValue placeholder="ステータス" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">すべて</SelectItem>
+                    <SelectItem value="paid">成功</SelectItem>
+                    <SelectItem value="pending">保留中</SelectItem>
+                    <SelectItem value="failed">失敗</SelectItem>
+                    <SelectItem value="refunded">返金済み</SelectItem>
+                  </SelectContent>
+                </Select>
               </div>
-              <Select value={statusFilter} onValueChange={setStatusFilter}>
-                <SelectTrigger className="w-32 h-8 text-xs">
-                  <SelectValue placeholder="ステータス" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">すべて</SelectItem>
-                  <SelectItem value="paid">成功</SelectItem>
-                  <SelectItem value="pending">保留中</SelectItem>
-                  <SelectItem value="failed">失敗</SelectItem>
-                  <SelectItem value="refunded">返金済み</SelectItem>
-                </SelectContent>
-              </Select>
+              
+              <div className="flex items-center space-x-2">
+                <Checkbox
+                  id="show-pending"
+                  checked={showPendingOrders}
+                  onCheckedChange={(checked) => setShowPendingOrders(checked === true)}
+                />
+                <Label htmlFor="show-pending" className="text-xs">
+                  保留中の注文を表示
+                </Label>
+              </div>
             </div>
           </CardHeader>
           <CardContent className="p-0">
@@ -436,6 +542,7 @@ export default function PaymentManagement() {
                 <TableHeader>
                   <TableRow className="text-xs">
                     <TableHead className="py-2">商品名</TableHead>
+                    <TableHead className="py-2">購入者</TableHead>
                     <TableHead className="py-2">金額</TableHead>
                     <TableHead className="py-2">ステータス</TableHead>
                     <TableHead className="py-2">モード</TableHead>
@@ -452,8 +559,14 @@ export default function PaymentManagement() {
                           <div className="text-xs text-muted-foreground">{order.stripe_session_id}</div>
                         </div>
                       </TableCell>
+                      <TableCell className="py-2">
+                        <div className="font-medium text-xs">{getFriendName(order)}</div>
+                        {order.status === 'pending' && (
+                          <div className="text-xs text-amber-600">保留中</div>
+                        )}
+                      </TableCell>
                       <TableCell className="py-2 font-medium text-xs">
-                        {formatPrice(order.amount, order.currency)}
+                        ¥{order.amount?.toLocaleString('ja-JP') || '0'}
                       </TableCell>
                       <TableCell className="py-2">
                         <Badge variant={getStatusColor(order.status)} className="text-xs">

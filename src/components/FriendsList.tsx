@@ -419,7 +419,17 @@ export function FriendsList({ user }: FriendsListProps) {
                       </div>
                       <div className="text-xs text-muted-foreground">
                         <p className="font-mono font-bold text-primary">
-                          User ID: {friend.short_uid || '生成中...'}
+                          User ID: 
+                          <button 
+                            className="ml-1 px-1 hover:bg-primary/20 rounded"
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              navigator.clipboard.writeText(friend.short_uid || '')
+                              toast({ title: `UID ${friend.short_uid} をコピーしました` })
+                            }}
+                          >
+                            {friend.short_uid || '生成中...'}
+                          </button>
                         </p>
                       </div>
                     </div>
