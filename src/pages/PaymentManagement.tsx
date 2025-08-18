@@ -11,7 +11,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
 import { Label } from "@/components/ui/label"
 import { Checkbox } from "@/components/ui/checkbox"
-import { Eye, RefreshCw, CreditCard, Users, TrendingUp, DollarSign, Search, Plus, ToggleLeft } from "lucide-react"
+import { Eye, RefreshCw, CreditCard, Users, TrendingUp, DollarSign, Search, Plus, ToggleLeft, Calendar } from "lucide-react"
 import { toast } from "sonner"
 
 interface OrderRecord {
@@ -50,6 +50,14 @@ interface Friend {
   line_user_id: string
 }
 
+interface Product {
+  id: string
+  name: string
+  price: number
+  product_type: string
+  currency: string
+}
+
 export default function PaymentManagement() {
   const [user, setUser] = useState<User | null>(null)
   const [loading, setLoading] = useState(true)
@@ -75,6 +83,9 @@ export default function PaymentManagement() {
   const [selectedFriend, setSelectedFriend] = useState<Friend | null>(null)
   const [manualAmount, setManualAmount] = useState("")
   const [manualProductName, setManualProductName] = useState("")
+  const [manualDate, setManualDate] = useState("")
+  const [products, setProducts] = useState<Product[]>([])
+  const [selectedProduct, setSelectedProduct] = useState<Product | null>(null)
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
@@ -87,6 +98,7 @@ export default function PaymentManagement() {
     if (user) {
       loadOrders()
       loadFriends()
+      loadProducts()
     }
   }, [user, showTestMode])
 
@@ -168,6 +180,24 @@ export default function PaymentManagement() {
     }
   }
 
+  const loadProducts = async () => {
+    try {
+      if (!user) return
+
+      const { data, error } = await supabase
+        .from('products')
+        .select('id, name, price, product_type, currency')
+        .eq('user_id', user.id)
+        .eq('is_active', true)
+        .order('name')
+
+      if (error) throw error
+      setProducts(data || [])
+    } catch (error) {
+      console.error('Error loading products:', error)
+    }
+  }
+
   const handleRefund = async (orderId: string) => {
     try {
       // Stripe返金処理のエッジ関数を呼び出し
@@ -212,6 +242,17 @@ export default function PaymentManagement() {
     }
   }
 
+  const handleProductSelect = (productId: string) => {
+    const product = products.find(p => p.id === productId)
+    if (product) {
+      setSelectedProduct(product)
+      setManualProductName(product.name)
+      if (!manualAmount) {
+        setManualAmount(product.price.toString())
+      }
+    }
+  }
+
   const handleAddOrderManually = async () => {
     try {
       if (!selectedFriend || !manualAmount || !manualProductName) {
@@ -219,22 +260,27 @@ export default function PaymentManagement() {
         return
       }
 
+      const orderDate = manualDate ? new Date(manualDate).toISOString() : new Date().toISOString()
+
       // 手動で注文を追加
       const { error } = await supabase
         .from('orders')
         .insert({
           user_id: user?.id,
+          product_id: selectedProduct?.id,
           line_user_id: selectedFriend.line_user_id,
           friend_uid: selectedFriend.short_uid,
           amount: parseInt(manualAmount),
-          currency: 'jpy',
+          currency: selectedProduct?.currency || 'jpy',
           status: 'paid',
           livemode: !showTestMode,
           metadata: {
             product_name: manualProductName,
+            product_type: selectedProduct?.product_type,
             manual_entry: true
           },
-          stripe_session_id: `manual_${Date.now()}`
+          stripe_session_id: `manual_${Date.now()}`,
+          created_at: orderDate
         })
 
       if (error) throw error
@@ -245,6 +291,8 @@ export default function PaymentManagement() {
       setSelectedFriend(null)
       setManualAmount("")
       setManualProductName("")
+      setManualDate("")
+      setSelectedProduct(null)
       loadOrders()
     } catch (error) {
       console.error('Error adding order manually:', error)
@@ -459,7 +507,23 @@ export default function PaymentManagement() {
                       )}
 
                       <div>
-                        <Label htmlFor="product-name">商品名</Label>
+                        <Label htmlFor="product-select">商品選択</Label>
+                        <Select onValueChange={handleProductSelect}>
+                          <SelectTrigger>
+                            <SelectValue placeholder="商品を選択してください" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {products.map(product => (
+                              <SelectItem key={product.id} value={product.id}>
+                                {product.name} (¥{product.price.toLocaleString()})
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+
+                      <div>
+                        <Label htmlFor="product-name">商品名（手動入力）</Label>
                         <Input
                           id="product-name"
                           value={manualProductName}
@@ -476,6 +540,16 @@ export default function PaymentManagement() {
                           value={manualAmount}
                           onChange={(e) => setManualAmount(e.target.value)}
                           placeholder="金額を入力"
+                        />
+                      </div>
+
+                      <div>
+                        <Label htmlFor="manual-date">日付</Label>
+                        <Input
+                          id="manual-date"
+                          type="datetime-local"
+                          value={manualDate}
+                          onChange={(e) => setManualDate(e.target.value)}
                         />
                       </div>
 
@@ -555,7 +629,11 @@ export default function PaymentManagement() {
                     <TableRow key={order.id} className="text-xs">
                       <TableCell className="py-2">
                         <div>
-                          <div className="font-medium text-xs">{order.metadata?.product_name || 'Unknown Product'}</div>
+                          <div className="font-medium text-xs">
+                            {order.metadata?.product_name || 
+                             (order.product_id ? products.find(p => p.id === order.product_id)?.name : null) || 
+                             'アンノーン'}
+                          </div>
                           <div className="text-xs text-muted-foreground">{order.stripe_session_id}</div>
                         </div>
                       </TableCell>
