@@ -9,9 +9,10 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog"
 import { Label } from "@/components/ui/label"
 import { Checkbox } from "@/components/ui/checkbox"
-import { Eye, RefreshCw, CreditCard, Users, TrendingUp, DollarSign, Search, Plus, ToggleLeft, Calendar } from "lucide-react"
+import { Eye, RefreshCw, CreditCard, Users, TrendingUp, DollarSign, Search, Plus, ToggleLeft, Calendar, X } from "lucide-react"
 import { toast } from "sonner"
 
 interface OrderRecord {
@@ -313,6 +314,29 @@ export default function PaymentManagement() {
     return matchesSearch && matchesStatus && matchesPendingFilter
   })
 
+  const getProductName = (order: OrderRecord) => {
+    // メタデータに商品名がある場合はそれを使用（削除されても保持される）
+    if (order.metadata?.product_name) {
+      return order.metadata.product_name
+    }
+    
+    // product_idがある場合、現在の商品リストで検索
+    if (order.product_id) {
+      const currentProduct = products.find(p => p.id === order.product_id)
+      if (currentProduct) {
+        return currentProduct.name
+      }
+      // 商品IDはあるが商品が見つからない場合は削除されている
+      return (
+        <span className="text-destructive-foreground bg-destructive/20 px-2 py-1 rounded text-xs">
+          [削除された商品]
+        </span>
+      )
+    }
+    
+    return 'アンノーン'
+  }
+
   const getFriendName = (order: OrderRecord) => {
     if (order.friend_uid) {
       const friend = friends.find(f => f.short_uid === order.friend_uid)
@@ -479,10 +503,18 @@ export default function PaymentManagement() {
                       手動追加
                     </Button>
                   </DialogTrigger>
-                  <DialogContent>
-                    <DialogHeader>
-                      <DialogTitle>注文手動追加</DialogTitle>
-                    </DialogHeader>
+                   <DialogContent>
+                     <Button 
+                       variant="ghost" 
+                       size="icon" 
+                       className="absolute right-4 top-4 rounded-sm opacity-70 ring-offset-background transition-opacity hover:opacity-100 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:pointer-events-none data-[state=open]:bg-accent data-[state=open]:text-muted-foreground"
+                       onClick={() => setShowAddDialog(false)}
+                     >
+                       <X className="h-4 w-4" />
+                     </Button>
+                     <DialogHeader>
+                       <DialogTitle>注文手動追加</DialogTitle>
+                     </DialogHeader>
                     <div className="space-y-4">
                       <div>
                         <Label htmlFor="friend-line-id">LINE ID</Label>
@@ -627,16 +659,14 @@ export default function PaymentManagement() {
                 <TableBody>
                   {filteredOrders.map((order) => (
                     <TableRow key={order.id} className="text-xs">
-                      <TableCell className="py-2">
-                        <div>
-                          <div className="font-medium text-xs">
-                            {order.metadata?.product_name || 
-                             (order.product_id ? products.find(p => p.id === order.product_id)?.name : null) || 
-                             'アンノーン'}
-                          </div>
-                          <div className="text-xs text-muted-foreground">{order.stripe_session_id}</div>
-                        </div>
-                      </TableCell>
+                       <TableCell className="py-2">
+                         <div>
+                           <div className="font-medium text-xs">
+                             {getProductName(order)}
+                           </div>
+                           <div className="text-xs text-muted-foreground">{order.stripe_session_id}</div>
+                         </div>
+                       </TableCell>
                       <TableCell className="py-2">
                         <div className="font-medium text-xs">{getFriendName(order)}</div>
                         {order.status === 'pending' && (
@@ -667,17 +697,25 @@ export default function PaymentManagement() {
                                 <Eye className="h-3 w-3" />
                               </Button>
                             </DialogTrigger>
-                            <DialogContent className="max-w-2xl">
-                              <DialogHeader>
-                                <DialogTitle>注文詳細</DialogTitle>
-                              </DialogHeader>
+                             <DialogContent className="max-w-2xl">
+                               <Button 
+                                 variant="ghost" 
+                                 size="icon" 
+                                 className="absolute right-4 top-4 rounded-sm opacity-70 ring-offset-background transition-opacity hover:opacity-100 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:pointer-events-none data-[state=open]:bg-accent data-[state=open]:text-muted-foreground"
+                                 onClick={() => setSelectedOrder(null)}
+                               >
+                                 <X className="h-4 w-4" />
+                               </Button>
+                               <DialogHeader>
+                                 <DialogTitle>注文詳細</DialogTitle>
+                               </DialogHeader>
                               {selectedOrder && (
                                 <div className="space-y-4">
-                                  <div className="grid grid-cols-2 gap-4">
-                                    <div>
-                                      <label className="text-sm font-medium">商品名</label>
-                                      <p className="text-sm">{selectedOrder.metadata?.product_name || 'Unknown'}</p>
-                                    </div>
+                                   <div className="grid grid-cols-2 gap-4">
+                                     <div>
+                                       <label className="text-sm font-medium">商品名</label>
+                                       <p className="text-sm">{getProductName(selectedOrder)}</p>
+                                     </div>
                                     <div>
                                       <label className="text-sm font-medium">金額</label>
                                       <p className="text-sm">{formatPrice(selectedOrder.amount, selectedOrder.currency)}</p>
@@ -695,26 +733,66 @@ export default function PaymentManagement() {
                               )}
                             </DialogContent>
                           </Dialog>
-                          {order.status === 'paid' && (
-                            <Button
-                              size="sm"
-                              variant="destructive"
-                              className="h-6 px-2 text-xs"
-                              onClick={() => handleRefund(order.id)}
-                            >
-                              返金
-                            </Button>
-                          )}
-                          {order.stripe_customer_id && order.status === 'paid' && order.metadata?.product_type?.includes('subscription') && (
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              className="h-6 px-2 text-xs"
-                              onClick={() => handleCancelSubscription(order.stripe_customer_id)}
-                            >
-                              解約
-                            </Button>
-                          )}
+                           {order.status === 'paid' && (
+                             <AlertDialog>
+                               <AlertDialogTrigger asChild>
+                                 <Button
+                                   size="sm"
+                                   variant="destructive"
+                                   className="h-6 px-2 text-xs"
+                                 >
+                                   返金
+                                 </Button>
+                               </AlertDialogTrigger>
+                               <AlertDialogContent>
+                                 <AlertDialogHeader>
+                                   <AlertDialogTitle>返金確認</AlertDialogTitle>
+                                   <AlertDialogDescription>
+                                     この注文を返金しますか？この操作は取り消せません。
+                                   </AlertDialogDescription>
+                                 </AlertDialogHeader>
+                                 <AlertDialogFooter>
+                                   <AlertDialogCancel>キャンセル</AlertDialogCancel>
+                                   <AlertDialogAction 
+                                     onClick={() => handleRefund(order.id)}
+                                     className="bg-destructive text-destructive-foreground hover:bg-destructive/80"
+                                   >
+                                     返金実行
+                                   </AlertDialogAction>
+                                 </AlertDialogFooter>
+                               </AlertDialogContent>
+                             </AlertDialog>
+                           )}
+                           {order.stripe_customer_id && order.status === 'paid' && order.metadata?.product_type?.includes('subscription') && (
+                             <AlertDialog>
+                               <AlertDialogTrigger asChild>
+                                 <Button
+                                   size="sm"
+                                   variant="outline"
+                                   className="h-6 px-2 text-xs"
+                                 >
+                                   解約
+                                 </Button>
+                               </AlertDialogTrigger>
+                               <AlertDialogContent>
+                                 <AlertDialogHeader>
+                                   <AlertDialogTitle>サブスクリプション解約確認</AlertDialogTitle>
+                                   <AlertDialogDescription>
+                                     このサブスクリプションを解約しますか？この操作は取り消せません。
+                                   </AlertDialogDescription>
+                                 </AlertDialogHeader>
+                                 <AlertDialogFooter>
+                                   <AlertDialogCancel>キャンセル</AlertDialogCancel>
+                                   <AlertDialogAction 
+                                     onClick={() => handleCancelSubscription(order.stripe_customer_id)}
+                                     className="bg-destructive text-destructive-foreground hover:bg-destructive/80"
+                                   >
+                                     解約実行
+                                   </AlertDialogAction>
+                                 </AlertDialogFooter>
+                               </AlertDialogContent>
+                             </AlertDialog>
+                           )}
                         </div>
                       </TableCell>
                     </TableRow>

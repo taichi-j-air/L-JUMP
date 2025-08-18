@@ -50,10 +50,15 @@ serve(async (req) => {
       .from('stripe_credentials')
       .select('*')
       .eq('user_id', order.user_id)
-      .single();
+      .maybeSingle();
 
-    if (credentialsError || !stripeCredentials) {
-      throw new Error("Stripe credentials not found for user");
+    if (credentialsError) {
+      console.error(`[stripe-refund] Stripe credentials error: ${credentialsError.message}`);
+      throw new Error("Failed to retrieve Stripe credentials");
+    }
+
+    if (!stripeCredentials) {
+      throw new Error("Stripe credentials not found for user. Please configure Stripe settings first.");
     }
 
     // Stripe 初期化
