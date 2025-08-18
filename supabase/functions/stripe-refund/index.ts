@@ -45,13 +45,24 @@ serve(async (req) => {
       throw new Error("No payment intent found for this order");
     }
 
+    // ユーザーのStripe認証情報を取得
+    const { data: stripeCredentials, error: credentialsError } = await supabaseClient
+      .from('stripe_credentials')
+      .select('*')
+      .eq('user_id', order.user_id)
+      .single();
+
+    if (credentialsError || !stripeCredentials) {
+      throw new Error("Stripe credentials not found for user");
+    }
+
     // Stripe 初期化
     const stripeKey = order.livemode 
-      ? Deno.env.get("STRIPE_SECRET_KEY_LIVE")
-      : Deno.env.get("STRIPE_SECRET_KEY_TEST");
+      ? stripeCredentials.live_secret_key
+      : stripeCredentials.test_secret_key;
     
     if (!stripeKey) {
-      throw new Error("Stripe secret key not configured");
+      throw new Error("Stripe secret key not configured for user");
     }
 
     const stripe = new Stripe(stripeKey, { apiVersion: "2023-10-16" });

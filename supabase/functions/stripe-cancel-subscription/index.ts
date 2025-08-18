@@ -26,10 +26,10 @@ serve(async (req) => {
       { auth: { persistSession: false } }
     );
 
-    // カスタマーのライブモードを確認（注文履歴から判定）
+    // カスタマーのライブモードとユーザーIDを確認（注文履歴から判定）
     const { data: orders, error: ordersError } = await supabaseClient
       .from('orders')
-      .select('livemode')
+      .select('livemode, user_id')
       .eq('stripe_customer_id', customerId)
       .limit(1);
 
@@ -38,14 +38,26 @@ serve(async (req) => {
     }
 
     const isLiveMode = orders[0].livemode;
+    const userId = orders[0].user_id;
+
+    // ユーザーのStripe認証情報を取得
+    const { data: stripeCredentials, error: credentialsError } = await supabaseClient
+      .from('stripe_credentials')
+      .select('*')
+      .eq('user_id', userId)
+      .single();
+
+    if (credentialsError || !stripeCredentials) {
+      throw new Error("Stripe credentials not found for user");
+    }
 
     // Stripe 初期化
     const stripeKey = isLiveMode 
-      ? Deno.env.get("STRIPE_SECRET_KEY_LIVE")
-      : Deno.env.get("STRIPE_SECRET_KEY_TEST");
+      ? stripeCredentials.live_secret_key
+      : stripeCredentials.test_secret_key;
     
     if (!stripeKey) {
-      throw new Error("Stripe secret key not configured");
+      throw new Error("Stripe secret key not configured for user");
     }
 
     const stripe = new Stripe(stripeKey, { apiVersion: "2023-10-16" });
