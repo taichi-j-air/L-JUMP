@@ -3,7 +3,7 @@ import { useParams, useLocation } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Loader2 } from "lucide-react";
+import { Loader2, Package } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 
@@ -87,7 +87,8 @@ export default function ProductLandingPage() {
       if (error) throw error;
 
       if (data?.url) {
-        window.location.href = data.url;
+        console.log("[LP] Opening checkout URL:", data.url);
+        window.open(data.url, '_blank');
       } else {
         throw new Error("決済URLの取得に失敗しました");
       }
@@ -143,71 +144,97 @@ export default function ProductLandingPage() {
     : undefined;
 
   return (
-    <div className="min-h-screen bg-background p-4">
-      <div className="max-w-2xl mx-auto">
-        <Card className="w-full">
-          <CardHeader>
-            <div className="flex items-start justify-between">
-              <div className="flex-1">
-                <CardTitle className="text-2xl font-bold">
+    <div className="min-h-screen bg-gradient-to-b from-background to-muted/20 flex items-center justify-center p-4">
+      <div className="w-full max-w-sm mx-auto">
+        <Card className="border-2 border-muted overflow-hidden">
+          <CardContent className="p-0">
+            <div className="bg-gradient-to-b from-background to-muted/20 p-6 flex flex-col min-h-[600px]">
+              {/* Header */}
+              <div className="text-center mb-6">
+                <h1 className="text-xl font-bold mb-2">
                   {product.landing_page_title || product.name}
-                </CardTitle>
+                </h1>
+                <div className="w-8 h-1 bg-primary mx-auto rounded-full" />
+                <Badge variant="outline" className="mt-3 text-xs">
+                  {getProductTypeLabel(product.product_type)}
+                </Badge>
+              </div>
+
+              {/* Product Image */}
+              <div className="flex-1 flex items-center justify-center mb-6">
+                {product.landing_page_image_url ? (
+                  <img 
+                    src={product.landing_page_image_url}
+                    alt={product.name}
+                    className="max-w-full max-h-40 object-contain rounded-lg shadow-lg"
+                  />
+                ) : (
+                  <div className="w-32 h-32 bg-muted rounded-lg flex items-center justify-center">
+                    <Package className="h-12 w-12 text-muted-foreground" />
+                  </div>
+                )}
+              </div>
+
+              {/* Product Info */}
+              <div className="text-center mb-6">
+                <div className="text-2xl font-bold text-primary mb-3">
+                  {formatPrice(product.price, product.currency)}
+                </div>
+                
+                {product.product_type === "subscription" && (
+                  <p className="text-sm text-muted-foreground mb-2">毎月課金</p>
+                )}
+                
+                {product.product_type === "subscription_with_trial" && product.trial_period_days && (
+                  <div className="mb-3">
+                    <Badge variant="secondary" className="text-xs px-3 py-1">
+                      {product.trial_period_days}日間 無料トライアル
+                    </Badge>
+                    <p className="text-xs text-muted-foreground mt-1">
+                      トライアル後 {formatPrice(product.price, product.currency)}/月
+                    </p>
+                  </div>
+                )}
+
                 {(product.landing_page_content || product.description) && (
-                  <p className="text-muted-foreground mt-2">
+                  <p className="text-sm text-muted-foreground leading-relaxed px-2">
                     {product.landing_page_content || product.description}
                   </p>
                 )}
               </div>
-              <Badge variant="secondary" className="ml-4">
-                {getProductTypeLabel(product.product_type)}
-              </Badge>
-            </div>
-          </CardHeader>
 
-          <CardContent className="space-y-6">
-            {product.landing_page_image_url && (
-              <div className="w-full h-64 rounded-lg overflow-hidden">
-                <img
-                  src={product.landing_page_image_url}
-                  alt={product.name}
-                  className="w-full h-full object-cover"
-                />
+              {/* Purchase Button */}
+              <div className="mt-auto space-y-3">
+                <Button
+                  onClick={handlePayment}
+                  disabled={processing}
+                  className="w-full h-12 text-base font-semibold rounded-lg shadow-lg hover:shadow-xl transition-all"
+                  style={buttonStyle}
+                >
+                  {processing ? (
+                    <>
+                      <Loader2 className="mr-2 h-5 w-5 animate-spin" />
+                      処理中...
+                    </>
+                  ) : (
+                    product.button_text || "今すぐ始める"
+                  )}
+                </Button>
+
+                {/* Security Badge */}
+                <div className="text-center">
+                  <Badge variant="outline" className="text-xs">
+                    🔒 安全な決済（Stripe）
+                  </Badge>
+                </div>
+
+                {uid && (
+                  <p className="text-xs text-muted-foreground text-center opacity-50">
+                    ID: {uid}
+                  </p>
+                )}
               </div>
-            )}
-
-            <div className="text-center py-6">
-              <div className="text-4xl font-bold text-primary mb-2">
-                {formatPrice(product.price, product.currency)}
-              </div>
-              {product.product_type === "subscription" && (
-                <p className="text-sm text-muted-foreground">毎月課金</p>
-              )}
-              {product.product_type === "subscription_with_trial" && product.trial_period_days && (
-                <p className="text-sm text-muted-foreground">
-                  {product.trial_period_days}日間の無料トライアルあり
-                </p>
-              )}
             </div>
-
-            <Button
-              onClick={handlePayment}
-              disabled={processing}
-              className="w-full h-12 text-lg font-semibold"
-              style={buttonStyle}
-            >
-              {processing ? (
-                <>
-                  <Loader2 className="mr-2 h-5 w-5 animate-spin" />
-                  処理中...
-                </>
-              ) : (
-                product.button_text || "支払いへ進む"
-              )}
-            </Button>
-
-            {uid && (
-              <p className="text-xs text-muted-foreground text-center">UID: {uid}</p>
-            )}
           </CardContent>
         </Card>
       </div>
