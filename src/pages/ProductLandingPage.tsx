@@ -84,7 +84,10 @@ export default function ProductLandingPage() {
         },
       });
 
-      if (error) throw error;
+      if (error) {
+        console.error("Checkout function error:", error);
+        throw error;
+      }
 
       if (data?.url) {
         console.log("[LP] Opening checkout URL:", data.url);
@@ -92,9 +95,25 @@ export default function ProductLandingPage() {
       } else {
         throw new Error("決済URLの取得に失敗しました");
       }
-    } catch (e) {
+    } catch (e: any) {
       console.error("Checkout error:", e);
-      toast.error("決済の開始に失敗しました");
+      
+      // より具体的なエラーメッセージを表示
+      let errorMessage = "決済の開始に失敗しました";
+      
+      if (e?.message) {
+        if (e.message.includes("recurring price")) {
+          errorMessage = "商品設定とStripe価格設定が一致しません。商品管理画面で商品タイプを確認するか、Stripe側で正しい価格タイプを設定してください。";
+        } else if (e.message.includes("商品")) {
+          errorMessage = e.message;
+        } else if (e.message.includes("価格ID")) {
+          errorMessage = e.message;
+        } else {
+          errorMessage = `決済エラー: ${e.message}`;
+        }
+      }
+      
+      toast.error(errorMessage);
     } finally {
       setProcessing(false);
     }
