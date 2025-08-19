@@ -509,6 +509,9 @@ export default function PaymentManagement() {
       // UI からも即座に削除
       setOrders(prevOrders => prevOrders.filter(order => order.id !== orderId))
       
+      // 統計も更新
+      await loadData()
+      
       toast.success('注文履歴を削除しました')
     } catch (error: any) {
       console.error('Error deleting order:', error)
@@ -1179,6 +1182,29 @@ export default function PaymentManagement() {
           open={showSubscriberDetailDialog}
           onOpenChange={setShowSubscriberDetailDialog}
           subscriber={selectedSubscriber}
+          onCancelSubscription={async (customerId: string, orderId: string) => {
+            // Find the order to get the actual customer ID
+            const order = orders.find(o => o.id === orderId)
+            if (order?.stripe_customer_id) {
+              await handleCancelSubscription(order.stripe_customer_id, orderId)
+              // Refresh the subscriber data immediately
+              const updatedSubscriber = subscriberDetails.find(s => 
+                s.orders.some(o => o.id === orderId)
+              )
+              if (updatedSubscriber) {
+                // Update the order status in subscriber data
+                updatedSubscriber.orders = updatedSubscriber.orders.map(o => 
+                  o.id === orderId ? { ...o, status: 'subscription_canceled' } : o
+                )
+                setSubscriberDetails(prev => 
+                  prev.map(s => s.id === updatedSubscriber.id ? updatedSubscriber : s)
+                )
+                setSelectedSubscriber(updatedSubscriber)
+              }
+            } else {
+              toast.error('カスタマーIDが見つかりません')
+            }
+          }}
         />
       </div>
     </>

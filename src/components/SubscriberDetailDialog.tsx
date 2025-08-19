@@ -31,9 +31,10 @@ interface SubscriberDetailDialogProps {
   open: boolean
   onOpenChange: (open: boolean) => void
   subscriber: SubscriberDetail | null
+  onCancelSubscription?: (customerId: string, orderId: string) => Promise<void>
 }
 
-export function SubscriberDetailDialog({ open, onOpenChange, subscriber }: SubscriberDetailDialogProps) {
+export function SubscriberDetailDialog({ open, onOpenChange, subscriber, onCancelSubscription }: SubscriberDetailDialogProps) {
   if (!subscriber) return null
 
   const formatPrice = (amount: number, currency: string) => {
@@ -123,24 +124,40 @@ export function SubscriberDetailDialog({ open, onOpenChange, subscriber }: Subsc
                   <div className="space-y-3">
                     {activeOrders.map((order, index) => (
                       <div key={order.id} className={`p-3 border rounded-lg ${index > 0 ? 'border-t mt-2' : ''}`}>
-                        <div className="flex items-center justify-between">
-                          <div>
-                            <div className="font-medium">{order.product_name || 'アンノーン'}</div>
-                            <div className="text-sm text-muted-foreground flex items-center gap-2">
-                              <Calendar className="h-3 w-3" />
-                              加入日: {formatDistanceToNow(new Date(order.created_at), { 
-                                addSuffix: true, 
-                                locale: ja 
-                              })}
-                            </div>
-                          </div>
-                          <div className="text-right">
-                            <div className="font-medium">{formatPrice(order.amount, order.currency)}</div>
-                            <Badge variant={getStatusColor(order.status)}>
-                              {getStatusLabel(order.status)}
-                            </Badge>
-                          </div>
-                        </div>
+                         <div className="flex items-center justify-between">
+                           <div>
+                             <div className="font-medium">{order.product_name || 'アンノーン'}</div>
+                             <div className="text-sm text-muted-foreground flex items-center gap-2">
+                               <Calendar className="h-3 w-3" />
+                               加入日: {formatDistanceToNow(new Date(order.created_at), { 
+                                 addSuffix: true, 
+                                 locale: ja 
+                               })}
+                             </div>
+                           </div>
+                           <div className="flex items-center gap-3">
+                             <div className="text-right">
+                               <div className="font-medium">{formatPrice(order.amount, order.currency)}</div>
+                               <Badge variant={getStatusColor(order.status)}>
+                                 {getStatusLabel(order.status)}
+                               </Badge>
+                             </div>
+                             {order.product_type === 'subscription' && order.status === 'paid' && onCancelSubscription && (
+                               <Button
+                                 variant="outline"
+                                 size="sm"
+                                 onClick={() => {
+                                   // Assuming we need to find the stripe_customer_id somehow
+                                   // For now, we'll pass the order id as both customerId and orderId
+                                   onCancelSubscription('', order.id)
+                                 }}
+                                 className="text-xs"
+                               >
+                                 解約
+                               </Button>
+                             )}
+                           </div>
+                         </div>
                         {index < activeOrders.length - 1 && <Separator className="mt-3" />}
                       </div>
                     ))}
