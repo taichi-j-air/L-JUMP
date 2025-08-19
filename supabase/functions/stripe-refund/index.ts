@@ -41,13 +41,6 @@ serve(async (req) => {
       throw new Error("Only paid orders can be refunded");
     }
 
-    // 商品情報を取得して Stripe Product ID を確認
-    const { data: product, error: productError } = await supabaseClient
-      .from('products')
-      .select('stripe_product_id, stripe_price_id')
-      .eq('id', order.product_id)
-      .maybeSingle();
-
     // Stripe Payment Intent ID を確認（手動追加の場合は存在しない可能性）
     if (!order.stripe_payment_intent_id) {
       // 手動追加の注文の場合、DBの状態のみ変更
@@ -72,12 +65,28 @@ serve(async (req) => {
       });
     }
 
-    // Stripe 返金処理
-    if (!Deno.env.get("STRIPE_SECRET_KEY")) {
-      throw new Error("Stripe secret key not configured");
+    // Stripe認証情報を取得
+    const { data: stripeCredentials, error: credentialsError } = await supabaseClient
+      .from('stripe_credentials')
+      .select('stripe_secret_key_live, stripe_secret_key_test')
+      .eq('user_id', order.user_id)
+      .maybeSingle();
+
+    if (credentialsError || !stripeCredentials) {
+      throw new Error("Stripe credentials not found");
     }
 
-    const stripe = new Stripe(Deno.env.get("STRIPE_SECRET_KEY") || "", { apiVersion: "2023-10-16" });
+    // テストモードかライブモードかを判定
+    const isTestMode = order.stripe_payment_intent_id?.startsWith('pi_test_') || false;
+    const stripeSecretKey = isTestMode ? 
+      stripeCredentials.stripe_secret_key_test : 
+      stripeCredentials.stripe_secret_key_live;
+
+    if (!stripeSecretKey) {
+      throw new Error(`Stripe ${isTestMode ? 'test' : 'live'} secret key not configured`);
+    }
+
+    const stripe = new Stripe(stripeSecretKey, { apiVersion: "2023-10-16" });
 
     // 返金処理
     const refund = await stripe.refunds.create({
