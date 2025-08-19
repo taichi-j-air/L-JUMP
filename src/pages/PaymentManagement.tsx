@@ -511,8 +511,8 @@ export default function PaymentManagement() {
     
     // 年月フィルター
     const orderDate = new Date(order.created_at)
-    const matchesYear = !filterYear || orderDate.getFullYear().toString() === filterYear
-    const matchesMonth = !filterMonth || (orderDate.getMonth() + 1).toString().padStart(2, '0') === filterMonth
+    const matchesYear = !filterYear || filterYear === "all" || orderDate.getFullYear().toString() === filterYear
+    const matchesMonth = !filterMonth || filterMonth === "all" || (orderDate.getMonth() + 1).toString().padStart(2, '0') === filterMonth
     
     return matchesSearch && matchesStatus && matchesPendingFilter && matchesCanceledFilter && matchesRefundedFilter && matchesExpiredFilter && matchesYear && matchesMonth
   })
@@ -883,7 +883,7 @@ export default function PaymentManagement() {
                      <SelectValue placeholder="年" />
                    </SelectTrigger>
                    <SelectContent>
-                     <SelectItem value="">全年</SelectItem>
+                     <SelectItem value="all">全年</SelectItem>
                      {availableYears.map(year => (
                        <SelectItem key={year} value={year.toString()}>{year}</SelectItem>
                      ))}
@@ -894,7 +894,7 @@ export default function PaymentManagement() {
                      <SelectValue placeholder="月" />
                    </SelectTrigger>
                    <SelectContent>
-                     <SelectItem value="">全月</SelectItem>
+                     <SelectItem value="all">全月</SelectItem>
                      {Array.from({length: 12}, (_, i) => (
                        <SelectItem key={i + 1} value={(i + 1).toString().padStart(2, '0')}>
                          {i + 1}月
