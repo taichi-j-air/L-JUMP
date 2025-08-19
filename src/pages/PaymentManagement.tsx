@@ -433,8 +433,11 @@ export default function PaymentManagement() {
 
       if (error) throw error
 
+      // UI からも即座に削除
+      setOrders(prevOrders => prevOrders.filter(order => order.id !== orderId))
+      
       toast.success('注文履歴を削除しました')
-      await loadData()
+      await loadData() // データを再読み込み
     } catch (error) {
       console.error('Error deleting order:', error)
       toast.error('削除に失敗しました')
@@ -456,9 +459,12 @@ export default function PaymentManagement() {
 
       if (error) throw error
 
+      // UI からも即座に削除
+      setOrders(prevOrders => prevOrders.filter(order => !selectedOrderIds.includes(order.id)))
+      
       toast.success(`${selectedOrderIds.length}件の注文履歴を削除しました`)
       setSelectedOrderIds([])
-      await loadData()
+      await loadData() // データを再読み込み
     } catch (error) {
       console.error('Error bulk deleting orders:', error)
       toast.error('一括削除に失敗しました')

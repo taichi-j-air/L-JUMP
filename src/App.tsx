@@ -97,7 +97,7 @@ function AppContent() {
   const isCheckoutPage = window.location.pathname.startsWith('/checkout/')
 
   // Show auth pages without sidebar/header  
-  if (isAuthPage || (!user && !isInvitePage && !isLoginPage && !hasLineLoginSuccess && !isPublicFormPage && !isProductLandingPage && !isCheckoutPage && !(isCMSPublicPath || isCMSPreviewPath))) {
+  if (isAuthPage || isProductLandingPage || (!user && !isInvitePage && !isLoginPage && !hasLineLoginSuccess && !isPublicFormPage && !isCheckoutPage && !(isCMSPublicPath || isCMSPreviewPath))) {
     return (
       <div className="min-h-screen">
         <Routes>
