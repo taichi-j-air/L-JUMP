@@ -10,6 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Textarea } from "@/components/ui/textarea"
 import { Badge } from "@/components/ui/badge"
 import { Separator } from "@/components/ui/separator"
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog"
 import { Plus, Package, Settings, Target, Trash2, Copy, Check, FileText } from "lucide-react"
 import { toast } from "sonner"
 import { ProductPreview } from "@/components/ProductPreview"
@@ -292,13 +293,17 @@ export default function ProductManagement() {
     if (!productToDelete) return;
     
     const hasStripeProduct = !!(productToDelete.stripe_product_id);
-    const isTestProduct = !!(productToDelete.name?.includes('テスト') || productToDelete.name?.toLowerCase().includes('test'));
     
-    const confirmMessage = hasStripeProduct 
-      ? 'この商品を削除してもよろしいですか？\n\nStripe側の商品も非アクティブ化されます。\n既存のサブスクリプション購読者は引き続き課金されます。'
-      : 'この商品を削除してもよろしいですか？';
-      
-    if (!confirm(confirmMessage)) return;
+    // 削除確認のポップアップ表示は、ボタンクリック時のAlertDialogで行う
+    return productToDelete;
+  }
+
+  const confirmDeleteProduct = async (productId: string) => {
+    const productToDelete = products.find(p => p.id === productId);
+    if (!productToDelete) return;
+    
+    const hasStripeProduct = !!(productToDelete.stripe_product_id);
+    const isTestProduct = !!(productToDelete.name?.includes('テスト') || productToDelete.name?.toLowerCase().includes('test'));
     
     try {
       // Stripe商品も削除（非アクティブ化）
@@ -688,17 +693,43 @@ export default function ProductManagement() {
                         </div>
                       </div>
                       <div className="flex items-center gap-1 flex-col">
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={(e) => {
-                            e.stopPropagation()
-                            handleDeleteProduct(product.id)
-                          }}
-                          className="h-6 w-6 p-0 text-destructive hover:text-destructive"
-                        >
-                          <Trash2 className="h-3 w-3" />
-                        </Button>
+                        <AlertDialog>
+                          <AlertDialogTrigger asChild>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={(e) => e.stopPropagation()}
+                              className="h-6 w-6 p-0 text-destructive hover:text-destructive"
+                            >
+                              <Trash2 className="h-3 w-3" />
+                            </Button>
+                          </AlertDialogTrigger>
+                          <AlertDialogContent>
+                            <AlertDialogHeader>
+                              <AlertDialogTitle>商品削除確認</AlertDialogTitle>
+                              <AlertDialogDescription>
+                                この商品を削除してもよろしいですか？
+                                {products.find(p => p.id === product.id)?.stripe_product_id && (
+                                  <>
+                                    <br /><br />
+                                    Stripe側の商品も非アクティブ化されます。
+                                    <br />
+                                    既存のサブスクリプション購読者は引き続き課金されます。
+                                  </>
+                                )}
+                              </AlertDialogDescription>
+                            </AlertDialogHeader>
+                            <AlertDialogFooter>
+                              <AlertDialogCancel>キャンセル</AlertDialogCancel>
+                              <AlertDialogAction 
+                                onClick={() => confirmDeleteProduct(product.id)}
+                                className="bg-destructive text-destructive-foreground hover:bg-destructive/80"
+                              >
+                                削除実行
+                              </AlertDialogAction>
+                            </AlertDialogFooter>
+                          </AlertDialogContent>
+                        </AlertDialog>
                         <div className="flex items-center gap-1">
                           <Package className="h-4 w-4 text-muted-foreground" />
                           {product.is_active
@@ -879,14 +910,14 @@ export default function ProductManagement() {
                         <div>
                           <Label htmlFor="landing-content">ページ内容</Label>
                           <div className="flex gap-2">
-                            <Textarea
-                              id="landing-content"
-                              value={settingsForm.landing_page_content || ''}
-                              onChange={(e) => setSettingsForm(prev => ({ ...prev, landing_page_content: e.target.value }))}
-                              placeholder="ランディングページの説明文"
-                              rows={4}
-                              className="flex-1"
-                            />
+                          <Textarea
+                            id="landing-content"
+                            value={settingsForm.landing_page_content || ''}
+                            onChange={(e) => setSettingsForm(prev => ({ ...prev, landing_page_content: e.target.value }))}
+                            placeholder="ランディングページの説明文&#10;改行で複数行のテキストが入力できます"
+                            rows={4}
+                            className="flex-1 whitespace-pre-wrap"
+                          />
                             <FieldInsertionDialog
                               trigger={<Button variant="outline" type="button" className="gap-2"><FileText className="h-4 w-4" />フィールド挿入</Button>}
                               productName={productForm.name}

@@ -202,34 +202,60 @@ export default function PaymentManagement() {
   const handleRefund = async (orderId: string) => {
     try {
       // Stripe返金処理のエッジ関数を呼び出し
-      const { error } = await supabase.functions.invoke('stripe-refund', {
+      const { data, error } = await supabase.functions.invoke('stripe-refund', {
         body: { orderId }
       })
 
       if (error) throw error
 
-      toast.success('返金処理を開始しました')
+      if (data?.success) {
+        // 注文ステータスを返金済みに更新
+        setOrders(prevOrders => 
+          prevOrders.map(order => 
+            order.id === orderId 
+              ? { ...order, status: 'refunded' }
+              : order
+          )
+        )
+        toast.success('返金処理が完了しました')
+      } else {
+        throw new Error(data?.error || '返金処理に失敗しました')
+      }
+      
       loadOrders()
     } catch (error) {
       console.error('Error processing refund:', error)
-      toast.error('返金処理に失敗しました')
+      toast.error(`返金処理に失敗しました: ${error.message || error}`)
     }
   }
 
   const handleCancelSubscription = async (customerId: string) => {
     try {
       // Stripeサブスクリプション解約のエッジ関数を呼び出し
-      const { error } = await supabase.functions.invoke('stripe-cancel-subscription', {
+      const { data, error } = await supabase.functions.invoke('stripe-cancel-subscription', {
         body: { customerId }
       })
 
       if (error) throw error
 
-      toast.success('サブスクリプションの解約処理を開始しました')
+      if (data?.success) {
+        // サブスクリプション注文のステータスを解約済みに更新
+        setOrders(prevOrders => 
+          prevOrders.map(order => 
+            order.stripe_customer_id === customerId && order.metadata?.product_type?.includes('subscription')
+              ? { ...order, status: 'canceled' }
+              : order
+          )
+        )
+        toast.success('サブスクリプションの解約が完了しました')
+      } else {
+        throw new Error(data?.error || '解約処理に失敗しました')
+      }
+
       loadOrders()
     } catch (error) {
       console.error('Error canceling subscription:', error)
-      toast.error('サブスクリプションの解約に失敗しました')
+      toast.error(`サブスクリプションの解約に失敗しました: ${error.message || error}`)
     }
   }
 
@@ -328,7 +354,7 @@ export default function PaymentManagement() {
       }
       // 商品IDはあるが商品が見つからない場合は削除されている
       return (
-        <span className="text-destructive-foreground bg-destructive/20 px-2 py-1 rounded text-xs">
+        <span className="text-destructive-foreground bg-destructive/20 px-1 py-0.5 rounded text-xs font-medium">
           [削除された商品]
         </span>
       )
@@ -364,6 +390,7 @@ export default function PaymentManagement() {
         return 'secondary'
       case 'failed':
       case 'refunded':
+      case 'canceled':
         return 'destructive'
       default:
         return 'secondary'
@@ -376,6 +403,7 @@ export default function PaymentManagement() {
       case 'pending': return '保留中'
       case 'failed': return '失敗'
       case 'refunded': return '返金済み'
+      case 'canceled': return '解約済み'
       default: return status
     }
   }
@@ -626,6 +654,7 @@ export default function PaymentManagement() {
                     <SelectItem value="pending">保留中</SelectItem>
                     <SelectItem value="failed">失敗</SelectItem>
                     <SelectItem value="refunded">返金済み</SelectItem>
+                    <SelectItem value="canceled">解約済み</SelectItem>
                   </SelectContent>
                 </Select>
               </div>

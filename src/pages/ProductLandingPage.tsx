@@ -144,11 +144,11 @@ export default function ProductLandingPage() {
     : undefined;
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-background to-muted/20 flex items-center justify-center p-4">
-      <div className="w-full max-w-sm mx-auto">
-        <Card className="border-2 border-muted overflow-hidden">
+    <div className="min-h-screen bg-gradient-to-b from-background to-muted/20 flex items-start justify-center p-2 md:p-4 pt-4 md:pt-8">
+      <div className="w-full max-w-lg mx-auto">
+        <Card className="border-none md:border-2 md:border-muted overflow-hidden shadow-lg md:shadow-xl">
           <CardContent className="p-0">
-            <div className="bg-gradient-to-b from-background to-muted/20 p-6 flex flex-col min-h-[600px]">
+            <div className="bg-gradient-to-b from-background to-muted/20 p-4 md:p-6 flex flex-col min-h-[600px]">
               {/* Header */}
               <div className="text-center mb-6">
                 <h1 className="text-xl font-bold mb-2">
@@ -161,22 +161,18 @@ export default function ProductLandingPage() {
               </div>
 
               {/* Product Image */}
-              <div className="flex-1 flex items-center justify-center mb-6">
-                {product.landing_page_image_url ? (
+              {product.landing_page_image_url && (
+                <div className="flex-1 flex items-center justify-center mb-6">
                   <img 
                     src={product.landing_page_image_url}
                     alt={product.name}
                     className="max-w-full max-h-40 object-contain rounded-lg shadow-lg"
                   />
-                ) : (
-                  <div className="w-32 h-32 bg-muted rounded-lg flex items-center justify-center">
-                    <Package className="h-12 w-12 text-muted-foreground" />
-                  </div>
-                )}
-              </div>
+                </div>
+              )}
 
               {/* Product Info */}
-              <div className="text-center mb-6">
+              <div className="text-center mb-6 flex-1">
                 <div className="text-2xl font-bold text-primary mb-3">
                   {formatPrice(product.price, product.currency)}
                 </div>
@@ -185,8 +181,8 @@ export default function ProductLandingPage() {
                   <p className="text-sm text-muted-foreground mb-2">毎月課金</p>
                 )}
 
-                {(product.landing_page_content || product.description) && (
-                  <p className="text-sm text-muted-foreground leading-relaxed px-2">
+                                {(product.landing_page_content || product.description) && (
+                  <p className="text-sm text-muted-foreground leading-relaxed px-2 whitespace-pre-wrap">
                     {product.landing_page_content || product.description}
                   </p>
                 )}
