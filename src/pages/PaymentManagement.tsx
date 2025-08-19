@@ -123,6 +123,7 @@ export default function PaymentManagement() {
   const [activeSubscribers, setActiveSubscribers] = useState<SubscriberDetail[]>([])
   const [selectedSubscriber, setSelectedSubscriber] = useState<SubscriberDetail | null>(null)
   const [showSubscriberDetailDialog, setShowSubscriberDetailDialog] = useState(false)
+  const [isRefundMode, setIsRefundMode] = useState(false)
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
@@ -195,17 +196,22 @@ export default function PaymentManagement() {
         
       const monthlyRevenue = monthlyPaid - monthlyRefunded
 
-      // サブスクリプション統計（保留中を除く）
+      // サブスクリプション統計（解約済み・返金済みを正しく除外）
       const subscriptionOrders = data?.filter(order => {
         const metadata = order.metadata as any
         return metadata?.product_type === 'subscription' && order.status !== 'pending'
       }) || []
-      const activeSubscriptions = subscriptionOrders.filter(order => order.status === 'paid').length
+      // アクティブなサブスクリプションは 'paid' で 'canceled' や 'refunded' でないもの
+      const activeSubscriptions = subscriptionOrders.filter(order => 
+        order.status === 'paid'
+      ).length
       const totalSubscriptions = subscriptionOrders.length
       
       // ユニークなサブスク加入者数（現在アクティブな会員のみ）
       const activeSubscriberIds = new Set(
-        subscriptionOrders.filter(order => order.status === 'paid')
+        subscriptionOrders.filter(order => 
+          order.status === 'paid'
+        )
           .map(order => order.friend_uid)
           .filter(Boolean)
       )
@@ -417,7 +423,7 @@ export default function PaymentManagement() {
 
       const orderDate = manualDate ? new Date(manualDate).toISOString() : new Date().toISOString()
 
-      // 手動で注文を追加
+      // 手動で注文/返金を追加
       const { error } = await supabase
         .from('orders')
         .insert({
@@ -426,12 +432,13 @@ export default function PaymentManagement() {
           friend_uid: selectedFriend.short_uid,
           amount: parseInt(manualAmount),
           currency: selectedProduct?.currency || 'jpy',
-          status: 'paid',
+          status: isRefundMode ? 'refunded' : 'paid',
           livemode: !showTestMode,
           metadata: {
             product_name: manualProductName,
             product_type: selectedProduct?.product_type,
-            manual_entry: true
+            manual_entry: true,
+            refund_type: isRefundMode ? 'manual' : undefined
           },
           stripe_session_id: `manual_${Date.now()}`,
           created_at: orderDate
@@ -439,7 +446,7 @@ export default function PaymentManagement() {
 
       if (error) throw error
 
-      toast.success(`${selectedFriend.display_name}の注文を手動追加しました`)
+      toast.success(`${selectedFriend.display_name}の${isRefundMode ? '返金' : '注文'}を手動追加しました`)
       setShowAddDialog(false)
       setFriendUid("")
       setSelectedFriend(null)
@@ -447,6 +454,7 @@ export default function PaymentManagement() {
       setManualProductName("")
       setManualDate("")
       setSelectedProduct(null)
+      setIsRefundMode(false)
       loadData()
     } catch (error) {
       console.error('Error adding order manually:', error)
@@ -689,10 +697,31 @@ export default function PaymentManagement() {
                      >
                        <X className="h-4 w-4" />
                      </Button>
-                     <DialogHeader>
-                       <DialogTitle>注文手動追加</DialogTitle>
-                     </DialogHeader>
-                    <div className="space-y-4">
+                      <DialogHeader>
+                        <DialogTitle>{isRefundMode ? '返金手動追加' : '注文手動追加'}</DialogTitle>
+                      </DialogHeader>
+                     <div className="space-y-4">
+                       <div>
+                         <Label>処理種別</Label>
+                         <div className="flex gap-2 mt-1">
+                           <Button
+                             type="button"
+                             variant={!isRefundMode ? "default" : "outline"}
+                             onClick={() => setIsRefundMode(false)}
+                             className="flex-1"
+                           >
+                             支払い追加
+                           </Button>
+                           <Button
+                             type="button"
+                             variant={isRefundMode ? "default" : "outline"}
+                             onClick={() => setIsRefundMode(true)}
+                             className="flex-1"
+                           >
+                             返金追加
+                           </Button>
+                         </div>
+                       </div>
                       <div>
                         <Label htmlFor="friend-line-id">LINE ID</Label>
                         <div className="flex gap-2">
@@ -721,14 +750,13 @@ export default function PaymentManagement() {
                            <SelectTrigger>
                              <SelectValue placeholder="商品を選択してください" />
                            </SelectTrigger>
-                           <SelectContent>
-                             <SelectItem value="">選択なし</SelectItem>
-                             {products.map(product => (
-                               <SelectItem key={product.id} value={product.id}>
-                                 {product.name} (¥{product.price.toLocaleString()})
-                               </SelectItem>
-                             ))}
-                           </SelectContent>
+                            <SelectContent>
+                              {products.map(product => (
+                                <SelectItem key={product.id} value={product.id}>
+                                  {product.name} (¥{product.price.toLocaleString()})
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
                          </Select>
                       </div>
 
@@ -763,13 +791,13 @@ export default function PaymentManagement() {
                         />
                       </div>
 
-                      <Button 
-                        onClick={handleAddOrderManually} 
-                        className="w-full"
-                        disabled={!selectedFriend || !manualAmount || !manualProductName}
-                      >
-                        追加
-                      </Button>
+                       <Button 
+                         onClick={handleAddOrderManually} 
+                         className="w-full"
+                         disabled={!selectedFriend || !manualAmount || !manualProductName}
+                       >
+                         {isRefundMode ? '返金追加' : '支払い追加'}
+                       </Button>
                     </div>
                   </DialogContent>
                 </Dialog>
@@ -961,67 +989,7 @@ export default function PaymentManagement() {
                               )}
                             </DialogContent>
                           </Dialog>
-              {order.status === 'paid' && (order.metadata as any)?.product_type === 'subscription' && (
-                // サブスクリプションの返金ボタン
-                <AlertDialog>
-                  <AlertDialogTrigger asChild>
-                    <Button
-                      size="sm"
-                      variant="destructive"
-                      className="h-6 px-2 text-xs"
-                    >
-                      返金
-                    </Button>
-                  </AlertDialogTrigger>
-                  <AlertDialogContent>
-                    <AlertDialogHeader>
-                      <AlertDialogTitle>返金確認</AlertDialogTitle>
-                      <AlertDialogDescription>
-                        このサブスクリプション注文を返金しますか？この操作は取り消せません。
-                      </AlertDialogDescription>
-                    </AlertDialogHeader>
-                    <AlertDialogFooter>
-                      <AlertDialogCancel>キャンセル</AlertDialogCancel>
-                      <AlertDialogAction 
-                        onClick={() => handleRefund(order.id)}
-                        className="bg-destructive text-destructive-foreground hover:bg-destructive/80"
-                      >
-                        返金実行
-                      </AlertDialogAction>
-                    </AlertDialogFooter>
-                  </AlertDialogContent>
-                </AlertDialog>
-              )}
-              {order.status === 'paid' && (order.metadata as any)?.product_type === 'one_time' && (
-                              <AlertDialog>
-                                <AlertDialogTrigger asChild>
-                                  <Button
-                                    size="sm"
-                                    variant="destructive"
-                                    className="h-6 px-2 text-xs"
-                                  >
-                                    返金
-                                  </Button>
-                                </AlertDialogTrigger>
-                                <AlertDialogContent>
-                                  <AlertDialogHeader>
-                                    <AlertDialogTitle>返金確認</AlertDialogTitle>
-                                    <AlertDialogDescription>
-                                      この注文を返金しますか？この操作は取り消せません。
-                                    </AlertDialogDescription>
-                                  </AlertDialogHeader>
-                                  <AlertDialogFooter>
-                                    <AlertDialogCancel>キャンセル</AlertDialogCancel>
-                                    <AlertDialogAction 
-                                      onClick={() => handleRefund(order.id)}
-                                      className="bg-destructive text-destructive-foreground hover:bg-destructive/80"
-                                    >
-                                      返金実行
-                                    </AlertDialogAction>
-                                  </AlertDialogFooter>
-                                </AlertDialogContent>
-                              </AlertDialog>
-                            )}
+              {/* 返金ボタンを非表示にしました */}
                             {order.status === 'refunded' && (
                               <Badge variant="destructive" className="text-xs">
                                 返金済
