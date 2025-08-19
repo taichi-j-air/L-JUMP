@@ -190,8 +190,6 @@ function AppContent() {
               <Route path="/form/:id" element={<PublicForm />} />
               <Route path="/liff-form/:id" element={<LiffForm />} />
               <Route path="/product-landing/:productId" element={<ProductLandingPage />} />
-              <Route path="/checkout/success" element={<CheckoutSuccess />} />
-              <Route path="/checkout/cancel" element={<CheckoutCancel />} />
               <Route path="/forms" element={<FormsBuilder />} />
               <Route path="/forms/responses" element={<FormResponses />} />
               <Route path="/cms/friends-page" element={<CMSFriendsPageBuilder />} />

@@ -237,7 +237,7 @@ export default function PaymentManagement() {
       )
       // アクティブなサブスクリプション数を計算（paid状態で未解約のもの）
       const activeSubscriptions = subscriptionOrders.filter(order => 
-        order.status === 'paid' && !(order.status === 'paid' && order.product_type === 'subscription')
+        order.status === 'paid'
       ).length
       const totalSubscriptions = subscriptionOrders.filter(order => order.status === 'paid').length
 
@@ -453,23 +453,34 @@ export default function PaymentManagement() {
   }
 
   const handleDeleteOrder = async (orderId: string) => {
+    if (!user?.id) {
+      toast.error('ユーザー情報が取得できません')
+      return
+    }
+
     try {
+      console.log('Deleting order:', { orderId, userId: user.id })
+      
       const { error } = await supabase
         .from('orders')
         .delete()
         .eq('id', orderId)
-        .eq('user_id', user?.id)
+        .eq('user_id', user.id)
 
-      if (error) throw error
+      if (error) {
+        console.error('Delete error:', error)
+        throw error
+      }
 
+      console.log('Order deleted successfully')
+      
       // UI からも即座に削除
       setOrders(prevOrders => prevOrders.filter(order => order.id !== orderId))
       
       toast.success('注文履歴を削除しました')
-      await loadData() // データを再読み込み
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error deleting order:', error)
-      toast.error('削除に失敗しました')
+      toast.error(`削除に失敗しました: ${error.message || error}`)
     }
   }
 
@@ -520,13 +531,17 @@ export default function PaymentManagement() {
   }
 
   const handleAddOrderManually = async () => {
+    if (!user?.id) {
+      toast.error('ユーザー情報が取得できません')
+      return
+    }
+
     try {
       if (!selectedFriend || !manualAmount || !manualProductName) {
         toast.error('すべての項目を入力してください')
         return
       }
 
-      const orderDate = manualDate ? new Date(manualDate).toISOString() : new Date().toISOString()
       const amount = parseInt(manualAmount)
 
       if (isNaN(amount) || amount <= 0) {
@@ -535,7 +550,7 @@ export default function PaymentManagement() {
       }
 
       const orderData = {
-        user_id: user?.id,
+        user_id: user.id,
         product_id: selectedProduct?.id || null,
         friend_uid: selectedFriend.short_uid,
         amount: isRefundMode ? -Math.abs(amount) : Math.abs(amount),
@@ -550,8 +565,12 @@ export default function PaymentManagement() {
           product_name: manualProductName,
           friend_display_name: selectedFriend.display_name,
           entry_type: isRefundMode ? 'refund' : 'payment'
-        }
+        },
+        created_at: manualDate ? new Date(manualDate).toISOString() : new Date().toISOString(),
+        updated_at: new Date().toISOString()
       }
+
+      console.log('Inserting manual order:', orderData)
 
       const { data, error } = await supabase
         .from('orders')
@@ -563,7 +582,7 @@ export default function PaymentManagement() {
         throw error
       }
 
-      console.log('Manual order added:', data)
+      console.log('Manual order added successfully:', data)
       toast.success(`${selectedFriend.display_name}の${isRefundMode ? '返金' : '注文'}を手動追加しました`)
       setShowAddDialog(false)
       handleClearForm()
@@ -670,27 +689,37 @@ export default function PaymentManagement() {
             </Card>
 
             <Card className="cursor-pointer hover:bg-muted/50 transition-colors" onClick={() => {
-              // 全友達を SubscriberDetail 形式に変換
-              const friendsAsSubscribers = friends.map(friend => ({
-                id: friend.id,
-                display_name: friend.display_name,
-                short_uid: friend.short_uid,
-                line_user_id: friend.line_user_id,
-                orders: orders
-                  .filter(order => order.friend_uid === friend.short_uid && order.status === 'paid')
-                  .map(order => ({
-                    id: order.id,
-                    product_name: order.product_name,
-                    product_type: order.product_type || 'unknown',
-                    amount: order.amount,
-                    currency: order.currency,
-                    status: order.status,
-                    created_at: order.created_at
-                  })),
-                total_amount: orders
-                  .filter(order => order.friend_uid === friend.short_uid && order.status === 'paid')
-                  .reduce((sum, order) => sum + (order.amount || 0), 0)
-              }))
+              // サブスク会員の詳細を取得（現在のモードに応じて）
+              const subscriptionFriends = orders
+                .filter(order => (order as any).product_type === 'subscription' && order.status === 'paid' && order.livemode === isLiveMode)
+                .map(order => order.friend_uid)
+                .filter((uid, index, self) => uid && self.indexOf(uid) === index)
+              
+              const friendsAsSubscribers = subscriptionFriends
+                .map(uid => {
+                  const friend = friends.find(f => f.short_uid === uid)
+                  return friend ? {
+                    id: friend.id,
+                    display_name: friend.display_name,
+                    short_uid: friend.short_uid,
+                    line_user_id: friend.line_user_id,
+                    orders: orders
+                      .filter(order => order.friend_uid === uid && order.status === 'paid' && order.livemode === isLiveMode)
+                      .map(order => ({
+                        id: order.id,
+                        product_name: order.product_name,
+                        product_type: order.product_type || 'unknown',
+                        amount: order.amount,
+                        currency: order.currency,
+                        status: order.status,
+                        created_at: order.created_at
+                      })),
+                    total_amount: orders
+                      .filter(order => order.friend_uid === uid && order.status === 'paid' && order.livemode === isLiveMode)
+                      .reduce((sum, order) => sum + (order.amount || 0), 0)
+                  } : null
+                })
+                .filter(Boolean)
               setSubscriberDetails(friendsAsSubscribers)
               setShowSubscriberDetailDialog(true)
             }}>
