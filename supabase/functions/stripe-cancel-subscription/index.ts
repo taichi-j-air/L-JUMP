@@ -97,11 +97,11 @@ serve(async (req) => {
       });
     }
 
-    // 該当する注文のステータスを即座に cancelled に更新
+    // 該当する注文のステータスを即座に subscription_canceled に更新
     await supabaseClient
       .from('orders')
       .update({
-        status: 'canceled',
+        status: 'subscription_canceled',
         updated_at: new Date().toISOString()
       })
       .eq('stripe_customer_id', customerId)

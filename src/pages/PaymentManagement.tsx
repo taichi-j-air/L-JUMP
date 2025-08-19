@@ -402,34 +402,17 @@ export default function PaymentManagement() {
         body: { customerId: customerId }
       })
 
+      console.log('Stripe function response:', { data, error })
+
       if (error) {
         console.error('Stripe function error:', error)
         throw error
       }
 
-      if (data.success) {
-        // データベースで解約済みに更新
-        const { data: updateData, error: updateError } = await supabase
-          .from('orders')
-          .update({ status: 'subscription_canceled' })
-          .eq('id', orderId)
-          .eq('user_id', user?.id)
-          .select()
-
-        if (updateError) {
-          console.error('Error updating order status:', updateError)
-          toast.error(`ステータス更新に失敗しました: ${updateError.message}`)
-          return
-        }
-
-        if (!updateData || updateData.length === 0) {
-          toast.error('更新対象の注文が見つかりません')
-          return
-        }
-
-        console.log('Order status updated successfully:', updateData)
-
-        // UIの注文リストも即座に更新
+      if (data?.success) {
+        console.log('Subscription successfully canceled in Stripe')
+        
+        // UIの注文リストを即座に更新
         setOrders(prevOrders => 
           prevOrders.map(order => 
             order.id === orderId 
@@ -447,28 +430,10 @@ export default function PaymentManagement() {
 
         toast.success('サブスクリプションを解約しました')
         
-        // データを再読み込みして最新状態を確保
-        setTimeout(() => loadData(), 500)
-      }
-    } catch (error: any) {
-      console.error('Error canceling subscription:', error)
-      
-      if (error.message?.includes('No active subscriptions found') || error.message?.includes('already_canceled')) {
-        // 既に解約済みの場合もデータベースを更新
-        const { data: updateData, error: updateError } = await supabase
-          .from('orders')
-          .update({ status: 'subscription_canceled' })
-          .eq('id', orderId)
-          .eq('user_id', user?.id)
-          .select()
-
-        if (updateError) {
-          console.error('Error updating order status:', updateError)
-          toast.error(`ステータス更新に失敗しました: ${updateError.message}`)
-          return
-        }
-
-        // UIも同様に更新
+      } else if (data?.already_canceled) {
+        console.log('Subscription was already canceled')
+        
+        // 既に解約済みでもUIを更新
         setOrders(prevOrders => 
           prevOrders.map(order => 
             order.id === orderId 
@@ -483,11 +448,14 @@ export default function PaymentManagement() {
           active_subscriptions: Math.max(0, prevStats.active_subscriptions - 1)
         }))
 
-        toast.info('このカスタマーは既に解約済みです')
-        setTimeout(() => loadData(), 500)
+        toast.info('このサブスクリプションは既に解約済みです')
       } else {
-        toast.error(`サブスクリプションの解約に失敗しました: ${error.message || 'データベースエラーが発生しました'}`)
+        console.error('Unexpected response from Stripe function:', data)
+        toast.error('サブスクリプション解約処理で予期しない応答が返されました')
       }
+    } catch (error: any) {
+      console.error('Error canceling subscription:', error)
+      toast.error(`サブスクリプションの解約に失敗しました: ${error.message || 'サーバーエラーが発生しました'}`)
     }
   }
 
