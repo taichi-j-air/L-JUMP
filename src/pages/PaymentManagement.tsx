@@ -235,8 +235,10 @@ export default function PaymentManagement() {
       const subscriptionOrders = ordersWithProductInfo.filter(order => 
         (order as any).product_type === 'subscription'
       )
-      // サブスクは実際のStripe状況に関係なくpaidのもののみカウント（実際は0）
-      const activeSubscriptions = 0 // 実際のサブスク数は0
+      // アクティブなサブスクリプション数を計算（paid状態で未解約のもの）
+      const activeSubscriptions = subscriptionOrders.filter(order => 
+        order.status === 'paid' && !(order.status === 'paid' && order.product_type === 'subscription')
+      ).length
       const totalSubscriptions = subscriptionOrders.filter(order => order.status === 'paid').length
 
       const oneTimeOrders = ordersWithProductInfo.filter(order => 
@@ -395,7 +397,7 @@ export default function PaymentManagement() {
 
     try {
       const { data, error } = await supabase.functions.invoke('stripe-cancel-subscription', {
-        body: { customer_id: customerId }
+        body: { customerId: customerId }
       })
 
       if (error) throw error
@@ -541,19 +543,20 @@ export default function PaymentManagement() {
         status: isRefundMode ? 'refunded' : 'paid',
         livemode: isLiveMode,
         stripe_session_id: `manual_${Date.now()}`,
+        stripe_customer_id: null,
+        stripe_payment_intent_id: null,
         metadata: {
           manual_entry: true,
           product_name: manualProductName,
           friend_display_name: selectedFriend.display_name,
           entry_type: isRefundMode ? 'refund' : 'payment'
-        },
-        created_at: orderDate,
-        updated_at: new Date().toISOString()
+        }
       }
 
       const { data, error } = await supabase
         .from('orders')
         .insert([orderData])
+        .select()
 
       if (error) {
         console.error('Insert error:', error)
@@ -698,7 +701,7 @@ export default function PaymentManagement() {
                 </CardTitle>
               </CardHeader>
               <CardContent className="p-3 pt-0">
-                <div className="text-lg font-bold">0人</div>
+                <div className="text-lg font-bold">{stats.unique_subscription_users}人</div>
                 <div className="text-xs text-muted-foreground">
                   (クリックで友達一覧)
                 </div>
