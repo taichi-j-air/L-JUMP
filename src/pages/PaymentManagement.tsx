@@ -350,7 +350,44 @@ export default function PaymentManagement() {
     return <Badge variant={statusConfig.variant}>{statusConfig.label}</Badge>
   }
 
-  const handleCancelSubscription = async (customerId: string) => {
+  const getStatusBadgeCompact = (status: string, productType?: string) => {
+    // 成功した決済は白文字、R12.G179.B134背景
+    if (status === 'paid') {
+      return (
+        <span 
+          className="inline-flex items-center px-2 py-1 rounded text-xs font-medium text-white"
+          style={{ backgroundColor: 'rgb(12, 179, 134)' }}
+        >
+          支払完了
+        </span>
+      )
+    }
+    
+    const statusMap = {
+      'pending': { label: '保留中', className: 'bg-gray-100 text-gray-800' },
+      'canceled': { label: '取消済', className: 'bg-gray-100 text-gray-800' },
+      'refunded': { label: '返金済', className: 'bg-red-100 text-red-800' },
+      'subscription_canceled': { label: '解約済', className: 'bg-gray-100 text-gray-800' }
+    }
+    
+    // サブスクリプション商品でpaidの場合は解約済み
+    if (status === 'paid' && productType === 'subscription') {
+      return (
+        <span className="inline-flex items-center px-2 py-1 rounded text-xs font-medium bg-gray-100 text-gray-800">
+          解約済
+        </span>
+      )
+    }
+    
+    const statusConfig = statusMap[status] || { label: status, className: 'bg-gray-100 text-gray-800' }
+    return (
+      <span className={`inline-flex items-center px-2 py-1 rounded text-xs font-medium ${statusConfig.className}`}>
+        {statusConfig.label}
+      </span>
+    )
+  }
+
+  const handleCancelSubscription = async (customerId: string, orderId: string) => {
     if (!customerId) {
       toast.error('既に解約済みまたはカスタマーIDが見つかりません')
       return
@@ -364,13 +401,34 @@ export default function PaymentManagement() {
       if (error) throw error
 
       if (data.success) {
+        // データベースで解約済みに更新
+        const { error: updateError } = await supabase
+          .from('orders')
+          .update({ status: 'subscription_canceled' })
+          .eq('id', orderId)
+
+        if (updateError) {
+          console.error('Error updating order status:', updateError)
+        }
+
         toast.success('サブスクリプションを解約しました')
         await loadData()
       }
     } catch (error: any) {
       console.error('Error canceling subscription:', error)
       if (error.message?.includes('No active subscriptions found') || error.message?.includes('already_canceled')) {
+        // 既に解約済みの場合もデータベースを更新
+        const { error: updateError } = await supabase
+          .from('orders')
+          .update({ status: 'subscription_canceled' })
+          .eq('id', orderId)
+
+        if (updateError) {
+          console.error('Error updating order status:', updateError)
+        }
+
         toast.info('このカスタマーは既に解約済みです')
+        await loadData()
       } else {
         toast.error(`サブスクリプションの解約に失敗しました: ${error.message || error}`)
       }
@@ -884,119 +942,133 @@ export default function PaymentManagement() {
               {/* Order Table */}
               <div className="overflow-x-auto">
                 <Table>
-                  <TableHeader>
-                    <TableRow className="bg-muted/50">
-                      <TableHead className="w-10">
-                        <Checkbox
-                          checked={selectedOrderIds.length === filteredOrders.length && filteredOrders.length > 0}
-                          onCheckedChange={handleSelectAll}
-                        />
-                      </TableHead>
-                      <TableHead className="text-xs">商品名</TableHead>
-                      <TableHead className="text-xs">LINE友達名</TableHead>
-                      <TableHead className="text-xs">UID</TableHead>
-                      <TableHead className="text-xs">決済金額</TableHead>
-                      <TableHead className="text-xs">累計課金金額</TableHead>
-                      <TableHead className="text-xs">決済日時</TableHead>
-                      <TableHead className="text-xs">操作</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {paginatedOrders.map((order) => (
-                      <TableRow key={order.id} className="hover:bg-muted/30 text-xs">
-                        <TableCell>
-                          <Checkbox
-                            checked={selectedOrderIds.includes(order.id)}
-                            onCheckedChange={() => handleSelectOrder(order.id)}
-                          />
-                        </TableCell>
-                        <TableCell>
-                          <div>
-                            <div className="font-medium">{order.product_name}</div>
-                            <Badge variant="outline" className="text-xs mt-1">
-                              {order.product_type === 'subscription' ? 'サブスク' : '単発'}
-                            </Badge>
-                          </div>
-                        </TableCell>
-                        <TableCell>
-                          <div className="font-medium">{order.friend_display_name}</div>
-                        </TableCell>
-                        <TableCell>
-                          <div className="flex items-center gap-1">
-                            <span className="font-mono">{order.friend_uid || '-'}</span>
-                            {order.friend_uid && (
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                onClick={() => handleCopyUID(order.friend_uid!)}
-                                className="h-5 w-5 p-0"
-                              >
-                                <Copy className="h-3 w-3" />
-                              </Button>
-                            )}
-                          </div>
-                        </TableCell>
-                        <TableCell>
-                          <div className="font-mono">{formatPrice(order.amount, order.currency)}</div>
-                          <div className="text-xs text-muted-foreground">
-                            {order.livemode ? 'Live' : 'Test'}
-                          </div>
-                        </TableCell>
-                        <TableCell>
-                          <div className="font-mono">{formatPrice(order.total_friend_amount || 0, order.currency)}</div>
-                        </TableCell>
-                        <TableCell>
-                          <div className="text-xs">
-                            {new Date(order.created_at).toLocaleDateString('ja-JP', {
-                              year: '2-digit',
-                              month: '2-digit', 
-                              day: '2-digit'
-                            }).replace(/\//g, '/')}
-                            <br />
-                            {new Date(order.created_at).toLocaleTimeString('ja-JP', {
-                              hour: '2-digit',
-                              minute: '2-digit'
-                            })}
-                          </div>
-                        </TableCell>
-                        <TableCell>
-                          <div className="flex gap-1">
-                            {order.status === 'paid' && order.product_type === 'subscription' && order.stripe_customer_id && (
-                              <Button
-                                variant="outline"
-                                size="sm"
-                                onClick={() => handleCancelSubscription(order.stripe_customer_id!)}
-                                className="text-xs"
-                              >
-                                解約
-                              </Button>
-                            )}
-                            <AlertDialog>
-                              <AlertDialogTrigger asChild>
-                                <Button variant="destructive" size="sm" className="text-xs">
-                                  <Trash2 className="h-3 w-3" />
-                                </Button>
-                              </AlertDialogTrigger>
-                              <AlertDialogContent>
-                                <AlertDialogHeader>
-                                  <AlertDialogTitle>注文履歴を削除しますか？</AlertDialogTitle>
-                                  <AlertDialogDescription>
-                                    この注文履歴を削除します。この操作は取り消せません。
-                                  </AlertDialogDescription>
-                                </AlertDialogHeader>
-                                <AlertDialogFooter>
-                                  <AlertDialogCancel>キャンセル</AlertDialogCancel>
-                                  <AlertDialogAction onClick={() => handleDeleteOrder(order.id)} className="bg-destructive text-destructive-foreground">
-                                    削除
-                                  </AlertDialogAction>
-                                </AlertDialogFooter>
-                              </AlertDialogContent>
-                            </AlertDialog>
-                          </div>
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
+                   <TableHeader>
+                     <TableRow className="bg-muted/50">
+                       <TableHead className="w-10">
+                         <Checkbox
+                           checked={selectedOrderIds.length === filteredOrders.length && filteredOrders.length > 0}
+                           onCheckedChange={handleSelectAll}
+                         />
+                       </TableHead>
+                       <TableHead className="text-xs">商品名</TableHead>
+                       <TableHead className="text-xs">決済モデル</TableHead>
+                       <TableHead className="text-xs">決済状況</TableHead>
+                       <TableHead className="text-xs">LINE友達名</TableHead>
+                       <TableHead className="text-xs">UID</TableHead>
+                       <TableHead className="text-xs">決済金額</TableHead>
+                       <TableHead className="text-xs">累計課金金額</TableHead>
+                       <TableHead className="text-xs">決済日時</TableHead>
+                       <TableHead className="text-xs">操作</TableHead>
+                     </TableRow>
+                   </TableHeader>
+                   <TableBody>
+                     {paginatedOrders.map((order) => (
+                       <TableRow key={order.id} className="hover:bg-muted/30 text-xs">
+                         <TableCell className="py-2">
+                           <Checkbox
+                             checked={selectedOrderIds.includes(order.id)}
+                             onCheckedChange={() => handleSelectOrder(order.id)}
+                           />
+                         </TableCell>
+                         <TableCell className="py-2">
+                           <div className="font-medium text-xs">{order.product_name}</div>
+                         </TableCell>
+                         <TableCell className="py-2">
+                           <Badge variant="outline" className="text-xs">
+                             {order.product_type === 'subscription' ? 'サブスク' : '単発'}
+                           </Badge>
+                         </TableCell>
+                         <TableCell className="py-2">
+                           {getStatusBadgeCompact(order.status, order.product_type)}
+                         </TableCell>
+                         <TableCell className="py-2">
+                           <div className="font-medium text-xs">{order.friend_display_name}</div>
+                         </TableCell>
+                         <TableCell className="py-2">
+                           <div className="flex items-center gap-1">
+                             <span className="font-mono text-xs">{order.friend_uid || '-'}</span>
+                             {order.friend_uid && (
+                               <Button
+                                 variant="ghost"
+                                 size="sm"
+                                 onClick={() => handleCopyUID(order.friend_uid!)}
+                                 className="h-4 w-4 p-0"
+                               >
+                                 <Copy className="h-3 w-3" />
+                               </Button>
+                             )}
+                           </div>
+                         </TableCell>
+                         <TableCell className="py-2">
+                           <div className="font-mono text-xs">{formatPrice(order.amount, order.currency)}</div>
+                           <div className="text-xs text-muted-foreground">
+                             {order.livemode ? 'Live' : 'Test'}
+                           </div>
+                         </TableCell>
+                         <TableCell className="py-2">
+                           <div className="font-mono text-xs">{formatPrice(order.total_friend_amount || 0, order.currency)}</div>
+                         </TableCell>
+                         <TableCell className="py-2">
+                           <div className="text-xs">
+                             {new Date(order.created_at).toLocaleDateString('ja-JP', {
+                               year: '2-digit',
+                               month: '2-digit', 
+                               day: '2-digit'
+                             })}
+                             <br />
+                             {new Date(order.created_at).toLocaleTimeString('ja-JP', {
+                               hour: '2-digit',
+                               minute: '2-digit'
+                             })}
+                           </div>
+                         </TableCell>
+                         <TableCell className="py-2">
+                           <div className="flex gap-1">
+                             <AlertDialog>
+                               <AlertDialogTrigger asChild>
+                                 <Button variant="destructive" size="sm" className="text-xs h-7">
+                                   <Trash2 className="h-3 w-3" />
+                                 </Button>
+                               </AlertDialogTrigger>
+                               <AlertDialogContent>
+                                 <AlertDialogHeader>
+                                   <AlertDialogTitle>注文履歴を削除しますか？</AlertDialogTitle>
+                                   <AlertDialogDescription>
+                                     この注文履歴を削除します。この操作は取り消せません。
+                                   </AlertDialogDescription>
+                                 </AlertDialogHeader>
+                                 <AlertDialogFooter>
+                                   <AlertDialogCancel>キャンセル</AlertDialogCancel>
+                                   <AlertDialogAction onClick={() => handleDeleteOrder(order.id)} className="bg-destructive text-destructive-foreground">
+                                     削除
+                                   </AlertDialogAction>
+                                 </AlertDialogFooter>
+                               </AlertDialogContent>
+                             </AlertDialog>
+                             {order.status === 'subscription_canceled' ? (
+                               <Button
+                                 variant="outline"
+                                 size="sm"
+                                 disabled
+                                 className="text-xs h-7"
+                               >
+                                 解約済み
+                               </Button>
+                             ) : order.status === 'paid' && order.product_type === 'subscription' && order.stripe_customer_id ? (
+                               <Button
+                                 variant="outline"
+                                 size="sm"
+                                 onClick={() => handleCancelSubscription(order.stripe_customer_id!, order.id)}
+                                 className="text-xs h-7"
+                               >
+                                 解約
+                               </Button>
+                             ) : null}
+                           </div>
+                         </TableCell>
+                       </TableRow>
+                     ))}
+                   </TableBody>
                 </Table>
               </div>
 
