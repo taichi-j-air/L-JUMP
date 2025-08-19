@@ -542,6 +542,7 @@ export type Database = {
           scenario_name: string | null
           short_uid: string | null
           short_uid_ci: string | null
+          total_payment_amount: number | null
           updated_at: string
           user_id: string
         }
@@ -557,6 +558,7 @@ export type Database = {
           scenario_name?: string | null
           short_uid?: string | null
           short_uid_ci?: string | null
+          total_payment_amount?: number | null
           updated_at?: string
           user_id: string
         }
@@ -572,6 +574,7 @@ export type Database = {
           scenario_name?: string | null
           short_uid?: string | null
           short_uid_ci?: string | null
+          total_payment_amount?: number | null
           updated_at?: string
           user_id?: string
         }

@@ -3,14 +3,15 @@ export async function processPaymentSuccessActions(
   supabaseClient: any,
   managerUserId: string,
   productId: string,
-  friendUid: string
+  friendUid: string,
+  amount?: number
 ) {
-  console.log('[stripe-webhook] Processing success actions for:', { managerUserId, productId, friendUid });
+  console.log('[stripe-webhook] Processing success actions for:', { managerUserId, productId, friendUid, amount });
 
   // Get friend by UID
   const { data: friend, error: friendError } = await supabaseClient
     .from('line_friends')
-    .select('id, line_user_id')
+    .select('id, line_user_id, total_payment_amount')
     .eq('user_id', managerUserId)
     .ilike('short_uid', friendUid)
     .single();
@@ -21,6 +22,26 @@ export async function processPaymentSuccessActions(
   }
 
   console.log('[stripe-webhook] Found friend:', friend.id);
+
+  // Update friend's cumulative payment amount if amount is provided
+  if (amount && amount > 0) {
+    try {
+      const currentTotal = friend.total_payment_amount || 0;
+      const newTotal = currentTotal + amount;
+      
+      await supabaseClient
+        .from('line_friends')
+        .update({ 
+          total_payment_amount: newTotal,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', friend.id);
+        
+      console.log('[stripe-webhook] Updated friend payment total:', { friendId: friend.id, previousTotal: currentTotal, addedAmount: amount, newTotal });
+    } catch (error) {
+      console.error('[stripe-webhook] Failed to update friend payment total:', error);
+    }
+  }
 
   // Get product actions
   const { data: actions, error: actionsError } = await supabaseClient

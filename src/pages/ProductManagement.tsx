@@ -1085,14 +1085,7 @@ export default function ProductManagement() {
                             onChange={(e) => setFailureAction(prev => ({ ...prev, failure_message: e.target.value }))}
                             placeholder="決済に失敗しました。再度お試しください。"
                             rows={3}
-                            className="flex-1"
-                          />
-                          <FieldInsertionDialog
-                            trigger={<Button variant="outline" type="button" className="gap-2"><FileText className="h-4 w-4" />フィールド挿入</Button>}
-                            productName={productForm.name}
-                            productPrice={productForm.price}
-                            currency={productForm.currency}
-                            productUrl={selectedProduct ? getProductUrl(selectedProduct.id) : undefined}
+                            className="w-full"
                           />
                         </div>
                       </div>

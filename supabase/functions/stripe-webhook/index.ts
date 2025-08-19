@@ -157,11 +157,19 @@ async function handleCheckoutCompleted(event: Stripe.Event, supabaseClient: any)
     if (metadata.uid && metadata.product_id && metadata.manager_user_id) {
       try {
         console.log('[stripe-webhook] Processing payment success actions');
+        
+        // Get payment amount from session for cumulative tracking
+        let paymentAmount = 0;
+        if (session.amount_total) {
+          paymentAmount = session.amount_total; // Amount in cents
+        }
+        
         await processPaymentSuccessActions(
           supabaseClient,
           metadata.manager_user_id,
           metadata.product_id,
-          metadata.uid
+          metadata.uid,
+          paymentAmount
         );
         console.log('[stripe-webhook] Payment success actions completed');
       } catch (error) {
