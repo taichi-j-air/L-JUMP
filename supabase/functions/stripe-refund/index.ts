@@ -19,6 +19,8 @@ serve(async (req) => {
       throw new Error("orderId is required");
     }
 
+    console.log(`[stripe-refund] Processing refund for order: ${orderId}`);
+
     // Supabase クライアント（サービスロール）
     const supabaseClient = createClient(
       Deno.env.get("SUPABASE_URL") ?? "",
@@ -34,8 +36,18 @@ serve(async (req) => {
       .single();
 
     if (orderError || !order) {
+      console.error(`[stripe-refund] Order not found: ${orderId}`, orderError);
       throw new Error("Order not found");
     }
+
+    console.log(`[stripe-refund] Order found:`, { 
+      id: order.id, 
+      status: order.status, 
+      amount: order.amount, 
+      user_id: order.user_id,
+      livemode: order.livemode,
+      stripe_payment_intent_id: order.stripe_payment_intent_id 
+    });
 
     if (order.status !== 'paid') {
       throw new Error("Only paid orders can be refunded");
@@ -43,6 +55,8 @@ serve(async (req) => {
 
     // Stripe Payment Intent ID を確認（手動追加の場合は存在しない可能性）
     if (!order.stripe_payment_intent_id) {
+      console.log(`[stripe-refund] Manual order detected, updating DB only: ${orderId}`);
+      
       // 手動追加の注文の場合、DBの状態のみ変更
       await supabaseClient
         .from('orders')
@@ -66,27 +80,42 @@ serve(async (req) => {
     }
 
     // Stripe認証情報を取得
+    console.log(`[stripe-refund] Fetching Stripe credentials for user: ${order.user_id}`);
+    
     const { data: stripeCredentials, error: credentialsError } = await supabaseClient
       .from('stripe_credentials')
-      .select('stripe_secret_key_live, stripe_secret_key_test')
+      .select('test_secret_key, live_secret_key')
       .eq('user_id', order.user_id)
       .maybeSingle();
 
+    console.log(`[stripe-refund] Stripe credentials query result:`, { 
+      error: credentialsError, 
+      hasCredentials: !!stripeCredentials,
+      hasTestKey: !!(stripeCredentials?.test_secret_key),
+      hasLiveKey: !!(stripeCredentials?.live_secret_key)
+    });
+
     if (credentialsError || !stripeCredentials) {
+      console.error(`[stripe-refund] Stripe credentials not found:`, credentialsError);
       throw new Error("Stripe credentials not found");
     }
 
-    // テストモードかライブモードかを判定
-    const isTestMode = order.stripe_payment_intent_id?.startsWith('pi_test_') || false;
-    const stripeSecretKey = isTestMode ? 
-      stripeCredentials.stripe_secret_key_test : 
-      stripeCredentials.stripe_secret_key_live;
+    // ライブモード判定（orderのlivemodeフィールドまたはPaymentIntentIDから判定）
+    const isLiveMode = order.livemode || (!order.stripe_payment_intent_id?.startsWith('pi_test_'));
+    const stripeSecretKey = isLiveMode ? 
+      stripeCredentials.live_secret_key : 
+      stripeCredentials.test_secret_key;
+
+    console.log(`[stripe-refund] Using ${isLiveMode ? 'live' : 'test'} mode for refund`);
 
     if (!stripeSecretKey) {
-      throw new Error(`Stripe ${isTestMode ? 'test' : 'live'} secret key not configured`);
+      console.error(`[stripe-refund] Stripe ${isLiveMode ? 'live' : 'test'} secret key not configured`);
+      throw new Error(`Stripe ${isLiveMode ? 'live' : 'test'} secret key not configured`);
     }
 
     const stripe = new Stripe(stripeSecretKey, { apiVersion: "2023-10-16" });
+
+    console.log(`[stripe-refund] Creating refund for PaymentIntent: ${order.stripe_payment_intent_id}`);
 
     // 返金処理
     const refund = await stripe.refunds.create({
@@ -98,6 +127,8 @@ serve(async (req) => {
         user_id: order.user_id
       }
     });
+
+    console.log(`[stripe-refund] Refund created successfully: ${refund.id}`);
 
     // 注文ステータスを更新
     await supabaseClient
