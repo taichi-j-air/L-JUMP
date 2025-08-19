@@ -139,13 +139,22 @@ serve(async (req) => {
       throw new Error(`価格ID「${product.stripe_price_id}」の取得に失敗しました。Stripeダッシュボードで価格IDが正しく設定されているか確認してください。詳細: ${priceError instanceof Error ? priceError.message : 'Unknown error'}`);
     }
 
-    // Create checkout session
+    // Create checkout session with proper mode selection
+    let checkoutMode: 'payment' | 'subscription';
+    if (product.product_type === 'one_time') {
+      checkoutMode = 'payment';
+    } else if (product.product_type === 'subscription' || product.product_type === 'subscription_with_trial') {
+      checkoutMode = 'subscription';
+    } else {
+      throw new Error(`不明な商品タイプです: ${product.product_type}`);
+    }
+
     const sessionParams: Stripe.Checkout.SessionCreateParams = {
       line_items: [{
         price: product.stripe_price_id,
         quantity: 1,
       }],
-      mode: product.product_type === 'one_time' ? 'payment' : 'subscription',
+      mode: checkoutMode,
       success_url: successUrl,
       cancel_url: cancelUrl,
       metadata: metadata,
@@ -154,7 +163,7 @@ serve(async (req) => {
     };
 
     // Only set customer_creation for payment mode (one_time products)
-    if (product.product_type === 'one_time') {
+    if (checkoutMode === 'payment') {
       sessionParams.customer_creation = 'always';
     }
 
