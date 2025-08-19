@@ -396,22 +396,38 @@ export default function PaymentManagement() {
     }
 
     try {
+      console.log('Canceling subscription for:', { customerId, orderId })
+      
       const { data, error } = await supabase.functions.invoke('stripe-cancel-subscription', {
         body: { customerId: customerId }
       })
 
-      if (error) throw error
+      if (error) {
+        console.error('Stripe function error:', error)
+        throw error
+      }
 
       if (data.success) {
         // データベースで解約済みに更新
-        const { error: updateError } = await supabase
+        const { data: updateData, error: updateError } = await supabase
           .from('orders')
           .update({ status: 'subscription_canceled' })
           .eq('id', orderId)
+          .eq('user_id', user?.id)
+          .select()
 
         if (updateError) {
           console.error('Error updating order status:', updateError)
+          toast.error(`ステータス更新に失敗しました: ${updateError.message}`)
+          return
         }
+
+        if (!updateData || updateData.length === 0) {
+          toast.error('更新対象の注文が見つかりません')
+          return
+        }
+
+        console.log('Order status updated successfully:', updateData)
 
         // UIの注文リストも即座に更新
         setOrders(prevOrders => 
@@ -430,20 +446,26 @@ export default function PaymentManagement() {
         }))
 
         toast.success('サブスクリプションを解約しました')
-        // 必要に応じて全データを再読み込み
-        setTimeout(() => loadData(), 1000)
+        
+        // データを再読み込みして最新状態を確保
+        setTimeout(() => loadData(), 500)
       }
     } catch (error: any) {
       console.error('Error canceling subscription:', error)
+      
       if (error.message?.includes('No active subscriptions found') || error.message?.includes('already_canceled')) {
         // 既に解約済みの場合もデータベースを更新
-        const { error: updateError } = await supabase
+        const { data: updateData, error: updateError } = await supabase
           .from('orders')
           .update({ status: 'subscription_canceled' })
           .eq('id', orderId)
+          .eq('user_id', user?.id)
+          .select()
 
         if (updateError) {
           console.error('Error updating order status:', updateError)
+          toast.error(`ステータス更新に失敗しました: ${updateError.message}`)
+          return
         }
 
         // UIも同様に更新
@@ -462,9 +484,9 @@ export default function PaymentManagement() {
         }))
 
         toast.info('このカスタマーは既に解約済みです')
-        setTimeout(() => loadData(), 1000)
+        setTimeout(() => loadData(), 500)
       } else {
-        toast.error(`サブスクリプションの解約に失敗しました: ${error.message || error}`)
+        toast.error(`サブスクリプションの解約に失敗しました: ${error.message || 'データベースエラーが発生しました'}`)
       }
     }
   }
@@ -493,18 +515,25 @@ export default function PaymentManagement() {
     try {
       console.log('Deleting order:', { orderId, userId: user.id })
       
-      const { error } = await supabase
+      const { data, error } = await supabase
         .from('orders')
         .delete()
         .eq('id', orderId)
         .eq('user_id', user.id)
+        .select()
 
       if (error) {
         console.error('Delete error:', error)
-        throw error
+        toast.error(`削除に失敗しました: ${error.message}`)
+        return
       }
 
-      console.log('Order deleted successfully')
+      if (!data || data.length === 0) {
+        toast.error('削除対象の注文が見つかりません')
+        return
+      }
+
+      console.log('Order deleted successfully:', data)
       
       // UI からも即座に削除
       setOrders(prevOrders => prevOrders.filter(order => order.id !== orderId))
@@ -515,7 +544,7 @@ export default function PaymentManagement() {
       toast.success('注文履歴を削除しました')
     } catch (error: any) {
       console.error('Error deleting order:', error)
-      toast.error(`削除に失敗しました: ${error.message || error}`)
+      toast.error(`削除に失敗しました: ${error.message || 'データベースエラーが発生しました'}`)
     }
   }
 
@@ -614,17 +643,24 @@ export default function PaymentManagement() {
 
       if (error) {
         console.error('Insert error:', error)
-        throw error
+        toast.error(`手動追加に失敗しました: ${error.message}`)
+        return
+      }
+
+      if (!data || data.length === 0) {
+        toast.error('データの挿入に失敗しました')
+        return
       }
 
       console.log('Manual order added successfully:', data)
       toast.success(`${selectedFriend.display_name}の${isRefundMode ? '返金' : '注文'}を手動追加しました`)
+      
       setShowAddDialog(false)
       handleClearForm()
       await loadData()
     } catch (error: any) {
       console.error('Error adding order manually:', error)
-      toast.error(`手動追加に失敗しました: ${error.message || error}`)
+      toast.error(`手動追加に失敗しました: ${error.message || 'データベースエラーが発生しました'}`)
     }
   }
 
