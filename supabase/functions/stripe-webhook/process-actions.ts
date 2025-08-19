@@ -97,17 +97,7 @@ export async function processPaymentSuccessActions(
   // Process scenario transition
   if (action.target_scenario_id) {
     try {
-      // Stop existing scenarios if replace_all
-      if (action.scenario_action === 'replace_all') {
-        await supabaseClient
-          .from('step_delivery_tracking')
-          .update({ status: 'exited', updated_at: new Date().toISOString() })
-          .eq('friend_id', friend.id)
-          .in('status', ['waiting', 'ready', 'delivered']);
-        console.log('[stripe-webhook] Stopped existing scenarios for replace_all');
-      }
-
-      // Register friend to new scenario
+      // Register friend to new scenario first
       await supabaseClient
         .from('scenario_friend_logs')
         .upsert({
@@ -117,46 +107,87 @@ export async function processPaymentSuccessActions(
           invite_code: 'payment_success'
         });
 
-      // Create step tracking for new scenario
+      // Remove existing tracking for target scenario to avoid conflicts
+      await supabaseClient
+        .from('step_delivery_tracking')
+        .delete()
+        .eq('friend_id', friend.id)
+        .eq('scenario_id', action.target_scenario_id);
+
+      // Handle scenario action logic
+      if (action.scenario_action === 'replace_all') {
+        // Stop existing scenarios except those with prevent_auto_exit = true
+        await supabaseClient
+          .from('step_delivery_tracking')
+          .update({ status: 'exited', updated_at: new Date().toISOString() })
+          .eq('friend_id', friend.id)
+          .in('status', ['waiting', 'ready', 'delivered'])
+          .in('scenario_id', 
+            supabaseClient
+              .from('step_scenarios')
+              .select('id')
+              .eq('prevent_auto_exit', false)
+          );
+        console.log('[stripe-webhook] Stopped existing scenarios for replace_all');
+      }
+      // For 'add_to_existing', we don't stop any existing scenarios
+
+      // Get steps for the new scenario
       const { data: steps, error: stepsError } = await supabaseClient
         .from('steps')
         .select('id, step_order')
         .eq('scenario_id', action.target_scenario_id)
         .order('step_order');
 
-      if (!stepsError && steps) {
-        for (const step of steps) {
-          await supabaseClient
-            .from('step_delivery_tracking')
-            .upsert({
-              scenario_id: action.target_scenario_id,
-              step_id: step.id,
-              friend_id: friend.id,
-              status: step.step_order === 0 ? 'ready' : 'waiting',
-              scheduled_delivery_at: step.step_order === 0 ? new Date().toISOString() : null
-            });
+      if (stepsError) {
+        console.error('[stripe-webhook] Failed to get steps:', stepsError);
+        return;
+      }
+
+      if (steps && steps.length > 0) {
+        // Create step tracking for new scenario
+        const trackingData = steps.map(step => ({
+          scenario_id: action.target_scenario_id,
+          step_id: step.id,
+          friend_id: friend.id,
+          status: 'waiting',
+          // First step gets immediate delivery, others get null
+          scheduled_delivery_at: step.step_order === 0 ? new Date().toISOString() : null,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString()
+        }));
+
+        const { error: insertError } = await supabaseClient
+          .from('step_delivery_tracking')
+          .insert(trackingData);
+
+        if (insertError) {
+          console.error('[stripe-webhook] Failed to insert step tracking:', insertError);
+          return;
         }
+
         console.log('[stripe-webhook] Created step tracking for scenario:', action.target_scenario_id);
         
-        // Trigger scenario delivery for the first step
-        if (steps.length > 0) {
-          try {
-            const { error: triggerError } = await supabaseClient.functions.invoke('scheduled-step-delivery', {
-              body: {
-                line_user_id: friend.line_user_id,
-                scenario_id: action.target_scenario_id,
-                trigger_source: 'payment_success'
-              }
-            });
-            if (triggerError) {
-              console.error('[stripe-webhook] Failed to trigger scenario delivery:', triggerError);
-            } else {
-              console.log('[stripe-webhook] Triggered scenario delivery');
+        // Trigger scenario delivery using the edge function
+        try {
+          const { error: triggerError } = await supabaseClient.functions.invoke('scheduled-step-delivery', {
+            body: {
+              line_user_id: friend.line_user_id,
+              scenario_id: action.target_scenario_id,
+              trigger_source: 'payment_success'
             }
-          } catch (triggerError) {
-            console.error('[stripe-webhook] Error triggering scenario delivery:', triggerError);
+          });
+          
+          if (triggerError) {
+            console.error('[stripe-webhook] Failed to trigger scenario delivery:', triggerError);
+          } else {
+            console.log('[stripe-webhook] Triggered scenario delivery');
           }
+        } catch (triggerError) {
+          console.error('[stripe-webhook] Error triggering scenario delivery:', triggerError);
         }
+      } else {
+        console.log('[stripe-webhook] No steps found for scenario:', action.target_scenario_id);
       }
     } catch (error) {
       console.error('[stripe-webhook] Failed to process scenario transition:', error);
