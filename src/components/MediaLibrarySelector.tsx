@@ -34,9 +34,16 @@ export function MediaLibrarySelector({ trigger, onSelect, selectedUrl }: MediaLi
   const loadMediaFiles = async () => {
     setLoading(true)
     try {
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) {
+        toast.error('ログインが必要です')
+        return
+      }
+
+      // ユーザー固有のフォルダからファイルを取得
       const { data, error } = await supabase.storage
         .from('media-files')
-        .list('', {
+        .list(user.id, {
           limit: 100,
           offset: 0,
           sortBy: { column: 'created_at', order: 'desc' }
@@ -51,7 +58,7 @@ export function MediaLibrarySelector({ trigger, onSelect, selectedUrl }: MediaLi
         (data || []).map(async (file) => {
           const { data: urlData } = supabase.storage
             .from('media-files')
-            .getPublicUrl(file.name)
+            .getPublicUrl(`${user.id}/${file.name}`)
 
           return {
             name: file.name,
@@ -91,8 +98,14 @@ export function MediaLibrarySelector({ trigger, onSelect, selectedUrl }: MediaLi
 
     setUploading(true)
     try {
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) {
+        toast.error('ログインが必要です')
+        return
+      }
+
       const fileExt = file.name.split('.').pop()
-      const fileName = `${Date.now()}.${fileExt}`
+      const fileName = `${user.id}/${Date.now()}.${fileExt}`
 
       const { error } = await supabase.storage
         .from('media-files')

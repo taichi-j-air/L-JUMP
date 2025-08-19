@@ -105,7 +105,7 @@ serve(async (req) => {
     const successUrl = settings.success_redirect_url || `${origin}/checkout/success`;
     const cancelUrl = settings.cancel_redirect_url || `${origin}/checkout/cancel`;
 
-    // Validate price mode compatibility
+    // Validate price mode compatibility - Enhanced checking
     let priceDetails: Stripe.Price;
     try {
       priceDetails = await stripe.prices.retrieve(product.stripe_price_id);
@@ -115,16 +115,28 @@ serve(async (req) => {
         recurring: priceDetails.recurring 
       });
 
-      // Check if price type matches product type
-      if (product.product_type === 'subscription' && priceDetails.type !== 'recurring') {
-        throw new Error(`Product is subscription type but price ${product.stripe_price_id} is not recurring. Please create a recurring price in Stripe.`);
+      // Enhanced validation for subscription products
+      if (product.product_type === 'subscription') {
+        if (priceDetails.type !== 'recurring') {
+          throw new Error(`商品「${product.name}」はサブスクリプション商品ですが、設定されている価格ID「${product.stripe_price_id}」は単発商品用の価格です。Stripeで「recurring（定期課金）」タイプの価格を作成してください。`);
+        }
+        if (!priceDetails.recurring) {
+          throw new Error(`価格ID「${product.stripe_price_id}」にrecurring情報が設定されていません。Stripeでサブスクリプション用の価格として設定してください。`);
+        }
       }
-      if (product.product_type === 'one_time' && priceDetails.type !== 'one_time') {
-        throw new Error(`Product is one_time type but price ${product.stripe_price_id} is not one_time. Please create a one-time price in Stripe.`);
+
+      if (product.product_type === 'one_time') {
+        if (priceDetails.type !== 'one_time') {
+          throw new Error(`商品「${product.name}」は単発商品ですが、設定されている価格ID「${product.stripe_price_id}」はサブスクリプション用の価格です。Stripeで「one_time（単発）」タイプの価格を作成してください。`);
+        }
       }
     } catch (priceError) {
       console.error('Price validation error:', priceError);
-      throw new Error(`Invalid price ID: ${product.stripe_price_id}. ${priceError instanceof Error ? priceError.message : 'Please check Stripe configuration.'}`);
+      if (priceError instanceof Error && priceError.message.includes('商品')) {
+        // Custom validation error - pass through
+        throw priceError;
+      }
+      throw new Error(`価格ID「${product.stripe_price_id}」の取得に失敗しました。Stripeダッシュボードで価格IDが正しく設定されているか確認してください。詳細: ${priceError instanceof Error ? priceError.message : 'Unknown error'}`);
     }
 
     // Create checkout session
