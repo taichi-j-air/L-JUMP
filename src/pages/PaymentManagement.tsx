@@ -42,6 +42,10 @@ interface CustomerStats {
   successful_one_time: number
   total_one_time: number
   pending_orders: number
+  unique_subscription_users: number
+  unique_onetime_users: number
+  canceled_orders: number
+  refunded_orders: number
 }
 
 interface Friend {
@@ -71,10 +75,17 @@ export default function PaymentManagement() {
     total_subscriptions: 0,
     successful_one_time: 0,
     total_one_time: 0,
-    pending_orders: 0
+    pending_orders: 0,
+    unique_subscription_users: 0,
+    unique_onetime_users: 0,
+    canceled_orders: 0,
+    refunded_orders: 0
   })
   const [searchTerm, setSearchTerm] = useState("")
   const [statusFilter, setStatusFilter] = useState("all")
+  const [showCanceledOrders, setShowCanceledOrders] = useState(false)
+  const [showRefundedOrders, setShowRefundedOrders] = useState(false)
+  const [userTotals, setUserTotals] = useState<Record<string, number>>({})
   const [selectedOrder, setSelectedOrder] = useState<OrderRecord | null>(null)
   const [showTestMode, setShowTestMode] = useState(false)
   const [showAddDialog, setShowAddDialog] = useState(false)
@@ -139,6 +150,13 @@ export default function PaymentManagement() {
       }) || []
       const activeSubscriptions = subscriptionOrders.filter(order => order.status === 'paid').length
       const totalSubscriptions = subscriptionOrders.length
+      
+      // ユニークなサブスク加入者数
+      const uniqueSubscriptionUsers = new Set(
+        subscriptionOrders.filter(order => order.status === 'paid')
+          .map(order => order.friend_uid)
+          .filter(Boolean)
+      ).size
 
       // 単発決済統計（保留中を除く）
       const oneTimeOrders = data?.filter(order => {
@@ -148,6 +166,25 @@ export default function PaymentManagement() {
       const successfulOneTime = oneTimeOrders.filter(order => order.status === 'paid').length
       const totalOneTime = oneTimeOrders.length
       
+      // ユニークな単発決済ユーザー数
+      const uniqueOneTimeUsers = new Set(
+        oneTimeOrders.filter(order => order.status === 'paid')
+          .map(order => order.friend_uid)
+          .filter(Boolean)
+      ).size
+      
+      // 解約・返金統計
+      const canceledOrders = data?.filter(order => order.status === 'canceled').length || 0
+      const refundedOrders = data?.filter(order => order.status === 'refunded').length || 0
+      
+      // ユーザーごとの累計課金額計算
+      const totals: Record<string, number> = {}
+      successful.forEach(order => {
+        const userId = order.friend_uid || 'unknown'
+        totals[userId] = (totals[userId] || 0) + (order.amount || 0)
+      })
+      setUserTotals(totals)
+      
       setStats({
         total_orders: data?.length || 0,
         total_revenue: totalRevenue,
@@ -156,7 +193,11 @@ export default function PaymentManagement() {
         total_subscriptions: totalSubscriptions,
         successful_one_time: successfulOneTime,
         total_one_time: totalOneTime,
-        pending_orders: data?.filter(order => order.status === 'pending').length || 0
+        pending_orders: data?.filter(order => order.status === 'pending').length || 0,
+        unique_subscription_users: uniqueSubscriptionUsers,
+        unique_onetime_users: uniqueOneTimeUsers,
+        canceled_orders: canceledOrders,
+        refunded_orders: refundedOrders
       })
     } catch (error) {
       console.error('Error loading orders:', error)
@@ -295,7 +336,6 @@ export default function PaymentManagement() {
         .insert({
           user_id: user?.id,
           product_id: selectedProduct?.id,
-          line_user_id: selectedFriend.line_user_id,
           friend_uid: selectedFriend.short_uid,
           amount: parseInt(manualAmount),
           currency: selectedProduct?.currency || 'jpy',
@@ -337,7 +377,13 @@ export default function PaymentManagement() {
     // 保留中の表示/非表示フィルター
     const matchesPendingFilter = showPendingOrders || order.status !== 'pending'
     
-    return matchesSearch && matchesStatus && matchesPendingFilter
+    // 解約済みの表示/非表示フィルター
+    const matchesCanceledFilter = showCanceledOrders || order.status !== 'canceled'
+    
+    // 返金済みの表示/非表示フィルター
+    const matchesRefundedFilter = showRefundedOrders || order.status !== 'refunded'
+    
+    return matchesSearch && matchesStatus && matchesPendingFilter && matchesCanceledFilter && matchesRefundedFilter
   })
 
   const getProductName = (order: OrderRecord) => {
@@ -353,8 +399,8 @@ export default function PaymentManagement() {
         return currentProduct.name
       }
       // 商品IDはあるが商品が見つからない場合は削除されている
-      return (
-        <span className="text-destructive-foreground bg-destructive/20 px-1 py-0.5 rounded text-xs font-medium">
+        return (
+        <span className="bg-destructive text-white px-1 py-0.5 rounded text-xs font-medium">
           [削除された商品]
         </span>
       )
@@ -367,10 +413,6 @@ export default function PaymentManagement() {
     if (order.friend_uid) {
       const friend = friends.find(f => f.short_uid === order.friend_uid)
       return friend?.display_name || order.friend_uid
-    }
-    if (order.line_user_id) {
-      const friend = friends.find(f => f.line_user_id === order.line_user_id)
-      return friend?.display_name || 'LINE友達'
     }
     return '不明'
   }
@@ -397,6 +439,13 @@ export default function PaymentManagement() {
     }
   }
 
+  const getStatusStyle = (status: string) => {
+    if (status === 'paid') {
+      return { backgroundColor: 'hsl(142, 71%, 45%)', color: 'white' }
+    }
+    return undefined
+  }
+
   const getStatusLabel = (status: string) => {
     switch (status) {
       case 'paid': return '成功'
@@ -404,8 +453,14 @@ export default function PaymentManagement() {
       case 'failed': return '失敗'
       case 'refunded': return '返金済み'
       case 'canceled': return '解約済み'
+      case 'expired': return '期限切れ'
       default: return status
     }
+  }
+
+  const getUserTotal = (order: OrderRecord) => {
+    const userId = order.friend_uid || 'unknown'
+    return userTotals[userId] || 0
   }
 
   if (loading) {
@@ -491,7 +546,7 @@ export default function PaymentManagement() {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-xs font-medium text-muted-foreground">サブスク会員数</p>
-                <p className="text-lg font-bold">{stats.active_subscriptions}/{stats.total_subscriptions}</p>
+                <p className="text-lg font-bold">{stats.active_subscriptions}/{stats.unique_subscription_users}</p>
               </div>
               <CreditCard className="h-4 w-4 text-muted-foreground" />
             </div>
@@ -501,7 +556,7 @@ export default function PaymentManagement() {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-xs font-medium text-muted-foreground">単発決済数</p>
-                <p className="text-lg font-bold">{stats.successful_one_time}/{stats.total_one_time}</p>
+                <p className="text-lg font-bold">{stats.successful_one_time}/{stats.unique_onetime_users}</p>
               </div>
               <TrendingUp className="h-4 w-4 text-muted-foreground" />
             </div>
@@ -568,18 +623,19 @@ export default function PaymentManagement() {
 
                       <div>
                         <Label htmlFor="product-select">商品選択</Label>
-                        <Select onValueChange={handleProductSelect}>
-                          <SelectTrigger>
-                            <SelectValue placeholder="商品を選択してください" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {products.map(product => (
-                              <SelectItem key={product.id} value={product.id}>
-                                {product.name} (¥{product.price.toLocaleString()})
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
+                         <Select onValueChange={handleProductSelect}>
+                           <SelectTrigger>
+                             <SelectValue placeholder="商品を選択してください" />
+                           </SelectTrigger>
+                           <SelectContent>
+                             <SelectItem value="">選択なし</SelectItem>
+                             {products.map(product => (
+                               <SelectItem key={product.id} value={product.id}>
+                                 {product.name} (¥{product.price.toLocaleString()})
+                               </SelectItem>
+                             ))}
+                           </SelectContent>
+                         </Select>
                       </div>
 
                       <div>
@@ -659,32 +715,55 @@ export default function PaymentManagement() {
                 </Select>
               </div>
               
-              <div className="flex items-center space-x-2">
-                <Checkbox
-                  id="show-pending"
-                  checked={showPendingOrders}
-                  onCheckedChange={(checked) => setShowPendingOrders(checked === true)}
-                />
-                <Label htmlFor="show-pending" className="text-xs">
-                  保留中の注文を表示
-                </Label>
+              <div className="flex flex-wrap items-center gap-4">
+                <div className="flex items-center space-x-2">
+                  <Checkbox
+                    id="show-pending"
+                    checked={showPendingOrders}
+                    onCheckedChange={(checked) => setShowPendingOrders(checked === true)}
+                  />
+                  <Label htmlFor="show-pending" className="text-xs">
+                    保留中の注文を表示
+                  </Label>
+                </div>
+                <div className="flex items-center space-x-2">
+                  <Checkbox
+                    id="show-canceled"
+                    checked={showCanceledOrders}
+                    onCheckedChange={(checked) => setShowCanceledOrders(checked === true)}
+                  />
+                  <Label htmlFor="show-canceled" className="text-xs">
+                    解約済みの注文を表示
+                  </Label>
+                </div>
+                <div className="flex items-center space-x-2">
+                  <Checkbox
+                    id="show-refunded"
+                    checked={showRefundedOrders}
+                    onCheckedChange={(checked) => setShowRefundedOrders(checked === true)}
+                  />
+                  <Label htmlFor="show-refunded" className="text-xs">
+                    返金済みの注文を表示
+                  </Label>
+                </div>
               </div>
             </div>
           </CardHeader>
           <CardContent className="p-0">
             <div className="overflow-x-auto">
               <Table>
-                <TableHeader>
-                  <TableRow className="text-xs">
-                    <TableHead className="py-2">商品名</TableHead>
-                    <TableHead className="py-2">購入者</TableHead>
-                    <TableHead className="py-2">金額</TableHead>
-                    <TableHead className="py-2">ステータス</TableHead>
-                    <TableHead className="py-2">モード</TableHead>
-                    <TableHead className="py-2">注文日</TableHead>
-                    <TableHead className="py-2">アクション</TableHead>
-                  </TableRow>
-                </TableHeader>
+                 <TableHeader>
+                   <TableRow className="text-xs">
+                     <TableHead className="py-2">商品名</TableHead>
+                     <TableHead className="py-2">購入者</TableHead>
+                     <TableHead className="py-2">金額</TableHead>
+                     <TableHead className="py-2">累計課金</TableHead>
+                     <TableHead className="py-2">ステータス</TableHead>
+                     <TableHead className="py-2">モード</TableHead>
+                     <TableHead className="py-2">注文日</TableHead>
+                     <TableHead className="py-2">アクション</TableHead>
+                   </TableRow>
+                 </TableHeader>
                 <TableBody>
                   {filteredOrders.map((order) => (
                     <TableRow key={order.id} className="text-xs">
@@ -702,14 +781,21 @@ export default function PaymentManagement() {
                           <div className="text-xs text-amber-600">保留中</div>
                         )}
                       </TableCell>
-                      <TableCell className="py-2 font-medium text-xs">
-                        ¥{order.amount?.toLocaleString('ja-JP') || '0'}
-                      </TableCell>
-                      <TableCell className="py-2">
-                        <Badge variant={getStatusColor(order.status)} className="text-xs">
-                          {getStatusLabel(order.status)}
-                        </Badge>
-                      </TableCell>
+                       <TableCell className="py-2 font-medium text-xs">
+                         ¥{order.amount?.toLocaleString('ja-JP') || '0'}
+                       </TableCell>
+                       <TableCell className="py-2 font-medium text-xs">
+                         ¥{getUserTotal(order).toLocaleString('ja-JP')}
+                       </TableCell>
+                       <TableCell className="py-2">
+                         <Badge 
+                           variant={getStatusColor(order.status)} 
+                           className="text-xs"
+                           style={getStatusStyle(order.status)}
+                         >
+                           {getStatusLabel(order.status)}
+                         </Badge>
+                       </TableCell>
                       <TableCell className="py-2">
                         <Badge variant={order.livemode ? 'default' : 'secondary'} className="text-xs">
                           {order.livemode ? '本番' : 'テスト'}

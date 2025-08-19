@@ -41,36 +41,43 @@ serve(async (req) => {
       throw new Error("Only paid orders can be refunded");
     }
 
-    if (!order.stripe_payment_intent_id) {
-      throw new Error("No payment intent found for this order");
-    }
-
-    // ユーザーのStripe認証情報を取得
-    const { data: stripeCredentials, error: credentialsError } = await supabaseClient
-      .from('stripe_credentials')
-      .select('*')
-      .eq('user_id', order.user_id)
+    // 商品情報を取得して Stripe Product ID を確認
+    const { data: product, error: productError } = await supabaseClient
+      .from('products')
+      .select('stripe_product_id, stripe_price_id')
+      .eq('id', order.product_id)
       .maybeSingle();
 
-    if (credentialsError) {
-      console.error(`[stripe-refund] Stripe credentials error: ${credentialsError.message}`);
-      throw new Error("Failed to retrieve Stripe credentials");
+    // Stripe Payment Intent ID を確認（手動追加の場合は存在しない可能性）
+    if (!order.stripe_payment_intent_id) {
+      // 手動追加の注文の場合、DBの状態のみ変更
+      await supabaseClient
+        .from('orders')
+        .update({ 
+          status: 'refunded', 
+          updated_at: new Date().toISOString() 
+        })
+        .eq('id', orderId);
+
+      console.log(`[stripe-refund] Manual order refund processed: ${orderId}`);
+
+      return new Response(JSON.stringify({
+        success: true,
+        refundId: 'manual-refund',
+        amount: order.amount,
+        manual: true
+      }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+        status: 200,
+      });
     }
 
-    if (!stripeCredentials) {
-      throw new Error("Stripe credentials not found for user. Please configure Stripe settings first.");
+    // Stripe 返金処理
+    if (!Deno.env.get("STRIPE_SECRET_KEY")) {
+      throw new Error("Stripe secret key not configured");
     }
 
-    // Stripe 初期化
-    const stripeKey = order.livemode 
-      ? stripeCredentials.live_secret_key
-      : stripeCredentials.test_secret_key;
-    
-    if (!stripeKey) {
-      throw new Error("Stripe secret key not configured for user");
-    }
-
-    const stripe = new Stripe(stripeKey, { apiVersion: "2023-10-16" });
+    const stripe = new Stripe(Deno.env.get("STRIPE_SECRET_KEY") || "", { apiVersion: "2023-10-16" });
 
     // 返金処理
     const refund = await stripe.refunds.create({

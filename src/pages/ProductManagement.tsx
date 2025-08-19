@@ -888,11 +888,11 @@ export default function ProductManagement() {
                                 placeholder="画像URLまたはメディアライブラリから選択"
                                 className="flex-1"
                               />
-                              <MediaLibrarySelector
-                                trigger={<Button variant="outline" type="button"><Package className="h-4 w-4" /></Button>}
-                                onSelect={(url) => setSettingsForm(prev => ({ ...prev, landing_page_image_url: url }))}
-                                selectedUrl={settingsForm.landing_page_image_url}
-                              />
+                               <MediaLibrarySelector
+                                 trigger={<Button variant="outline" type="button">画像選択</Button>}
+                                 onSelect={(url) => setSettingsForm(prev => ({ ...prev, landing_page_image_url: url }))}
+                                 selectedUrl={settingsForm.landing_page_image_url}
+                               />
                             </div>
                           </div>
 
@@ -910,14 +910,14 @@ export default function ProductManagement() {
                         <div>
                           <Label htmlFor="landing-content">ページ内容</Label>
                           <div className="flex gap-2">
-                          <Textarea
-                            id="landing-content"
-                            value={settingsForm.landing_page_content || ''}
-                            onChange={(e) => setSettingsForm(prev => ({ ...prev, landing_page_content: e.target.value }))}
-                            placeholder="ランディングページの説明文&#10;改行で複数行のテキストが入力できます"
-                            rows={4}
-                            className="flex-1 whitespace-pre-wrap"
-                          />
+                           <Textarea
+                             id="landing-content"
+                             value={settingsForm.landing_page_content || ''}
+                             onChange={(e) => setSettingsForm(prev => ({ ...prev, landing_page_content: e.target.value }))}
+                             placeholder="改行で段落分けできます"
+                             rows={4}
+                             className="flex-1 whitespace-pre-wrap"
+                           />
                             <FieldInsertionDialog
                               trigger={<Button variant="outline" type="button" className="gap-2"><FileText className="h-4 w-4" />フィールド挿入</Button>}
                               productName={productForm.name}

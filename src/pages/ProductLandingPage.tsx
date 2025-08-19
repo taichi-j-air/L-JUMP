@@ -181,7 +181,7 @@ export default function ProductLandingPage() {
                   <p className="text-sm text-muted-foreground mb-2">毎月課金</p>
                 )}
 
-                                {(product.landing_page_content || product.description) && (
+                {(product.landing_page_content || product.description) && (
                   <p className="text-sm text-muted-foreground leading-relaxed px-2 whitespace-pre-wrap">
                     {product.landing_page_content || product.description}
                   </p>
