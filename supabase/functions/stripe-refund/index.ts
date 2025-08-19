@@ -150,7 +150,7 @@ serve(async (req) => {
 
     console.log(`[stripe-refund] Refund created successfully: ${refund.id}`);
 
-    // 注文ステータスを更新
+    // 注文ステータスを即座に refunded に更新
     await supabaseClient
       .from('orders')
       .update({ 
@@ -159,7 +159,7 @@ serve(async (req) => {
       })
       .eq('id', orderId);
 
-    console.log(`[stripe-refund] Refund processed: ${refund.id} for order ${orderId}`);
+    console.log(`[stripe-refund] Refund processed and DB updated: ${refund.id} for order ${orderId}`);
 
     return new Response(JSON.stringify({
       success: true,

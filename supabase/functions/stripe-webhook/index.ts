@@ -1,7 +1,7 @@
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import Stripe from "https://esm.sh/stripe@14.21.0";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
-import { handleRefundCreated } from "./process-actions.ts";
+import { handleRefundCreated, processPaymentSuccessActions } from "./process-actions.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -92,6 +92,15 @@ serve(async (req) => {
       case 'charge.refunded':
       case 'refund.created':
         await handleRefundCreated(event, supabaseClient);
+        break;
+        
+      case 'customer.subscription.deleted':
+      case 'customer.subscription.updated':
+        await handleSubscriptionEvent(event, supabaseClient);
+        break;
+        
+      case 'invoice.payment_failed':
+        await handleSubscriptionPaymentFailed(event, supabaseClient);
         break;
       
       default:
@@ -238,4 +247,124 @@ async function handlePaymentRequiresAction(event: Stripe.Event, supabaseClient: 
       updated_at: new Date().toISOString(),
     })
     .eq('stripe_payment_intent_id', paymentIntent.id);
+}
+
+async function handleSubscriptionEvent(event: Stripe.Event, supabaseClient: any) {
+  const subscription = event.data.object as Stripe.Subscription;
+  
+  console.log('[stripe-webhook] Subscription event:', {
+    eventType: event.type,
+    subscriptionId: subscription.id,
+    customerId: subscription.customer,
+    status: subscription.status,
+  });
+
+  const customerId = typeof subscription.customer === 'string' 
+    ? subscription.customer 
+    : subscription.customer?.id;
+
+  if (!customerId) {
+    console.error('[stripe-webhook] No customer ID found in subscription');
+    return;
+  }
+
+  // サブスクリプションがキャンセル・期限切れになった場合
+  if (event.type === 'customer.subscription.deleted' || 
+      (event.type === 'customer.subscription.updated' && subscription.status === 'canceled')) {
+    
+    console.log('[stripe-webhook] Subscription cancelled, updating order status');
+    
+    // 該当カスタマーの有料サブスクリプション注文を cancelled に更新
+    await supabaseClient
+      .from('orders')
+      .update({
+        status: 'cancelled',
+        updated_at: new Date().toISOString(),
+      })
+      .eq('stripe_customer_id', customerId)
+      .eq('status', 'paid');
+
+    // サブスクライバー テーブルがあれば非アクティブ化
+    const { data: subscribers } = await supabaseClient
+      .from('subscribers')
+      .select('*')
+      .eq('stripe_customer_id', customerId)
+      .eq('subscribed', true);
+
+    if (subscribers && subscribers.length > 0) {
+      await supabaseClient
+        .from('subscribers')
+        .update({
+          subscribed: false,
+          subscription_end: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        })
+        .eq('stripe_customer_id', customerId);
+      
+      console.log('[stripe-webhook] Updated subscriber status to inactive');
+    }
+  }
+  
+  // サブスクリプションが再アクティブになった場合
+  if (event.type === 'customer.subscription.updated' && subscription.status === 'active') {
+    console.log('[stripe-webhook] Subscription reactivated');
+    
+    // 注文ステータスを paid に戻す
+    await supabaseClient
+      .from('orders')
+      .update({
+        status: 'paid',
+        updated_at: new Date().toISOString(),
+      })
+      .eq('stripe_customer_id', customerId)
+      .in('status', ['cancelled', 'expired']);
+
+    // サブスクライバー テーブルも再アクティブ化
+    const { data: subscribers } = await supabaseClient
+      .from('subscribers')
+      .select('*')
+      .eq('stripe_customer_id', customerId);
+
+    if (subscribers && subscribers.length > 0) {
+      await supabaseClient
+        .from('subscribers')
+        .update({
+          subscribed: true,
+          subscription_end: subscription.current_period_end 
+            ? new Date(subscription.current_period_end * 1000).toISOString()
+            : null,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('stripe_customer_id', customerId);
+      
+      console.log('[stripe-webhook] Updated subscriber status to active');
+    }
+  }
+}
+
+async function handleSubscriptionPaymentFailed(event: Stripe.Event, supabaseClient: any) {
+  const invoice = event.data.object as Stripe.Invoice;
+  
+  console.log('[stripe-webhook] Subscription payment failed:', {
+    invoiceId: invoice.id,
+    subscriptionId: invoice.subscription,
+    customerId: invoice.customer,
+    attemptCount: invoice.attempt_count,
+  });
+
+  const customerId = typeof invoice.customer === 'string' 
+    ? invoice.customer 
+    : invoice.customer?.id;
+
+  if (customerId) {
+    // 支払い失敗の場合、注文ステータスを更新（最終的な自動解約はStripe側で行われる）
+    await supabaseClient
+      .from('orders')
+      .update({
+        status: 'payment_failed',
+        updated_at: new Date().toISOString(),
+      })
+      .eq('stripe_customer_id', customerId)
+      .eq('status', 'paid');
+  }
 }

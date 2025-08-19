@@ -90,16 +90,37 @@ serve(async (req) => {
       });
     }
 
-    // 該当する注文のステータスを更新（必要に応じて）
+    // 該当する注文のステータスを即座に cancelled に更新
     await supabaseClient
       .from('orders')
       .update({ 
+        status: 'cancelled',
         updated_at: new Date().toISOString() 
       })
       .eq('stripe_customer_id', customerId)
       .eq('status', 'paid');
 
-    console.log(`[stripe-cancel-subscription] Cancelled subscriptions for customer: ${customerId}`);
+    // サブスクライバー テーブルも即座に非アクティブ化
+    const { data: subscribers } = await supabaseClient
+      .from('subscribers')
+      .select('*')
+      .eq('stripe_customer_id', customerId)
+      .eq('subscribed', true);
+
+    if (subscribers && subscribers.length > 0) {
+      await supabaseClient
+        .from('subscribers')
+        .update({
+          subscribed: false,
+          subscription_end: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        })
+        .eq('stripe_customer_id', customerId);
+      
+      console.log('[stripe-cancel-subscription] Updated subscriber status to inactive');
+    }
+
+    console.log(`[stripe-cancel-subscription] Cancelled subscriptions and updated DB for customer: ${customerId}`);
 
     return new Response(JSON.stringify({
       success: true,
