@@ -33,6 +33,11 @@ interface OrderRecord {
   updated_at: string
   friend_uid?: string
   line_user_id?: string
+  product_name?: string
+  product_type?: string
+  friend_display_name?: string
+  friend_line_user_id?: string
+  total_friend_amount?: number
 }
 
 interface CustomerStats {
@@ -146,29 +151,67 @@ export default function PaymentManagement() {
     if (!activeUser) return
 
     try {
-      // Load orders with product info (filtered by mode)
+      // Load orders (filtered by mode)
       const { data: ordersData, error: ordersError } = await supabase
         .from('orders')
-        .select(`
-          *,
-          products (
-            name,
-            product_type,
-            price,
-            currency
-          )
-        `)
+        .select('*')
         .eq('user_id', activeUser.id)
         .eq('livemode', isLiveMode)
         .order('created_at', { ascending: false })
 
       if (ordersError) throw ordersError
 
-      const ordersWithProductInfo = ordersData?.map(order => ({
-        ...order,
-        product_name: (order as any).products?.name || '不明な商品',
-        product_type: (order as any).products?.product_type || 'unknown'
-      })) || []
+      // Manually join with products and line_friends
+      const ordersWithDetails = []
+      
+      for (const order of ordersData || []) {
+        let productInfo = null
+        let friendInfo = null
+        let totalFriendAmount = 0
+        
+        // Get product info if product_id exists
+        if (order.product_id) {
+          const { data: product } = await supabase
+            .from('products')
+            .select('name, product_type, price, currency')
+            .eq('id', order.product_id)
+            .maybeSingle()
+          productInfo = product
+        }
+        
+        // Get friend info if friend_uid exists
+        if (order.friend_uid) {
+          const { data: friend } = await supabase
+            .from('line_friends')
+            .select('display_name, short_uid, line_user_id')
+            .eq('short_uid_ci', order.friend_uid.toUpperCase())
+            .eq('user_id', activeUser.id)
+            .maybeSingle()
+          friendInfo = friend
+          
+          // Calculate total amount for this friend
+          const { data: friendOrders } = await supabase
+            .from('orders')
+            .select('amount')
+            .eq('friend_uid', order.friend_uid)
+            .eq('user_id', activeUser.id)
+            .eq('livemode', isLiveMode) // 同一モードでのみ計算
+            .eq('status', 'paid')
+          
+          totalFriendAmount = friendOrders?.reduce((sum, fo) => sum + (fo.amount || 0), 0) || 0
+        }
+        
+        ordersWithDetails.push({
+          ...order,
+          product_name: productInfo?.name || (order.metadata as any)?.product_name || '不明な商品',
+          product_type: productInfo?.product_type || 'unknown',
+          friend_display_name: friendInfo?.display_name || '不明',
+          friend_line_user_id: friendInfo?.line_user_id || '',
+          total_friend_amount: totalFriendAmount
+        })
+      }
+
+      const ordersWithProductInfo = ordersWithDetails
 
       setOrders(ordersWithProductInfo)
 
@@ -266,7 +309,8 @@ export default function PaymentManagement() {
   // Filter orders
   const filteredOrders = orders.filter(order => {
     const matchesSearch = order.stripe_session_id?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         (order as any).product_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                         order.product_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                         order.friend_display_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
                          order.friend_uid?.toLowerCase().includes(searchTerm.toLowerCase())
     
     const matchesStatus = statusFilter === "all" || order.status === statusFilter
@@ -564,17 +608,41 @@ export default function PaymentManagement() {
               </CardContent>
             </Card>
 
-            <Card>
+            <Card className="cursor-pointer hover:bg-muted/50 transition-colors" onClick={() => {
+              // 全友達を SubscriberDetail 形式に変換
+              const friendsAsSubscribers = friends.map(friend => ({
+                id: friend.id,
+                display_name: friend.display_name,
+                short_uid: friend.short_uid,
+                line_user_id: friend.line_user_id,
+                orders: orders
+                  .filter(order => order.friend_uid === friend.short_uid && order.status === 'paid')
+                  .map(order => ({
+                    id: order.id,
+                    product_name: order.product_name,
+                    product_type: order.product_type || 'unknown',
+                    amount: order.amount,
+                    currency: order.currency,
+                    status: order.status,
+                    created_at: order.created_at
+                  })),
+                total_amount: orders
+                  .filter(order => order.friend_uid === friend.short_uid && order.status === 'paid')
+                  .reduce((sum, order) => sum + (order.amount || 0), 0)
+              }))
+              setSubscriberDetails(friendsAsSubscribers)
+              setShowSubscriberDetailDialog(true)
+            }}>
               <CardHeader className="p-3">
                 <CardTitle className="text-sm text-muted-foreground flex items-center gap-2">
                   <Users className="h-4 w-4" />
-                  サブスク会員
+                  サブスク会員数
                 </CardTitle>
               </CardHeader>
               <CardContent className="p-3 pt-0">
                 <div className="text-lg font-bold">0人</div>
                 <div className="text-xs text-muted-foreground">
-                  (全員解約済み)
+                  (クリックで友達一覧)
                 </div>
               </CardContent>
             </Card>
@@ -583,11 +651,11 @@ export default function PaymentManagement() {
               <CardHeader className="p-3">
                 <CardTitle className="text-sm text-muted-foreground flex items-center gap-2">
                   <CreditCard className="h-4 w-4" />
-                  総注文数
+                  単発決済数
                 </CardTitle>
               </CardHeader>
               <CardContent className="p-3 pt-0">
-                <div className="text-lg font-bold">{stats.total_orders}件</div>
+                <div className="text-lg font-bold">{stats.successful_one_time}件</div>
               </CardContent>
             </Card>
           </div>
@@ -746,7 +814,7 @@ export default function PaymentManagement() {
                   <div className="relative">
                     <Search className="absolute left-2 top-2 h-3 w-3 text-muted-foreground" />
                     <Input
-                      placeholder="セッションID、商品名、UIDで検索..."
+                      placeholder="商品名、友達名、UIDで検索..."
                       value={searchTerm}
                       onChange={(e) => setSearchTerm(e.target.value)}
                       className="pl-8 text-xs"
@@ -824,12 +892,12 @@ export default function PaymentManagement() {
                           onCheckedChange={handleSelectAll}
                         />
                       </TableHead>
-                      <TableHead className="text-xs">セッションID</TableHead>
-                      <TableHead className="text-xs">商品</TableHead>
-                      <TableHead className="text-xs">金額</TableHead>
-                      <TableHead className="text-xs">ステータス</TableHead>
+                      <TableHead className="text-xs">商品名</TableHead>
+                      <TableHead className="text-xs">LINE友達名</TableHead>
                       <TableHead className="text-xs">UID</TableHead>
-                      <TableHead className="text-xs">作成日時</TableHead>
+                      <TableHead className="text-xs">決済金額</TableHead>
+                      <TableHead className="text-xs">累計課金金額</TableHead>
+                      <TableHead className="text-xs">決済日時</TableHead>
                       <TableHead className="text-xs">操作</TableHead>
                     </TableRow>
                   </TableHeader>
@@ -842,37 +910,16 @@ export default function PaymentManagement() {
                             onCheckedChange={() => handleSelectOrder(order.id)}
                           />
                         </TableCell>
-                        <TableCell className="font-mono">
-                          <div className="flex items-center gap-1">
-                            <span className="max-w-24 truncate">
-                              {order.stripe_session_id}
-                            </span>
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => handleCopyUID(order.stripe_session_id)}
-                              className="h-5 w-5 p-0"
-                            >
-                              <Copy className="h-3 w-3" />
-                            </Button>
-                          </div>
-                        </TableCell>
                         <TableCell>
                           <div>
-                            <div className="font-medium">{(order as any).product_name}</div>
+                            <div className="font-medium">{order.product_name}</div>
                             <Badge variant="outline" className="text-xs mt-1">
-                              {(order as any).product_type === 'subscription' ? 'サブスク' : '単発'}
+                              {order.product_type === 'subscription' ? 'サブスク' : '単発'}
                             </Badge>
                           </div>
                         </TableCell>
                         <TableCell>
-                          <div className="font-mono">{formatPrice(order.amount, order.currency)}</div>
-                          <div className="text-xs text-muted-foreground">
-                            {order.livemode ? 'Live' : 'Test'}
-                          </div>
-                        </TableCell>
-                        <TableCell>
-                          {getStatusBadge(order.status, (order as any).product_type)}
+                          <div className="font-medium">{order.friend_display_name}</div>
                         </TableCell>
                         <TableCell>
                           <div className="flex items-center gap-1">
@@ -890,9 +937,21 @@ export default function PaymentManagement() {
                           </div>
                         </TableCell>
                         <TableCell>
-                          <div className="flex items-center gap-1 text-xs">
-                            <Calendar className="h-3 w-3" />
-                            {new Date(order.created_at).toLocaleDateString('ja-JP')}
+                          <div className="font-mono">{formatPrice(order.amount, order.currency)}</div>
+                          <div className="text-xs text-muted-foreground">
+                            {order.livemode ? 'Live' : 'Test'}
+                          </div>
+                        </TableCell>
+                        <TableCell>
+                          <div className="font-mono">{formatPrice(order.total_friend_amount || 0, order.currency)}</div>
+                        </TableCell>
+                        <TableCell>
+                          <div className="text-xs">
+                            {new Date(order.created_at).toLocaleDateString('ja-JP', {
+                              year: '2-digit',
+                              month: '2-digit', 
+                              day: '2-digit'
+                            }).replace(/\//g, '/')}
                             <br />
                             {new Date(order.created_at).toLocaleTimeString('ja-JP', {
                               hour: '2-digit',
@@ -902,14 +961,13 @@ export default function PaymentManagement() {
                         </TableCell>
                         <TableCell>
                           <div className="flex gap-1">
-                            {order.status === 'paid' && (order as any).product_type === 'subscription' && order.stripe_customer_id && (
+                            {order.status === 'paid' && order.product_type === 'subscription' && order.stripe_customer_id && (
                               <Button
                                 variant="outline"
                                 size="sm"
                                 onClick={() => handleCancelSubscription(order.stripe_customer_id!)}
                                 className="text-xs"
                               >
-                                <ToggleLeft className="h-3 w-3 mr-1" />
                                 解約
                               </Button>
                             )}
