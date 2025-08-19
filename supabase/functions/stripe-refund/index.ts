@@ -2,6 +2,12 @@ import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import Stripe from "https://esm.sh/stripe@14.21.0";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 
+// Helper logging function
+const logStep = (step: string, details?: any) => {
+  const detailsStr = details ? ` - ${JSON.stringify(details)}` : '';
+  console.log(`[STRIPE-REFUND] ${step}${detailsStr}`);
+};
+
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
@@ -19,7 +25,7 @@ serve(async (req) => {
       throw new Error("orderId is required");
     }
 
-    console.log(`[stripe-refund] Processing refund for order: ${orderId}`);
+    logStep("Processing refund", { orderId });
 
     // Supabase クライアント（サービスロール）
     const supabaseClient = createClient(
@@ -36,11 +42,11 @@ serve(async (req) => {
       .single();
 
     if (orderError || !order) {
-      console.error(`[stripe-refund] Order not found: ${orderId}`, orderError);
+      logStep("ERROR: Order not found", { orderId, error: orderError });
       throw new Error("Order not found");
     }
 
-    console.log(`[stripe-refund] Order found:`, { 
+    logStep("Order found", { 
       id: order.id, 
       status: order.status, 
       amount: order.amount, 
@@ -49,13 +55,27 @@ serve(async (req) => {
       stripe_payment_intent_id: order.stripe_payment_intent_id 
     });
 
+    if (order.status === 'refunded') {
+      logStep("Order already refunded", { orderId });
+      return new Response(JSON.stringify({
+        success: true,
+        message: "Order already refunded",
+        refundId: 'already-refunded',
+        amount: order.amount
+      }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+        status: 200,
+      });
+    }
+
     if (order.status !== 'paid') {
+      logStep("ERROR: Order not paid", { status: order.status });
       throw new Error("Only paid orders can be refunded");
     }
 
     // Stripe Payment Intent ID を確認（手動追加の場合は存在しない可能性）
     if (!order.stripe_payment_intent_id) {
-      console.log(`[stripe-refund] Manual order detected, updating DB only: ${orderId}`);
+      logStep("Manual order detected, updating DB only", { orderId });
       
       // 手動追加の注文の場合、DBの状態のみ変更
       await supabaseClient

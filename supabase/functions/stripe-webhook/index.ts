@@ -83,6 +83,16 @@ serve(async (req) => {
         await handleInvoicePaymentSucceeded(event, supabaseClient);
         break;
       
+      case 'charge.dispute.created':
+      case 'payment_intent.requires_action':
+        await handlePaymentRequiresAction(event, supabaseClient);
+        break;
+        
+      case 'charge.refunded':
+      case 'refund.created':
+        await handleRefundCreated(event, supabaseClient);
+        break;
+      
       default:
         console.log('[stripe-webhook] Unhandled event type:', event.type);
     }
@@ -313,4 +323,56 @@ async function startScenarioForFriend(userId: string, uid: string, scenarioId: s
   } catch (error) {
     console.error('[stripe-webhook] Error starting scenario:', error);
   }
+}
+
+// 返金処理用のハンドラー関数を追加
+async function handleRefundCreated(event: Stripe.Event, supabaseClient: any) {
+  const refund = event.data.object as Stripe.Refund;
+  
+  console.log('[stripe-webhook] Refund created:', {
+    refundId: refund.id,
+    paymentIntentId: refund.payment_intent,
+    amount: refund.amount,
+    reason: refund.reason
+  });
+
+  // PaymentIntentIDから注文を検索して返金済みに更新
+  if (refund.payment_intent) {
+    const { data: updatedOrder, error } = await supabaseClient
+      .from('orders')
+      .update({
+        status: 'refunded',
+        updated_at: new Date().toISOString(),
+      })
+      .eq('stripe_payment_intent_id', refund.payment_intent)
+      .select()
+      .single();
+
+    if (error) {
+      console.error('[stripe-webhook] Error updating order for refund:', error);
+    } else if (updatedOrder) {
+      console.log('[stripe-webhook] Order updated to refunded:', updatedOrder.id);
+    } else {
+      console.log('[stripe-webhook] No matching order found for refund');
+    }
+  }
+}
+
+// 支払いに問題がある場合のハンドラー
+async function handlePaymentRequiresAction(event: Stripe.Event, supabaseClient: any) {
+  const paymentIntent = event.data.object as Stripe.PaymentIntent;
+  
+  console.log('[stripe-webhook] Payment requires action:', {
+    paymentIntentId: paymentIntent.id,
+    status: paymentIntent.status
+  });
+
+  // 注文ステータスを更新（問題ありとして）
+  await supabaseClient
+    .from('orders')
+    .update({
+      status: 'requires_action',
+      updated_at: new Date().toISOString(),
+    })
+    .eq('stripe_payment_intent_id', paymentIntent.id);
 }

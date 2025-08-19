@@ -78,3 +78,6 @@ verify_jwt = true
 
 [functions.update-stripe-product]
 verify_jwt = true
+
+[functions.stripe-refund]
+verify_jwt = true

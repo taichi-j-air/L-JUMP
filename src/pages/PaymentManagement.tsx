@@ -134,19 +134,33 @@ export default function PaymentManagement() {
 
       setOrders(data || [])
 
-      // 統計を計算
+      // 統計を計算（返金済みを除外）
       const successful = data?.filter(order => order.status === 'paid') || []
-      const totalRevenue = successful.reduce((sum, order) => sum + (order.amount || 0), 0)
+      const refunded = data?.filter(order => order.status === 'refunded') || []
       
-      // 今月の売上を計算
+      const totalRevenue = successful.reduce((sum, order) => sum + (order.amount || 0), 0)
+      const totalRefunded = refunded.reduce((sum, order) => sum + (order.amount || 0), 0)
+      const netRevenue = totalRevenue - totalRefunded
+      
+      // 今月の売上を計算（返金を考慮）
       const currentMonth = new Date().getMonth()
       const currentYear = new Date().getFullYear()
-      const monthlyRevenue = successful
+      
+      const monthlyPaid = successful
         .filter(order => {
           const orderDate = new Date(order.created_at)
           return orderDate.getMonth() === currentMonth && orderDate.getFullYear() === currentYear
         })
         .reduce((sum, order) => sum + (order.amount || 0), 0)
+        
+      const monthlyRefunded = refunded
+        .filter(order => {
+          const orderDate = new Date(order.created_at)
+          return orderDate.getMonth() === currentMonth && orderDate.getFullYear() === currentYear
+        })
+        .reduce((sum, order) => sum + (order.amount || 0), 0)
+        
+      const monthlyRevenue = monthlyPaid - monthlyRefunded
 
       // サブスクリプション統計（保留中を除く）
       const subscriptionOrders = data?.filter(order => {
@@ -190,20 +204,25 @@ export default function PaymentManagement() {
       const canceledOrders = data?.filter(order => order.status === 'canceled').length || 0
       const refundedOrders = data?.filter(order => order.status === 'refunded').length || 0
       
-      // ユーザーごとの累計課金額計算
-      const totals: Record<string, number> = {}
-      successful.forEach(order => {
-        const userId = order.friend_uid || 'unknown'
-        totals[userId] = (totals[userId] || 0) + (order.amount || 0)
-      })
-      setUserTotals(totals)
-      
-      setStats({
-        total_orders: data?.length || 0,
-        total_revenue: totalRevenue,
-        monthly_revenue: monthlyRevenue,
-        active_subscriptions: activeSubscriptions,
-        total_subscriptions: totalSubscriptions,
+       // ユーザーごとの累計課金額計算（返金分を除外）
+       const totals: Record<string, number> = {}
+       successful.forEach(order => {
+         const userId = order.friend_uid || 'unknown'
+         totals[userId] = (totals[userId] || 0) + (order.amount || 0)
+       })
+       // 返金分を差し引く
+       refunded.forEach(order => {
+         const userId = order.friend_uid || 'unknown'
+         totals[userId] = (totals[userId] || 0) - (order.amount || 0)
+       })
+       setUserTotals(totals)
+       
+       setStats({
+         total_orders: data?.length || 0,
+         total_revenue: netRevenue, // 返金を考慮した純売上
+         monthly_revenue: monthlyRevenue,
+         active_subscriptions: activeSubscriptions,
+         total_subscriptions: totalSubscriptions,
         successful_one_time: successfulOneTime,
         total_one_time: totalOneTime,
         pending_orders: data?.filter(order => order.status === 'pending').length || 0,
@@ -255,28 +274,32 @@ export default function PaymentManagement() {
 
   const handleRefund = async (orderId: string) => {
     try {
+      console.log('Processing refund for order:', orderId)
+      
       // Stripe返金処理のエッジ関数を呼び出し
       const { data, error } = await supabase.functions.invoke('stripe-refund', {
         body: { orderId }
       })
 
-      if (error) throw error
+      console.log('Refund response:', { data, error })
+
+      if (error) {
+        console.error('Refund error:', error)
+        throw error
+      }
 
       if (data?.success) {
-        // 注文ステータスを返金済みに更新
-        setOrders(prevOrders => 
-          prevOrders.map(order => 
-            order.id === orderId 
-              ? { ...order, status: 'refunded' }
-              : order
-          )
-        )
-        toast.success('返金処理が完了しました')
+        if (data.manual) {
+          toast.success('手動注文の返金処理が完了しました')
+        } else {
+          toast.success(`返金処理が完了しました (返金ID: ${data.refundId})`)
+        }
+        
+        // データを再読み込みして統計を更新
+        loadOrders()
       } else {
         throw new Error(data?.error || '返金処理に失敗しました')
       }
-      
-      loadOrders()
     } catch (error) {
       console.error('Error processing refund:', error)
       toast.error(`返金処理に失敗しました: ${error.message || error}`)
