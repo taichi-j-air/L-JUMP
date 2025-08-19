@@ -367,7 +367,7 @@ export default function PaymentManagement() {
         }
         
         // データを再読み込みして統計と表示を更新
-        loadData();
+        await loadData();
       } else {
         throw new Error(data?.error || '返金処理に失敗しました')
       }
@@ -389,7 +389,7 @@ export default function PaymentManagement() {
       if (data?.success) {
         toast.success('サブスクリプションの解約が完了しました')
         // データを再読み込みして統計と表示を更新
-        loadData()
+        await loadData()
       } else {
         // 解約済みの場合は適切なメッセージを表示
         if (data?.already_canceled || data?.error?.includes('No active subscriptions found')) {
@@ -434,7 +434,7 @@ export default function PaymentManagement() {
       if (error) throw error
 
       toast.success('注文履歴を削除しました')
-      loadData()
+      await loadData()
     } catch (error) {
       console.error('Error deleting order:', error)
       toast.error('削除に失敗しました')
@@ -458,7 +458,7 @@ export default function PaymentManagement() {
 
       toast.success(`${selectedOrderIds.length}件の注文履歴を削除しました`)
       setSelectedOrderIds([])
-      loadData()
+      await loadData()
     } catch (error) {
       console.error('Error bulk deleting orders:', error)
       toast.error('一括削除に失敗しました')
@@ -533,7 +533,7 @@ export default function PaymentManagement() {
       toast.success(`${selectedFriend.display_name}の${isRefundMode ? '返金' : '注文'}を手動追加しました`)
       setShowAddDialog(false)
       handleClearForm()
-      loadData()
+      await loadData()
     } catch (error) {
       console.error('Error adding order manually:', error)
       toast.error(`手動追加に失敗しました: ${error.message || error}`)
@@ -783,7 +783,10 @@ export default function PaymentManagement() {
             <div className="flex justify-between items-center">
               <CardTitle className="text-lg">注文履歴 ({filteredOrders.length}件)</CardTitle>
               <div className="flex gap-2">
-                <Dialog open={showAddDialog} onOpenChange={setShowAddDialog}>
+                <Dialog open={showAddDialog} onOpenChange={(open) => {
+                  setShowAddDialog(open)
+                  if (!open) handleClearForm() // ダイアログを閉じたらリセット
+                }}>
                   <DialogTrigger asChild>
                     <Button variant="outline" size="sm" className="text-xs">
                       <Plus className="h-3 w-3 mr-1" />
@@ -892,15 +895,24 @@ export default function PaymentManagement() {
                           value={manualDate}
                           onChange={(e) => setManualDate(e.target.value)}
                         />
-                      </div>
+                       </div>
 
-                       <Button 
-                         onClick={handleAddOrderManually} 
-                         className="w-full"
-                         disabled={!selectedFriend || !manualAmount || !manualProductName}
-                       >
-                         {isRefundMode ? '返金追加' : '支払い追加'}
-                       </Button>
+                        <div className="flex gap-2">
+                          <Button 
+                            onClick={handleAddOrderManually} 
+                            className="flex-1"
+                            disabled={!selectedFriend || !manualAmount || !manualProductName}
+                          >
+                            {isRefundMode ? '返金追加' : '支払い追加'}
+                          </Button>
+                          <Button 
+                            onClick={handleClearForm} 
+                            variant="outline"
+                            className="flex-1"
+                          >
+                            クリア
+                          </Button>
+                        </div>
                     </div>
                   </DialogContent>
                 </Dialog>
@@ -1181,12 +1193,17 @@ export default function PaymentManagement() {
                             </DialogContent>
                           </Dialog>
               {/* 返金ボタンを非表示にしました */}
-                            {order.status === 'refunded' && (
-                              <Badge variant="destructive" className="text-xs">
-                                返金済
-                              </Badge>
-                            )}
-                            {order.stripe_customer_id && order.status === 'paid' && (order.metadata as any)?.product_type === 'subscription' && (
+                             {order.status === 'refunded' && (
+                               <Badge variant="destructive" className="text-xs">
+                                 返金済
+                               </Badge>
+                             )}
+                             {order.status === 'canceled' && (order.metadata as any)?.product_type === 'subscription' && (
+                               <Badge variant="secondary" className="text-xs">
+                                 解約済
+                               </Badge>
+                             )}
+                             {order.stripe_customer_id && order.status === 'paid' && (order.metadata as any)?.product_type === 'subscription' && (
                               <AlertDialog>
                                 <AlertDialogTrigger asChild>
                                   <Button
