@@ -14,7 +14,7 @@ import { SubscriberDetailDialog } from "@/components/SubscriberDetailDialog"
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog"
 import { Label } from "@/components/ui/label"
 import { Checkbox } from "@/components/ui/checkbox"
-import { Eye, RefreshCw, CreditCard, Users, TrendingUp, DollarSign, Search, Plus, ToggleLeft, Calendar, X, Copy, Trash2 } from "lucide-react"
+import { Eye, RefreshCw, CreditCard, Users, TrendingUp, DollarSign, Search, Plus, ToggleLeft, Calendar, X, Copy, Trash2, ToggleRight } from "lucide-react"
 import { toast } from "sonner"
 
 interface OrderRecord {
@@ -118,12 +118,19 @@ export default function PaymentManagement() {
   const [manualDate, setManualDate] = useState("")
   const [selectedOrderIds, setSelectedOrderIds] = useState<string[]>([])
   const [isRefundMode, setIsRefundMode] = useState(false)
+  const [isLiveMode, setIsLiveMode] = useState(false)
 
   const itemsPerPage = 20
 
   useEffect(() => {
     checkUser()
   }, [])
+
+  useEffect(() => {
+    if (user) {
+      loadData(user)
+    }
+  }, [isLiveMode])
 
   const checkUser = async () => {
     const { data: { session } } = await supabase.auth.getSession()
@@ -139,7 +146,7 @@ export default function PaymentManagement() {
     if (!activeUser) return
 
     try {
-      // Load orders with product info
+      // Load orders with product info (filtered by mode)
       const { data: ordersData, error: ordersError } = await supabase
         .from('orders')
         .select(`
@@ -152,6 +159,7 @@ export default function PaymentManagement() {
           )
         `)
         .eq('user_id', activeUser.id)
+        .eq('livemode', isLiveMode)
         .order('created_at', { ascending: false })
 
       if (ordersError) throw ordersError
@@ -429,7 +437,7 @@ export default function PaymentManagement() {
         amount: isRefundMode ? -Math.abs(amount) : Math.abs(amount),
         currency: selectedProduct?.currency || 'jpy',
         status: isRefundMode ? 'refunded' : 'paid',
-        livemode: false,
+        livemode: isLiveMode,
         stripe_session_id: `manual_${Date.now()}`,
         metadata: {
           manual_entry: true,
@@ -507,6 +515,26 @@ export default function PaymentManagement() {
               <p className="text-sm text-muted-foreground mt-1">
                 Stripe決済の管理と分析
               </p>
+            </div>
+            <div className="flex items-center gap-3">
+              <div className="flex items-center gap-2">
+                <Badge variant={isLiveMode ? "default" : "secondary"} className="text-xs">
+                  {isLiveMode ? "本番環境" : "テスト環境"}
+                </Badge>
+              </div>
+              <Button
+                onClick={() => setIsLiveMode(!isLiveMode)}
+                variant="outline"
+                size="sm"
+                className="flex items-center gap-2"
+              >
+                {isLiveMode ? (
+                  <ToggleRight className="h-4 w-4 text-green-600" />
+                ) : (
+                  <ToggleLeft className="h-4 w-4 text-orange-500" />
+                )}
+                {isLiveMode ? "本番" : "テスト"}に切替
+              </Button>
             </div>
           </div>
 
