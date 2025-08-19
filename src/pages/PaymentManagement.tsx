@@ -413,8 +413,25 @@ export default function PaymentManagement() {
           console.error('Error updating order status:', updateError)
         }
 
+        // UIの注文リストも即座に更新
+        setOrders(prevOrders => 
+          prevOrders.map(order => 
+            order.id === orderId 
+              ? { ...order, status: 'subscription_canceled' }
+              : order
+          )
+        )
+
+        // 統計も即座に更新 - サブスク会員数を1減らす
+        setStats(prevStats => ({
+          ...prevStats,
+          unique_subscription_users: Math.max(0, prevStats.unique_subscription_users - 1),
+          active_subscriptions: Math.max(0, prevStats.active_subscriptions - 1)
+        }))
+
         toast.success('サブスクリプションを解約しました')
-        await loadData()
+        // 必要に応じて全データを再読み込み
+        setTimeout(() => loadData(), 1000)
       }
     } catch (error: any) {
       console.error('Error canceling subscription:', error)
@@ -429,8 +446,23 @@ export default function PaymentManagement() {
           console.error('Error updating order status:', updateError)
         }
 
+        // UIも同様に更新
+        setOrders(prevOrders => 
+          prevOrders.map(order => 
+            order.id === orderId 
+              ? { ...order, status: 'subscription_canceled' }
+              : order
+          )
+        )
+
+        setStats(prevStats => ({
+          ...prevStats,
+          unique_subscription_users: Math.max(0, prevStats.unique_subscription_users - 1),
+          active_subscriptions: Math.max(0, prevStats.active_subscriptions - 1)
+        }))
+
         toast.info('このカスタマーは既に解約済みです')
-        await loadData()
+        setTimeout(() => loadData(), 1000)
       } else {
         toast.error(`サブスクリプションの解約に失敗しました: ${error.message || error}`)
       }

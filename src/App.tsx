@@ -96,8 +96,8 @@ function AppContent() {
   const isProductLandingPage = window.location.pathname.startsWith('/product-landing/')
   const isCheckoutPage = window.location.pathname.startsWith('/checkout/')
 
-  // Show auth pages without sidebar/header  
-  if (isAuthPage || isProductLandingPage || (!user && !isInvitePage && !isLoginPage && !hasLineLoginSuccess && !isPublicFormPage && !isCheckoutPage && !(isCMSPublicPath || isCMSPreviewPath))) {
+  // Show auth pages and checkout pages without sidebar/header  
+  if (isAuthPage || isProductLandingPage || isCheckoutPage || (!user && !isInvitePage && !isLoginPage && !hasLineLoginSuccess && !isPublicFormPage && !(isCMSPublicPath || isCMSPreviewPath))) {
     return (
       <div className="min-h-screen">
         <Routes>
