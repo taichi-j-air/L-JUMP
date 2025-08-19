@@ -4,6 +4,7 @@ import { User } from "@supabase/supabase-js"
 import { AppHeader } from "@/components/AppHeader"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
+import { Pagination, PaginationContent, PaginationItem, PaginationLink, PaginationNext, PaginationPrevious } from "@/components/ui/pagination"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -13,7 +14,7 @@ import { SubscriberDetailDialog } from "@/components/SubscriberDetailDialog"
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog"
 import { Label } from "@/components/ui/label"
 import { Checkbox } from "@/components/ui/checkbox"
-import { Eye, RefreshCw, CreditCard, Users, TrendingUp, DollarSign, Search, Plus, ToggleLeft, Calendar, X } from "lucide-react"
+import { Eye, RefreshCw, CreditCard, Users, TrendingUp, DollarSign, Search, Plus, ToggleLeft, Calendar, X, Copy, Trash2, Filter } from "lucide-react"
 import { toast } from "sonner"
 
 interface OrderRecord {
@@ -124,6 +125,10 @@ export default function PaymentManagement() {
   const [selectedSubscriber, setSelectedSubscriber] = useState<SubscriberDetail | null>(null)
   const [showSubscriberDetailDialog, setShowSubscriberDetailDialog] = useState(false)
   const [isRefundMode, setIsRefundMode] = useState(false)
+  const [currentPage, setCurrentPage] = useState(1)
+  const [itemsPerPage] = useState(20)
+  const [filterYear, setFilterYear] = useState("")
+  const [filterMonth, setFilterMonth] = useState("")
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
@@ -394,12 +399,35 @@ export default function PaymentManagement() {
   }
 
   const handleFriendSearch = () => {
-    const friend = friends.find(f => f.line_user_id === friendUid)
+    const friend = friends.find(f => f.short_uid === friendUid.toUpperCase())
     if (friend) {
       setSelectedFriend(friend)
     } else {
-      toast.error('指定されたLINE IDの友達が見つかりません')
+      toast.error('指定されたUIDの友達が見つかりません')
       setSelectedFriend(null)
+    }
+  }
+
+  const handleCopyUID = (uid: string) => {
+    navigator.clipboard.writeText(uid)
+    toast.success('UIDをコピーしました')
+  }
+
+  const handleDeleteOrder = async (orderId: string) => {
+    try {
+      const { error } = await supabase
+        .from('orders')
+        .delete()
+        .eq('id', orderId)
+        .eq('user_id', user?.id)
+
+      if (error) throw error
+
+      toast.success('注文履歴を削除しました')
+      loadData()
+    } catch (error) {
+      console.error('Error deleting order:', error)
+      toast.error('削除に失敗しました')
     }
   }
 
@@ -481,8 +509,22 @@ export default function PaymentManagement() {
     // 期限切れの表示/非表示フィルター
     const matchesExpiredFilter = !showExpiredOrders || order.status === 'expired'
     
-    return matchesSearch && matchesStatus && matchesPendingFilter && matchesCanceledFilter && matchesRefundedFilter && matchesExpiredFilter
+    // 年月フィルター
+    const orderDate = new Date(order.created_at)
+    const matchesYear = !filterYear || orderDate.getFullYear().toString() === filterYear
+    const matchesMonth = !filterMonth || (orderDate.getMonth() + 1).toString().padStart(2, '0') === filterMonth
+    
+    return matchesSearch && matchesStatus && matchesPendingFilter && matchesCanceledFilter && matchesRefundedFilter && matchesExpiredFilter && matchesYear && matchesMonth
   })
+
+  const totalPages = Math.ceil(filteredOrders.length / itemsPerPage)
+  const paginatedOrders = filteredOrders.slice(
+    (currentPage - 1) * itemsPerPage,
+    currentPage * itemsPerPage
+  )
+
+  // 年のオプション生成
+  const availableYears = Array.from(new Set(orders.map(order => new Date(order.created_at).getFullYear()))).sort((a, b) => b - a)
 
   const getProductName = (order: OrderRecord) => {
     // メタデータに商品名がある場合はそれを使用（削除されても保持される）
@@ -722,20 +764,21 @@ export default function PaymentManagement() {
                            </Button>
                          </div>
                        </div>
-                      <div>
-                        <Label htmlFor="friend-line-id">LINE ID</Label>
-                        <div className="flex gap-2">
-                          <Input
-                            id="friend-line-id"
-                            value={friendUid}
-                            onChange={(e) => setFriendUid(e.target.value)}
-                            placeholder="LINE IDを入力"
-                          />
-                          <Button onClick={handleFriendSearch} size="sm">
-                            検索
-                          </Button>
-                        </div>
-                      </div>
+                       <div>
+                         <Label htmlFor="friend-uid">友達UID</Label>
+                         <div className="flex gap-2">
+                           <Input
+                             id="friend-uid"
+                             value={friendUid}
+                             onChange={(e) => setFriendUid(e.target.value)}
+                             placeholder="UIDを入力（例: ABC123）"
+                             className="uppercase"
+                           />
+                           <Button onClick={handleFriendSearch} size="sm">
+                             検索
+                           </Button>
+                         </div>
+                       </div>
                       
                       {selectedFriend && (
                         <div className="p-3 bg-muted rounded-md">
@@ -809,33 +852,57 @@ export default function PaymentManagement() {
             </div>
             
             {/* 検索・フィルター */}
-            <div className="space-y-3 mt-3">
-              <div className="flex gap-2">
-                <div className="flex-1">
-                  <div className="relative">
-                    <Search className="absolute left-2 top-2 h-3 w-3 text-muted-foreground" />
-                    <Input
-                      placeholder="セッションIDまたは友達UIDで検索"
-                      value={searchTerm}
-                      onChange={(e) => setSearchTerm(e.target.value)}
-                      className="pl-7 h-8 text-xs"
-                    />
-                  </div>
-                </div>
-                <Select value={statusFilter} onValueChange={setStatusFilter}>
-                  <SelectTrigger className="w-32 h-8 text-xs">
-                    <SelectValue placeholder="ステータス" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">すべて</SelectItem>
-                    <SelectItem value="paid">成功</SelectItem>
-                    <SelectItem value="pending">保留中</SelectItem>
-                    <SelectItem value="failed">失敗</SelectItem>
-                    <SelectItem value="refunded">返金済み</SelectItem>
-                    <SelectItem value="canceled">解約済み</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
+              <div className="space-y-3 mt-3">
+               <div className="flex gap-2">
+                 <div className="flex-1">
+                   <div className="relative">
+                     <Search className="absolute left-2 top-2 h-3 w-3 text-muted-foreground" />
+                     <Input
+                       placeholder="セッションIDまたは友達UIDで検索"
+                       value={searchTerm}
+                       onChange={(e) => setSearchTerm(e.target.value)}
+                       className="pl-7 h-8 text-xs"
+                     />
+                   </div>
+                 </div>
+                 <Select value={statusFilter} onValueChange={setStatusFilter}>
+                   <SelectTrigger className="w-32 h-8 text-xs">
+                     <SelectValue placeholder="ステータス" />
+                   </SelectTrigger>
+                   <SelectContent>
+                     <SelectItem value="all">すべて</SelectItem>
+                     <SelectItem value="paid">成功</SelectItem>
+                     <SelectItem value="pending">保留中</SelectItem>
+                     <SelectItem value="failed">失敗</SelectItem>
+                     <SelectItem value="refunded">返金済み</SelectItem>
+                     <SelectItem value="canceled">解約済み</SelectItem>
+                   </SelectContent>
+                 </Select>
+                 <Select value={filterYear} onValueChange={setFilterYear}>
+                   <SelectTrigger className="w-24 h-8 text-xs">
+                     <SelectValue placeholder="年" />
+                   </SelectTrigger>
+                   <SelectContent>
+                     <SelectItem value="">全年</SelectItem>
+                     {availableYears.map(year => (
+                       <SelectItem key={year} value={year.toString()}>{year}</SelectItem>
+                     ))}
+                   </SelectContent>
+                 </Select>
+                 <Select value={filterMonth} onValueChange={setFilterMonth}>
+                   <SelectTrigger className="w-20 h-8 text-xs">
+                     <SelectValue placeholder="月" />
+                   </SelectTrigger>
+                   <SelectContent>
+                     <SelectItem value="">全月</SelectItem>
+                     {Array.from({length: 12}, (_, i) => (
+                       <SelectItem key={i + 1} value={(i + 1).toString().padStart(2, '0')}>
+                         {i + 1}月
+                       </SelectItem>
+                     ))}
+                   </SelectContent>
+                 </Select>
+               </div>
               
               <div className="flex flex-wrap items-center gap-4">
                 <div className="flex items-center space-x-2">
@@ -896,9 +963,9 @@ export default function PaymentManagement() {
                      <TableHead className="py-2">アクション</TableHead>
                    </TableRow>
                  </TableHeader>
-                <TableBody>
-                  {filteredOrders.map((order) => (
-                    <TableRow key={order.id} className="text-xs">
+                 <TableBody>
+                   {paginatedOrders.map((order) => (
+                     <TableRow key={order.id} className="text-xs">
                        <TableCell className="py-2">
                          <div>
                            <div className="font-medium text-xs">
@@ -907,12 +974,25 @@ export default function PaymentManagement() {
                            <div className="text-xs text-muted-foreground">{order.stripe_session_id}</div>
                          </div>
                        </TableCell>
-                      <TableCell className="py-2">
-                        <div className="font-medium text-xs">{getFriendName(order)}</div>
-                        {order.status === 'pending' && (
-                          <div className="text-xs text-amber-600">保留中</div>
-                        )}
-                      </TableCell>
+                       <TableCell className="py-2">
+                         <div className="font-medium text-xs">{getFriendName(order)}</div>
+                         {order.friend_uid && (
+                           <div className="flex items-center gap-1 text-xs text-muted-foreground">
+                             <span className="font-mono">{order.friend_uid}</span>
+                             <Button
+                               variant="ghost"
+                               size="sm"
+                               className="h-4 w-4 p-0"
+                               onClick={() => handleCopyUID(order.friend_uid)}
+                             >
+                               <Copy className="h-3 w-3" />
+                             </Button>
+                           </div>
+                         )}
+                         {order.status === 'pending' && (
+                           <div className="text-xs text-amber-600">保留中</div>
+                         )}
+                       </TableCell>
                        <TableCell className="py-2 font-medium text-xs">
                          ¥{order.amount?.toLocaleString('ja-JP') || '0'}
                        </TableCell>
@@ -945,14 +1025,14 @@ export default function PaymentManagement() {
                            </div>
                          </div>
                        </TableCell>
-                      <TableCell className="py-2">
-                        <div className="flex gap-1">
-                          <Dialog>
-                            <DialogTrigger asChild>
-                              <Button size="sm" variant="outline" className="h-6 w-6 p-0" onClick={() => setSelectedOrder(order)}>
-                                <Eye className="h-3 w-3" />
-                              </Button>
-                            </DialogTrigger>
+                       <TableCell className="py-2">
+                         <div className="flex gap-1">
+                           <Dialog>
+                             <DialogTrigger asChild>
+                               <Button size="sm" variant="outline" className="h-6 w-6 p-0" onClick={() => setSelectedOrder(order)}>
+                                 <Eye className="h-3 w-3" />
+                               </Button>
+                             </DialogTrigger>
                              <DialogContent className="max-w-2xl">
                                <Button 
                                  variant="ghost" 
@@ -1029,16 +1109,90 @@ export default function PaymentManagement() {
                               <Badge variant="destructive" className="text-xs">
                                 解約済
                               </Badge>
-                            )}
-                        </div>
-                      </TableCell>
+                             )}
+                             <AlertDialog>
+                               <AlertDialogTrigger asChild>
+                                 <Button
+                                   size="sm"
+                                   variant="outline"
+                                   className="h-6 w-6 p-0"
+                                 >
+                                   <Trash2 className="h-3 w-3" />
+                                 </Button>
+                               </AlertDialogTrigger>
+                               <AlertDialogContent>
+                                 <AlertDialogHeader>
+                                   <AlertDialogTitle>注文履歴削除確認</AlertDialogTitle>
+                                   <AlertDialogDescription>
+                                     この注文履歴を削除しますか？この操作は取り消せません。
+                                   </AlertDialogDescription>
+                                 </AlertDialogHeader>
+                                 <AlertDialogFooter>
+                                   <AlertDialogCancel>キャンセル</AlertDialogCancel>
+                                   <AlertDialogAction 
+                                     onClick={() => handleDeleteOrder(order.id)}
+                                     className="bg-destructive text-destructive-foreground hover:bg-destructive/80"
+                                   >
+                                     削除実行
+                                   </AlertDialogAction>
+                                 </AlertDialogFooter>
+                               </AlertDialogContent>
+                             </AlertDialog>
+                         </div>
+                       </TableCell>
                     </TableRow>
                   ))}
                 </TableBody>
               </Table>
-            </div>
-          </CardContent>
-        </Card>
+             </div>
+           </CardContent>
+           {totalPages > 1 && (
+             <div className="p-4 border-t">
+               <Pagination>
+                 <PaginationContent>
+                   <PaginationItem>
+                     <PaginationPrevious 
+                       onClick={() => setCurrentPage(Math.max(1, currentPage - 1))}
+                       className={currentPage === 1 ? 'pointer-events-none opacity-50' : 'cursor-pointer'}
+                     />
+                   </PaginationItem>
+                   {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+                     let pageNumber;
+                     if (totalPages <= 5) {
+                       pageNumber = i + 1;
+                     } else if (currentPage <= 3) {
+                       pageNumber = i + 1;
+                     } else if (currentPage >= totalPages - 2) {
+                       pageNumber = totalPages - 4 + i;
+                     } else {
+                       pageNumber = currentPage - 2 + i;
+                     }
+                     return (
+                       <PaginationItem key={pageNumber}>
+                         <PaginationLink
+                           onClick={() => setCurrentPage(pageNumber)}
+                           isActive={currentPage === pageNumber}
+                           className="cursor-pointer"
+                         >
+                           {pageNumber}
+                         </PaginationLink>
+                       </PaginationItem>
+                     );
+                   })}
+                   <PaginationItem>
+                     <PaginationNext 
+                       onClick={() => setCurrentPage(Math.min(totalPages, currentPage + 1))}
+                       className={currentPage === totalPages ? 'pointer-events-none opacity-50' : 'cursor-pointer'}
+                     />
+                   </PaginationItem>
+                 </PaginationContent>
+               </Pagination>
+               <div className="text-center text-sm text-muted-foreground mt-2">
+                 {filteredOrders.length}件中 {((currentPage - 1) * itemsPerPage) + 1}-{Math.min(currentPage * itemsPerPage, filteredOrders.length)}件を表示
+               </div>
+             </div>
+           )}
+         </Card>
 
         {/* サブスクライバー一覧ダイアログ */}
         <Dialog open={showSubscriberDialog} onOpenChange={setShowSubscriberDialog}>
@@ -1087,20 +1241,62 @@ export default function PaymentManagement() {
                          <TableRow key={subscriber.id}>
                            <TableCell>{subscriber.display_name || '未設定'}</TableCell>
                            <TableCell className="font-mono text-xs">{subscriber.short_uid}</TableCell>
-                           <TableCell>
-                             <div className="space-y-1">
-                               {subscriber.orders
-                                 .filter(order => order.status === 'paid')
-                                 .map((order, index) => (
-                                 <div key={index} className="text-xs">
-                                   <div className="font-medium">{order.product_name}</div>
-                                   <div className="text-muted-foreground">
-                                     {new Date(order.created_at).toLocaleDateString('ja-JP')}
-                                   </div>
-                                 </div>
-                               ))}
-                             </div>
-                           </TableCell>
+                            <TableCell>
+                              <div className="space-y-1">
+                                {subscriber.orders
+                                  .filter(order => order.status === 'paid')
+                                  .map((order, index) => (
+                                  <div key={index} className="flex items-center gap-2 text-xs">
+                                    <div>
+                                      <div className="font-medium">{order.product_name}</div>
+                                      <div className="text-muted-foreground">
+                                        {new Date(order.created_at).toLocaleDateString('ja-JP')}
+                                      </div>
+                                    </div>
+                                    <AlertDialog>
+                                      <AlertDialogTrigger asChild>
+                                        <Button
+                                          size="sm"
+                                          variant="outline"
+                                          className="h-5 px-2 text-xs"
+                                        >
+                                          解約
+                                        </Button>
+                                      </AlertDialogTrigger>
+                                      <AlertDialogContent>
+                                        <AlertDialogHeader>
+                                          <AlertDialogTitle>サブスクリプション解約確認</AlertDialogTitle>
+                                          <AlertDialogDescription>
+                                            {subscriber.display_name}のサブスクリプション「{order.product_name}」を解約しますか？
+                                            この操作は取り消せません。
+                                          </AlertDialogDescription>
+                                        </AlertDialogHeader>
+                                        <AlertDialogFooter>
+                                          <AlertDialogCancel>キャンセル</AlertDialogCancel>
+                                          <AlertDialogAction 
+                                            onClick={() => {
+                                              const customerOrder = orders.find(o => 
+                                                o.friend_uid === subscriber.short_uid && 
+                                                o.stripe_customer_id &&
+                                                o.status === 'paid'
+                                              );
+                                              if (customerOrder?.stripe_customer_id) {
+                                                handleCancelSubscription(customerOrder.stripe_customer_id);
+                                              } else {
+                                                toast.error('Stripeカスタマー情報が見つかりません');
+                                              }
+                                            }}
+                                            className="bg-destructive text-destructive-foreground hover:bg-destructive/80"
+                                          >
+                                            解約実行
+                                          </AlertDialogAction>
+                                        </AlertDialogFooter>
+                                      </AlertDialogContent>
+                                    </AlertDialog>
+                                  </div>
+                                ))}
+                              </div>
+                            </TableCell>
                            <TableCell>
                              {subscriber.orders.length > 0 && (
                                <div className="text-xs">
