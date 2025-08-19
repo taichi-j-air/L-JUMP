@@ -1182,7 +1182,6 @@ export default function PaymentManagement() {
             </div>
           </DialogContent>
         </Dialog>
-        </Dialog>
         
         <SubscriberDetailDialog 
           open={showSubscriberDetailDialog}
