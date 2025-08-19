@@ -75,7 +75,14 @@ serve(async (req) => {
     });
 
     if (subscriptions.data.length === 0) {
-      throw new Error("No active subscriptions found for this customer");
+      return new Response(JSON.stringify({ 
+        success: false, 
+        error: "No active subscriptions found for this customer",
+        already_canceled: true
+      }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+        status: 200,
+      });
     }
 
     const cancelledSubscriptions = [];

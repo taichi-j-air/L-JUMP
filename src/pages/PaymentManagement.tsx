@@ -129,6 +129,7 @@ export default function PaymentManagement() {
   const [itemsPerPage] = useState(20)
   const [filterYear, setFilterYear] = useState("")
   const [filterMonth, setFilterMonth] = useState("")
+  const [selectedOrderIds, setSelectedOrderIds] = useState<string[]>([])
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
@@ -390,11 +391,20 @@ export default function PaymentManagement() {
         // データを再読み込みして統計と表示を更新
         loadData()
       } else {
-        throw new Error(data?.error || '解約処理に失敗しました')
+        // 解約済みの場合は適切なメッセージを表示
+        if (data?.already_canceled || data?.error?.includes('No active subscriptions found')) {
+          toast.info('このカスタマーは既に解約済みです')
+        } else {
+          throw new Error(data?.error || '解約処理に失敗しました')
+        }
       }
     } catch (error) {
       console.error('Error canceling subscription:', error)
-      toast.error(`サブスクリプションの解約に失敗しました: ${error.message || error}`)
+      if (error.message?.includes('No active subscriptions found') || error.message?.includes('already_canceled')) {
+        toast.info('このカスタマーは既に解約済みです')
+      } else {
+        toast.error(`サブスクリプションの解約に失敗しました: ${error.message || error}`)
+      }
     }
   }
 
@@ -431,6 +441,38 @@ export default function PaymentManagement() {
     }
   }
 
+  const handleBulkDelete = async () => {
+    if (selectedOrderIds.length === 0) {
+      toast.error('削除する注文を選択してください')
+      return
+    }
+
+    try {
+      const { error } = await supabase
+        .from('orders')
+        .delete()
+        .in('id', selectedOrderIds)
+        .eq('user_id', user?.id)
+
+      if (error) throw error
+
+      toast.success(`${selectedOrderIds.length}件の注文履歴を削除しました`)
+      setSelectedOrderIds([])
+      loadData()
+    } catch (error) {
+      console.error('Error bulk deleting orders:', error)
+      toast.error('一括削除に失敗しました')
+    }
+  }
+
+  const handleSelectAll = () => {
+    if (selectedOrderIds.length === filteredOrders.length) {
+      setSelectedOrderIds([])
+    } else {
+      setSelectedOrderIds(filteredOrders.map(order => order.id))
+    }
+  }
+
   const handleProductSelect = (productId: string) => {
     const product = products.find(p => p.id === productId)
     if (product) {
@@ -450,44 +492,62 @@ export default function PaymentManagement() {
       }
 
       const orderDate = manualDate ? new Date(manualDate).toISOString() : new Date().toISOString()
+      const amount = parseInt(manualAmount)
+
+      if (isNaN(amount) || amount <= 0) {
+        toast.error('有効な金額を入力してください')
+        return
+      }
 
       // 手動で注文/返金を追加
-      const { error } = await supabase
+      const { data, error } = await supabase
         .from('orders')
         .insert({
           user_id: user?.id,
           product_id: selectedProduct?.id,
           friend_uid: selectedFriend.short_uid,
-          amount: parseInt(manualAmount),
+          amount: amount,
           currency: selectedProduct?.currency || 'jpy',
           status: isRefundMode ? 'refunded' : 'paid',
           livemode: !showTestMode,
           metadata: {
             product_name: manualProductName,
-            product_type: selectedProduct?.product_type,
+            product_type: selectedProduct?.product_type || 'one_time',
             manual_entry: true,
             refund_type: isRefundMode ? 'manual' : undefined
           },
           stripe_session_id: `manual_${Date.now()}`,
-          created_at: orderDate
+          stripe_customer_id: null,
+          stripe_payment_intent_id: null,
+          created_at: orderDate,
+          updated_at: new Date().toISOString()
         })
+        .select()
 
-      if (error) throw error
+      if (error) {
+        console.error('Insert error:', error)
+        throw error
+      }
 
+      console.log('Manual order added:', data)
       toast.success(`${selectedFriend.display_name}の${isRefundMode ? '返金' : '注文'}を手動追加しました`)
       setShowAddDialog(false)
-      setFriendUid("")
-      setSelectedFriend(null)
-      setManualAmount("")
-      setManualProductName("")
-      setManualDate("")
-      setSelectedProduct(null)
-      setIsRefundMode(false)
+      handleClearForm()
       loadData()
     } catch (error) {
       console.error('Error adding order manually:', error)
-      toast.error('手動追加に失敗しました')
+      toast.error(`手動追加に失敗しました: ${error.message || error}`)
     }
+  }
+
+  const handleClearForm = () => {
+    setFriendUid("")
+    setSelectedFriend(null)
+    setManualAmount("")
+    setManualProductName("")
+    setManualDate("")
+    setSelectedProduct(null)
+    setIsRefundMode(false)
   }
 
   const filteredOrders = orders.filter(order => {
@@ -950,9 +1010,48 @@ export default function PaymentManagement() {
           </CardHeader>
           <CardContent className="p-0">
             <div className="overflow-x-auto">
+              {/* 一括削除ボタン */}
+              {selectedOrderIds.length > 0 && (
+                <div className="p-4 bg-destructive/10 border-b flex items-center justify-between">
+                  <span className="text-sm font-medium">
+                    {selectedOrderIds.length}件の注文が選択されています
+                  </span>
+                  <AlertDialog>
+                    <AlertDialogTrigger asChild>
+                      <Button variant="destructive" size="sm">
+                        <Trash2 className="h-3 w-3 mr-1" />
+                        一括削除
+                      </Button>
+                    </AlertDialogTrigger>
+                    <AlertDialogContent>
+                      <AlertDialogHeader>
+                        <AlertDialogTitle>一括削除確認</AlertDialogTitle>
+                        <AlertDialogDescription>
+                          選択された{selectedOrderIds.length}件の注文履歴を削除しますか？この操作は取り消せません。
+                        </AlertDialogDescription>
+                      </AlertDialogHeader>
+                      <AlertDialogFooter>
+                        <AlertDialogCancel>キャンセル</AlertDialogCancel>
+                        <AlertDialogAction 
+                          onClick={handleBulkDelete}
+                          className="bg-destructive text-destructive-foreground hover:bg-destructive/80"
+                        >
+                          削除実行
+                        </AlertDialogAction>
+                      </AlertDialogFooter>
+                    </AlertDialogContent>
+                  </AlertDialog>
+                </div>
+              )}
               <Table>
                  <TableHeader>
                    <TableRow className="text-xs">
+                     <TableHead className="py-2 w-12">
+                       <Checkbox
+                         checked={selectedOrderIds.length === filteredOrders.length && filteredOrders.length > 0}
+                         onCheckedChange={handleSelectAll}
+                       />
+                     </TableHead>
                      <TableHead className="py-2">商品名</TableHead>
                      <TableHead className="py-2">購入者</TableHead>
                      <TableHead className="py-2">金額</TableHead>
@@ -966,6 +1065,18 @@ export default function PaymentManagement() {
                  <TableBody>
                    {paginatedOrders.map((order) => (
                      <TableRow key={order.id} className="text-xs">
+                       <TableCell className="py-2">
+                         <Checkbox
+                           checked={selectedOrderIds.includes(order.id)}
+                           onCheckedChange={(checked) => {
+                             if (checked) {
+                               setSelectedOrderIds([...selectedOrderIds, order.id])
+                             } else {
+                               setSelectedOrderIds(selectedOrderIds.filter(id => id !== order.id))
+                             }
+                           }}
+                         />
+                       </TableCell>
                        <TableCell className="py-2">
                          <div>
                            <div className="font-medium text-xs">
