@@ -131,13 +131,26 @@ export default function PaymentManagement() {
     })
   }, [])
 
+  // Function to load all data and refresh stats
+  const loadData = async () => {
+    try {
+      if (!user) return;
+      await Promise.all([
+        loadOrders(),
+        loadFriends(), 
+        loadProducts()
+      ]);
+    } catch (error) {
+      console.error('Error loading data:', error);
+      toast.error('データの読み込みに失敗しました');
+    }
+  };
+
   useEffect(() => {
     if (user) {
-      loadOrders()
-      loadFriends()
-      loadProducts()
+      loadData();
     }
-  }, [user, showTestMode])
+  }, [user, showTestMode]);
 
   const loadOrders = async () => {
     try {
@@ -341,8 +354,8 @@ export default function PaymentManagement() {
           toast.success(`返金処理が完了しました (返金ID: ${data.refundId})`)
         }
         
-        // データを再読み込みして統計を更新
-        loadOrders()
+        // データを再読み込みして統計と表示を更新
+        loadData();
       } else {
         throw new Error(data?.error || '返金処理に失敗しました')
       }
@@ -364,7 +377,7 @@ export default function PaymentManagement() {
       if (data?.success) {
         toast.success('サブスクリプションの解約が完了しました')
         // データを再読み込みして統計と表示を更新
-        loadOrders()
+        loadData()
       } else {
         throw new Error(data?.error || '解約処理に失敗しました')
       }
@@ -434,7 +447,7 @@ export default function PaymentManagement() {
       setManualProductName("")
       setManualDate("")
       setSelectedProduct(null)
-      loadOrders()
+      loadData()
     } catch (error) {
       console.error('Error adding order manually:', error)
       toast.error('手動追加に失敗しました')
@@ -760,7 +773,7 @@ export default function PaymentManagement() {
                     </div>
                   </DialogContent>
                 </Dialog>
-                <Button onClick={loadOrders} variant="outline" size="sm">
+                <Button onClick={loadData} variant="outline" size="sm">
                   <RefreshCw className="h-3 w-3 mr-1" />
                   更新
                 </Button>

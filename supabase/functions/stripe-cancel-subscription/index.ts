@@ -93,9 +93,9 @@ serve(async (req) => {
     // 該当する注文のステータスを即座に cancelled に更新
     await supabaseClient
       .from('orders')
-      .update({ 
-        status: 'cancelled',
-        updated_at: new Date().toISOString() 
+      .update({
+        status: 'canceled',
+        updated_at: new Date().toISOString()
       })
       .eq('stripe_customer_id', customerId)
       .eq('status', 'paid');

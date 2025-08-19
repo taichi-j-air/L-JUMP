@@ -105,6 +105,28 @@ serve(async (req) => {
     const successUrl = settings.success_redirect_url || `${origin}/checkout/success`;
     const cancelUrl = settings.cancel_redirect_url || `${origin}/checkout/cancel`;
 
+    // Validate price mode compatibility
+    let priceDetails: Stripe.Price;
+    try {
+      priceDetails = await stripe.prices.retrieve(product.stripe_price_id);
+      console.log('Price details:', { 
+        id: priceDetails.id, 
+        type: priceDetails.type, 
+        recurring: priceDetails.recurring 
+      });
+
+      // Check if price type matches product type
+      if (product.product_type === 'subscription' && priceDetails.type !== 'recurring') {
+        throw new Error(`Product is subscription type but price ${product.stripe_price_id} is not recurring. Please create a recurring price in Stripe.`);
+      }
+      if (product.product_type === 'one_time' && priceDetails.type !== 'one_time') {
+        throw new Error(`Product is one_time type but price ${product.stripe_price_id} is not one_time. Please create a one-time price in Stripe.`);
+      }
+    } catch (priceError) {
+      console.error('Price validation error:', priceError);
+      throw new Error(`Invalid price ID: ${product.stripe_price_id}. ${priceError instanceof Error ? priceError.message : 'Please check Stripe configuration.'}`);
+    }
+
     // Create checkout session
     const sessionParams: Stripe.Checkout.SessionCreateParams = {
       line_items: [{

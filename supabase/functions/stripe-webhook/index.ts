@@ -156,15 +156,19 @@ async function handleCheckoutCompleted(event: Stripe.Event, supabaseClient: any)
     // Process success actions (tags and scenarios)
     if (metadata.uid && metadata.product_id && metadata.manager_user_id) {
       try {
+        console.log('[stripe-webhook] Processing payment success actions');
         await processPaymentSuccessActions(
           supabaseClient,
           metadata.manager_user_id,
           metadata.product_id,
           metadata.uid
         );
+        console.log('[stripe-webhook] Payment success actions completed');
       } catch (error) {
         console.error('[stripe-webhook] Failed to process success actions:', error);
       }
+    } else {
+      console.log('[stripe-webhook] Missing required metadata for success actions:', { uid: metadata.uid, product_id: metadata.product_id, manager_user_id: metadata.manager_user_id });
     }
 }
 
@@ -278,7 +282,7 @@ async function handleSubscriptionEvent(event: Stripe.Event, supabaseClient: any)
     await supabaseClient
       .from('orders')
       .update({
-        status: 'cancelled',
+        status: 'canceled',
         updated_at: new Date().toISOString(),
       })
       .eq('stripe_customer_id', customerId)
@@ -317,7 +321,7 @@ async function handleSubscriptionEvent(event: Stripe.Event, supabaseClient: any)
         updated_at: new Date().toISOString(),
       })
       .eq('stripe_customer_id', customerId)
-      .in('status', ['cancelled', 'expired']);
+      .in('status', ['canceled', 'expired']);
 
     // サブスクライバー テーブルも再アクティブ化
     const { data: subscribers } = await supabaseClient
