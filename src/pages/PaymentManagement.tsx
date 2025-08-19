@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
+import { SubscriberDetailDialog } from "@/components/SubscriberDetailDialog"
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog"
 import { Label } from "@/components/ui/label"
 import { Checkbox } from "@/components/ui/checkbox"
@@ -53,6 +54,23 @@ interface Friend {
   display_name: string
   short_uid: string
   line_user_id: string
+}
+
+interface SubscriberDetail {
+  id: string
+  display_name: string
+  short_uid: string
+  line_user_id: string
+  orders: Array<{
+    id: string
+    product_name?: string
+    product_type: string
+    amount: number
+    currency: string
+    status: string
+    created_at: string
+  }>
+  total_amount: number
 }
 
 interface Product {
@@ -102,7 +120,9 @@ export default function PaymentManagement() {
   const [showSubscriberDialog, setShowSubscriberDialog] = useState(false)
   const [subscriberPage, setSubscriberPage] = useState(1)
   const [subscriberSort, setSubscriberSort] = useState<'name' | 'date'>('name')
-  const [activeSubscribers, setActiveSubscribers] = useState<Friend[]>([])
+  const [activeSubscribers, setActiveSubscribers] = useState<SubscriberDetail[]>([])
+  const [selectedSubscriber, setSelectedSubscriber] = useState<SubscriberDetail | null>(null)
+  const [showSubscriberDetailDialog, setShowSubscriberDetailDialog] = useState(false)
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
@@ -165,7 +185,7 @@ export default function PaymentManagement() {
       // サブスクリプション統計（保留中を除く）
       const subscriptionOrders = data?.filter(order => {
         const metadata = order.metadata as any
-        return metadata?.product_type?.includes('subscription') && order.status !== 'pending'
+        return metadata?.product_type === 'subscription' && order.status !== 'pending'
       }) || []
       const activeSubscriptions = subscriptionOrders.filter(order => order.status === 'paid').length
       const totalSubscriptions = subscriptionOrders.length
@@ -177,18 +197,44 @@ export default function PaymentManagement() {
           .filter(Boolean)
       )
       
-      // アクティブなサブスクライバーの友達情報を取得
-      const activeSubFriends = friends.filter(friend => 
-        activeSubscriberIds.has(friend.short_uid)
-      )
-      setActiveSubscribers(activeSubFriends)
+      // アクティブなサブスクライバーの詳細情報を取得
+      const activeSubDetails: SubscriberDetail[] = friends
+        .filter(friend => activeSubscriberIds.has(friend.short_uid))
+        .map(friend => {
+          const friendOrders = data?.filter(order => 
+            order.friend_uid === friend.short_uid && 
+            (order.metadata as any)?.product_type === 'subscription'
+          ) || []
+          
+          const friendTotalAmount = friendOrders
+            .filter(order => order.status === 'paid')
+            .reduce((sum, order) => sum + (order.amount || 0), 0) -
+            friendOrders
+            .filter(order => order.status === 'refunded')
+            .reduce((sum, order) => sum + (order.amount || 0), 0)
+            
+          return {
+            ...friend,
+            orders: friendOrders.map(order => ({
+              id: order.id,
+              product_name: (order.metadata as any)?.product_name || getProductName(order),
+              product_type: (order.metadata as any)?.product_type || 'subscription',
+              amount: order.amount,
+              currency: order.currency,
+              status: order.status,
+              created_at: order.created_at
+            })),
+            total_amount: friendTotalAmount
+          }
+        })
+      setActiveSubscribers(activeSubDetails)
       
-      const uniqueSubscriptionUsers = activeSubFriends.length
+      const uniqueSubscriptionUsers = activeSubDetails.length
 
       // 単発決済統計（保留中を除く）
       const oneTimeOrders = data?.filter(order => {
         const metadata = order.metadata as any
-        return !metadata?.product_type?.includes('subscription') && order.status !== 'pending'
+        return metadata?.product_type === 'one_time' && order.status !== 'pending'
       }) || []
       const successfulOneTime = oneTimeOrders.filter(order => order.status === 'paid').length
       const totalOneTime = oneTimeOrders.length
@@ -316,20 +362,12 @@ export default function PaymentManagement() {
       if (error) throw error
 
       if (data?.success) {
-        // サブスクリプション注文のステータスを解約済みに更新
-        setOrders(prevOrders => 
-          prevOrders.map(order => 
-            order.stripe_customer_id === customerId && order.metadata?.product_type?.includes('subscription')
-              ? { ...order, status: 'canceled' }
-              : order
-          )
-        )
         toast.success('サブスクリプションの解約が完了しました')
+        // データを再読み込みして統計と表示を更新
+        loadOrders()
       } else {
         throw new Error(data?.error || '解約処理に失敗しました')
       }
-
-      loadOrders()
     } catch (error) {
       console.error('Error canceling subscription:', error)
       toast.error(`サブスクリプションの解約に失敗しました: ${error.message || error}`)
@@ -910,7 +948,38 @@ export default function PaymentManagement() {
                               )}
                             </DialogContent>
                           </Dialog>
-                            {order.status === 'paid' && !order.metadata?.product_type?.includes('subscription') && (
+              {order.status === 'paid' && (order.metadata as any)?.product_type === 'subscription' && (
+                // サブスクリプションの返金ボタン
+                <AlertDialog>
+                  <AlertDialogTrigger asChild>
+                    <Button
+                      size="sm"
+                      variant="destructive"
+                      className="h-6 px-2 text-xs"
+                    >
+                      返金
+                    </Button>
+                  </AlertDialogTrigger>
+                  <AlertDialogContent>
+                    <AlertDialogHeader>
+                      <AlertDialogTitle>返金確認</AlertDialogTitle>
+                      <AlertDialogDescription>
+                        このサブスクリプション注文を返金しますか？この操作は取り消せません。
+                      </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                      <AlertDialogCancel>キャンセル</AlertDialogCancel>
+                      <AlertDialogAction 
+                        onClick={() => handleRefund(order.id)}
+                        className="bg-destructive text-destructive-foreground hover:bg-destructive/80"
+                      >
+                        返金実行
+                      </AlertDialogAction>
+                    </AlertDialogFooter>
+                  </AlertDialogContent>
+                </AlertDialog>
+              )}
+              {order.status === 'paid' && (order.metadata as any)?.product_type === 'one_time' && (
                               <AlertDialog>
                                 <AlertDialogTrigger asChild>
                                   <Button
@@ -945,7 +1014,7 @@ export default function PaymentManagement() {
                                 返金済
                               </Badge>
                             )}
-                            {order.stripe_customer_id && order.status === 'paid' && order.metadata?.product_type?.includes('subscription') && (
+                            {order.stripe_customer_id && order.status === 'paid' && (order.metadata as any)?.product_type === 'subscription' && (
                               <AlertDialog>
                                 <AlertDialogTrigger asChild>
                                   <Button
@@ -975,7 +1044,7 @@ export default function PaymentManagement() {
                                 </AlertDialogContent>
                               </AlertDialog>
                             )}
-                            {order.status === 'canceled' && order.metadata?.product_type?.includes('subscription') && (
+                            {order.status === 'canceled' && (order.metadata as any)?.product_type === 'subscription' && (
                               <Badge variant="destructive" className="text-xs">
                                 解約済
                               </Badge>
@@ -1015,11 +1084,14 @@ export default function PaymentManagement() {
               <div className="border rounded-lg">
                 <Table>
                   <TableHeader>
-                    <TableRow>
-                      <TableHead>名前</TableHead>
-                      <TableHead>UID</TableHead>
-                      <TableHead>LINE ID</TableHead>
-                    </TableRow>
+                     <TableRow>
+                       <TableHead>名前</TableHead>
+                       <TableHead>UID</TableHead>
+                       <TableHead>プラン</TableHead>
+                       <TableHead>加入日</TableHead>
+                       <TableHead>累計課金</TableHead>
+                       <TableHead>詳細</TableHead>
+                     </TableRow>
                   </TableHeader>
                   <TableBody>
                     {activeSubscribers
@@ -1030,16 +1102,52 @@ export default function PaymentManagement() {
                         return a.id.localeCompare(b.id)
                       })
                       .slice((subscriberPage - 1) * 20, subscriberPage * 20)
-                      .map((friend) => (
-                        <TableRow key={friend.id}>
-                          <TableCell>{friend.display_name || '未設定'}</TableCell>
-                          <TableCell className="font-mono text-xs">{friend.short_uid}</TableCell>
-                          <TableCell className="font-mono text-xs">{friend.line_user_id}</TableCell>
-                        </TableRow>
-                      ))}
-                    {activeSubscribers.length === 0 && (
-                      <TableRow>
-                        <TableCell colSpan={3} className="text-center text-muted-foreground py-8">
+                       .map((subscriber) => (
+                         <TableRow key={subscriber.id}>
+                           <TableCell>{subscriber.display_name || '未設定'}</TableCell>
+                           <TableCell className="font-mono text-xs">{subscriber.short_uid}</TableCell>
+                           <TableCell>
+                             <div className="space-y-1">
+                               {subscriber.orders
+                                 .filter(order => order.status === 'paid')
+                                 .map((order, index) => (
+                                 <div key={index} className="text-xs">
+                                   <div className="font-medium">{order.product_name}</div>
+                                   <div className="text-muted-foreground">
+                                     {new Date(order.created_at).toLocaleDateString('ja-JP')}
+                                   </div>
+                                 </div>
+                               ))}
+                             </div>
+                           </TableCell>
+                           <TableCell>
+                             {subscriber.orders.length > 0 && (
+                               <div className="text-xs">
+                                 {new Date(subscriber.orders[0].created_at).toLocaleDateString('ja-JP')}
+                               </div>
+                             )}
+                           </TableCell>
+                           <TableCell className="font-mono text-xs">
+                             ¥{subscriber.total_amount.toLocaleString('ja-JP')}
+                           </TableCell>
+                           <TableCell>
+                             <Button
+                               variant="outline"
+                               size="sm"
+                               onClick={() => {
+                                 setSelectedSubscriber(subscriber)
+                                 setShowSubscriberDetailDialog(true)
+                               }}
+                               className="h-6 px-2 text-xs"
+                             >
+                               詳細
+                             </Button>
+                           </TableCell>
+                         </TableRow>
+                       ))}
+                     {activeSubscribers.length === 0 && (
+                       <TableRow>
+                         <TableCell colSpan={6} className="text-center text-muted-foreground py-8">
                           アクティブなサブスクライバーがいません
                         </TableCell>
                       </TableRow>
@@ -1074,6 +1182,13 @@ export default function PaymentManagement() {
             </div>
           </DialogContent>
         </Dialog>
+        </Dialog>
+        
+        <SubscriberDetailDialog 
+          open={showSubscriberDetailDialog}
+          onOpenChange={setShowSubscriberDetailDialog}
+          subscriber={selectedSubscriber}
+        />
       </div>
     </div>
   )

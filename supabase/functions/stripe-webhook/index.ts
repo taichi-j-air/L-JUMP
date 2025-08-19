@@ -1,6 +1,7 @@
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import Stripe from "https://esm.sh/stripe@14.21.0";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
+import { handleRefundCreated } from "./process-actions.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -40,7 +41,7 @@ serve(async (req) => {
     const { data: existingEvent } = await supabaseClient
       .from('stripe_events')
       .select('id')
-      .eq('event_id', event.id)
+      .eq('stripe_event_id', event.id)
       .single();
 
     if (existingEvent) {
@@ -55,7 +56,7 @@ serve(async (req) => {
     await supabaseClient
       .from('stripe_events')
       .insert({
-        event_id: event.id,
+        stripe_event_id: event.id,
         event_type: event.type,
         livemode: event.livemode,
         processed_at: new Date().toISOString(),
@@ -128,21 +129,34 @@ async function handleCheckoutCompleted(event: Stripe.Event, supabaseClient: any)
   const productId = metadata.product_id;
   const managerUserId = metadata.manager_user_id;
 
-  // Update order status
-  await supabaseClient
-    .from('orders')
-    .update({
-      status: 'paid',
-      stripe_customer_id: session.customer,
-      stripe_payment_intent_id: session.payment_intent,
-      updated_at: new Date().toISOString(),
-    })
-    .eq('stripe_session_id', session.id);
+    // Update order status to paid and process actions
+    const { data: updatedOrder } = await supabaseClient
+      .from('orders')
+      .update({ 
+        status: 'paid',
+        stripe_payment_intent_id: session.payment_intent,
+        stripe_customer_id: session.customer,
+        updated_at: new Date().toISOString()
+      })
+      .eq('stripe_session_id', session.id)
+      .select()
+      .single();
 
-  // Execute product actions if available
-  if (productId && managerUserId) {
-    await executeProductActions(productId, managerUserId, uid, 'success', supabaseClient);
-  }
+    console.log(`[stripe-webhook] Order updated to paid status`);
+
+    // Process success actions (tags and scenarios)
+    if (metadata.uid && metadata.product_id && metadata.manager_user_id) {
+      try {
+        await processPaymentSuccessActions(
+          supabaseClient,
+          metadata.manager_user_id,
+          metadata.product_id,
+          metadata.uid
+        );
+      } catch (error) {
+        console.error('[stripe-webhook] Failed to process success actions:', error);
+      }
+    }
 }
 
 async function handlePaymentSucceeded(event: Stripe.Event, supabaseClient: any) {
@@ -208,157 +222,6 @@ async function handleInvoicePaymentSucceeded(event: Stripe.Event, supabaseClient
   // Handle recurring payments - could trigger scenarios here
 }
 
-async function executeProductActions(
-  productId: string, 
-  managerUserId: string, 
-  uid: string | undefined, 
-  actionType: 'success' | 'failure', 
-  supabaseClient: any
-) {
-  try {
-    const { data: actions } = await supabaseClient
-      .from('product_actions')
-      .select('*')
-      .eq('product_id', productId)
-      .eq('action_type', actionType);
-
-    if (!actions || actions.length === 0) {
-      console.log('[stripe-webhook] No product actions found');
-      return;
-    }
-
-    for (const action of actions) {
-      console.log('[stripe-webhook] Executing action:', action.action_name, 'for uid:', uid);
-
-      if (action.action_name === 'add_tag' && uid) {
-        await addTagToFriend(managerUserId, uid, action.tag_name, supabaseClient);
-      } else if (action.action_name === 'remove_tag' && uid) {
-        await removeTagFromFriend(managerUserId, uid, action.tag_name, supabaseClient);
-      } else if (action.action_name === 'start_scenario' && uid) {
-        await startScenarioForFriend(managerUserId, uid, action.scenario_id, supabaseClient);
-      }
-    }
-  } catch (error) {
-    console.error('[stripe-webhook] Error executing product actions:', error);
-  }
-}
-
-async function addTagToFriend(userId: string, uid: string, tagName: string, supabaseClient: any) {
-  try {
-    // Find friend by uid
-    const { data: friend } = await supabaseClient
-      .from('line_friends')
-      .select('id, tags')
-      .eq('user_id', userId)
-      .eq('short_uid_ci', uid.toUpperCase())
-      .single();
-
-    if (friend) {
-      const currentTags = friend.tags || [];
-      if (!currentTags.includes(tagName)) {
-        await supabaseClient
-          .from('line_friends')
-          .update({ tags: [...currentTags, tagName] })
-          .eq('id', friend.id);
-        
-        console.log('[stripe-webhook] Added tag:', tagName, 'to friend:', uid);
-      }
-    }
-  } catch (error) {
-    console.error('[stripe-webhook] Error adding tag:', error);
-  }
-}
-
-async function removeTagFromFriend(userId: string, uid: string, tagName: string, supabaseClient: any) {
-  try {
-    // Find friend by uid
-    const { data: friend } = await supabaseClient
-      .from('line_friends')
-      .select('id, tags')
-      .eq('user_id', userId)
-      .eq('short_uid_ci', uid.toUpperCase())
-      .single();
-
-    if (friend) {
-      const currentTags = friend.tags || [];
-      const newTags = currentTags.filter((tag: string) => tag !== tagName);
-      
-      await supabaseClient
-        .from('line_friends')
-        .update({ tags: newTags })
-        .eq('id', friend.id);
-      
-      console.log('[stripe-webhook] Removed tag:', tagName, 'from friend:', uid);
-    }
-  } catch (error) {
-    console.error('[stripe-webhook] Error removing tag:', error);
-  }
-}
-
-async function startScenarioForFriend(userId: string, uid: string, scenarioId: string, supabaseClient: any) {
-  try {
-    // Find friend by uid
-    const { data: friend } = await supabaseClient
-      .from('line_friends')
-      .select('id, line_user_id')
-      .eq('user_id', userId)
-      .eq('short_uid_ci', uid.toUpperCase())
-      .single();
-
-    if (friend) {
-      // Call trigger-scenario function
-      const { error } = await supabaseClient.functions.invoke('trigger-scenario', {
-        body: {
-          line_user_id: friend.line_user_id,
-          scenario_id: scenarioId,
-        }
-      });
-
-      if (error) {
-        console.error('[stripe-webhook] Error triggering scenario:', error);
-      } else {
-        console.log('[stripe-webhook] Started scenario:', scenarioId, 'for friend:', uid);
-      }
-    }
-  } catch (error) {
-    console.error('[stripe-webhook] Error starting scenario:', error);
-  }
-}
-
-// 返金処理用のハンドラー関数を追加
-async function handleRefundCreated(event: Stripe.Event, supabaseClient: any) {
-  const refund = event.data.object as Stripe.Refund;
-  
-  console.log('[stripe-webhook] Refund created:', {
-    refundId: refund.id,
-    paymentIntentId: refund.payment_intent,
-    amount: refund.amount,
-    reason: refund.reason
-  });
-
-  // PaymentIntentIDから注文を検索して返金済みに更新
-  if (refund.payment_intent) {
-    const { data: updatedOrder, error } = await supabaseClient
-      .from('orders')
-      .update({
-        status: 'refunded',
-        updated_at: new Date().toISOString(),
-      })
-      .eq('stripe_payment_intent_id', refund.payment_intent)
-      .select()
-      .single();
-
-    if (error) {
-      console.error('[stripe-webhook] Error updating order for refund:', error);
-    } else if (updatedOrder) {
-      console.log('[stripe-webhook] Order updated to refunded:', updatedOrder.id);
-    } else {
-      console.log('[stripe-webhook] No matching order found for refund');
-    }
-  }
-}
-
-// 支払いに問題がある場合のハンドラー
 async function handlePaymentRequiresAction(event: Stripe.Event, supabaseClient: any) {
   const paymentIntent = event.data.object as Stripe.PaymentIntent;
   

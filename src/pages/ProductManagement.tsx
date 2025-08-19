@@ -23,8 +23,7 @@ interface Product {
   description?: string
   price: number
   currency: string
-  product_type: 'one_time' | 'subscription' | 'subscription_with_trial'
-  trial_period_days?: number
+  product_type: 'one_time' | 'subscription'
   interval?: 'month' | 'year'
   is_active: boolean
   stripe_product_id?: string
@@ -74,7 +73,6 @@ export default function ProductManagement() {
     price: 0,
     currency: 'jpy',
     product_type: 'one_time',
-    trial_period_days: undefined,
     interval: 'month',
     is_active: true
   })
@@ -420,7 +418,6 @@ export default function ProductManagement() {
             price: productForm.price || 0,
             currency: productForm.currency || 'jpy',
             product_type: productForm.product_type!,
-            trial_period_days: productForm.trial_period_days,
             interval: productForm.interval,
             is_active: productForm.is_active ?? true,
             user_id: user.id
@@ -460,13 +457,12 @@ export default function ProductManagement() {
               description: productForm.description || '',
               unitAmount: productForm.price || 0,
               currency: productForm.currency || 'jpy',
-              interval: (productForm.product_type === 'subscription' || productForm.product_type === 'subscription_with_trial')
+              interval: productForm.product_type === 'subscription'
                 ? productForm.interval
                 : undefined,
               metadata: {
                 product_id: productId,
-                product_type: productForm.product_type,
-                trial_period_days: productForm.trial_period_days?.toString() || undefined
+                product_type: productForm.product_type
               },
               isTest: isTestProduct
             }
@@ -510,13 +506,12 @@ export default function ProductManagement() {
                 description: productForm.description || '',
                 unitAmount: productForm.price || 0,
                 currency: productForm.currency || 'jpy',
-                interval: (productForm.product_type === 'subscription' || productForm.product_type === 'subscription_with_trial')
+                interval: productForm.product_type === 'subscription'
                   ? productForm.interval
                   : undefined,
                 metadata: {
                   product_id: productId,
-                  product_type: productForm.product_type,
-                  trial_period_days: productForm.trial_period_days?.toString() || undefined
+                  product_type: productForm.product_type
                 },
                 isTest: isTestProduct
               }
@@ -549,14 +544,13 @@ export default function ProductManagement() {
                 description: productForm.description || '',
                 unitAmount: productForm.price || 0,
                 currency: productForm.currency || 'jpy',
-                interval: (productForm.product_type === 'subscription' || productForm.product_type === 'subscription_with_trial')
-                  ? productForm.interval
-                  : undefined,
-                metadata: {
-                  product_id: productId,
-                  product_type: productForm.product_type,
-                  trial_period_days: productForm.trial_period_days?.toString() || undefined
-                },
+               interval: productForm.product_type === 'subscription'
+                 ? productForm.interval
+                 : undefined,
+               metadata: {
+                 product_id: productId,
+                 product_type: productForm.product_type
+               },
                 isTest: isTestProduct
               }
             })
@@ -791,7 +785,6 @@ export default function ProductManagement() {
                           <SelectContent>
                             <SelectItem value="one_time">単発決済</SelectItem>
                             <SelectItem value="subscription">継続課金</SelectItem>
-                            <SelectItem value="subscription_with_trial">トライアル付き継続課金</SelectItem>
                           </SelectContent>
                         </Select>
                       </div>
@@ -808,28 +801,28 @@ export default function ProductManagement() {
                         />
                       </div>
 
-                      {(productForm.product_type === 'subscription' || productForm.product_type === 'subscription_with_trial') && (
-                        <div>
-                          <Label htmlFor="product-interval-select">課金間隔</Label>
-                          <Select
-                            value={productForm.interval}
-                            onValueChange={(value) => setProductForm(prev => ({ ...prev, interval: value as any }))}
-                          >
-                            <SelectTrigger id="product-interval-select">
-                              <SelectValue />
-                            </SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="month">月次（毎月同日に請求）</SelectItem>
-                              <SelectItem value="year">年次（毎年同日に請求）</SelectItem>
-                            </SelectContent>
-                          </Select>
-                          <p className="text-xs text-muted-foreground mt-1">
-                            {productForm.interval === 'month'
-                              ? '初回請求は購入直後、2回目は購入日の翌月同日となります'
-                              : '初回請求は購入直後、2回目は購入日の翌年同日となります'}
-                          </p>
-                        </div>
-                      )}
+                        {productForm.product_type === 'subscription' && (
+                          <div>
+                            <Label htmlFor="product-interval-select">課金間隔</Label>
+                            <Select
+                              value={productForm.interval}
+                              onValueChange={(value) => setProductForm(prev => ({ ...prev, interval: value as any }))}
+                            >
+                              <SelectTrigger id="product-interval-select">
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="month">月次（毎月同日に請求）</SelectItem>
+                                <SelectItem value="year">年次（毎年同日に請求）</SelectItem>
+                              </SelectContent>
+                            </Select>
+                            <p className="text-xs text-muted-foreground mt-1">
+                              {productForm.interval === 'month'
+                                ? '初回請求は購入直後、2回目は購入日の翌月同日となります'
+                                : '初回請求は購入直後、2回目は購入日の翌年同日となります'}
+                            </p>
+                          </div>
+                        )}
 
                     </div>
 

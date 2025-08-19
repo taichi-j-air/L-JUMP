@@ -7,7 +7,7 @@ import { Loader2, Package } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 
-type ProductType = "one_time" | "subscription" | "subscription_with_trial";
+type ProductType = "one_time" | "subscription";
 
 interface ProductData {
   id: string;
@@ -114,8 +114,6 @@ export default function ProductLandingPage() {
         return "単発商品";
       case "subscription":
         return "サブスクリプション";
-      case "subscription_with_trial":
-        return "トライアル付きサブスク";
     }
   };
 
@@ -177,7 +175,7 @@ export default function ProductLandingPage() {
                   {formatPrice(product.price, product.currency)}
                 </div>
                 
-                {(product.product_type === "subscription" || product.product_type === "subscription_with_trial") && (
+                {product.product_type === "subscription" && (
                   <p className="text-sm text-muted-foreground mb-2">毎月課金</p>
                 )}
 
