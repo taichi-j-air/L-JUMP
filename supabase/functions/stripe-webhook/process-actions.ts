@@ -116,19 +116,28 @@ export async function processPaymentSuccessActions(
 
       // Handle scenario action logic
       if (action.scenario_action === 'replace_all') {
-        // Stop existing scenarios except those with prevent_auto_exit = true
-        await supabaseClient
-          .from('step_delivery_tracking')
-          .update({ status: 'exited', updated_at: new Date().toISOString() })
-          .eq('friend_id', friend.id)
-          .in('status', ['waiting', 'ready', 'delivered'])
-          .in('scenario_id', 
-            supabaseClient
-              .from('step_scenarios')
-              .select('id')
-              .eq('prevent_auto_exit', false)
-          );
-        console.log('[stripe-webhook] Stopped existing scenarios for replace_all');
+        // First get scenarios that can be auto-exited
+        const { data: exitableScenarios, error: scenarioError } = await supabaseClient
+          .from('step_scenarios')
+          .select('id')
+          .eq('user_id', managerUserId)
+          .eq('prevent_auto_exit', false);
+        
+        if (scenarioError) {
+          console.error('[stripe-webhook] Failed to get exitable scenarios:', scenarioError);
+        } else if (exitableScenarios && exitableScenarios.length > 0) {
+          const scenarioIds = exitableScenarios.map(s => s.id);
+          
+          // Stop existing scenarios except those with prevent_auto_exit = true
+          await supabaseClient
+            .from('step_delivery_tracking')
+            .update({ status: 'exited', updated_at: new Date().toISOString() })
+            .eq('friend_id', friend.id)
+            .in('status', ['waiting', 'ready', 'delivered'])
+            .in('scenario_id', scenarioIds);
+            
+          console.log('[stripe-webhook] Stopped existing scenarios for replace_all:', scenarioIds);
+        }
       }
       // For 'add_to_existing', we don't stop any existing scenarios
 
