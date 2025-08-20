@@ -178,6 +178,7 @@ if (!data) return null;
           secondLabel={data.timer_second_label || "秒"}
           internalTimer={!!data.internal_timer}
           timerText={data.timer_text || "期間限定公開"}
+          showEndDate={data.timer_mode === 'per_access'}
         />
       )}
 

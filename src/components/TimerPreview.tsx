@@ -21,6 +21,7 @@ interface TimerPreviewProps {
   preview?: boolean;
   internalTimer?: boolean; // 内部タイマーモード
   timerText?: string; // 内部タイマー時の表示テキスト
+  showEndDate?: boolean; // 終了日時を表示するかどうか
 }
 
 function formatRemaining(
@@ -59,6 +60,7 @@ export const TimerPreview = ({
   preview = false,
   internalTimer = false,
   timerText = "期間限定公開",
+  showEndDate = false,
 }: TimerPreviewProps) => {
   const [remainingMs, setRemainingMs] = useState<number>(0);
   const intervalRef = useRef<number | null>(null);
@@ -102,6 +104,13 @@ const text = formatRemaining(remainingMs, showMilliseconds, {
   secondLabel,
 });
 
+// 終了日時の表示
+const endDateText = useMemo(() => {
+  if (!showEndDate) return null;
+  const endDate = new Date(targetTime);
+  return `${endDate.getFullYear()}年${endDate.getMonth() + 1}月${endDate.getDate()}日 ${endDate.getHours()}時${endDate.getMinutes().toString().padStart(2, '0')}分まで`;
+}, [targetTime, showEndDate]);
+
   const styleClasses = {
     solid: "rounded-md p-3",
     glass: "rounded-md p-3 backdrop-blur border border-white/20",
@@ -120,6 +129,11 @@ const text = formatRemaining(remainingMs, showMilliseconds, {
         <div className="text-xl font-semibold tracking-wide">
           {internalTimer ? timerText : text}
         </div>
+        {showEndDate && endDateText && (
+          <div className="text-sm mt-1 opacity-80">
+            {endDateText}
+          </div>
+        )}
       </div>
     </div>
   );

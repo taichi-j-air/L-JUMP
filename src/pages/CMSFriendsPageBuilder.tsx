@@ -304,9 +304,11 @@ export default function CMSFriendsPageBuilder() {
 
       setPages(prev => prev.map(p => (p.id === selected.id ? { ...(p as any), ...(data as any) } : p)) as any);
       toast.success("保存しました");
+      return Promise.resolve();
     } catch (e: any) {
       console.error(e);
       toast.error("保存に失敗しました");
+      return Promise.reject(e);
     } finally {
       setSaving(false);
     }
@@ -342,7 +344,10 @@ export default function CMSFriendsPageBuilder() {
   // Preview open
   const openPreview = () => {
     if (!selected) return;
-    window.open(`/cms/preview/${selected.id}`, '_blank');
+    // まず保存してからプレビューを開く
+    handleSave().then(() => {
+      window.open(`/cms/preview/${selected.id}`, '_blank');
+    });
   };
   return (
     <div className="container mx-auto max-w-[1200px] space-y-4">
@@ -471,6 +476,7 @@ export default function CMSFriendsPageBuilder() {
                       preview={true}
                       internalTimer={internalTimer}
                       timerText={timerText}
+                      showEndDate={timerMode === 'per_access'}
                     />
                   )}
                   <div className="space-y-2">
