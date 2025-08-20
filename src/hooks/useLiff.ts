@@ -30,18 +30,30 @@ export const useLiff = (liffId?: string) => {
 
   const initializeLiff = useCallback(async () => {
     if (!liffId) {
-      setError('LIFF IDが設定されていません');
+      console.log('[LIFF] No LIFF ID provided - form may be public');
+      setError(null); // Clear error if no LIFF ID is required
       setIsLoading(false);
       return;
     }
 
     try {
       if (!window.liff) {
-        setError('LIFF SDKが読み込まれていません');
-        setIsLoading(false);
-        return;
+        console.log('[LIFF] Waiting for LIFF SDK to load...');
+        // Wait for LIFF SDK to load
+        let retries = 0;
+        while (!window.liff && retries < 50) {
+          await new Promise(resolve => setTimeout(resolve, 100));
+          retries++;
+        }
+        
+        if (!window.liff) {
+          setError('LIFF SDKが読み込まれていません');
+          setIsLoading(false);
+          return;
+        }
       }
 
+      console.log('[LIFF] Initializing with ID:', liffId);
       await window.liff.init({ liffId });
       setIsLiffReady(true);
 
@@ -55,6 +67,7 @@ export const useLiff = (liffId?: string) => {
           displayName: userProfile.displayName,
           pictureUrl: userProfile.pictureUrl
         });
+        console.log('[LIFF] User profile loaded:', userProfile.displayName);
       }
 
       const liffContext = window.liff.getContext();
