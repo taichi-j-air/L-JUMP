@@ -82,24 +82,79 @@ export default function LiffForm() {
   useEffect(() => {
     const loadForm = async () => {
       setLoading(true);
-      const { data, error } = await supabase
-        .from('forms')
-        .select('id,name,description,fields,success_message,is_public,user_id,require_line_friend,prevent_duplicate_per_friend,post_submit_scenario_id,submit_button_text,submit_button_variant,submit_button_bg_color,submit_button_text_color,accent_color')
-        .eq('id', formId)
-        .maybeSingle();
       
-      if (error) {
-        console.error('[forms.load] error:', error);
+      try {
+        // First, try the RPC method
+        const { data: formData, error: formError } = await supabase
+          .rpc('get_public_form_meta', { p_form_id: formId })
+          .maybeSingle();
+
+        if (formError) {
+          console.error('[forms.load] RPC error:', formError);
+          
+          // Fallback to direct table query if RPC fails
+          console.log('[forms.load] Trying fallback method...');
+          const { data: fallbackData, error: fallbackError } = await supabase
+            .from('forms')
+            .select('id,name,description,fields,success_message,is_public,user_id,require_line_friend,prevent_duplicate_per_friend,post_submit_scenario_id,submit_button_text,submit_button_variant,submit_button_bg_color,submit_button_text_color,accent_color')
+            .eq('id', formId)
+            .maybeSingle();
+            
+          if (fallbackError) {
+            console.error('[forms.load] Fallback error:', fallbackError);
+            toast.error('フォームの取得に失敗しました');
+            return;
+          }
+          
+          if (fallbackData) {
+            const formFields = Array.isArray(fallbackData.fields) 
+              ? fallbackData.fields as Array<{ id: string; label: string; name: string; type: string; required?: boolean; options?: string[]; placeholder?: string; rows?: number }>
+              : [];
+            
+            setForm({ ...fallbackData, fields: formFields });
+            console.log('[forms.load] Fallback method successful');
+          }
+        } else if (formData) {
+          // RPC method successful
+          const formFields = Array.isArray(formData.fields) 
+            ? formData.fields as Array<{ id: string; label: string; name: string; type: string; required?: boolean; options?: string[]; placeholder?: string; rows?: number }>
+            : [];
+          
+          setForm({ ...formData, fields: formFields });
+          console.log('[forms.load] RPC method successful');
+        }
+      } catch (error) {
+        console.error('[forms.load] unexpected error:', error);
         toast.error('フォームの取得に失敗しました');
+      } finally {
+        setLoading(false);
       }
-      if (data) {
-        setForm({ ...data, fields: Array.isArray(data.fields) ? data.fields as any[] : [] });
-      }
-      setLoading(false);
     };
     
     if (formId) loadForm();
   }, [formId]);
+
+  // Browser translation detection
+  useEffect(() => {
+    const checkTranslation = () => {
+      const isTranslated = document.documentElement.classList.contains('translated-ltr') || 
+                          document.documentElement.classList.contains('translated-rtl') ||
+                          document.querySelector('[class*="translate"]') ||
+                          document.querySelector('font[face]') ||
+                          document.body.style.top === '-30000px';
+      
+      if (isTranslated) {
+        console.warn('[Browser Translation] Page translation detected - this may cause errors');
+        toast.error('ブラウザの翻訳機能が検出されました。正常に動作しない場合は翻訳をオフにしてください。', {
+          duration: 8000
+        });
+      }
+    };
+
+    // Check after component mount
+    const timer = setTimeout(checkTranslation, 1000);
+    return () => clearTimeout(timer);
+  }, []);
 
   const handleChange = (name: string, value: any) => {
     setValues(prev => ({ ...prev, [name]: value }));

@@ -120,6 +120,23 @@ export default function PublicForm() {
               : [];
             
             setForm({ ...fallbackData, fields: formFields });
+            
+            // Fallback時もLIFF IDを取得する
+            try {
+              const { data: profileData } = await supabase
+                .from('profiles')
+                .select('liff_id')
+                .eq('user_id', fallbackData.user_id)
+                .maybeSingle();
+              
+              if (profileData?.liff_id) {
+                console.log('[liff] Setting LIFF ID from profile:', profileData.liff_id);
+                setLiffId(profileData.liff_id);
+              }
+            } catch (error) {
+              console.warn('[liff] Failed to get LIFF ID from profile:', error);
+            }
+            
             console.log('[forms.load] Fallback method successful');
           }
         } else if (formData) {
