@@ -495,7 +495,11 @@ export default function CMSFriendsPageBuilder() {
                         type="button"
                         onClick={() => {
                           if (!selectedFormId) return;
-                          const formEmbed = `<div class="form-embed" data-form-id="${selectedFormId}">フォーム読み込み中...</div>`;
+                          const selectedForm = forms.find(f => f.id === selectedFormId);
+                          const formEmbed = `<div class="form-embed" data-form-id="${selectedFormId}" style="padding: 20px; background: #f5f5f5; border: 1px solid #ddd; border-radius: 8px; text-align: center;">
+                            <h3>📝 ${selectedForm?.name || 'フォーム'}</h3>
+                            <p>フォームが埋め込まれます</p>
+                          </div>`;
                           setContentBlocks(prev => [...prev, formEmbed]);
                           setSelectedFormId("");
                         }}

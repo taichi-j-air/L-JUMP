@@ -79,7 +79,6 @@ const [friendInfo, setFriendInfo] = useState<{ account_name: string | null; line
         setError("共有コードがありません");
         return;
       }
-// UID がなくてもフレンド情報案内を返すためそのまま続行します
 
       const { data: res, error: fnErr } = await supabase.functions.invoke("cms-page-view", {
         body: { shareCode, uid, passcode: withPasscode || undefined },
@@ -207,6 +206,7 @@ if (!data) return null;
                         src={`${window.location.origin}/form/${formId}${uid ? `?uid=${uid}` : ''}`}
                         className="w-full min-h-[400px] border rounded"
                         title="埋め込みフォーム"
+                        style={{ background: 'white' }}
                       />
                     </div>
                   );
