@@ -5,8 +5,11 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
+import { Button } from "@/components/ui/button";
 import { AppSidebar } from "./components/AppSidebar";
 import { AppHeader } from "./components/AppHeader";
+import ErrorBoundary from "./components/ErrorBoundary";
+import LoadingSpinner from "./components/LoadingSpinner";
 import Index from "./pages/Index";
 import Auth from "./pages/Auth";
 import InvitePage from "./pages/InvitePage";
@@ -29,6 +32,7 @@ import ErrorPage from "./pages/ErrorPage";
 import IndividualChatPage from "./pages/IndividualChatPage";
 import ChatInboxPage from "./pages/ChatInboxPage";
 import LiffAuth from "./pages/LiffAuth";
+import LiffFormSecure from "./pages/LiffFormSecure";
 import LineLoginPage from "./pages/LineLoginPage";
 import LoginSuccess from "./pages/LoginSuccess";
 import { supabase } from "@/integrations/supabase/client";
@@ -80,7 +84,7 @@ function AppContent() {
   }, [])
 
   if (loading) {
-    return <div className="flex items-center justify-center min-h-screen">読み込み中...</div>
+    return <LoadingSpinner message="アプリケーション初期化中..." size="lg" className="min-h-screen" />
   }
 
   const isAuthPage = window.location.pathname === '/auth' || 
@@ -95,15 +99,18 @@ function AppContent() {
   const isCMSPreviewPath = window.location.pathname.startsWith('/cms/preview/')
   const isProductLandingPage = window.location.pathname.startsWith('/product-landing/')
   const isCheckoutPage = window.location.pathname.startsWith('/checkout/')
+  const isLiffPage = window.location.pathname.startsWith('/liff')
 
-  // Show auth pages and checkout pages without sidebar/header  
-  if (isAuthPage || isProductLandingPage || isCheckoutPage || (!user && !isInvitePage && !isLoginPage && !hasLineLoginSuccess && !isPublicFormPage && !(isCMSPublicPath || isCMSPreviewPath))) {
+  // Show pages without sidebar/header: auth, public forms, liff, checkout, product landing, cms public
+  if (isAuthPage || isPublicFormPage || isLiffPage || isProductLandingPage || isCheckoutPage || isCMSPublicPath || isCMSPreviewPath || (!user && !isInvitePage && !isLoginPage && !hasLineLoginSuccess)) {
     return (
-      <div className="min-h-screen">
-        <Routes>
-          <Route path="/liff" element={<LiffAuth />} />
-          <Route path="/liff-handler" element={<LiffHandler />} />
-          <Route path="/liff-invite" element={<LiffInvitePage />} />
+      <ErrorBoundary>
+        <div className="min-h-screen">
+          <Suspense fallback={<LoadingSpinner />}>
+            <Routes>
+              <Route path="/liff" element={<LiffAuth />} />
+              <Route path="/liff-handler" element={<LiffHandler />} />
+              <Route path="/liff-invite" element={<LiffInvitePage />} />
               <Route path="/invite" element={<InvitePage />} />
               <Route path="/invite/:inviteCode" element={<InvitePage />} />
               <Route path="/login" element={<LineLoginPage />} />
@@ -113,15 +120,18 @@ function AppContent() {
               <Route path="/reset-password" element={<ResetPassword />} />
               <Route path="/form/:id" element={<PublicForm />} />
               <Route path="/liff-form/:id" element={<LiffForm />} />
+              <Route path="/liff-form-secure/:id" element={<LiffFormSecure />} />
               <Route path="/product-landing/:productId" element={<ProductLandingPage />} />
               <Route path="/checkout/success" element={<CheckoutSuccess />} />
               <Route path="/checkout/cancel" element={<CheckoutCancel />} />
               <Route path="/cms/f/:shareCode" element={<CMSFriendsPublicView />} />
               <Route path="/cms/preview/:pageId" element={<CMSFriendsPublicView />} />
               <Route path="/error" element={<ErrorPage />} />
-              <Route path="*" element={<Auth />} />
-        </Routes>
-      </div>
+              <Route path="*" element={user ? <NotFound /> : <Auth />} />
+            </Routes>
+          </Suspense>
+        </div>
+      </ErrorBoundary>
     )
   }
 
@@ -132,12 +142,12 @@ function AppContent() {
         <div className="text-center">
           <h2 className="text-xl font-bold text-green-600 mb-4">✅ LINEログイン成功</h2>
           <p className="text-gray-600 mb-4">ユーザー名: {decodeURIComponent(new URLSearchParams(window.location.search).get('user_name') || '')}</p>
-          <button 
+          <Button 
             onClick={() => window.location.href = '/auth'}
-            className="bg-blue-500 text-white px-4 py-2 rounded"
+            className="bg-blue-500 text-white"
           >
             メインページに戻る
-          </button>
+          </Button>
         </div>
       </div>
     )
@@ -145,64 +155,54 @@ function AppContent() {
 
   // Show main app with sidebar and header for authenticated users
   return (
-    <SidebarProvider>
-      <div className="flex min-h-screen w-full">
-        {user && <AppHeader user={user} />}
-        {user && <AppSidebar user={user} />}
-        <div className="flex-1 flex flex-col pt-14">
-          <main className="flex-1 p-2">
-            <Suspense fallback={<div className="flex items-center justify-center p-8">読み込み中...</div>}>
-              <Routes>
-              <Route path="/rich-menu" element={<RichMenuSettings />} />
-              <Route path="/greeting-message" element={<GreetingMessageSettings />} />
-              <Route path="/member-sites" element={<MemberSitesList />} />
-              <Route path="/member-sites/management" element={<MemberSiteManagement />} />
-              <Route path="/" element={<Index />} />
-              <Route path="/liff" element={<LiffAuth />} />
-              <Route path="/liff-handler" element={<LiffHandler />} />
-              <Route path="/liff-invite" element={<LiffInvitePage />} />
-              <Route path="/invite" element={<InvitePage />} />
-              <Route path="/invite/:inviteCode" element={<InvitePage />} />
-              <Route path="/login" element={<LineLoginPage />} />
-              <Route path="/login-success" element={<LoginSuccess />} />
-              <Route path="/line-api-settings" element={<LineApiSettings />} />
-              <Route path="/line-login-settings" element={<LineLoginSettings />} />
-              <Route path="/webhook-settings" element={<WebhookSettings />} />
-              <Route path="/profile-management" element={<ProfileManagement />} />
-              <Route path="/flex-message-designer" element={<FlexMessageDesigner />} />
-              <Route path="/media-library" element={<MediaLibrary />} />
-              <Route path="/friends-list" element={<FriendsListPage />} />
-              <Route path="/tags" element={<TagsManager />} />
-              <Route path="/payment/stripe-settings" element={<StripeSettings />} />
-              <Route path="/payment/products" element={<ProductManagement />} />
-              <Route path="/payment/orders" element={<PaymentManagement />} />
-              <Route path="/settings/plan" element={<PlanSettings />} />
-              <Route path="/developer/master-mode" element={<MasterMode />} />
-              <Route path="/developer/users" element={<UserManagement />} />
-              <Route path="/developer/user-management" element={<UserManagement />} />
-              <Route path="/developer/plan-management" element={<PlanManagement />} />
-              <Route path="/stripe-settings" element={<StripeSettings />} />
-              <Route path="/payment-management" element={<PaymentManagement />} />
-              <Route path="/developer/maintenance" element={<MaintenanceSettings />} />
-              <Route path="/step-delivery" element={<StepDeliveryPage />} />
-              <Route path="/chat-inbox" element={<ChatInboxPage />} />
-              <Route path="/chat/:friendId" element={<IndividualChatPage />} />
-              <Route path="/form/:id" element={<PublicForm />} />
-              <Route path="/liff-form/:id" element={<LiffForm />} />
-              <Route path="/product-landing/:productId" element={<ProductLandingPage />} />
-              <Route path="/forms" element={<FormsBuilder />} />
-              <Route path="/forms/responses" element={<FormResponses />} />
-              <Route path="/cms/friends-page" element={<CMSFriendsPageBuilder />} />
-              <Route path="/cms/public-page" element={<CMSPublicPageBuilder />} />
-              <Route path="/cms/f/:shareCode" element={<CMSFriendsPublicView />} />
-              <Route path="/cms/preview/:pageId" element={<CMSFriendsPublicView />} />
-              <Route path="*" element={<NotFound />} />
-              </Routes>
-            </Suspense>
-          </main>
+    <ErrorBoundary>
+      <SidebarProvider>
+        <div className="flex min-h-screen w-full">
+          {user && <AppHeader user={user} />}
+          {user && <AppSidebar user={user} />}
+          <div className="flex-1 flex flex-col pt-14">
+            <main className="flex-1 p-2">
+              <Suspense fallback={<LoadingSpinner />}>
+                <Routes>
+                  <Route path="/rich-menu" element={<RichMenuSettings />} />
+                  <Route path="/greeting-message" element={<GreetingMessageSettings />} />
+                  <Route path="/member-sites" element={<MemberSitesList />} />
+                  <Route path="/member-sites/management" element={<MemberSiteManagement />} />
+                  <Route path="/" element={<Index />} />
+                  <Route path="/line-api-settings" element={<LineApiSettings />} />
+                  <Route path="/line-login-settings" element={<LineLoginSettings />} />
+                  <Route path="/webhook-settings" element={<WebhookSettings />} />
+                  <Route path="/profile-management" element={<ProfileManagement />} />
+                  <Route path="/flex-message-designer" element={<FlexMessageDesigner />} />
+                  <Route path="/media-library" element={<MediaLibrary />} />
+                  <Route path="/friends-list" element={<FriendsListPage />} />
+                  <Route path="/tags" element={<TagsManager />} />
+                  <Route path="/payment/stripe-settings" element={<StripeSettings />} />
+                  <Route path="/payment/products" element={<ProductManagement />} />
+                  <Route path="/payment/orders" element={<PaymentManagement />} />
+                  <Route path="/settings/plan" element={<PlanSettings />} />
+                  <Route path="/developer/master-mode" element={<MasterMode />} />
+                  <Route path="/developer/users" element={<UserManagement />} />
+                  <Route path="/developer/user-management" element={<UserManagement />} />
+                  <Route path="/developer/plan-management" element={<PlanManagement />} />
+                  <Route path="/stripe-settings" element={<StripeSettings />} />
+                  <Route path="/payment-management" element={<PaymentManagement />} />
+                  <Route path="/developer/maintenance" element={<MaintenanceSettings />} />
+                  <Route path="/step-delivery" element={<StepDeliveryPage />} />
+                  <Route path="/chat-inbox" element={<ChatInboxPage />} />
+                  <Route path="/chat/:friendId" element={<IndividualChatPage />} />
+                  <Route path="/forms" element={<FormsBuilder />} />
+                  <Route path="/forms/responses" element={<FormResponses />} />
+                  <Route path="/cms/friends-page" element={<CMSFriendsPageBuilder />} />
+                  <Route path="/cms/public-page" element={<CMSPublicPageBuilder />} />
+                  <Route path="*" element={<NotFound />} />
+                </Routes>
+              </Suspense>
+            </main>
+          </div>
         </div>
-      </div>
-    </SidebarProvider>
+      </SidebarProvider>
+    </ErrorBoundary>
   )
 }
 
