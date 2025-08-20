@@ -279,8 +279,8 @@ export default function CMSFriendsPageBuilder() {
             ? new Date(timerDeadline).toISOString()
             : null,
         timer_mode: timerMode,
-          timer_duration_seconds:
-            timerEnabled && timerMode === 'per_access' ? toSeconds(durDays, durHours, durMinutes, durSecs) : null,
+        timer_duration_seconds:
+          timerEnabled && timerMode === 'per_access' ? toSeconds(durDays, durHours, durMinutes, durSecs) : null,
         show_milliseconds: showMilliseconds,
         timer_style: timerStyle,
         timer_bg_color: timerBgColor,
@@ -457,8 +457,8 @@ export default function CMSFriendsPageBuilder() {
                   {timerEnabled && (
                     <TimerPreview
                       mode={timerMode}
-                      deadline={timerDeadline || undefined}
-                      durationSeconds={durationSeconds || undefined}
+                      deadline={timerMode === 'absolute' ? timerDeadline || undefined : undefined}
+                      durationSeconds={timerMode === 'per_access' ? toSeconds(durDays, durHours, durMinutes, durSecs) : undefined}
                       showMilliseconds={showMilliseconds}
                       styleVariant={timerStyle}
                       bgColor={timerBgColor}
@@ -468,7 +468,7 @@ export default function CMSFriendsPageBuilder() {
                       hourLabel={hourLabel}
                       minuteLabel={minuteLabel}
                       secondLabel={secondLabel}
-                      preview={timerMode === 'per_access'}
+                      preview={true}
                       internalTimer={internalTimer}
                       timerText={timerText}
                     />

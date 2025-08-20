@@ -43,7 +43,36 @@ serve(async (req) => {
       });
     }
 
-    // If UID is missing, return friend-add info for guidance
+    // Check if page is public or if UID is missing  
+    if (page.visibility === 'public') {
+      // Public pages can be accessed without authentication
+      const payload = {
+        title: page.title,
+        tag_label: page.tag_label,
+        content: page.content,
+        content_blocks: Array.isArray(page.content_blocks) ? page.content_blocks : [],
+        timer_enabled: !!page.timer_enabled,
+        timer_mode: page.timer_mode || "absolute",
+        timer_deadline: page.timer_deadline,
+        timer_duration_seconds: page.timer_duration_seconds,
+        show_milliseconds: !!page.show_milliseconds,
+        timer_style: page.timer_style || "solid",
+        timer_bg_color: page.timer_bg_color || "#0cb386",
+        timer_text_color: page.timer_text_color || "#ffffff",
+        internal_timer: !!page.internal_timer,
+        timer_text: page.timer_text,
+        timer_day_label: page.timer_day_label || null,
+        timer_hour_label: page.timer_hour_label || null,
+        timer_minute_label: page.timer_minute_label || null,
+        timer_second_label: page.timer_second_label || null,
+      };
+
+      return new Response(JSON.stringify(payload), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    // If UID is missing for friends-only page, return friend-add info
     if (!uid) {
       const { data: profile } = await supabase
         .from("profiles")

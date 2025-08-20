@@ -164,8 +164,8 @@ if (!data) return null;
       {data.timer_enabled && (
         <TimerPreview
           mode={data.timer_mode || "absolute"}
-          deadline={data.timer_deadline || undefined}
-          durationSeconds={data.timer_duration_seconds || undefined}
+          deadline={data.timer_mode === 'absolute' ? data.timer_deadline || undefined : undefined}
+          durationSeconds={data.timer_mode === 'per_access' ? data.timer_duration_seconds || undefined : undefined}
           showMilliseconds={!!data.show_milliseconds}
           styleVariant={data.timer_style || "solid"}
           bgColor={data.timer_bg_color || "#0cb386"}
