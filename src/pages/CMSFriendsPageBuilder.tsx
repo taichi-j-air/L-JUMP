@@ -91,6 +91,8 @@ export default function CMSFriendsPageBuilder() {
   const toSeconds = (d: number, h: number, m: number, s: number) => d * 86400 + h * 3600 + m * 60 + s;
   const [saving, setSaving] = useState(false);
   const [isPublic, setIsPublic] = useState(false);
+  const [forms, setForms] = useState<Array<{id: string; name: string}>>([]);
+  const [selectedFormId, setSelectedFormId] = useState<string>("");
 
   useEffect(() => {
     document.title = "LINE友達ページ作成 | CMS";
@@ -110,6 +112,14 @@ export default function CMSFriendsPageBuilder() {
         .eq('user_id', user.id)
         .order('created_at', { ascending: false });
       if (!tagErr) setTags(tagRows || []);
+
+      // Load forms
+      const { data: formRows } = await (supabase as any)
+        .from('forms')
+        .select('id, name')
+        .eq('user_id', user.id)
+        .order('created_at', { ascending: false });
+      setForms(formRows || []);
 
       const { data: pageRows, error } = await (supabase as any)
         .from('cms_pages')
@@ -269,8 +279,8 @@ export default function CMSFriendsPageBuilder() {
             ? new Date(timerDeadline).toISOString()
             : null,
         timer_mode: timerMode,
-        timer_duration_seconds:
-          timerEnabled && timerMode === 'per_access' ? Number(durationSeconds || 0) : null,
+          timer_duration_seconds:
+            timerEnabled && timerMode === 'per_access' ? toSeconds(durDays, durHours, durMinutes, durSecs) : null,
         show_milliseconds: showMilliseconds,
         timer_style: timerStyle,
         timer_bg_color: timerBgColor,
@@ -306,8 +316,8 @@ export default function CMSFriendsPageBuilder() {
     if (!selected) return "";
     const baseUrl = `${window.location.origin}/cms/f/${selected.share_code}`;
     if (hasLiffConfig) {
-      // LIFF認証対応のパラメーター付きURL
-      return `${baseUrl}?liff=1&auth=required`;
+      // LIFF認証対応のパラメーター付きURL（UIDパラメーター）
+      return `${baseUrl}?uid=[UID]`;
     }
     return baseUrl;
   }, [selected, hasLiffConfig]);
@@ -332,11 +342,7 @@ export default function CMSFriendsPageBuilder() {
   // Preview open
   const openPreview = () => {
     if (!selected) return;
-    const w = window.open(`/cms/preview/${selected.id}`, '_blank');
-    if (!w) {
-      // ポップアップブロック時は同一タブで遷移
-      window.location.href = `/cms/preview/${selected.id}`;
-    }
+    window.open(`/cms/preview/${selected.id}`, '_blank');
   };
   return (
     <div className="container mx-auto max-w-[1200px] space-y-4">
@@ -470,6 +476,34 @@ export default function CMSFriendsPageBuilder() {
                   <div className="space-y-2">
                     <Label>本文（リッチテキスト・複数可）</Label>
                     <RichTextBlocksEditor value={contentBlocks} onChange={setContentBlocks} />
+                  </div>
+                  
+                  <div className="space-y-2">
+                    <Label>フォーム埋め込み</Label>
+                    <div className="flex gap-2">
+                      <Select value={selectedFormId} onValueChange={setSelectedFormId}>
+                        <SelectTrigger className="flex-1">
+                          <SelectValue placeholder="フォームを選択" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {forms.map(form => (
+                            <SelectItem key={form.id} value={form.id}>{form.name}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <Button
+                        type="button"
+                        onClick={() => {
+                          if (!selectedFormId) return;
+                          const formEmbed = `<div class="form-embed" data-form-id="${selectedFormId}">フォーム読み込み中...</div>`;
+                          setContentBlocks(prev => [...prev, formEmbed]);
+                          setSelectedFormId("");
+                        }}
+                        disabled={!selectedFormId}
+                      >
+                        追加
+                      </Button>
+                    </div>
                   </div>
                 </>
               )}
@@ -636,24 +670,6 @@ export default function CMSFriendsPageBuilder() {
                         </div>
                       </div>
 
-                      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                        <div className="space-y-1">
-                          <Label>日ラベル</Label>
-                          <Input value={dayLabel} onChange={(e) => setDayLabel(e.target.value)} placeholder="日" />
-                        </div>
-                        <div className="space-y-1">
-                          <Label>時間ラベル</Label>
-                          <Input value={hourLabel} onChange={(e) => setHourLabel(e.target.value)} placeholder="時間" />
-                        </div>
-                        <div className="space-y-1">
-                          <Label>分ラベル</Label>
-                          <Input value={minuteLabel} onChange={(e) => setMinuteLabel(e.target.value)} placeholder="分" />
-                        </div>
-                        <div className="space-y-1">
-                          <Label>秒ラベル</Label>
-                          <Input value={secondLabel} onChange={(e) => setSecondLabel(e.target.value)} placeholder="秒" />
-                        </div>
-                      </div>
                     </>
                   )}
 

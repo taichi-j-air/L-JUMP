@@ -1,11 +1,12 @@
 import { useEffect, useMemo, useState } from "react";
-import { useParams, useSearchParams } from "react-router-dom";
+import { useParams, useSearchParams, useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import DOMPurify from "dompurify";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { TimerPreview } from "@/components/TimerPreview";
+import { ArrowLeft, X } from "lucide-react";
 
 interface PagePayload {
   title: string;
@@ -31,6 +32,7 @@ interface PagePayload {
 export default function CMSFriendsPublicView() {
   const params = useParams();
   const [search] = useSearchParams();
+  const navigate = useNavigate();
   const shareCode = params.shareCode;
   const pageId = params.pageId;
   const uid = search.get("uid") || undefined;
@@ -138,6 +140,28 @@ if (!data) return null;
 
   return (
     <div className="container mx-auto max-w-3xl p-4 space-y-4">
+      {isPreview && (
+        <div className="flex justify-between items-center mb-4">
+          <Button
+            variant="outline"
+            onClick={() => navigate('/cms/friends-page')}
+            className="flex items-center gap-2"
+          >
+            <ArrowLeft className="h-4 w-4" />
+            設定に戻る
+          </Button>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => window.close()}
+            className="flex items-center gap-2"
+          >
+            <X className="h-4 w-4" />
+            閉じる
+          </Button>
+        </div>
+      )}
+      
       {data.timer_enabled && (
         <TimerPreview
           mode={data.timer_mode || "absolute"}
@@ -153,6 +177,8 @@ if (!data) return null;
           hourLabel={data.timer_hour_label || "時間"}
           minuteLabel={data.timer_minute_label || "分"}
           secondLabel={data.timer_second_label || "秒"}
+          internalTimer={!!data.internal_timer}
+          timerText={data.timer_text || "期間限定公開"}
         />
       )}
 
@@ -170,6 +196,22 @@ if (!data) return null;
           {Array.isArray(data.content_blocks) && data.content_blocks.length > 0 ? (
             data.content_blocks.map((block, idx) => {
               const html = DOMPurify.sanitize(block || "");
+              // フォーム埋め込みの処理
+              if (html.includes('class="form-embed"') && html.includes('data-form-id=')) {
+                const formIdMatch = html.match(/data-form-id="([^"]+)"/);
+                if (formIdMatch) {
+                  const formId = formIdMatch[1];
+                  return (
+                    <div key={idx} className="mt-4 first:mt-0">
+                      <iframe 
+                        src={`${window.location.origin}/form/${formId}${uid ? `?uid=${uid}` : ''}`}
+                        className="w-full min-h-[400px] border rounded"
+                        title="埋め込みフォーム"
+                      />
+                    </div>
+                  );
+                }
+              }
               return <div key={idx} className="mt-4 first:mt-0" dangerouslySetInnerHTML={{ __html: html }} />;
             })
           ) : (
