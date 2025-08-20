@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { RichTextEditor } from "@/components/RichTextEditor";
@@ -93,6 +94,7 @@ export default function FormPreviewPanel({
   const [values, setValues] = useState<Record<string, any>>({});
   const [showLiffDialog, setShowLiffDialog] = useState(false);
   const { hasLiffConfig, loading: liffLoading } = useLiffValidation();
+  const navigate = useNavigate();
 
   const canSubmit = useMemo(() => {
     return fields.every((f) => {
@@ -288,7 +290,7 @@ export default function FormPreviewPanel({
           <AlertDialogFooter>
             <AlertDialogCancel>キャンセル</AlertDialogCancel>
             <AlertDialogAction onClick={() => {
-              window.location.href = '/line-login-settings#liff-settings';
+              navigate('/line-login-settings#liff-settings');
               setShowLiffDialog(false);
             }}>
               設定画面を開く
