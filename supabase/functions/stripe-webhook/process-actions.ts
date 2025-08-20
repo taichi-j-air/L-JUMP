@@ -132,10 +132,20 @@ export async function processPaymentSuccessActions(
       }
       // For 'add_to_existing', we don't stop any existing scenarios
 
-      // Get steps for the new scenario
+      // Get steps for the new scenario with delivery settings
       const { data: steps, error: stepsError } = await supabaseClient
         .from('steps')
-        .select('id, step_order')
+        .select(`
+          id, 
+          step_order, 
+          delivery_type, 
+          delivery_seconds, 
+          delivery_minutes, 
+          delivery_hours, 
+          delivery_days, 
+          specific_time,
+          delivery_time_of_day
+        `)
         .eq('scenario_id', action.target_scenario_id)
         .order('step_order');
 
@@ -145,17 +155,50 @@ export async function processPaymentSuccessActions(
       }
 
       if (steps && steps.length > 0) {
-        // Create step tracking for new scenario
-        const trackingData = steps.map(step => ({
-          scenario_id: action.target_scenario_id,
-          step_id: step.id,
-          friend_id: friend.id,
-          status: 'waiting',
-          // First step gets immediate delivery, others get null
-          scheduled_delivery_at: step.step_order === 0 ? new Date().toISOString() : null,
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString()
-        }));
+        console.log('[stripe-webhook] Processing steps for scenario:', action.target_scenario_id, 'step count:', steps.length);
+        
+        // Create step tracking for new scenario with proper scheduling
+        const trackingData = [];
+        const friendAddedAt = new Date().toISOString(); // Use payment time as registration time
+        
+        for (const step of steps) {
+          let scheduledDeliveryAt = null;
+          
+          // Calculate scheduled delivery time using RPC function
+          if (step.step_order === 0) {
+            // First step - calculate based on delivery settings
+            const { data: calculatedTime, error: calcError } = await supabaseClient
+              .rpc('calculate_scheduled_delivery_time', {
+                p_friend_added_at: friendAddedAt,
+                p_delivery_type: step.delivery_type,
+                p_delivery_seconds: step.delivery_seconds || 0,
+                p_delivery_minutes: step.delivery_minutes || 0,
+                p_delivery_hours: step.delivery_hours || 0,
+                p_delivery_days: step.delivery_days || 0,
+                p_specific_time: step.specific_time,
+                p_delivery_time_of_day: step.delivery_time_of_day
+              });
+              
+            if (calcError) {
+              console.error('[stripe-webhook] Failed to calculate delivery time for step:', step.id, calcError);
+              // Fallback to immediate delivery
+              scheduledDeliveryAt = friendAddedAt;
+            } else {
+              scheduledDeliveryAt = calculatedTime;
+            }
+          }
+          // Other steps will be scheduled when previous step is delivered
+          
+          trackingData.push({
+            scenario_id: action.target_scenario_id,
+            step_id: step.id,
+            friend_id: friend.id,
+            status: 'waiting',
+            scheduled_delivery_at: scheduledDeliveryAt,
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString()
+          });
+        }
 
         const { error: insertError } = await supabaseClient
           .from('step_delivery_tracking')
