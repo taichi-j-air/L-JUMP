@@ -14,6 +14,8 @@ import { ColorPicker } from "@/components/ui/color-picker";
 import RichTextEditor from "@/components/RichTextEditor";
 import RichTextBlocksEditor from "@/components/RichTextBlocksEditor";
 import { TimerPreview } from "@/components/TimerPreview";
+import { useLiffValidation } from "@/hooks/useLiffValidation";
+import { Trash2 } from "lucide-react";
 
 // Type helpers (loosened to avoid tight coupling with generated types)
 interface CmsPageRow {
@@ -50,6 +52,7 @@ export default function CMSFriendsPageBuilder() {
   const [pages, setPages] = useState<CmsPageRow[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const selected = useMemo(() => pages.find(p => p.id === selectedId) || null, [pages, selectedId]);
+  const { hasLiffConfig } = useLiffValidation();
 
   // Center editor states (bound to selected)
   const [internalName, setInternalName] = useState("");
@@ -87,6 +90,7 @@ export default function CMSFriendsPageBuilder() {
   const [durSecs, setDurSecs] = useState<number>(0);
   const toSeconds = (d: number, h: number, m: number, s: number) => d * 86400 + h * 3600 + m * 60 + s;
   const [saving, setSaving] = useState(false);
+  const [isPublic, setIsPublic] = useState(false);
 
   useEffect(() => {
     document.title = "LINE友達ページ作成 | CMS";
@@ -166,6 +170,7 @@ export default function CMSFriendsPageBuilder() {
     setDurHours(h);
     setDurMinutes(m);
     setDurSecs(s);
+    setIsPublic(selected.visibility === 'public');
   }, [selectedId]);
 
   const handleAddPage = async () => {
@@ -215,6 +220,29 @@ export default function CMSFriendsPageBuilder() {
     }
   };
 
+  const handleDelete = async (pageId: string) => {
+    if (!confirm("このページを削除しますか？この操作は取り消せません。")) return;
+    
+    try {
+      const { error } = await (supabase as any)
+        .from('cms_pages')
+        .delete()
+        .eq('id', pageId);
+      
+      if (error) throw error;
+      
+      setPages(prev => prev.filter(p => p.id !== pageId));
+      if (selectedId === pageId) {
+        const remaining = pages.filter(p => p.id !== pageId);
+        setSelectedId(remaining.length > 0 ? remaining[0].id : null);
+      }
+      toast.success("ページを削除しました");
+    } catch (e) {
+      console.error(e);
+      toast.error("ページの削除に失敗しました");
+    }
+  };
+
   const handleSave = async () => {
     if (!selected) return;
     if (!title || !slug) {
@@ -228,6 +256,7 @@ export default function CMSFriendsPageBuilder() {
         slug,
         internal_name: internalName,
         tag_label: tagLabel,
+        visibility: isPublic ? 'public' : 'friends_only',
         content: contentHtml,
         content_blocks: contentBlocks,
         allowed_tag_ids: allowedTags,
@@ -273,7 +302,15 @@ export default function CMSFriendsPageBuilder() {
     }
   };
 
-  const shareUrl = selected ? `${window.location.origin}/cms/f/${selected.share_code}` : "";
+  const shareUrl = useMemo(() => {
+    if (!selected) return "";
+    const baseUrl = `${window.location.origin}/cms/f/${selected.share_code}`;
+    if (hasLiffConfig) {
+      // LIFF認証対応のパラメーター付きURL
+      return `${baseUrl}?liff=1&auth=required`;
+    }
+    return baseUrl;
+  }, [selected, hasLiffConfig]);
 
   const toggleAllowed = (id: string) => {
     setAllowedTags(prev => {
@@ -322,14 +359,29 @@ export default function CMSFriendsPageBuilder() {
               ) : (
                 <div className="space-y-1">
                   {pages.map((p) => (
-                    <button
+                    <div
                       key={p.id}
-                      onClick={() => setSelectedId(p.id)}
-                      className={`w-full text-left rounded-md px-3 py-2 transition-colors ${selectedId === p.id ? 'bg-muted' : 'hover:bg-muted/60'}`}
+                      className={`flex items-center justify-between rounded-md px-3 py-2 transition-colors ${selectedId === p.id ? 'bg-muted' : 'hover:bg-muted/60'}`}
                     >
-                      <div className="text-sm font-medium line-clamp-1">{p.internal_name || p.title}</div>
-                      <div className="text-xs text-muted-foreground line-clamp-1">/{p.slug}</div>
-                    </button>
+                      <button
+                        onClick={() => setSelectedId(p.id)}
+                        className="flex-1 text-left"
+                      >
+                        <div className="text-sm font-medium line-clamp-1">{p.internal_name || p.title}</div>
+                        <div className="text-xs text-muted-foreground line-clamp-1">/{p.slug}</div>
+                      </button>
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleDelete(p.id);
+                        }}
+                        className="ml-2 h-8 w-8 p-0 text-destructive hover:text-destructive"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </div>
                   ))}
                 </div>
               )}
@@ -368,11 +420,16 @@ export default function CMSFriendsPageBuilder() {
                   </div>
 
                   <div className="space-y-2">
-                    <Label>このページのURL</Label>
+                    <Label>このページのURL {hasLiffConfig && "(LIFF認証対応)"}</Label>
                     <div className="flex gap-2">
                       <Input readOnly value={shareUrl} />
                       <Button type="button" onClick={() => navigator.clipboard.writeText(shareUrl).then(() => toast.success("URLをコピーしました"))}>コピー</Button>
                     </div>
+                  </div>
+
+                  <div className="flex items-center justify-between">
+                    <Label>ページを公開する</Label>
+                    <Switch checked={isPublic} onCheckedChange={setIsPublic} />
                   </div>
                 </>
               )}
@@ -406,6 +463,8 @@ export default function CMSFriendsPageBuilder() {
                       minuteLabel={minuteLabel}
                       secondLabel={secondLabel}
                       preview={timerMode === 'per_access'}
+                      internalTimer={internalTimer}
+                      timerText={timerText}
                     />
                   )}
                   <div className="space-y-2">
@@ -433,28 +492,35 @@ export default function CMSFriendsPageBuilder() {
                 <p className="text-sm text-muted-foreground">ページを選択してください。</p>
               ) : (
                 <>
-                  <div className="space-y-2">
-                    <Label>閲覧を許可するタグ</Label>
-                    <div className="space-y-1">
-                      {tags.map(t => (
-                        <label key={t.id} className="flex items-center gap-2 text-sm">
-                          <Checkbox checked={allowedTags.includes(t.id)} onCheckedChange={() => toggleAllowed(t.id)} />
-                          <span>{t.name}</span>
-                        </label>
-                      ))}
-                    </div>
-                  </div>
-                  <div className="space-y-2">
-                    <Label>閲覧を禁止するタグ</Label>
-                    <div className="space-y-1">
-                      {tags.map(t => (
-                        <label key={t.id} className="flex items-center gap-2 text-sm">
-                          <Checkbox checked={blockedTags.includes(t.id)} onCheckedChange={() => toggleBlocked(t.id)} />
-                          <span>{t.name}</span>
-                        </label>
-                      ))}
-                    </div>
-                  </div>
+                  <Accordion type="single" collapsible className="w-full">
+                    <AccordionItem value="tag-settings">
+                      <AccordionTrigger className="text-sm">タグ設定</AccordionTrigger>
+                      <AccordionContent className="space-y-4">
+                        <div className="space-y-2">
+                          <Label>閲覧を許可するタグ</Label>
+                          <div className="space-y-1">
+                            {tags.map(t => (
+                              <label key={t.id} className="flex items-center gap-2 text-sm">
+                                <Checkbox checked={allowedTags.includes(t.id)} onCheckedChange={() => toggleAllowed(t.id)} />
+                                <span>{t.name}</span>
+                              </label>
+                            ))}
+                          </div>
+                        </div>
+                        <div className="space-y-2">
+                          <Label>閲覧を禁止するタグ</Label>
+                          <div className="space-y-1">
+                            {tags.map(t => (
+                              <label key={t.id} className="flex items-center gap-2 text-sm">
+                                <Checkbox checked={blockedTags.includes(t.id)} onCheckedChange={() => toggleBlocked(t.id)} />
+                                <span>{t.name}</span>
+                              </label>
+                            ))}
+                          </div>
+                        </div>
+                      </AccordionContent>
+                    </AccordionItem>
+                  </Accordion>
 
                   <div className="space-y-2">
                     <Label className="flex items-center justify-between">パスコード保護 <Switch checked={requirePass} onCheckedChange={(v) => setRequirePass(!!v)} /></Label>

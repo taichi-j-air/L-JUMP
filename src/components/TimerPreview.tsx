@@ -19,6 +19,8 @@ interface TimerPreviewProps {
   minuteLabel?: string;
   secondLabel?: string;
   preview?: boolean;
+  internalTimer?: boolean; // 内部タイマーモード
+  timerText?: string; // 内部タイマー時の表示テキスト
 }
 
 function formatRemaining(
@@ -55,6 +57,8 @@ export const TimerPreview = ({
   minuteLabel = "分",
   secondLabel = "秒",
   preview = false,
+  internalTimer = false,
+  timerText = "期間限定公開",
 }: TimerPreviewProps) => {
   const [remainingMs, setRemainingMs] = useState<number>(0);
   const intervalRef = useRef<number | null>(null);
@@ -113,7 +117,9 @@ const text = formatRemaining(remainingMs, showMilliseconds, {
   return (
     <div className={className}>
       <div className={`${styleClasses[styleVariant]}`} style={containerStyle}>
-        <div className="text-xl font-semibold tracking-wide">{text}</div>
+        <div className="text-xl font-semibold tracking-wide">
+          {internalTimer ? timerText : text}
+        </div>
       </div>
     </div>
   );
