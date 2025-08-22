@@ -38,11 +38,25 @@ function formatRemaining(
 
   const { dayLabel, hourLabel, minuteLabel, secondLabel } = labels;
   
-  // より読みやすい表示形式に修正
+  // 修正: 正しい時間表示ロジック
   let timeStr = "";
-  if (days > 0) timeStr += `${days}${dayLabel}`;
-  if (hours > 0 || days > 0) timeStr += `${hours}${hourLabel}`;
-  if (minutes > 0 || hours > 0 || days > 0) timeStr += `${minutes}${minuteLabel}`;
+  
+  // 日数がある場合は日数を表示
+  if (days > 0) {
+    timeStr += `${days}${dayLabel}`;
+  }
+  
+  // 時間がある場合、または日数がある場合は時間を表示
+  if (hours > 0 || days > 0) {
+    timeStr += `${hours}${hourLabel}`;
+  }
+  
+  // 分がある場合、または上位単位がある場合は分を表示
+  if (minutes > 0 || hours > 0 || days > 0) {
+    timeStr += `${minutes}${minuteLabel}`;
+  }
+  
+  // 秒は常に表示
   timeStr += `${seconds}${secondLabel}`;
   
   const base = `残り${timeStr}`;
@@ -191,6 +205,21 @@ export const TimerPreview = ({
 
   // タイマーが0になった場合の表示
   const isExpired = remainingMs <= 0 && (mode === "absolute" || (mode === "per_access" && !preview));
+
+  // デバッグ情報を開発環境でのみ表示
+  if (process.env.NODE_ENV === 'development') {
+    console.log('Timer Debug:', {
+      mode,
+      durationSeconds,
+      targetTime,
+      remainingMs,
+      currentTime: Date.now(),
+      days: Math.floor(remainingMs / 1000 / 86400),
+      hours: Math.floor((remainingMs / 1000 % 86400) / 3600),
+      minutes: Math.floor((remainingMs / 1000 % 3600) / 60),
+      seconds: Math.floor(remainingMs / 1000 % 60)
+    });
+  }
 
   return (
     <div className={className}>
