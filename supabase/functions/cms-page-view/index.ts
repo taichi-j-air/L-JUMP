@@ -85,55 +85,38 @@ serve(async (req) => {
         );
       }
 
-      // ✅ 修正：フォーム機能と同じデータベース側認証を使用
+      // ✅ フォーム機能と同じ友達認証ロジックを使用
       console.log("Friend authentication check:", { uid, user_id: page.user_id });
 
-      // 方法1: データベース関数を使用した友達認証（推奨）
       try {
-        const { data: authResult, error: authErr } = await supabase
-          .rpc('check_friend_access', {  // フォーム機能の認証関数を流用
-            p_user_id: page.user_id,
-            p_short_uid: uid
+        // フォーム機能と同じlookup_friend_by_uid関数を使用
+        // まず仮想的なフォームIDとして page.id を使用してテスト
+        const { data: friendLookup, error: lookupErr } = await supabase
+          .rpc('lookup_friend_by_uid', {
+            p_form_id: page.id, // CMSページIDを使用
+            p_uid: uid
           });
 
-        console.log("Friend auth result:", { authResult, authErr });
+        console.log("Friend lookup result:", { friendLookup, lookupErr });
 
-        if (authErr || !authResult) {
-          // RPC関数が存在しない場合のフォールバック
-          console.log("RPC auth failed, trying manual method...");
+        if (lookupErr) {
+          console.log("RPC lookup failed, trying direct query...");
           
-          // 方法2: 手動でフォーム機能と同じロジックを実装
-          const friendCheckResult = await (async () => {
-            // Step 1: 短縮UIDから元のLINE UIDに変換
-            const { data: uidMapping, error: mappingErr } = await supabase
-              .from("friends")
-              .select("line_user_id")
-              .eq("user_id", page.user_id)
-              .eq("short_uid", uid)
-              .single();
+          // 直接クエリでフォーム機能と同じロジックを実装
+          const uidUpper = uid.toUpperCase().trim();
+          
+          const { data: friendData, error: friendErr } = await supabase
+            .from("line_friends")
+            .select("id, line_user_id")
+            .eq("user_id", page.user_id)
+            .eq("short_uid_ci", uidUpper)
+            .maybeSingle();
 
-            if (mappingErr || !uidMapping?.line_user_id) {
-              console.log("UID mapping failed:", { uid, user_id: page.user_id, mappingErr });
-              return false;
-            }
+          console.log("Direct friend query result:", { friendData, friendErr, uidUpper });
 
-            const actualLineUserId = uidMapping.line_user_id;
-            console.log("UID conversion successful:", { shortUid: uid, actualLineUserId });
-
-            // Step 2: 変換された元UIDで友達関係確認
-            const { data: friendData, error: friendErr } = await supabase
-              .from("line_friends")
-              .select("id")
-              .eq("user_id", page.user_id)
-              .eq("line_user_id", actualLineUserId)
-              .single();
-
-            console.log("Friend relationship check:", { friendData, friendErr });
-
-            return !friendErr && !!friendData;
-          })();
-
-          if (!friendCheckResult) {
+          if (friendErr || !friendData) {
+            console.log("Friend not found or error:", { friendErr, uidUpper, user_id: page.user_id });
+            
             const { data: profile } = await supabase
               .from("profiles")
               .select("display_name, line_user_id, add_friend_url")
@@ -151,11 +134,35 @@ serve(async (req) => {
               { headers: { ...corsHeaders, "Content-Type": "application/json" } }
             );
           }
-        }
 
-        // 友達認証成功
-        friend = { id: "verified" };
-        console.log("Friend authentication successful");
+          // 友達認証成功
+          friend = { id: friendData.id, line_user_id: friendData.line_user_id };
+          console.log("Friend authentication successful via direct query");
+        } else if (friendLookup && friendLookup.length > 0) {
+          // RPC関数による認証成功
+          friend = { id: friendLookup[0].friend_id, line_user_id: friendLookup[0].line_user_id };
+          console.log("Friend authentication successful via RPC");
+        } else {
+          // 友達が見つからない
+          console.log("Friend not found via RPC");
+          
+          const { data: profile } = await supabase
+            .from("profiles")
+            .select("display_name, line_user_id, add_friend_url")
+            .eq("user_id", page.user_id)
+            .maybeSingle();
+
+          const friendInfo = {
+            account_name: profile?.display_name || null,
+            line_id: profile?.line_user_id || null,
+            add_friend_url: profile?.add_friend_url || null,
+          };
+
+          return new Response(
+            JSON.stringify({ require_friend: true, friend_info: friendInfo }),
+            { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          );
+        }
 
       } catch (error) {
         console.error("Friend authentication error:", error);
