@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
@@ -10,11 +11,13 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Switch } from "@/components/ui/switch";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { ColorPicker } from "@/components/ui/color-picker";
+import RichTextEditor from "@/components/RichTextEditor";
 import RichTextBlocksEditor from "@/components/RichTextBlocksEditor";
 import { TimerPreview } from "@/components/TimerPreview";
 import { useLiffValidation } from "@/hooks/useLiffValidation";
 import { Trash2 } from "lucide-react";
 
+// Type helpers (loosened to avoid tight coupling with generated types)
 interface CmsPageRow {
   id: string;
   user_id: string;
@@ -39,6 +42,12 @@ interface CmsPageRow {
 
 interface TagRow { id: string; name: string }
 
+interface ContentBlock {
+  id: string;
+  title: string;
+  body: string;
+}
+
 export default function CMSFriendsPageBuilder() {
   const [pages, setPages] = useState<CmsPageRow[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -62,7 +71,7 @@ export default function CMSFriendsPageBuilder() {
   const [timerEnabled, setTimerEnabled] = useState(false);
   const [timerMode, setTimerMode] = useState<"absolute" | "per_access">("absolute");
   const [timerDeadline, setTimerDeadline] = useState("");
-  const [durationSeconds, setDurationSeconds] = useState<number>(0); // 使わないけどUIの状態保持に使う
+  const [durationSeconds, setDurationSeconds] = useState<number>(0);
   const [showMilliseconds, setShowMilliseconds] = useState<boolean>(false);
   const [timerStyle, setTimerStyle] = useState<"solid" | "glass" | "outline">("solid");
   const [timerBgColor, setTimerBgColor] = useState<string>("#0cb386");
@@ -80,7 +89,7 @@ export default function CMSFriendsPageBuilder() {
   const [durMinutes, setDurMinutes] = useState<number>(0);
   const [durSecs, setDurSecs] = useState<number>(0);
 
-  // 正しい秒換算
+  // 正しい秒換算関数
   const toSeconds = (d: number, h: number, m: number, s: number) => d * 86400 + h * 3600 + m * 60 + s;
 
   const [saving, setSaving] = useState(false);
@@ -95,17 +104,19 @@ export default function CMSFriendsPageBuilder() {
   }, []);
 
   useEffect(() => {
+    // Load pages and tags
     const load = async () => {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return toast.error("ログインが必要です");
 
-      const { data: tagRows } = await (supabase as any)
+      const { data: tagRows, error: tagErr } = await (supabase as any)
         .from('tags')
         .select('id,name')
         .eq('user_id', user.id)
         .order('created_at', { ascending: false });
-      setTags(tagRows || []);
+      if (!tagErr) setTags(tagRows || []);
 
+      // Load forms
       const { data: formRows } = await (supabase as any)
         .from('forms')
         .select('id, name')
@@ -135,9 +146,10 @@ export default function CMSFriendsPageBuilder() {
     load();
   }, []);
 
-  // When selected page changes, sync editor fields
+  // When selected page changes, sync editor fields - 修正版
   useEffect(() => {
     if (!selected) return;
+    
     setInternalName(selected.internal_name || selected.title || "");
     setTagLabel(selected.tag_label || "");
     setSlug(selected.slug || "");
@@ -151,7 +163,11 @@ export default function CMSFriendsPageBuilder() {
     setTimerEnabled(!!selected.timer_enabled);
     setTimerMode(((selected as any).timer_mode as any) || "absolute");
     setTimerDeadline(selected.timer_deadline ? selected.timer_deadline.slice(0, 16) : ""); // yyyy-MM-ddTHH:mm
-    setDurationSeconds((selected as any).timer_duration_seconds || 0);
+    
+    // 修正: durationSecondsの初期化を正しく行う
+    const secsInit = Number((selected as any).timer_duration_seconds || 0);
+    setDurationSeconds(secsInit);
+    
     setShowMilliseconds(!!(selected as any).show_milliseconds);
     setTimerStyle(((selected as any).timer_style as any) || "solid");
     setTimerBgColor(((selected as any).timer_bg_color as any) || "#0cb386");
@@ -163,7 +179,8 @@ export default function CMSFriendsPageBuilder() {
     setHourLabel(((selected as any).timer_hour_label as any) || "時間");
     setMinuteLabel(((selected as any).timer_minute_label as any) || "分");
     setSecondLabel(((selected as any).timer_second_label as any) || "秒");
-    const secsInit = Number((selected as any).timer_duration_seconds || 0);
+    
+    // 修正: 日時分秒への分解を正しく行う
     const d = Math.floor(secsInit / 86400);
     const h = Math.floor((secsInit % 86400) / 3600);
     const m = Math.floor((secsInit % 3600) / 60);
@@ -192,6 +209,7 @@ export default function CMSFriendsPageBuilder() {
           slug: defaultSlug,
           visibility: 'friends_only',
           content: "",
+          content_blocks: [],
           allowed_tag_ids: [],
           blocked_tag_ids: [],
           require_passcode: false,
@@ -206,7 +224,11 @@ export default function CMSFriendsPageBuilder() {
           timer_text_color: '#ffffff',
           internal_timer: false,
           timer_text: null,
-          expire_action: 'keep_public'
+          expire_action: 'keep_public',
+          timer_day_label: '日',
+          timer_hour_label: '時間',
+          timer_minute_label: '分',
+          timer_second_label: '秒'
         })
         .select('*')
         .maybeSingle();
@@ -224,13 +246,15 @@ export default function CMSFriendsPageBuilder() {
 
   const handleDelete = async (pageId: string) => {
     if (!confirm("このページを削除しますか？この操作は取り消せません。")) return;
+    
     try {
       const { error } = await (supabase as any)
         .from('cms_pages')
         .delete()
         .eq('id', pageId);
+      
       if (error) throw error;
-
+      
       setPages(prev => prev.filter(p => p.id !== pageId));
       if (selectedId === pageId) {
         const remaining = pages.filter(p => p.id !== pageId);
@@ -243,6 +267,7 @@ export default function CMSFriendsPageBuilder() {
     }
   };
 
+  // 修正版handleSave
   const handleSave = async () => {
     if (!selected) return;
     if (!title || !slug) {
@@ -308,6 +333,7 @@ export default function CMSFriendsPageBuilder() {
     if (!selected) return "";
     const baseUrl = `${window.location.origin}/cms/f/${selected.share_code}`;
     if (hasLiffConfig) {
+      // LIFF認証対応のパラメーター付きURL（UIDパラメーター）
       return `${baseUrl}?uid=[UID]`;
     }
     return baseUrl;
@@ -316,39 +342,47 @@ export default function CMSFriendsPageBuilder() {
   const toggleAllowed = (id: string) => {
     setAllowedTags(prev => {
       const next = prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id];
-      setBlockedTags(b => b.filter(x => x !== id)); // 重複排除
+      // remove from blocked if added to allowed
+      setBlockedTags(b => b.filter(x => x !== id));
       return next;
     });
   };
+  
   const toggleBlocked = (id: string) => {
     setBlockedTags(prev => {
       const next = prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id];
-      setAllowedTags(a => a.filter(x => x !== id)); // 重複排除
+      // remove from allowed if added to blocked
+      setAllowedTags(a => a.filter(x => x !== id));
       return next;
     });
   };
 
+  // Preview open
   const openPreview = () => {
     if (!selected) return;
+    // まず保存してからプレビューを開く
     handleSave().then(() => {
       window.open(`/cms/preview/${selected.id}`, '_blank');
+    }).catch(() => {
+      // 保存に失敗した場合はプレビューを開かない
+      toast.error("保存してからプレビューを開いてください");
     });
   };
 
   return (
-    <div className="container mx-auto max-w-[1200px] space-y-4">
+    <div className="container mx-auto max-w-[1400px] space-y-4 p-4">
       <header>
         <h1 className="text-2xl font-bold tracking-tight">LINE友達ページ作成</h1>
         <p className="text-muted-foreground">3カラムでページ追加・編集・公開設定ができます。</p>
       </header>
 
-      <div className="grid grid-cols-12 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
         {/* Left: list and add */}
-        <div className="col-span-12 md:col-span-3 space-y-3">
+        <div className="lg:col-span-3 space-y-3">
           <Card>
             <CardHeader className="flex flex-row items-center justify-between py-3">
               <CardTitle className="text-base">ページ一覧</CardTitle>
-              <Button size="sm" onClick={handleAddPage}>ページを追加</Button>
+              <Button size="sm" onClick={handleAddPage}>追加</Button>
             </CardHeader>
             <CardContent className="space-y-2">
               {pages.length === 0 ? (
@@ -358,11 +392,13 @@ export default function CMSFriendsPageBuilder() {
                   {pages.map((p) => (
                     <div
                       key={p.id}
-                      className={`flex items-center justify-between rounded-md px-3 py-2 transition-colors ${selectedId === p.id ? 'bg-muted' : 'hover:bg-muted/60'}`}
+                      className={`flex items-center justify-between rounded-md px-3 py-2 transition-colors ${
+                        selectedId === p.id ? 'bg-muted' : 'hover:bg-muted/60'
+                      }`}
                     >
                       <button
                         onClick={() => setSelectedId(p.id)}
-                        className="flex-1 text-left"
+                        className="flex-1 text-left min-w-0"
                       >
                         <div className="text-sm font-medium line-clamp-1">{p.internal_name || p.title}</div>
                         <div className="text-xs text-muted-foreground line-clamp-1">/{p.slug}</div>
@@ -374,7 +410,7 @@ export default function CMSFriendsPageBuilder() {
                           e.stopPropagation();
                           handleDelete(p.id);
                         }}
-                        className="ml-2 h-8 w-8 p-0 text-destructive hover:text-destructive"
+                        className="ml-2 h-8 w-8 p-0 text-destructive hover:text-destructive flex-shrink-0"
                       >
                         <Trash2 className="h-4 w-4" />
                       </Button>
@@ -387,7 +423,7 @@ export default function CMSFriendsPageBuilder() {
         </div>
 
         {/* Center: page info + builder */}
-        <div className="col-span-12 md:col-span-6 space-y-4">
+        <div className="lg:col-span-6 space-y-4">
           <Card>
             <CardHeader className="py-3">
               <CardTitle className="text-base">ページ情報</CardTitle>
@@ -400,27 +436,49 @@ export default function CMSFriendsPageBuilder() {
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div className="space-y-2">
                       <Label>ページ名（ツール内）</Label>
-                      <Input value={internalName} onChange={(e) => setInternalName(e.target.value)} placeholder="例）会員限定ページA" />
+                      <Input 
+                        value={internalName} 
+                        onChange={(e) => setInternalName(e.target.value)} 
+                        placeholder="例）会員限定ページA" 
+                      />
                     </div>
                     <div className="space-y-2">
                       <Label>タグ名（ウェブサイト上）</Label>
-                      <Input value={tagLabel} onChange={(e) => setTagLabel(e.target.value)} placeholder="例）特別公開" />
+                      <Input 
+                        value={tagLabel} 
+                        onChange={(e) => setTagLabel(e.target.value)} 
+                        placeholder="例）特別公開" 
+                      />
                     </div>
                     <div className="space-y-2">
                       <Label>ページタイトル</Label>
-                      <Input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="例）会員限定のお知らせ" />
+                      <Input 
+                        value={title} 
+                        onChange={(e) => setTitle(e.target.value)} 
+                        placeholder="例）会員限定のお知らせ" 
+                      />
                     </div>
                     <div className="space-y-2">
                       <Label>スラッグ（URLの一部）</Label>
-                      <Input value={slug} onChange={(e) => setSlug(e.target.value)} placeholder="例）member-news" />
+                      <Input 
+                        value={slug} 
+                        onChange={(e) => setSlug(e.target.value)} 
+                        placeholder="例）member-news" 
+                      />
                     </div>
                   </div>
 
                   <div className="space-y-2">
                     <Label>このページのURL {hasLiffConfig && "(LIFF認証対応)"}</Label>
                     <div className="flex gap-2">
-                      <Input readOnly value={shareUrl} />
-                      <Button type="button" onClick={() => navigator.clipboard.writeText(shareUrl).then(() => toast.success("URLをコピーしました"))}>コピー</Button>
+                      <Input readOnly value={shareUrl} className="font-mono text-sm" />
+                      <Button 
+                        type="button" 
+                        variant="outline"
+                        onClick={() => navigator.clipboard.writeText(shareUrl).then(() => toast.success("URLをコピーしました"))}
+                      >
+                        コピー
+                      </Button>
                     </div>
                   </div>
 
@@ -437,7 +495,9 @@ export default function CMSFriendsPageBuilder() {
             <CardHeader className="py-3">
               <div className="flex items-center justify-between">
                 <CardTitle className="text-base">ページ用コンテンツ作成ビルダー</CardTitle>
-                <Button size="sm" variant="secondary" onClick={openPreview} disabled={!selected}>プレビュー</Button>
+                <Button size="sm" variant="secondary" onClick={openPreview} disabled={!selected}>
+                  プレビュー
+                </Button>
               </div>
             </CardHeader>
             <CardContent className="space-y-4">
@@ -448,7 +508,7 @@ export default function CMSFriendsPageBuilder() {
                   {timerEnabled && (
                     <TimerPreview
                       mode={timerMode}
-                      deadline={timerMode === 'absolute' ? timerDeadline || undefined : undefined}
+                      deadline={timerMode === 'absolute' && timerDeadline ? new Date(timerDeadline).toISOString() : undefined}
                       durationSeconds={timerMode === 'per_access' ? toSeconds(durDays, durHours, durMinutes, durSecs) : undefined}
                       showMilliseconds={showMilliseconds}
                       styleVariant={timerStyle}
@@ -461,7 +521,7 @@ export default function CMSFriendsPageBuilder() {
                       secondLabel={secondLabel}
                       preview={true}
                       internalTimer={internalTimer}
-                      timerText={timerText}
+                      timerText={timerText || "期間限定公開"}
                       showEndDate={timerMode === 'per_access'}
                     />
                   )}
@@ -469,7 +529,7 @@ export default function CMSFriendsPageBuilder() {
                     <Label>本文（リッチテキスト・複数可）</Label>
                     <RichTextBlocksEditor value={contentBlocks} onChange={setContentBlocks} />
                   </div>
-
+                  
                   <div className="space-y-2">
                     <Label>フォーム埋め込み</Label>
                     <div className="flex gap-2">
@@ -494,6 +554,7 @@ export default function CMSFriendsPageBuilder() {
                           </div>`;
                           setContentBlocks(prev => [...prev, formEmbed]);
                           setSelectedFormId("");
+                          toast.success("フォームを追加しました");
                         }}
                         disabled={!selectedFormId}
                       >
@@ -507,12 +568,14 @@ export default function CMSFriendsPageBuilder() {
           </Card>
 
           <div className="flex justify-end">
-            <Button onClick={handleSave} disabled={saving || !selected}>{saving ? '保存中…' : '保存する'}</Button>
+            <Button onClick={handleSave} disabled={saving || !selected}>
+              {saving ? '保存中…' : '保存する'}
+            </Button>
           </div>
         </div>
 
         {/* Right: publish & conditions */}
-        <div className="col-span-12 md:col-span-3 space-y-4">
+        <div className="lg:col-span-3 space-y-4">
           <Card>
             <CardHeader className="py-3">
               <CardTitle className="text-base">公開条件の設定</CardTitle>
@@ -528,10 +591,13 @@ export default function CMSFriendsPageBuilder() {
                       <AccordionContent className="space-y-4">
                         <div className="space-y-2">
                           <Label>閲覧を許可するタグ</Label>
-                          <div className="space-y-1">
+                          <div className="space-y-1 max-h-32 overflow-y-auto">
                             {tags.map(t => (
                               <label key={t.id} className="flex items-center gap-2 text-sm">
-                                <Checkbox checked={allowedTags.includes(t.id)} onCheckedChange={() => toggleAllowed(t.id)} />
+                                <Checkbox 
+                                  checked={allowedTags.includes(t.id)} 
+                                  onCheckedChange={() => toggleAllowed(t.id)} 
+                                />
                                 <span>{t.name}</span>
                               </label>
                             ))}
@@ -539,10 +605,13 @@ export default function CMSFriendsPageBuilder() {
                         </div>
                         <div className="space-y-2">
                           <Label>閲覧を禁止するタグ</Label>
-                          <div className="space-y-1">
+                          <div className="space-y-1 max-h-32 overflow-y-auto">
                             {tags.map(t => (
                               <label key={t.id} className="flex items-center gap-2 text-sm">
-                                <Checkbox checked={blockedTags.includes(t.id)} onCheckedChange={() => toggleBlocked(t.id)} />
+                                <Checkbox 
+                                  checked={blockedTags.includes(t.id)} 
+                                  onCheckedChange={() => toggleBlocked(t.id)} 
+                                />
                                 <span>{t.name}</span>
                               </label>
                             ))}
@@ -553,9 +622,16 @@ export default function CMSFriendsPageBuilder() {
                   </Accordion>
 
                   <div className="space-y-2">
-                    <Label className="flex items-center justify-between">パスコード保護 <Switch checked={requirePass} onCheckedChange={(v) => setRequirePass(!!v)} /></Label>
+                    <div className="flex items-center justify-between">
+                      <Label>パスコード保護</Label>
+                      <Switch checked={requirePass} onCheckedChange={setRequirePass} />
+                    </div>
                     {requirePass && (
-                      <Input value={passcode} onChange={(e) => setPasscode(e.target.value)} placeholder="例）1234" />
+                      <Input 
+                        value={passcode} 
+                        onChange={(e) => setPasscode(e.target.value)} 
+                        placeholder="例）1234" 
+                      />
                     )}
                   </div>
                 </>
@@ -574,10 +650,10 @@ export default function CMSFriendsPageBuilder() {
                 <>
                   <div className="flex items-center justify-between">
                     <Label>カウントダウンタイマー</Label>
-                    <Switch checked={timerEnabled} onCheckedChange={(v) => setTimerEnabled(!!v)} />
+                    <Switch checked={timerEnabled} onCheckedChange={setTimerEnabled} />
                   </div>
                   {timerEnabled && (
-                    <>
+                    <div className="space-y-4">
                       <div className="space-y-2">
                         <Label>表示期限タイプ</Label>
                         <Select value={timerMode} onValueChange={(v) => setTimerMode(v as any)}>
@@ -594,79 +670,70 @@ export default function CMSFriendsPageBuilder() {
                       {timerMode === 'absolute' ? (
                         <div className="space-y-2">
                           <Label>表示期限（締切）</Label>
-                          <Input
-                            type="datetime-local"
-                            value={timerDeadline}
-                            onChange={(e) => setTimerDeadline(e.target.value)}
-                            className="h-10"
+                          <Input 
+                            type="datetime-local" 
+                            value={timerDeadline} 
+                            onChange={(e) => setTimerDeadline(e.target.value)} 
                           />
                         </div>
                       ) : (
                         <div className="space-y-2">
                           <Label>カウント時間</Label>
-                          <div className="grid grid-cols-4 gap-3">
+                          <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
                             <div className="space-y-1">
                               <Label className="text-xs">日</Label>
-                              <Input
-                                type="number"
-                                min={0}
-                                value={durDays}
+                              <Input 
+                                type="number" 
+                                min={0} 
+                                value={durDays || ""} 
+                                placeholder="0"
                                 onChange={(e) => {
-                                  const v = Math.max(0, Number(e.target.value || 0));
+                                  const v = e.target.value === "" ? 0 : Math.max(0, Number(e.target.value));
                                   setDurDays(v);
                                   setDurationSeconds(toSeconds(v, durHours, durMinutes, durSecs));
-                                }}
-                                className="h-12 min-w-[120px] text-lg"
-                                inputMode="numeric"
-                                pattern="[0-9]*"
+                                }} 
                               />
                             </div>
                             <div className="space-y-1">
                               <Label className="text-xs">時</Label>
-                              <Input
-                                type="number"
-                                min={0}
-                                value={durHours}
+                              <Input 
+                                type="number" 
+                                min={0} 
+                                value={durHours || ""} 
+                                placeholder="0"
                                 onChange={(e) => {
-                                  const v = Math.max(0, Number(e.target.value || 0));
+                                  const v = e.target.value === "" ? 0 : Math.max(0, Number(e.target.value));
                                   setDurHours(v);
                                   setDurationSeconds(toSeconds(durDays, v, durMinutes, durSecs));
-                                }}
-                                className="h-12 min-w-[120px] text-lg"
-                                inputMode="numeric"
-                                pattern="[0-9]*"
+                                }} 
                               />
                             </div>
                             <div className="space-y-1">
                               <Label className="text-xs">分</Label>
-                              <Input
-                                type="number"
-                                min={0}
-                                value={durMinutes}
+                              <Input 
+                                type="number" 
+                                min={0} 
+                                value={durMinutes || ""} 
+                                placeholder="0"
                                 onChange={(e) => {
-                                  const v = Math.max(0, Number(e.target.value || 0));
+                                  const v = e.target.value === "" ? 0 : Math.max(0, Number(e.target.value));
                                   setDurMinutes(v);
                                   setDurationSeconds(toSeconds(durDays, durHours, v, durSecs));
-                                }}
-                                className="h-12 min-w-[120px] text-lg"
-                                inputMode="numeric"
-                                pattern="[0-9]*"
+                                }} 
                               />
                             </div>
                             <div className="space-y-1">
                               <Label className="text-xs">秒</Label>
-                              <Input
-                                type="number"
-                                min={0}
-                                value={durSecs}
+                              <Input 
+                                type="number" 
+                                min={0} 
+                                value={durSecs || ""} 
+                                placeholder="0"
                                 onChange={(e) => {
-                                  const v = Math.max(0, Number(e.target.value || 0));
+                                  const v = e.target.value === "" ? 0 : Math.max(0, Number(e.target.value));
                                   setDurSecs(v);
                                   setDurationSeconds(toSeconds(durDays, durHours, durMinutes, v));
-                                }}
-                                className="h-12 min-w-[120px] text-lg"
-                                inputMode="numeric"
-                                pattern="[0-9]*"
+                                }} 
                               />
                             </div>
                           </div>
@@ -675,7 +742,7 @@ export default function CMSFriendsPageBuilder() {
 
                       <div className="flex items-center justify-between">
                         <Label>ミリ秒を表示</Label>
-                        <Switch checked={showMilliseconds} onCheckedChange={(v) => setShowMilliseconds(!!v)} />
+                        <Switch checked={showMilliseconds} onCheckedChange={setShowMilliseconds} />
                       </div>
 
                       <div className="space-y-2">
@@ -702,30 +769,79 @@ export default function CMSFriendsPageBuilder() {
                           <ColorPicker color={timerTextColor} onChange={setTimerTextColor} />
                         </div>
                       </div>
-                    </>
+
+                      <div className="flex items-center justify-between">
+                        <Label>内部タイマーモード</Label>
+                        <Switch checked={internalTimer} onCheckedChange={setInternalTimer} />
+                      </div>
+                      
+                      {internalTimer && (
+                        <div className="space-y-2">
+                          <Label>表示テキスト</Label>
+                          <Input 
+                            value={timerText} 
+                            onChange={(e) => setTimerText(e.target.value)} 
+                            placeholder="例）期間限定公開" 
+                          />
+                        </div>
+                      )}
+
+                      <div className="space-y-2">
+                        <Label>タイマー切れ時の動作</Label>
+                        <Select value={expireAction} onValueChange={(v) => setExpireAction(v as any)}>
+                          <SelectTrigger>
+                            <SelectValue placeholder="動作" />
+                          </SelectTrigger>
+                          <SelectContent className="bg-background">
+                            <SelectItem value="hide">ページを非表示にする</SelectItem>
+                            <SelectItem value="keep_public">公開した状態にする</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+
+                      <Accordion type="single" collapsible className="w-full">
+                        <AccordionItem value="timer-labels">
+                          <AccordionTrigger className="text-sm">時間単位ラベル設定</AccordionTrigger>
+                          <AccordionContent className="space-y-3">
+                            <div className="grid grid-cols-2 gap-2">
+                              <div className="space-y-1">
+                                <Label className="text-xs">日ラベル</Label>
+                                <Input 
+                                  value={dayLabel} 
+                                  onChange={(e) => setDayLabel(e.target.value)} 
+                                  placeholder="日" 
+                                />
+                              </div>
+                              <div className="space-y-1">
+                                <Label className="text-xs">時間ラベル</Label>
+                                <Input 
+                                  value={hourLabel} 
+                                  onChange={(e) => setHourLabel(e.target.value)} 
+                                  placeholder="時間" 
+                                />
+                              </div>
+                              <div className="space-y-1">
+                                <Label className="text-xs">分ラベル</Label>
+                                <Input 
+                                  value={minuteLabel} 
+                                  onChange={(e) => setMinuteLabel(e.target.value)} 
+                                  placeholder="分" 
+                                />
+                              </div>
+                              <div className="space-y-1">
+                                <Label className="text-xs">秒ラベル</Label>
+                                <Input 
+                                  value={secondLabel} 
+                                  onChange={(e) => setSecondLabel(e.target.value)} 
+                                  placeholder="秒" 
+                                />
+                              </div>
+                            </div>
+                          </AccordionContent>
+                        </AccordionItem>
+                      </Accordion>
+                    </div>
                   )}
-
-                  <div className="flex items-center justify-between">
-                    <Label>タイマーは表示せず内部タイマーにする</Label>
-                    <Switch checked={internalTimer} onCheckedChange={(v) => setInternalTimer(!!v)} />
-                  </div>
-                  <div className="space-y-2">
-                    <Label>内部タイマー時の表示テキスト（例：期間限定公開）</Label>
-                    <Input value={timerText} onChange={(e) => setTimerText(e.target.value)} placeholder="例）期間限定公開" />
-                  </div>
-
-                  <div className="space-y-2">
-                    <Label>タイマー切れ時の動作</Label>
-                    <Select value={expireAction} onValueChange={(v) => setExpireAction(v as any)}>
-                      <SelectTrigger>
-                        <SelectValue placeholder="動作" />
-                      </SelectTrigger>
-                      <SelectContent className="bg-background">
-                        <SelectItem value="hide">ページを非表示にする</SelectItem>
-                        <SelectItem value="keep_public">公開した状態にする</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
                 </>
               )}
             </CardContent>
