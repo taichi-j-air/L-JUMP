@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
@@ -11,13 +10,11 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Switch } from "@/components/ui/switch";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { ColorPicker } from "@/components/ui/color-picker";
-import RichTextEditor from "@/components/RichTextEditor";
 import RichTextBlocksEditor from "@/components/RichTextBlocksEditor";
 import { TimerPreview } from "@/components/TimerPreview";
 import { useLiffValidation } from "@/hooks/useLiffValidation";
 import { Trash2 } from "lucide-react";
 
-// Type helpers (loosened to avoid tight coupling with generated types)
 interface CmsPageRow {
   id: string;
   user_id: string;
@@ -42,12 +39,6 @@ interface CmsPageRow {
 
 interface TagRow { id: string; name: string }
 
-interface ContentBlock {
-  id: string;
-  title: string;
-  body: string;
-}
-
 export default function CMSFriendsPageBuilder() {
   const [pages, setPages] = useState<CmsPageRow[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -71,7 +62,7 @@ export default function CMSFriendsPageBuilder() {
   const [timerEnabled, setTimerEnabled] = useState(false);
   const [timerMode, setTimerMode] = useState<"absolute" | "per_access">("absolute");
   const [timerDeadline, setTimerDeadline] = useState("");
-  const [durationSeconds, setDurationSeconds] = useState<number>(0);
+  const [durationSeconds, setDurationSeconds] = useState<number>(0); // 使わないけどUIの状態保持に使う
   const [showMilliseconds, setShowMilliseconds] = useState<boolean>(false);
   const [timerStyle, setTimerStyle] = useState<"solid" | "glass" | "outline">("solid");
   const [timerBgColor, setTimerBgColor] = useState<string>("#0cb386");
@@ -89,7 +80,7 @@ export default function CMSFriendsPageBuilder() {
   const [durMinutes, setDurMinutes] = useState<number>(0);
   const [durSecs, setDurSecs] = useState<number>(0);
 
-  // ✅ 正しい秒換算
+  // 正しい秒換算
   const toSeconds = (d: number, h: number, m: number, s: number) => d * 86400 + h * 3600 + m * 60 + s;
 
   const [saving, setSaving] = useState(false);
@@ -104,19 +95,17 @@ export default function CMSFriendsPageBuilder() {
   }, []);
 
   useEffect(() => {
-    // Load pages and tags
     const load = async () => {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return toast.error("ログインが必要です");
 
-      const { data: tagRows, error: tagErr } = await (supabase as any)
+      const { data: tagRows } = await (supabase as any)
         .from('tags')
         .select('id,name')
         .eq('user_id', user.id)
         .order('created_at', { ascending: false });
-      if (!tagErr) setTags(tagRows || []);
+      setTags(tagRows || []);
 
-      // Load forms
       const { data: formRows } = await (supabase as any)
         .from('forms')
         .select('id, name')
@@ -235,15 +224,13 @@ export default function CMSFriendsPageBuilder() {
 
   const handleDelete = async (pageId: string) => {
     if (!confirm("このページを削除しますか？この操作は取り消せません。")) return;
-    
     try {
       const { error } = await (supabase as any)
         .from('cms_pages')
         .delete()
         .eq('id', pageId);
-      
       if (error) throw error;
-      
+
       setPages(prev => prev.filter(p => p.id !== pageId));
       if (selectedId === pageId) {
         const remaining = pages.filter(p => p.id !== pageId);
@@ -321,7 +308,6 @@ export default function CMSFriendsPageBuilder() {
     if (!selected) return "";
     const baseUrl = `${window.location.origin}/cms/f/${selected.share_code}`;
     if (hasLiffConfig) {
-      // LIFF認証対応のパラメーター付きURL（UIDパラメーター）
       return `${baseUrl}?uid=[UID]`;
     }
     return baseUrl;
@@ -330,28 +316,25 @@ export default function CMSFriendsPageBuilder() {
   const toggleAllowed = (id: string) => {
     setAllowedTags(prev => {
       const next = prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id];
-      // remove from blocked if added to allowed
-      setBlockedTags(b => b.filter(x => x !== id));
+      setBlockedTags(b => b.filter(x => x !== id)); // 重複排除
       return next;
     });
   };
   const toggleBlocked = (id: string) => {
     setBlockedTags(prev => {
       const next = prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id];
-      // remove from allowed if added to blocked
-      setAllowedTags(a => a.filter(x => x !== id));
+      setAllowedTags(a => a.filter(x => x !== id)); // 重複排除
       return next;
     });
   };
 
-  // Preview open
   const openPreview = () => {
     if (!selected) return;
-    // まず保存してからプレビューを開く
     handleSave().then(() => {
       window.open(`/cms/preview/${selected.id}`, '_blank');
     });
   };
+
   return (
     <div className="container mx-auto max-w-[1200px] space-y-4">
       <header>
@@ -486,7 +469,7 @@ export default function CMSFriendsPageBuilder() {
                     <Label>本文（リッチテキスト・複数可）</Label>
                     <RichTextBlocksEditor value={contentBlocks} onChange={setContentBlocks} />
                   </div>
-                  
+
                   <div className="space-y-2">
                     <Label>フォーム埋め込み</Label>
                     <div className="flex gap-2">
@@ -611,10 +594,10 @@ export default function CMSFriendsPageBuilder() {
                       {timerMode === 'absolute' ? (
                         <div className="space-y-2">
                           <Label>表示期限（締切）</Label>
-                          <Input 
-                            type="datetime-local" 
-                            value={timerDeadline} 
-                            onChange={(e) => setTimerDeadline(e.target.value)} 
+                          <Input
+                            type="datetime-local"
+                            value={timerDeadline}
+                            onChange={(e) => setTimerDeadline(e.target.value)}
                             className="h-10"
                           />
                         </div>
@@ -624,64 +607,64 @@ export default function CMSFriendsPageBuilder() {
                           <div className="grid grid-cols-4 gap-3">
                             <div className="space-y-1">
                               <Label className="text-xs">日</Label>
-                              <Input 
-                                type="number" 
-                                min={0} 
-                                value={durDays} 
+                              <Input
+                                type="number"
+                                min={0}
+                                value={durDays}
                                 onChange={(e) => {
                                   const v = Math.max(0, Number(e.target.value || 0));
                                   setDurDays(v);
                                   setDurationSeconds(toSeconds(v, durHours, durMinutes, durSecs));
                                 }}
-                                className="h-10 min-w-[96px] text-base"
+                                className="h-12 min-w-[120px] text-lg"
                                 inputMode="numeric"
                                 pattern="[0-9]*"
                               />
                             </div>
                             <div className="space-y-1">
                               <Label className="text-xs">時</Label>
-                              <Input 
-                                type="number" 
-                                min={0} 
-                                value={durHours} 
+                              <Input
+                                type="number"
+                                min={0}
+                                value={durHours}
                                 onChange={(e) => {
                                   const v = Math.max(0, Number(e.target.value || 0));
                                   setDurHours(v);
                                   setDurationSeconds(toSeconds(durDays, v, durMinutes, durSecs));
                                 }}
-                                className="h-10 min-w-[96px] text-base"
+                                className="h-12 min-w-[120px] text-lg"
                                 inputMode="numeric"
                                 pattern="[0-9]*"
                               />
                             </div>
                             <div className="space-y-1">
                               <Label className="text-xs">分</Label>
-                              <Input 
-                                type="number" 
-                                min={0} 
-                                value={durMinutes} 
+                              <Input
+                                type="number"
+                                min={0}
+                                value={durMinutes}
                                 onChange={(e) => {
                                   const v = Math.max(0, Number(e.target.value || 0));
                                   setDurMinutes(v);
                                   setDurationSeconds(toSeconds(durDays, durHours, v, durSecs));
                                 }}
-                                className="h-10 min-w-[96px] text-base"
+                                className="h-12 min-w-[120px] text-lg"
                                 inputMode="numeric"
                                 pattern="[0-9]*"
                               />
                             </div>
                             <div className="space-y-1">
                               <Label className="text-xs">秒</Label>
-                              <Input 
-                                type="number" 
-                                min={0} 
-                                value={durSecs} 
+                              <Input
+                                type="number"
+                                min={0}
+                                value={durSecs}
                                 onChange={(e) => {
                                   const v = Math.max(0, Number(e.target.value || 0));
                                   setDurSecs(v);
                                   setDurationSeconds(toSeconds(durDays, durHours, durMinutes, v));
                                 }}
-                                className="h-10 min-w-[96px] text-base"
+                                className="h-12 min-w-[120px] text-lg"
                                 inputMode="numeric"
                                 pattern="[0-9]*"
                               />
@@ -719,7 +702,6 @@ export default function CMSFriendsPageBuilder() {
                           <ColorPicker color={timerTextColor} onChange={setTimerTextColor} />
                         </div>
                       </div>
-
                     </>
                   )}
 

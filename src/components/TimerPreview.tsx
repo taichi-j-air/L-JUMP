@@ -5,35 +5,34 @@ export type TimerStyle = "solid" | "glass" | "outline";
 
 interface TimerPreviewProps {
   mode: TimerMode;
-  deadline?: string | null;              // absolute のときのISO
-  durationSeconds?: number | null;       // per_access のときの秒（※秒）
+  deadline?: string | null;              // absolute のときのISO/ローカル日時
+  durationSeconds?: number | null;       // per_access のときの秒
   showMilliseconds?: boolean;
   styleVariant?: TimerStyle;
-  bgColor?: string;                       // hex
-  textColor?: string;                     // hex
-  shareCode?: string;                     // per_access のキー
-  uid?: string;                           // per_access のキー
+  bgColor?: string;
+  textColor?: string;
+  shareCode?: string;                    // per_access のキー
+  uid?: string;                          // per_access のキー
   className?: string;
   dayLabel?: string;
   hourLabel?: string;
   minuteLabel?: string;
   secondLabel?: string;
   preview?: boolean;
-  internalTimer?: boolean;                // 非表示モード
-  timerText?: string;                     // 非表示モード時テキスト
-  showEndDate?: boolean;                  // 終了日時を表示
+  internalTimer?: boolean;               // 非表示モード
+  timerText?: string;                    // 非表示モード時テキスト
+  showEndDate?: boolean;                 // 終了日時を表示
 }
 
 function breakdown(ms: number) {
   const totalSeconds = Math.max(0, Math.floor(ms / 1000));
-
   let days = Math.floor(totalSeconds / 86400);
   let hours = Math.floor((totalSeconds % 86400) / 3600);
-  let minutes = Math.floor((totalSeconds % 3600) / 60);
-  let seconds = totalSeconds % 60;
+  const minutes = Math.floor((totalSeconds % 3600) / 60);
+  const seconds = totalSeconds % 60;
   const milli = Math.max(0, ms % 1000);
 
-  // もし何らかの理由で hours が 23 を超える値になっていたら安全側で正規化
+  // 念のための正規化保険（万一 24h 以上になっていたら繰り上げ）
   if (hours > 23) {
     days += Math.floor(hours / 24);
     hours = hours % 24;
@@ -64,10 +63,10 @@ export const TimerPreview = ({
   const [remainingMs, setRemainingMs] = useState<number>(0);
   const intervalRef = useRef<number | null>(null);
 
-  // ✅ durationSeconds がミリ秒で来てしまった場合（1000の倍数&やたら大きい）を秒に補正
+  // duration が誤ってミリ秒で来た場合を自動補正（例: 86400000 など）
   const safeDurationSeconds = useMemo(() => {
     let sec = Number(durationSeconds ?? 0);
-    if (sec > 2_592_000 && sec % 1000 === 0) { // 30日(秒)より大きく、かつ1000の倍数 → ms疑い
+    if (sec > 2_592_000 && sec % 1000 === 0) { // 30日(秒)超 & 1000の倍数 → ms疑い
       sec = Math.floor(sec / 1000);
     }
     return sec;
@@ -102,16 +101,19 @@ export const TimerPreview = ({
 
   const { days, hours, minutes, seconds, milli } = breakdown(remainingMs);
 
-  // ✅ 「日」が1以上なら必ず日を表示。ぴったり1日(= 1d 0h 0m 0s)なら"残り1日"だけ。
-  let base = "";
+  // 表示ルール:
+  // 1) ぴったり1日(=1d 0h 0m 0s) → 「残り1日」
+  // 2) 日が1以上 → 「残り{日}{時間}{分}{秒}」
+  // 3) それ以外 → 「残り{時間}{分}{秒}」
+  let base: string;
   if (days > 0 && hours === 0 && minutes === 0 && seconds === 0) {
     base = `残り${days}${dayLabel}`;
+  } else if (days > 0) {
+    base = `残り${days}${dayLabel}${hours}${hourLabel}${minutes}${minuteLabel}${seconds}${secondLabel}`;
   } else {
-    const parts: string[] = [];
-    if (days > 0) parts.push(`${days}${dayLabel}`);
-    parts.push(`${hours}${hourLabel}`, `${minutes}${minuteLabel}`, `${seconds}${secondLabel}`);
-    base = `残り${parts.join("")}`;
+    base = `残り${hours}${hourLabel}${minutes}${minuteLabel}${seconds}${secondLabel}`;
   }
+
   const text = internalTimer
     ? timerText
     : showMilliseconds
