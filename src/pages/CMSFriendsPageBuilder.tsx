@@ -88,7 +88,10 @@ export default function CMSFriendsPageBuilder() {
   const [durHours, setDurHours] = useState<number>(0);
   const [durMinutes, setDurMinutes] = useState<number>(0);
   const [durSecs, setDurSecs] = useState<number>(0);
+
+  // ✅ 正しい秒換算
   const toSeconds = (d: number, h: number, m: number, s: number) => d * 86400 + h * 3600 + m * 60 + s;
+
   const [saving, setSaving] = useState(false);
   const [isPublic, setIsPublic] = useState(false);
   const [forms, setForms] = useState<Array<{id: string; name: string}>>([]);
@@ -682,7 +685,6 @@ export default function CMSFriendsPageBuilder() {
 
                     </>
                   )}
-
 
                   <div className="flex items-center justify-between">
                     <Label>タイマーは表示せず内部タイマーにする</Label>
