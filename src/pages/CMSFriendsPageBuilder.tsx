@@ -611,43 +611,80 @@ export default function CMSFriendsPageBuilder() {
                       {timerMode === 'absolute' ? (
                         <div className="space-y-2">
                           <Label>表示期限（締切）</Label>
-                          <Input type="datetime-local" value={timerDeadline} onChange={(e) => setTimerDeadline(e.target.value)} />
+                          <Input 
+                            type="datetime-local" 
+                            value={timerDeadline} 
+                            onChange={(e) => setTimerDeadline(e.target.value)} 
+                            className="h-10"
+                          />
                         </div>
                       ) : (
                         <div className="space-y-2">
                           <Label>カウント時間</Label>
-                          <div className="grid grid-cols-4 gap-2">
+                          <div className="grid grid-cols-4 gap-3">
                             <div className="space-y-1">
                               <Label className="text-xs">日</Label>
-                              <Input type="number" min={0} value={durDays} onChange={(e) => {
-                                const v = Math.max(0, Number(e.target.value || 0));
-                                setDurDays(v);
-                                setDurationSeconds(toSeconds(v, durHours, durMinutes, durSecs));
-                              }} />
+                              <Input 
+                                type="number" 
+                                min={0} 
+                                value={durDays} 
+                                onChange={(e) => {
+                                  const v = Math.max(0, Number(e.target.value || 0));
+                                  setDurDays(v);
+                                  setDurationSeconds(toSeconds(v, durHours, durMinutes, durSecs));
+                                }}
+                                className="h-10 min-w-[96px] text-base"
+                                inputMode="numeric"
+                                pattern="[0-9]*"
+                              />
                             </div>
                             <div className="space-y-1">
                               <Label className="text-xs">時</Label>
-                              <Input type="number" min={0} value={durHours} onChange={(e) => {
-                                const v = Math.max(0, Number(e.target.value || 0));
-                                setDurHours(v);
-                                setDurationSeconds(toSeconds(durDays, v, durMinutes, durSecs));
-                              }} />
+                              <Input 
+                                type="number" 
+                                min={0} 
+                                value={durHours} 
+                                onChange={(e) => {
+                                  const v = Math.max(0, Number(e.target.value || 0));
+                                  setDurHours(v);
+                                  setDurationSeconds(toSeconds(durDays, v, durMinutes, durSecs));
+                                }}
+                                className="h-10 min-w-[96px] text-base"
+                                inputMode="numeric"
+                                pattern="[0-9]*"
+                              />
                             </div>
                             <div className="space-y-1">
                               <Label className="text-xs">分</Label>
-                              <Input type="number" min={0} value={durMinutes} onChange={(e) => {
-                                const v = Math.max(0, Number(e.target.value || 0));
-                                setDurMinutes(v);
-                                setDurationSeconds(toSeconds(durDays, durHours, v, durSecs));
-                              }} />
+                              <Input 
+                                type="number" 
+                                min={0} 
+                                value={durMinutes} 
+                                onChange={(e) => {
+                                  const v = Math.max(0, Number(e.target.value || 0));
+                                  setDurMinutes(v);
+                                  setDurationSeconds(toSeconds(durDays, durHours, v, durSecs));
+                                }}
+                                className="h-10 min-w-[96px] text-base"
+                                inputMode="numeric"
+                                pattern="[0-9]*"
+                              />
                             </div>
                             <div className="space-y-1">
                               <Label className="text-xs">秒</Label>
-                              <Input type="number" min={0} value={durSecs} onChange={(e) => {
-                                const v = Math.max(0, Number(e.target.value || 0));
-                                setDurSecs(v);
-                                setDurationSeconds(toSeconds(durDays, durHours, durMinutes, v));
-                              }} />
+                              <Input 
+                                type="number" 
+                                min={0} 
+                                value={durSecs} 
+                                onChange={(e) => {
+                                  const v = Math.max(0, Number(e.target.value || 0));
+                                  setDurSecs(v);
+                                  setDurationSeconds(toSeconds(durDays, durHours, durMinutes, v));
+                                }}
+                                className="h-10 min-w-[96px] text-base"
+                                inputMode="numeric"
+                                pattern="[0-9]*"
+                              />
                             </div>
                           </div>
                         </div>
