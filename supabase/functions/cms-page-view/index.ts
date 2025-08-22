@@ -43,8 +43,8 @@ serve(async (req) => {
       });
     }
 
-    // Always require UID parameter for all pages (public or friends-only)
-    if (!uid) {
+    // Public pages don't require UID, friends-only pages do
+    if (page.visibility === 'friends_only' && !uid) {
       const { data: profile } = await supabase
         .from("profiles")
         .select("display_name, line_user_id, add_friend_url")
@@ -63,31 +63,54 @@ serve(async (req) => {
       );
     }
 
-    // Validate friend relationship
-    const { data: friend, error: frErr } = await supabase
-      .from("line_friends")
-      .select("id")
-      .eq("user_id", page.user_id)
-      .eq("line_user_id", uid)
-      .single();
+    // Validate friend relationship for friends-only pages and when UID is provided
+    let friend = null;
+    if (page.visibility === 'friends_only' || uid) {
+      if (!uid) {
+        const { data: profile } = await supabase
+          .from("profiles")
+          .select("display_name, line_user_id, add_friend_url")
+          .eq("user_id", page.user_id)
+          .maybeSingle();
 
-    if (frErr || !friend) {
-      const { data: profile } = await supabase
-        .from("profiles")
-        .select("display_name, line_user_id, add_friend_url")
+        const friendInfo = {
+          account_name: profile?.display_name || null,
+          line_id: profile?.line_user_id || null,
+          add_friend_url: profile?.add_friend_url || null,
+        };
+
+        return new Response(
+          JSON.stringify({ require_friend: true, friend_info: friendInfo }),
+          { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+
+      const { data: friendData, error: frErr } = await supabase
+        .from("line_friends")
+        .select("id")
         .eq("user_id", page.user_id)
-        .maybeSingle();
+        .eq("line_user_id", uid)
+        .single();
 
-      const friendInfo = {
-        account_name: profile?.display_name || null,
-        line_id: profile?.line_user_id || null,
-        add_friend_url: profile?.add_friend_url || null,
-      };
+      if (frErr || !friendData) {
+        const { data: profile } = await supabase
+          .from("profiles")
+          .select("display_name, line_user_id, add_friend_url")
+          .eq("user_id", page.user_id)
+          .maybeSingle();
 
-      return new Response(
-        JSON.stringify({ require_friend: true, friend_info: friendInfo }),
-        { headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
+        const friendInfo = {
+          account_name: profile?.display_name || null,
+          line_id: profile?.line_user_id || null,
+          add_friend_url: profile?.add_friend_url || null,
+        };
+
+        return new Response(
+          JSON.stringify({ require_friend: true, friend_info: friendInfo }),
+          { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+      friend = friendData;
     }
 
     // Passcode check if required
@@ -100,28 +123,30 @@ serve(async (req) => {
       }
     }
 
-    // Tag segmentation
-    const allowed: string[] = Array.isArray(page.allowed_tag_ids) ? page.allowed_tag_ids : [];
-    const blocked: string[] = Array.isArray(page.blocked_tag_ids) ? page.blocked_tag_ids : [];
+    // Tag segmentation (only apply if friend relationship exists)
+    if (friend) {
+      const allowed: string[] = Array.isArray(page.allowed_tag_ids) ? page.allowed_tag_ids : [];
+      const blocked: string[] = Array.isArray(page.blocked_tag_ids) ? page.blocked_tag_ids : [];
 
-    if (allowed.length > 0 || blocked.length > 0) {
-      const { data: friendTags } = await supabase
-        .from("friend_tags")
-        .select("tag_id")
-        .eq("user_id", page.user_id)
-        .eq("friend_id", friend.id);
-      const tagIds = new Set((friendTags || []).map((t: any) => t.tag_id));
-      if (allowed.length > 0 && !allowed.some((id) => tagIds.has(id))) {
-        return new Response(JSON.stringify({ error: "forbidden by allowed tags" }), {
-          status: 403,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        });
-      }
-      if (blocked.length > 0 && blocked.some((id) => tagIds.has(id))) {
-        return new Response(JSON.stringify({ error: "forbidden by blocked tags" }), {
-          status: 403,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        });
+      if (allowed.length > 0 || blocked.length > 0) {
+        const { data: friendTags } = await supabase
+          .from("friend_tags")
+          .select("tag_id")
+          .eq("user_id", page.user_id)
+          .eq("friend_id", friend.id);
+        const tagIds = new Set((friendTags || []).map((t: any) => t.tag_id));
+        if (allowed.length > 0 && !allowed.some((id) => tagIds.has(id))) {
+          return new Response(JSON.stringify({ error: "forbidden by allowed tags" }), {
+            status: 403,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
+        }
+        if (blocked.length > 0 && blocked.some((id) => tagIds.has(id))) {
+          return new Response(JSON.stringify({ error: "forbidden by blocked tags" }), {
+            status: 403,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
+        }
       }
     }
 

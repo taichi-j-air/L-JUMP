@@ -87,6 +87,7 @@ const [friendInfo, setFriendInfo] = useState<{ account_name: string | null; line
       if (res?.require_passcode) {
         setRequirePass(true);
         setFriendInfo(null);
+        setData(null);
         return;
       }
       if (res?.require_friend) {

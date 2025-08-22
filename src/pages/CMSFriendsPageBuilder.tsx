@@ -621,14 +621,23 @@ export default function CMSFriendsPageBuilder() {
                       ) : (
                         <div className="space-y-2">
                           <Label>カウント時間</Label>
-                          <div className="grid grid-cols-4 gap-2">
+                          <div className="grid grid-cols-4 gap-3">
                             <div className="space-y-1">
                               <Label className="text-xs">日</Label>
                               <Input 
                                 type="number" 
                                 min={0} 
                                 value={durDays} 
-                                onChange={(e) => setDurDays(Math.max(0, Number(e.target.value || 0)))} 
+                                onChange={(e) => {
+                                  const v = Math.max(0, Number(e.target.value || 0));
+                                  setDurDays(v);
+                                  const newSeconds = toSeconds(v, durHours, durMinutes, durSecs);
+                                  setDurationSeconds(newSeconds);
+                                  console.log('Updated duration (days):', { days: v, hours: durHours, minutes: durMinutes, seconds: durSecs, total: newSeconds });
+                                }}
+                                className="h-10 min-w-[96px] text-base"
+                                inputMode="numeric"
+                                pattern="[0-9]*"
                               />
                             </div>
                             <div className="space-y-1">
@@ -637,7 +646,16 @@ export default function CMSFriendsPageBuilder() {
                                 type="number" 
                                 min={0} 
                                 value={durHours} 
-                                onChange={(e) => setDurHours(Math.max(0, Number(e.target.value || 0)))} 
+                                onChange={(e) => {
+                                  const v = Math.max(0, Number(e.target.value || 0));
+                                  setDurHours(v);
+                                  const newSeconds = toSeconds(durDays, v, durMinutes, durSecs);
+                                  setDurationSeconds(newSeconds);
+                                  console.log('Updated duration (hours):', { days: durDays, hours: v, minutes: durMinutes, seconds: durSecs, total: newSeconds });
+                                }}
+                                className="h-10 min-w-[96px] text-base"
+                                inputMode="numeric"
+                                pattern="[0-9]*"
                               />
                             </div>
                             <div className="space-y-1">
@@ -646,7 +664,16 @@ export default function CMSFriendsPageBuilder() {
                                 type="number" 
                                 min={0} 
                                 value={durMinutes} 
-                                onChange={(e) => setDurMinutes(Math.max(0, Number(e.target.value || 0)))} 
+                                onChange={(e) => {
+                                  const v = Math.max(0, Number(e.target.value || 0));
+                                  setDurMinutes(v);
+                                  const newSeconds = toSeconds(durDays, durHours, v, durSecs);
+                                  setDurationSeconds(newSeconds);
+                                  console.log('Updated duration (minutes):', { days: durDays, hours: durHours, minutes: v, seconds: durSecs, total: newSeconds });
+                                }}
+                                className="h-10 min-w-[96px] text-base"
+                                inputMode="numeric"
+                                pattern="[0-9]*"
                               />
                             </div>
                             <div className="space-y-1">
@@ -655,7 +682,16 @@ export default function CMSFriendsPageBuilder() {
                                 type="number" 
                                 min={0} 
                                 value={durSecs} 
-                                onChange={(e) => setDurSecs(Math.max(0, Number(e.target.value || 0)))} 
+                                onChange={(e) => {
+                                  const v = Math.max(0, Number(e.target.value || 0));
+                                  setDurSecs(v);
+                                  const newSeconds = toSeconds(durDays, durHours, durMinutes, v);
+                                  setDurationSeconds(newSeconds);
+                                  console.log('Updated duration (seconds):', { days: durDays, hours: durHours, minutes: durMinutes, seconds: v, total: newSeconds });
+                                }}
+                                className="h-10 min-w-[96px] text-base"
+                                inputMode="numeric"
+                                pattern="[0-9]*"
                               />
                             </div>
                           </div>
