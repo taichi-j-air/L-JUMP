@@ -85,11 +85,12 @@ serve(async (req) => {
         );
       }
 
+      // ✅ 修正：フォーム機能と同じテーブル・フィールドを使用
       const { data: friendData, error: frErr } = await supabase
-        .from("line_friends")
+        .from("friends")  // ← フォーム機能と同じテーブル名
         .select("id")
         .eq("user_id", page.user_id)
-        .eq("line_user_id", uid)
+        .eq("short_uid", uid)  // ← 短縮UIDで検索（フォーム機能と同じ）
         .single();
 
       if (frErr || !friendData) {
