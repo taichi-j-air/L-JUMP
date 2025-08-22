@@ -1,3 +1,4 @@
+'use client';
 import { useEffect, useMemo, useRef, useState } from "react";
 
 export type TimerMode = "absolute" | "per_access";
@@ -24,19 +25,16 @@ interface TimerPreviewProps {
   showEndDate?: boolean;                 // 終了日時を表示
 }
 
-function breakdown(ms: number) {
-  const totalSeconds = Math.max(0, Math.floor(ms / 1000));
-  let days = Math.floor(totalSeconds / 86400);
-  let hours = Math.floor((totalSeconds % 86400) / 3600);
-  const minutes = Math.floor((totalSeconds % 3600) / 60);
-  const seconds = totalSeconds % 60;
-  const milli = Math.max(0, ms % 1000);
-
-  // 念のための正規化保険（万一 24h 以上になっていたら繰り上げ）
-  if (hours > 23) {
-    days += Math.floor(hours / 24);
-    hours = hours % 24;
-  }
+// 差分(ミリ秒)→ 正規化済みの日/時/分/秒
+function calcPartsFromMs(diffMs: number) {
+  const totalSeconds = Math.max(0, Math.floor(diffMs / 1000));
+  const days = Math.floor(totalSeconds / 86400);
+  const restAfterDays = totalSeconds - days * 86400;
+  const hours = Math.floor(restAfterDays / 3600);                  // 0..23
+  const restAfterHours = restAfterDays - hours * 3600;
+  const minutes = Math.floor(restAfterHours / 60);                 // 0..59
+  const seconds = restAfterHours - minutes * 60;                   // 0..59
+  const milli = Math.max(0, diffMs % 1000);
   return { days, hours, minutes, seconds, milli };
 }
 
@@ -63,23 +61,21 @@ export const TimerPreview = ({
   const [remainingMs, setRemainingMs] = useState<number>(0);
   const intervalRef = useRef<number | null>(null);
 
-  // duration が誤ってミリ秒で来た場合を自動補正（例: 86400000 など）
+  // ms混入データの自動補正
   const safeDurationSeconds = useMemo(() => {
     let sec = Number(durationSeconds ?? 0);
-    if (sec > 2_592_000 && sec % 1000 === 0) { // 30日(秒)超 & 1000の倍数 → ms疑い
-      sec = Math.floor(sec / 1000);
-    }
+    // 30日(=2592000s)超 & 1000の倍数 → ms疑い
+    if (sec > 2_592_000 && sec % 1000 === 0) sec = Math.floor(sec / 1000);
     return sec;
   }, [durationSeconds]);
 
+  // 残り時間の唯一の真実: targetTime
   const targetTime = useMemo(() => {
     if (mode === "absolute" && deadline) {
-      return new Date(deadline).getTime();
+      return new Date(deadline).getTime(); // datetime-localはローカルとして解釈される
     }
     if (mode === "per_access" && safeDurationSeconds > 0) {
-      if (preview) {
-        return Date.now() + safeDurationSeconds * 1000;
-      }
+      if (preview) return Date.now() + safeDurationSeconds * 1000;
       const key = `cms_page_first_access:${shareCode || ""}:${uid || "anon"}`;
       const stored = typeof window !== "undefined" ? localStorage.getItem(key) : null;
       const start = stored ? Number(stored) : Date.now();
@@ -89,22 +85,20 @@ export const TimerPreview = ({
     return Date.now();
   }, [mode, deadline, safeDurationSeconds, shareCode, uid, preview]);
 
+  // tick
   useEffect(() => {
     if (intervalRef.current) window.clearInterval(intervalRef.current);
     const tick = () => setRemainingMs(Math.max(0, targetTime - Date.now()));
     tick();
     intervalRef.current = window.setInterval(tick, showMilliseconds ? 50 : 500);
-    return () => {
-      if (intervalRef.current) window.clearInterval(intervalRef.current);
-    };
+    return () => { if (intervalRef.current) window.clearInterval(intervalRef.current); };
   }, [targetTime, showMilliseconds]);
 
-  const { days, hours, minutes, seconds, milli } = breakdown(remainingMs);
+  const { days, hours, minutes, seconds, milli } = useMemo(
+    () => calcPartsFromMs(remainingMs), [remainingMs]
+  );
 
-  // 表示ルール:
-  // 1) ぴったり1日(=1d 0h 0m 0s) → 「残り1日」
-  // 2) 日が1以上 → 「残り{日}{時間}{分}{秒}」
-  // 3) それ以外 → 「残り{時間}{分}{秒}」
+  // 表示ルール
   let base: string;
   if (days > 0 && hours === 0 && minutes === 0 && seconds === 0) {
     base = `残り${days}${dayLabel}`;
@@ -144,7 +138,7 @@ export const TimerPreview = ({
   };
 
   return (
-    <div className={className}>
+    <div className={className} data-testid="timer-preview-v3">
       <div className={styleClasses[styleVariant]} style={containerStyle}>
         <div className="text-xl font-semibold tracking-wide">{text}</div>
         {showEndDate && endDateText && (
