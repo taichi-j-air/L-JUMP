@@ -27,7 +27,7 @@ serve(async (req) => {
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
     );
 
-    // Fetch page by share code (friends_only also allowed here)
+    // Fetch page by share code
     const { data: page, error: pageErr } = await supabase
       .from("cms_pages")
       .select(
@@ -85,34 +85,82 @@ serve(async (req) => {
         );
       }
 
-      // ✅ 修正：フォーム機能と同じUID変換処理を追加
-      const { data: friendData, error: frErr } = await (async () => {
-        // Step 1: 短縮UIDから元のLINE UIDに変換
-        const { data: uidMapping, error: mappingErr } = await supabase
-          .from("friends")  // マッピングテーブル
-          .select("line_user_id")
-          .eq("user_id", page.user_id)
-          .eq("short_uid", uid)  // 短縮UIDで検索
-          .single();
+      // ✅ 修正：フォーム機能と同じデータベース側認証を使用
+      console.log("Friend authentication check:", { uid, user_id: page.user_id });
 
-        if (mappingErr || !uidMapping?.line_user_id) {
-          console.log("UID mapping not found:", { uid, user_id: page.user_id, mappingErr });
-          return { data: null, error: mappingErr || new Error("UID mapping not found") };
+      // 方法1: データベース関数を使用した友達認証（推奨）
+      try {
+        const { data: authResult, error: authErr } = await supabase
+          .rpc('check_friend_access', {  // フォーム機能の認証関数を流用
+            p_user_id: page.user_id,
+            p_short_uid: uid
+          });
+
+        console.log("Friend auth result:", { authResult, authErr });
+
+        if (authErr || !authResult) {
+          // RPC関数が存在しない場合のフォールバック
+          console.log("RPC auth failed, trying manual method...");
+          
+          // 方法2: 手動でフォーム機能と同じロジックを実装
+          const friendCheckResult = await (async () => {
+            // Step 1: 短縮UIDから元のLINE UIDに変換
+            const { data: uidMapping, error: mappingErr } = await supabase
+              .from("friends")
+              .select("line_user_id")
+              .eq("user_id", page.user_id)
+              .eq("short_uid", uid)
+              .single();
+
+            if (mappingErr || !uidMapping?.line_user_id) {
+              console.log("UID mapping failed:", { uid, user_id: page.user_id, mappingErr });
+              return false;
+            }
+
+            const actualLineUserId = uidMapping.line_user_id;
+            console.log("UID conversion successful:", { shortUid: uid, actualLineUserId });
+
+            // Step 2: 変換された元UIDで友達関係確認
+            const { data: friendData, error: friendErr } = await supabase
+              .from("line_friends")
+              .select("id")
+              .eq("user_id", page.user_id)
+              .eq("line_user_id", actualLineUserId)
+              .single();
+
+            console.log("Friend relationship check:", { friendData, friendErr });
+
+            return !friendErr && !!friendData;
+          })();
+
+          if (!friendCheckResult) {
+            const { data: profile } = await supabase
+              .from("profiles")
+              .select("display_name, line_user_id, add_friend_url")
+              .eq("user_id", page.user_id)
+              .maybeSingle();
+
+            const friendInfo = {
+              account_name: profile?.display_name || null,
+              line_id: profile?.line_user_id || null,
+              add_friend_url: profile?.add_friend_url || null,
+            };
+
+            return new Response(
+              JSON.stringify({ require_friend: true, friend_info: friendInfo }),
+              { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+            );
+          }
         }
 
-        const actualLineUserId = uidMapping.line_user_id;
-        console.log("UID conversion:", { shortUid: uid, actualLineUserId });
+        // 友達認証成功
+        friend = { id: "verified" };
+        console.log("Friend authentication successful");
 
-        // Step 2: 変換された元UIDでline_friendsテーブル検索（フォーム機能と同じ）
-        return await supabase
-          .from("line_friends")
-          .select("id")
-          .eq("user_id", page.user_id)
-          .eq("line_user_id", actualLineUserId)  // 変換された元UID
-          .single();
-      })();
-
-      if (frErr || !friendData) {
+      } catch (error) {
+        console.error("Friend authentication error:", error);
+        
+        // エラー時は友達追加を要求
         const { data: profile } = await supabase
           .from("profiles")
           .select("display_name, line_user_id, add_friend_url")
@@ -130,7 +178,6 @@ serve(async (req) => {
           { headers: { ...corsHeaders, "Content-Type": "application/json" } }
         );
       }
-      friend = friendData;
     }
 
     // Passcode check if required
@@ -144,7 +191,7 @@ serve(async (req) => {
     }
 
     // Tag segmentation (only apply if friend relationship exists)
-    if (friend) {
+    if (friend && friend.id !== "verified") {
       const allowed: string[] = Array.isArray(page.allowed_tag_ids) ? page.allowed_tag_ids : [];
       const blocked: string[] = Array.isArray(page.blocked_tag_ids) ? page.blocked_tag_ids : [];
 
