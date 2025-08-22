@@ -85,13 +85,32 @@ serve(async (req) => {
         );
       }
 
-      // ✅ 修正：フォーム機能と同じテーブル・フィールドを使用
-      const { data: friendData, error: frErr } = await supabase
-        .from("friends")  // ← フォーム機能と同じテーブル名
-        .select("id")
-        .eq("user_id", page.user_id)
-        .eq("short_uid", uid)  // ← 短縮UIDで検索（フォーム機能と同じ）
-        .single();
+      // ✅ 修正：フォーム機能と同じUID変換処理を追加
+      const { data: friendData, error: frErr } = await (async () => {
+        // Step 1: 短縮UIDから元のLINE UIDに変換
+        const { data: uidMapping, error: mappingErr } = await supabase
+          .from("friends")  // マッピングテーブル
+          .select("line_user_id")
+          .eq("user_id", page.user_id)
+          .eq("short_uid", uid)  // 短縮UIDで検索
+          .single();
+
+        if (mappingErr || !uidMapping?.line_user_id) {
+          console.log("UID mapping not found:", { uid, user_id: page.user_id, mappingErr });
+          return { data: null, error: mappingErr || new Error("UID mapping not found") };
+        }
+
+        const actualLineUserId = uidMapping.line_user_id;
+        console.log("UID conversion:", { shortUid: uid, actualLineUserId });
+
+        // Step 2: 変換された元UIDでline_friendsテーブル検索（フォーム機能と同じ）
+        return await supabase
+          .from("line_friends")
+          .select("id")
+          .eq("user_id", page.user_id)
+          .eq("line_user_id", actualLineUserId)  // 変換された元UID
+          .single();
+      })();
 
       if (frErr || !friendData) {
         const { data: profile } = await supabase
