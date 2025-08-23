@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 
-export type TimerMode = "absolute" | "per_access";
+export type TimerMode = "absolute" | "per_access" | "step_delivery";
 export type TimerStyle = "solid" | "glass" | "outline";
 
 interface TimerPreviewProps {

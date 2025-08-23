@@ -120,6 +120,7 @@ export type Database = {
           timer_hour_label: string | null
           timer_minute_label: string | null
           timer_mode: string
+          timer_mode_step_delivery: boolean | null
           timer_second_label: string | null
           timer_style: string
           timer_text: string | null
@@ -154,6 +155,7 @@ export type Database = {
           timer_hour_label?: string | null
           timer_minute_label?: string | null
           timer_mode?: string
+          timer_mode_step_delivery?: boolean | null
           timer_second_label?: string | null
           timer_style?: string
           timer_text?: string | null
@@ -188,6 +190,7 @@ export type Database = {
           timer_hour_label?: string | null
           timer_minute_label?: string | null
           timer_mode?: string
+          timer_mode_step_delivery?: boolean | null
           timer_second_label?: string | null
           timer_style?: string
           timer_text?: string | null
@@ -360,6 +363,54 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      friend_page_access: {
+        Row: {
+          access_enabled: boolean
+          access_source: string | null
+          created_at: string
+          first_access_at: string | null
+          friend_id: string
+          id: string
+          page_share_code: string
+          scenario_id: string | null
+          step_id: string | null
+          timer_end_at: string | null
+          timer_start_at: string | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          access_enabled?: boolean
+          access_source?: string | null
+          created_at?: string
+          first_access_at?: string | null
+          friend_id: string
+          id?: string
+          page_share_code: string
+          scenario_id?: string | null
+          step_id?: string | null
+          timer_end_at?: string | null
+          timer_start_at?: string | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          access_enabled?: boolean
+          access_source?: string | null
+          created_at?: string
+          first_access_at?: string | null
+          friend_id?: string
+          id?: string
+          page_share_code?: string
+          scenario_id?: string | null
+          step_id?: string | null
+          timer_end_at?: string | null
+          timer_start_at?: string | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
       }
       friend_tags: {
         Row: {
@@ -1821,6 +1872,17 @@ export type Database = {
           friend_id: string
           line_user_id: string
         }[]
+      }
+      manage_friend_page_access: {
+        Args: {
+          p_action: string
+          p_friend_id: string
+          p_page_share_code: string
+          p_scenario_id?: string
+          p_step_id?: string
+          p_timer_start_at?: string
+        }
+        Returns: Json
       }
       register_friend_to_scenario: {
         Args: {

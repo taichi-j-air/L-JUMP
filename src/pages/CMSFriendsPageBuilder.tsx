@@ -69,7 +69,7 @@ export default function CMSFriendsPageBuilder() {
   const [requirePass, setRequirePass] = useState(false);
   const [passcode, setPasscode] = useState("");
   const [timerEnabled, setTimerEnabled] = useState(false);
-  const [timerMode, setTimerMode] = useState<"absolute" | "per_access">("absolute");
+  const [timerMode, setTimerMode] = useState<"absolute" | "per_access" | "step_delivery">("absolute");
   const [timerDeadline, setTimerDeadline] = useState("");
   const [durationSeconds, setDurationSeconds] = useState<number>(0);
   const [showMilliseconds, setShowMilliseconds] = useState<boolean>(false);
@@ -293,7 +293,7 @@ export default function CMSFriendsPageBuilder() {
             : null,
         timer_mode: timerMode,
         timer_duration_seconds:
-          timerEnabled && timerMode === 'per_access' ? toSeconds(durDays, durHours, durMinutes, durSecs) : null,
+          timerEnabled && (timerMode === 'per_access' || timerMode === 'step_delivery') ? toSeconds(durDays, durHours, durMinutes, durSecs) : null,
         show_milliseconds: showMilliseconds,
         timer_style: timerStyle,
         timer_bg_color: timerBgColor,
@@ -607,6 +607,7 @@ export default function CMSFriendsPageBuilder() {
                           <SelectContent className="bg-background">
                             <SelectItem value="absolute">日時時間指定</SelectItem>
                             <SelectItem value="per_access">アクセス後カウント</SelectItem>
+                            <SelectItem value="step_delivery">ステップ配信時からカウント</SelectItem>
                           </SelectContent>
                         </Select>
                       </div>
@@ -616,7 +617,7 @@ export default function CMSFriendsPageBuilder() {
                           <Label>表示期限（締切）</Label>
                           <Input type="datetime-local" value={timerDeadline} onChange={(e) => setTimerDeadline(e.target.value)} />
                         </div>
-                      ) : (
+                      ) : (timerMode === 'per_access' || timerMode === 'step_delivery') ? (
                         <div className="space-y-2">
                           <Label>カウント時間</Label>
                           <div className="grid grid-cols-4 gap-2">
@@ -694,7 +695,7 @@ export default function CMSFriendsPageBuilder() {
                             </div>
                           </div>
                         </div>
-                      )}
+                      ) : null}
 
                       <div className="flex items-center justify-between">
                         <Label>ミリ秒を表示</Label>

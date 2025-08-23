@@ -36,7 +36,7 @@ serve(async (req) => {
         "timer_enabled, timer_mode, timer_deadline, timer_duration_seconds, " +
         "show_milliseconds, timer_style, timer_bg_color, timer_text_color, " +
         "internal_timer, timer_text, timer_day_label, timer_hour_label, " +
-        "timer_minute_label, timer_second_label"
+        "timer_minute_label, timer_second_label, expire_action, timer_mode_step_delivery"
       )
       .eq("share_code", shareCode)
       .single();
@@ -70,7 +70,7 @@ serve(async (req) => {
 
         return new Response(
           JSON.stringify({ require_friend: true, friend_info: friendInfo }),
-          { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
         );
       }
 
@@ -83,7 +83,7 @@ serve(async (req) => {
         .from("line_friends")
         .select("id, line_user_id")
         .eq("user_id", page.user_id)
-        .eq("short_uid", uidUpper)  // 実際のフィールド名に合わせて修正
+        .eq("short_uid_ci", uidUpper)  // 大文字小文字を区別しないフィールドを使用
         .maybeSingle();
 
       console.log("Friend query result:", { friendData, friendErr });
@@ -105,12 +105,66 @@ serve(async (req) => {
 
         return new Response(
           JSON.stringify({ require_friend: true, friend_info: friendInfo }),
-          { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
         );
       }
 
       friend = { id: friendData.id, line_user_id: friendData.line_user_id };
       console.log("Friend authentication successful:", friend);
+
+      // 友達別のページアクセス制御をチェック
+      const { data: accessData } = await supabase
+        .from("friend_page_access")
+        .select("*")
+        .eq("friend_id", friend.id)
+        .eq("page_share_code", shareCode)
+        .maybeSingle();
+
+      // アクセス制御レコードが存在し、access_enabledがfalseの場合
+      if (accessData && !accessData.access_enabled) {
+        console.log("Access disabled for friend:", { friend_id: friend.id, shareCode });
+        
+        const { data: profile } = await supabase
+          .from("profiles")
+          .select("display_name, line_user_id, add_friend_url")
+          .eq("user_id", page.user_id)
+          .maybeSingle();
+
+        const friendInfo = {
+          account_name: profile?.display_name || null,
+          line_id: profile?.line_user_id || null,
+          add_friend_url: profile?.add_friend_url || null,
+          message: "このページの閲覧期限が終了しました。"
+        };
+
+        return new Response(
+          JSON.stringify({ require_friend: true, friend_info: friendInfo }),
+          { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+
+      // 初回アクセス時の記録（per_accessタイマー用）
+      if (page.timer_enabled && page.timer_mode === 'per_access') {
+        if (!accessData) {
+          // 新規アクセス制御レコードを作成
+          await supabase
+            .from("friend_page_access")
+            .insert({
+              user_id: page.user_id,
+              friend_id: friend.id,
+              page_share_code: shareCode,
+              first_access_at: new Date().toISOString(),
+              access_enabled: true,
+              access_source: 'page_view'
+            });
+        } else if (!accessData.first_access_at) {
+          // 初回アクセス時刻を記録
+          await supabase
+            .from("friend_page_access")
+            .update({ first_access_at: new Date().toISOString() })
+            .eq("id", accessData.id);
+        }
+      }
     }
 
     // パスコード認証
@@ -123,7 +177,7 @@ serve(async (req) => {
 
       if (!passcode || passcode !== page.passcode) {
         return new Response(JSON.stringify({ require_passcode: true }), {
-          status: 200, // 401ではなく200でパスコード入力画面を促す
+          status: 200,
           headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       }
