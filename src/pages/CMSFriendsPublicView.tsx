@@ -14,7 +14,7 @@ interface PagePayload {
   content?: string | null;
   content_blocks?: string[];
   timer_enabled?: boolean;
-  timer_mode?: "absolute" | "per_access";
+  timer_mode?: "absolute" | "per_access" | "step_delivery";
   timer_deadline?: string | null;
   timer_duration_seconds?: number | null;
   show_milliseconds?: boolean;
@@ -216,7 +216,7 @@ export default function CMSFriendsPublicView() {
         <TimerPreview
           mode={data.timer_mode || "absolute"}
           deadline={data.timer_mode === 'absolute' ? data.timer_deadline || undefined : undefined}
-          durationSeconds={data.timer_mode === 'per_access' ? data.timer_duration_seconds || undefined : undefined}
+          durationSeconds={(data.timer_mode === 'per_access' || data.timer_mode === 'step_delivery') ? data.timer_duration_seconds || undefined : undefined}
           showMilliseconds={!!data.show_milliseconds}
           styleVariant={data.timer_style || "solid"}
           bgColor={data.timer_bg_color || "#0cb386"}
@@ -229,7 +229,7 @@ export default function CMSFriendsPublicView() {
           secondLabel={data.timer_second_label || "秒"}
           internalTimer={!!data.internal_timer}
           timerText={data.timer_text || "期間限定公開"}
-          showEndDate={data.timer_mode === 'per_access'}
+          showEndDate={data.timer_mode === 'per_access' || data.timer_mode === 'step_delivery'}
         />
       )}
 
@@ -238,6 +238,25 @@ export default function CMSFriendsPublicView() {
         {Array.isArray(data.content_blocks) && data.content_blocks.length > 0 ? (
           data.content_blocks.map((block, idx) => {
             const html = DOMPurify.sanitize(block || "");
+            // フォーム埋め込み（新しい形式）の処理
+            if (html.includes('class="form-embed-container"') && html.includes('data-form-id=')) {
+              const formIdMatch = html.match(/data-form-id="([^"]+)"/);
+              if (formIdMatch) {
+                const formId = formIdMatch[1];
+                return (
+                  <div key={idx} className="mt-4 first:mt-0">
+                    <iframe 
+                      src={`${window.location.origin}/form/${formId}${uid ? `?uid=${uid}` : ''}`}
+                      className="w-full min-h-[400px] border rounded"
+                      title="埋め込みフォーム"
+                      style={{ background: 'white' }}
+                    />
+                  </div>
+                );
+              }
+            }
+            
+            // 従来のフォーム埋め込み形式も維持
             if (html.includes('class="form-embed"') && html.includes('data-form-id=')) {
               const formIdMatch = html.match(/data-form-id="([^"]+)"/);
               if (formIdMatch) {
