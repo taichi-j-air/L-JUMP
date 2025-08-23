@@ -15,29 +15,19 @@ import RichTextEditor from "@/components/RichTextEditor";
 import RichTextBlocksEditor from "@/components/RichTextBlocksEditor";
 import { TimerPreview } from "@/components/TimerPreview";
 import { useLiffValidation } from "@/hooks/useLiffValidation";
-import { Trash2, FormInput } from "lucide-react";
+import { Trash2 } from "lucide-react";
 
-// 【追加】フォームブロックの型定義
-interface FormBlock {
-  id: string;
-  type: 'form';
-  title: string;
-  formId: string;
-  formName: string;
-}
-
-// Type helpers (loosened to avoid tight coupling with generated types)
+// 【修正1】型定義にprivateを追加
 interface CmsPageRow {
   id: string;
   user_id: string;
   title: string;
   slug: string;
   share_code: string;
-  visibility: "friends_only" | "public" | "private";
+  visibility: "friends_only" | "public" | "private";  // ← private追加
   internal_name?: string | null;
   tag_label?: string | null;
   content_blocks?: any[];
-  form_blocks?: FormBlock[]; // 【追加】
   allowed_tag_ids?: string[];
   blocked_tag_ids?: string[];
   require_passcode?: boolean;
@@ -71,9 +61,6 @@ export default function CMSFriendsPageBuilder() {
   const [title, setTitle] = useState("");
   const [contentHtml, setContentHtml] = useState<string>("");
   const [contentBlocks, setContentBlocks] = useState<string[]>([]);
-  
-  // 【追加】フォームブロック専用のstate
-  const [formBlocks, setFormBlocks] = useState<FormBlock[]>([]);
 
   // Right settings
   const [tags, setTags] = useState<TagRow[]>([]);
@@ -108,28 +95,7 @@ export default function CMSFriendsPageBuilder() {
   const [saving, setSaving] = useState(false);
   const [isPublic, setIsPublic] = useState(false);
   const [forms, setForms] = useState<Array<{id: string; name: string}>>([]);
-
-  // 【追加】フォームブロック管理関数
-  const addFormBlock = () => {
-    const newBlock: FormBlock = {
-      id: `form_${Date.now()}`,
-      type: 'form',
-      title: '新しいフォーム',
-      formId: '',
-      formName: ''
-    };
-    setFormBlocks(prev => [...prev, newBlock]);
-  };
-
-  const updateFormBlock = (index: number, updates: Partial<FormBlock>) => {
-    setFormBlocks(prev => prev.map((block, i) => 
-      i === index ? { ...block, ...updates } : block
-    ));
-  };
-
-  const deleteFormBlock = (index: number) => {
-    setFormBlocks(prev => prev.filter((_, i) => i !== index));
-  };
+  const [selectedFormId, setSelectedFormId] = useState<string>("");
 
   // 修正: durationSecondsをdurDays/durHours/durMinutes/durSecsの変更時にuseEffectで更新
   useEffect(() => {
@@ -176,7 +142,6 @@ export default function CMSFriendsPageBuilder() {
       const arr: CmsPageRow[] = (pageRows || []).map((r: any) => ({
         ...r,
         content_blocks: Array.isArray(r.content_blocks) ? r.content_blocks : [],
-        form_blocks: Array.isArray(r.form_blocks) ? r.form_blocks : [], // 【追加】
         allowed_tag_ids: Array.isArray(r.allowed_tag_ids) ? r.allowed_tag_ids : [],
         blocked_tag_ids: Array.isArray(r.blocked_tag_ids) ? r.blocked_tag_ids : [],
       }));
@@ -195,10 +160,6 @@ export default function CMSFriendsPageBuilder() {
     setTitle(selected.title || "");
     setContentHtml((selected as any).content || "");
     setContentBlocks(Array.isArray((selected as any).content_blocks) ? (selected as any).content_blocks : []);
-    
-    // 【追加】フォームブロックの読み込み
-    setFormBlocks(Array.isArray(selected.form_blocks) ? selected.form_blocks : []);
-    
     setAllowedTags(selected.allowed_tag_ids || []);
     setBlockedTags(selected.blocked_tag_ids || []);
     setRequirePass(!!selected.require_passcode);
@@ -228,7 +189,7 @@ export default function CMSFriendsPageBuilder() {
     setDurMinutes(m);
     setDurSecs(s);
     
-    // 【修正】状態読み込みの論理を修正
+    // 【修正2】状態読み込みの論理を修正
     setIsPublic(selected.visibility === 'friends_only'); // friends_onlyを公開として扱う
   }, [selectedId]);
 
@@ -321,7 +282,6 @@ export default function CMSFriendsPageBuilder() {
         
         content: contentHtml,
         content_blocks: contentBlocks,
-        form_blocks: formBlocks, // 【追加】フォームブロックを保存
         allowed_tag_ids: allowedTags,
         blocked_tag_ids: blockedTags,
         require_passcode: requirePass,
@@ -402,7 +362,6 @@ export default function CMSFriendsPageBuilder() {
       window.open(`/cms/preview/${selected.id}`, '_blank');
     });
   };
-
   return (
     <div className="container mx-auto max-w-[1200px] space-y-4">
       <header>
@@ -531,80 +490,36 @@ export default function CMSFriendsPageBuilder() {
                     <RichTextBlocksEditor value={contentBlocks} onChange={setContentBlocks} />
                   </div>
                   
-                  {/* 【新規追加】フォームブロック管理セクション */}
-                  <div className="space-y-4">
-                    <div className="flex items-center justify-between">
-                      <Label>フォーム埋め込み</Label>
-                      <Button size="sm" onClick={addFormBlock}>
-                        フォーム追加
+                  <div className="space-y-2">
+                    <Label>フォーム埋め込み</Label>
+                    <div className="flex gap-2">
+                      <Select value={selectedFormId} onValueChange={setSelectedFormId}>
+                        <SelectTrigger className="flex-1">
+                          <SelectValue placeholder="フォームを選択" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {forms.map(form => (
+                            <SelectItem key={form.id} value={form.id}>{form.name}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <Button
+                        type="button"
+                        onClick={() => {
+                          if (!selectedFormId) return;
+                          const selectedForm = forms.find(f => f.id === selectedFormId);
+                          const formEmbed = `<div class="form-embed" data-form-id="${selectedFormId}" style="padding: 20px; background: #f5f5f5; border: 1px solid #ddd; border-radius: 8px; text-align: center;">
+                            <h3>📝 ${selectedForm?.name || 'フォーム'}</h3>
+                            <p>フォームが埋め込まれます</p>
+                          </div>`;
+                          setContentBlocks(prev => [...prev, formEmbed]);
+                          setSelectedFormId("");
+                        }}
+                        disabled={!selectedFormId}
+                      >
+                        追加
                       </Button>
                     </div>
-                    
-                    {formBlocks.length === 0 ? (
-                      <p className="text-sm text-muted-foreground">フォームを追加してください</p>
-                    ) : (
-                      <div className="space-y-3">
-                        {formBlocks.map((block, index) => (
-                          <Card key={block.id} className="border-l-4 border-l-green-500">
-                            <CardContent className="p-4">
-                              <div className="flex items-center justify-between mb-3">
-                                <div className="flex items-center gap-2">
-                                  <FormInput className="h-4 w-4" />
-                                  <span className="font-medium">フォーム #{index + 1}</span>
-                                  <span className="text-sm text-muted-foreground">
-                                    {block.formName || '（未選択）'}
-                                  </span>
-                                </div>
-                                <Button
-                                  size="sm"
-                                  variant="ghost"
-                                  onClick={() => deleteFormBlock(index)}
-                                  className="text-destructive hover:text-destructive"
-                                >
-                                  <Trash2 className="h-4 w-4" />
-                                </Button>
-                              </div>
-                              
-                              <div className="grid grid-cols-1 gap-3">
-                                <div className="space-y-2">
-                                  <Label>ブロックタイトル</Label>
-                                  <Input
-                                    value={block.title}
-                                    onChange={(e) => updateFormBlock(index, { title: e.target.value })}
-                                    placeholder="例: お問い合わせフォーム"
-                                  />
-                                </div>
-                                
-                                <div className="space-y-2">
-                                  <Label>埋め込むフォーム</Label>
-                                  <Select 
-                                    value={block.formId} 
-                                    onValueChange={(formId) => {
-                                      const selectedForm = forms.find(f => f.id === formId);
-                                      updateFormBlock(index, { 
-                                        formId, 
-                                        formName: selectedForm?.name || '' 
-                                      });
-                                    }}
-                                  >
-                                    <SelectTrigger>
-                                      <SelectValue placeholder="フォームを選択" />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                      {forms.map(form => (
-                                        <SelectItem key={form.id} value={form.id}>
-                                          {form.name}
-                                        </SelectItem>
-                                      ))}
-                                    </SelectContent>
-                                  </Select>
-                                </div>
-                              </div>
-                            </CardContent>
-                          </Card>
-                        ))}
-                      </div>
-                    )}
                   </div>
                 </>
               )}
