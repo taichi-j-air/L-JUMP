@@ -5,9 +5,10 @@ const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
   "Access-Control-Allow-Methods": "GET,POST,OPTIONS",
+  "Cache-Control": "no-store", // ← 念のため
 };
 
-// 未変換・ダミー値を無効とする（例: [UID], UID, 空, null, undefined）
+// 未変換・ダミー値判定
 const isPlaceholder = (v?: string | null) => {
   if (v == null) return true;
   const s = String(v).trim();
@@ -16,13 +17,19 @@ const isPlaceholder = (v?: string | null) => {
   return ["[uid]", "uid", "[[uid]]", "{uid}", "undefined", "null"].includes(lower);
 };
 
+// visibility正規化
+const normalizeVis = (v: any) =>
+  String(v ?? "")
+    .trim()
+    .toLowerCase()
+    .replace(/[\s-]+/g, "_"); // "friends-only" や "friends only" → "friends_only"
+
 serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
   }
 
   try {
-    // クエリ/JSONの両方から取得
     const url = new URL(req.url);
     const isJSON = req.headers.get("content-type")?.includes("application/json");
     const body = isJSON && req.method === "POST" ? await req.json().catch(() => ({})) : {};
@@ -30,13 +37,17 @@ serve(async (req) => {
     const shareCode = (body.shareCode ?? url.searchParams.get("shareCode") ?? "").trim();
     const passcode  = (body.passcode  ?? url.searchParams.get("passcode")  ?? "") || undefined;
 
-    // フォーム同等：uid or line_user_id どちらでも照合可
-    let uid: string | undefined = body.uid ?? url.searchParams.get("uid") ?? body.suid ?? url.searchParams.get("suid") ?? undefined;
-    let lineUserId: string | undefined = body.line_user_id ?? url.searchParams.get("line_user_id") ?? url.searchParams.get("lu") ?? undefined;
+    // 入力（クエリ/JSON両対応）
+    const uidParamRaw = url.searchParams.get("uid") ?? url.searchParams.get("suid");
+    const hasUidParam = uidParamRaw !== null; // クエリに uid/suid が “ある” か
+    let uid: string | undefined =
+      body.uid ?? uidParamRaw ?? body.suid ?? undefined;
 
-    // 未変換/ダミーを無効化
-    if (isPlaceholder(uid)) uid = undefined; else uid = String(uid).trim();
-    if (isPlaceholder(lineUserId)) lineUserId = undefined; else lineUserId = String(lineUserId).trim();
+    let lineUserId: string | undefined =
+      body.line_user_id ?? url.searchParams.get("line_user_id") ?? url.searchParams.get("lu") ?? undefined;
+
+    if (uid != null) uid = String(uid).trim();
+    if (lineUserId != null) lineUserId = String(lineUserId).trim();
 
     const uidUpper = uid ? uid.toUpperCase() : undefined;
 
@@ -73,11 +84,39 @@ serve(async (req) => {
       });
     }
 
-    // ===== 友だち認証（厳格）=====
+    const visRaw = page.visibility;
+    const vis = normalizeVis(visRaw);
+    const isFriendsOnly = vis === "friends_only";
+
+    console.log("[page]", { shareCode, visRaw, vis, isFriendsOnly, hasUidParam, uidParamRaw, uid, uidUpper });
+
+    // ★ 追加：クエリに uid が含まれ、かつ未変換/ダミーなら即403（誰も通さない）
+    if (hasUidParam && isPlaceholder(uidParamRaw)) {
+      const { data: profile } = await supabase
+        .from("profiles")
+        .select("display_name, line_user_id, add_friend_url")
+        .eq("user_id", page.user_id)
+        .maybeSingle();
+
+      return new Response(
+        JSON.stringify({
+          require_friend: true,
+          reason: "uid_placeholder",
+          friend_info: {
+            account_name: profile?.display_name || null,
+            line_id: profile?.line_user_id || null,
+            add_friend_url: profile?.add_friend_url || null,
+          },
+        }),
+        { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    // 友だち認証
     let friend: { id: string | number; line_user_id: string } | null = null;
 
-    if (page.visibility === "friends_only") {
-      // A) uid で照合（short_uid / short_uid_ci の OR）
+    if (isFriendsOnly) {
+      // (A) uid → short_uid / short_uid_ci の OR
       if (uid || uidUpper) {
         const orParts = [
           uid ? `short_uid.eq.${uid}` : "",
@@ -92,14 +131,12 @@ serve(async (req) => {
             .or(orParts)
             .maybeSingle();
 
-          if (f1) {
-            friend = { id: f1.id, line_user_id: f1.line_user_id };
-          }
+          if (f1) friend = { id: f1.id, line_user_id: f1.line_user_id };
         }
       }
 
-      // B) 見つからず、かつ line_user_id があれば照合（LIFF想定）
-      if (!friend && lineUserId) {
+      // (B) 見つからず & line_user_id があれば（LIFF用・今回は通常ブラウザなら多くは未設定）
+      if (!friend && lineUserId && !isPlaceholder(lineUserId)) {
         const { data: f2 } = await supabase
           .from("line_friends")
           .select("id, line_user_id")
@@ -107,12 +144,10 @@ serve(async (req) => {
           .eq("line_user_id", lineUserId)
           .maybeSingle();
 
-        if (f2) {
-          friend = { id: f2.id, line_user_id: f2.line_user_id };
-        }
+        if (f2) friend = { id: f2.id, line_user_id: f2.line_user_id };
       }
 
-      // C) 友だち確定できなければ 403（payload は返さない）
+      // (C) 確定できなければ 403（本文は返さない）
       if (!friend) {
         const { data: profile } = await supabase
           .from("profiles")
@@ -123,6 +158,7 @@ serve(async (req) => {
         return new Response(
           JSON.stringify({
             require_friend: true,
+            reason: "not_matched",
             friend_info: {
               account_name: profile?.display_name || null,
               line_id: profile?.line_user_id || null,
@@ -134,7 +170,7 @@ serve(async (req) => {
       }
     }
 
-    // ===== パスコード（厳格）=====
+    // パスコード（厳格）
     if (page.require_passcode) {
       if (!passcode || passcode !== page.passcode) {
         return new Response(JSON.stringify({ require_passcode: true }), {
@@ -144,7 +180,7 @@ serve(async (req) => {
       }
     }
 
-    // ===== タグ制御 =====
+    // タグ制御（友だち確定時のみ）
     if (friend) {
       const allowed: string[] = Array.isArray(page.allowed_tag_ids) ? page.allowed_tag_ids : [];
       const blocked: string[] = Array.isArray(page.blocked_tag_ids) ? page.blocked_tag_ids : [];
@@ -173,7 +209,7 @@ serve(async (req) => {
       }
     }
 
-    // ===== コンテンツ返却（認可済みのみ）=====
+    // 認可OKのみ本文返却
     const payload = {
       title: page.title,
       tag_label: page.tag_label,
