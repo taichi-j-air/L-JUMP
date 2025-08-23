@@ -5,24 +5,22 @@ const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
   "Access-Control-Allow-Methods": "GET,POST,OPTIONS",
-  "Cache-Control": "no-store", // ← 念のため
+  "Cache-Control": "no-store",
 };
 
-// 未変換・ダミー値判定
+// 未変換/ダミー UID を弾く
 const isPlaceholder = (v?: string | null) => {
   if (v == null) return true;
   const s = String(v).trim();
   if (!s) return true;
   const lower = s.toLowerCase();
-  return ["[uid]", "uid", "[[uid]]", "{uid}", "undefined", "null"].includes(lower);
+  return ["[uid]", "uid", "[[uid]]", "{uid}", "<uid>", "__uid__", "undefined", "null"].includes(lower)
+      || /^[\[\{<\(_\-\s]*uid[\]\}>\)\_\-\s]*$/i.test(s);
 };
 
-// visibility正規化
+// visibility を正規化（記法ゆれ対策）
 const normalizeVis = (v: any) =>
-  String(v ?? "")
-    .trim()
-    .toLowerCase()
-    .replace(/[\s-]+/g, "_"); // "friends-only" や "friends only" → "friends_only"
+  String(v ?? "").trim().toLowerCase().replace(/[\s-]+/g, "_"); // "friends-only"等→"friends_only"
 
 serve(async (req) => {
   if (req.method === "OPTIONS") {
@@ -37,19 +35,11 @@ serve(async (req) => {
     const shareCode = (body.shareCode ?? url.searchParams.get("shareCode") ?? "").trim();
     const passcode  = (body.passcode  ?? url.searchParams.get("passcode")  ?? "") || undefined;
 
-    // 入力（クエリ/JSON両対応）
+    // uid は URL か body のどちらでも可（今回は「uidだけ」を使う）
     const uidParamRaw = url.searchParams.get("uid") ?? url.searchParams.get("suid");
-    const hasUidParam = uidParamRaw !== null; // クエリに uid/suid が “ある” か
-    let uid: string | undefined =
-      body.uid ?? uidParamRaw ?? body.suid ?? undefined;
-
-    let lineUserId: string | undefined =
-      body.line_user_id ?? url.searchParams.get("line_user_id") ?? url.searchParams.get("lu") ?? undefined;
-
+    const hasUidParam = uidParamRaw !== null;
+    let uid: string | undefined = (uidParamRaw ?? body.uid ?? body.suid) ?? undefined;
     if (uid != null) uid = String(uid).trim();
-    if (lineUserId != null) lineUserId = String(lineUserId).trim();
-
-    const uidUpper = uid ? uid.toUpperCase() : undefined;
 
     if (!shareCode) {
       return new Response(JSON.stringify({ error: "shareCode is required" }), {
@@ -84,71 +74,13 @@ serve(async (req) => {
       });
     }
 
-    const visRaw = page.visibility;
-    const vis = normalizeVis(visRaw);
+    const vis = normalizeVis(page.visibility);
     const isFriendsOnly = vis === "friends_only";
 
-    console.log("[page]", { shareCode, visRaw, vis, isFriendsOnly, hasUidParam, uidParamRaw, uid, uidUpper });
-
-    // ★ 追加：クエリに uid が含まれ、かつ未変換/ダミーなら即403（誰も通さない）
-    if (hasUidParam && isPlaceholder(uidParamRaw)) {
-      const { data: profile } = await supabase
-        .from("profiles")
-        .select("display_name, line_user_id, add_friend_url")
-        .eq("user_id", page.user_id)
-        .maybeSingle();
-
-      return new Response(
-        JSON.stringify({
-          require_friend: true,
-          reason: "uid_placeholder",
-          friend_info: {
-            account_name: profile?.display_name || null,
-            line_id: profile?.line_user_id || null,
-            add_friend_url: profile?.add_friend_url || null,
-          },
-        }),
-        { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
-    }
-
-    // 友だち認証
-    let friend: { id: string | number; line_user_id: string } | null = null;
-
+    // ---- 友だち限定：uid 必須 ＆ 登録済みUIDのみ許可（LIFFは一切見ない）----
     if (isFriendsOnly) {
-      // (A) uid → short_uid / short_uid_ci の OR
-      if (uid || uidUpper) {
-        const orParts = [
-          uid ? `short_uid.eq.${uid}` : "",
-          uidUpper ? `short_uid_ci.eq.${uidUpper}` : "",
-        ].filter(Boolean).join(",");
-
-        if (orParts) {
-          const { data: f1 } = await supabase
-            .from("line_friends")
-            .select("id, line_user_id")
-            .eq("user_id", page.user_id) // テナント一致
-            .or(orParts)
-            .maybeSingle();
-
-          if (f1) friend = { id: f1.id, line_user_id: f1.line_user_id };
-        }
-      }
-
-      // (B) 見つからず & line_user_id があれば（LIFF用・今回は通常ブラウザなら多くは未設定）
-      if (!friend && lineUserId && !isPlaceholder(lineUserId)) {
-        const { data: f2 } = await supabase
-          .from("line_friends")
-          .select("id, line_user_id")
-          .eq("user_id", page.user_id)
-          .eq("line_user_id", lineUserId)
-          .maybeSingle();
-
-        if (f2) friend = { id: f2.id, line_user_id: f2.line_user_id };
-      }
-
-      // (C) 確定できなければ 403（本文は返さない）
-      if (!friend) {
+      // uid が無い or 未変換 → 即 403
+      if (!hasUidParam || isPlaceholder(uid)) {
         const { data: profile } = await supabase
           .from("profiles")
           .select("display_name, line_user_id, add_friend_url")
@@ -158,7 +90,7 @@ serve(async (req) => {
         return new Response(
           JSON.stringify({
             require_friend: true,
-            reason: "not_matched",
+            reason: !hasUidParam ? "uid_missing" : "uid_placeholder",
             friend_info: {
               account_name: profile?.display_name || null,
               line_id: profile?.line_user_id || null,
@@ -168,32 +100,48 @@ serve(async (req) => {
           { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } }
         );
       }
-    }
 
-    // パスコード（厳格）
-    if (page.require_passcode) {
-      if (!passcode || passcode !== page.passcode) {
-        return new Response(JSON.stringify({ require_passcode: true }), {
-          status: 401,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        });
+      // 登録済みUID（同一 user_id の友だち）かを厳密チェック
+      // 大文字小文字を吸収するため ilike を使用（UIDは英数想定）
+      const { data: friend } = await supabase
+        .from("line_friends")
+        .select("id, line_user_id")
+        .eq("user_id", page.user_id)   // ← ここが最重要：同じアカウントの友だち限定
+        .ilike("short_uid", uid!)      // ← case-insensitive 一致
+        .maybeSingle();
+
+      if (!friend) {
+        // その uid は当該アカウントの友だちとして登録がない → 403
+        const { data: profile } = await supabase
+          .from("profiles")
+          .select("display_name, line_user_id, add_friend_url")
+          .eq("user_id", page.user_id)
+          .maybeSingle();
+
+        return new Response(
+          JSON.stringify({
+            require_friend: true,
+            reason: "uid_not_found",
+            friend_info: {
+              account_name: profile?.display_name || null,
+              line_id: profile?.line_user_id || null,
+              add_friend_url: profile?.add_friend_url || null,
+            },
+          }),
+          { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
       }
-    }
 
-    // タグ制御（友だち確定時のみ）
-    if (friend) {
+      // （必要ならここで allowed / blocked タグ制御）
       const allowed: string[] = Array.isArray(page.allowed_tag_ids) ? page.allowed_tag_ids : [];
       const blocked: string[] = Array.isArray(page.blocked_tag_ids) ? page.blocked_tag_ids : [];
-
       if (allowed.length > 0 || blocked.length > 0) {
         const { data: friendTags } = await supabase
           .from("friend_tags")
           .select("tag_id")
           .eq("user_id", page.user_id)
           .eq("friend_id", friend.id);
-
         const tagIds = new Set((friendTags || []).map((t: any) => t.tag_id));
-
         if (allowed.length > 0 && !allowed.some((id) => tagIds.has(id))) {
           return new Response(JSON.stringify({ error: "forbidden by allowed tags" }), {
             status: 403,
@@ -209,7 +157,17 @@ serve(async (req) => {
       }
     }
 
-    // 認可OKのみ本文返却
+    // ---- パスコード（必要なページのみ）----
+    if (page.require_passcode) {
+      if (!passcode || passcode !== page.passcode) {
+        return new Response(JSON.stringify({ require_passcode: true }), {
+          status: 401,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+    }
+
+    // ---- 認可OK：中身を返す ----
     const payload = {
       title: page.title,
       tag_label: page.tag_label,
