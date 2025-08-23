@@ -1,12 +1,12 @@
 import { useEffect, useMemo, useState } from "react";
-import { useParams, useSearchParams, useNavigate } from "react-router-dom";
+import { useParams, useSearchParams } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import DOMPurify from "dompurify";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { TimerPreview } from "@/components/TimerPreview";
-import { ArrowLeft, X } from "lucide-react";
+import { X } from "lucide-react";
 
 interface PagePayload {
   title: string;
@@ -29,10 +29,17 @@ interface PagePayload {
   timer_second_label?: string | null;
 }
 
+// 【追加】friendInfoの型定義を拡張
+interface FriendInfo {
+  account_name: string | null;
+  line_id: string | null;
+  add_friend_url: string | null;
+  message?: string;
+}
+
 export default function CMSFriendsPublicView() {
   const params = useParams();
   const [search] = useSearchParams();
-  const navigate = useNavigate();
   const shareCode = params.shareCode;
   const pageId = params.pageId;
   const uid = search.get("uid") || undefined;
@@ -42,16 +49,9 @@ export default function CMSFriendsPublicView() {
   const [error, setError] = useState<string | null>(null);
   const [passcode, setPasscode] = useState("");
   const [requirePass, setRequirePass] = useState(false);
-  
-  // 【修正】friendInfoにmessageフィールドを追加
-  const [friendInfo, setFriendInfo] = useState<{ 
-    account_name: string | null; 
-    line_id: string | null; 
-    add_friend_url: string | null;
-    message?: string | null;
-  } | null>(null);
+  const [friendInfo, setFriendInfo] = useState<FriendInfo | null>(null);
 
-  const isPreview = !!pageId; // preview route for owners
+  const isPreview = !!pageId;
 
   useEffect(() => {
     document.title = data?.title ? `${data.title} | ページ` : "ページ";
@@ -65,96 +65,44 @@ export default function CMSFriendsPublicView() {
     try {
       setLoading(true);
       setError(null);
+      setFriendInfo(null);
+      setRequirePass(false);
 
-      // プレビューモードでも認証を適用する場合は、shareCodeから取得
-      if (isPreview && pageId) {
-        const { data: page, error } = await (supabase as any)
+      // 【修正】プレビュー機能のロジックを全面的に修正
+      if (isPreview) {
+        // プレビューモード：作成者として直接ページデータを取得
+        const { data: page, error: pageError } = await supabase
           .from("cms_pages")
-          .select("share_code")
+          .select("*")
           .eq("id", pageId)
           .maybeSingle();
-        if (error) throw error;
-        if (!page?.share_code) throw new Error("ページが見つかりません");
-        
-        // プレビューモードでもエッジ関数を使用して認証を適用
-        const { data: res, error: fnErr } = await supabase.functions.invoke("cms-page-view", {
-          body: { 
-            shareCode: page.share_code, 
-            uid: uid, 
-            passcode: withPasscode || undefined 
-          },
-        });
-        
-        // エラーハンドリングを改善
-        if (fnErr) {
-          console.error("Edge function error:", fnErr);
-          throw new Error(fnErr.message || "エッジ関数でエラーが発生しました");
+
+        if (pageError || !page) {
+          throw new Error("プレビュー対象のページが見つかりません。");
         }
-        
-        // レスポンスがnullの場合
-        if (!res) {
-          throw new Error("レスポンスがありません");
-        }
-        
-        if (res?.require_passcode) {
-          setRequirePass(true);
-          setFriendInfo(null);
-          setData(null);
-          return;
-        }
-        if (res?.require_friend) {
-          setFriendInfo(res.friend_info || null);
-          setData(null);
-          setRequirePass(false);
-          return;
-        }
-        if (res?.error) {
-          throw new Error(res.error);
-        }
-        setFriendInfo(null);
-        setRequirePass(false);
-        setData(res as PagePayload);
+        setData(page as PagePayload);
         return;
       }
 
+      // 通常の公開ページ表示
       if (!shareCode) {
         setError("共有コードがありません");
         return;
       }
 
       const { data: res, error: fnErr } = await supabase.functions.invoke("cms-page-view", {
-        body: { shareCode, uid, passcode: withPasscode || undefined },
+        body: { shareCode, uid, passcode: withPasscode },
       });
       
-      // エラーハンドリングを改善
-      if (fnErr) {
-        console.error("Edge function error:", fnErr);
-        throw new Error(fnErr.message || "エッジ関数でエラーが発生しました");
-      }
+      if (fnErr) throw new Error(fnErr.message || "エッジ関数でエラーが発生しました");
+      if (!res) throw new Error("レスポンスがありません");
       
-      // レスポンスがnullの場合
-      if (!res) {
-        throw new Error("レスポンスがありません");
-      }
-      
-      if (res?.require_passcode) {
-        setRequirePass(true);
-        setFriendInfo(null);
-        setData(null);
-        return;
-      }
-      if (res?.require_friend) {
-        setFriendInfo(res.friend_info || null);
-        setData(null);
-        setRequirePass(false);
-        return;
-      }
-      if (res?.error) {
-        throw new Error(res.error);
-      }
-      setFriendInfo(null);
-      setRequirePass(false);
+      if (res.error) throw new Error(res.error);
+      if (res.require_passcode) return setRequirePass(true);
+      if (res.require_friend) return setFriendInfo(res.friend_info || null);
+
       setData(res as PagePayload);
+
     } catch (e: any) {
       setError(e?.message || "読み込みに失敗しました");
     } finally {
@@ -164,14 +112,33 @@ export default function CMSFriendsPublicView() {
 
   useEffect(() => {
     fetchData();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [shareCode, uid, pageId]);
+  }, [shareCode, pageId, uid]); // 依存配列を修正
 
   if (loading) return <div className="container mx-auto p-6">読み込み中…</div>;
   if (error) return <div className="container mx-auto p-6 text-destructive">{error}</div>;
 
-  // 【修正】友達限定画面の表示を改善
-  if (!data && friendInfo) {
+  // 【修正】パスコード入力画面の表示ロジックを優先
+  if (requirePass) {
+    return (
+      <div className="container mx-auto max-w-3xl p-4">
+        <Card>
+          <CardContent className="p-4 space-y-3">
+            <div>このページはパスコードで保護されています。</div>
+            <Input 
+              value={passcode} 
+              onChange={(e) => setPasscode(e.target.value)} 
+              placeholder="パスコード"
+              onKeyDown={(e) => e.key === 'Enter' && fetchData(passcode)}
+            />
+            <Button onClick={() => fetchData(passcode)}>送信</Button>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
+  // 【修正】権限なし画面の表示ロジックと宣伝バナー
+  if (friendInfo) {
     return (
       <div className="container mx-auto max-w-3xl p-4 space-y-4">
         <Card>
@@ -181,7 +148,6 @@ export default function CMSFriendsPublicView() {
               {friendInfo.message || "このページを閲覧する権限がありません。詳細については管理者にお問い合わせください。"}
             </p>
             
-            {/* 管理者情報がある場合のみ表示 */}
             {(friendInfo.account_name || friendInfo.line_id || friendInfo.add_friend_url) && (
               <div className="mt-4 p-4 bg-muted rounded-lg">
                 <p className="text-sm font-medium mb-2">お問い合わせ先：</p>
@@ -203,6 +169,23 @@ export default function CMSFriendsPublicView() {
                 )}
               </div>
             )}
+          </CardContent>
+        </Card>
+        
+        <Card className="bg-gradient-to-r from-blue-500 to-blue-600 text-white">
+          <CardContent className="p-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <h3 className="text-lg font-bold">L!JUMP</h3>
+                <p className="text-sm opacity-90">次世代LINEマーケティングツール</p>
+              </div>
+              <Button 
+                variant="secondary"
+                onClick={() => window.open('https://ljump.com', '_blank')}
+              >
+                詳細を見る
+              </Button>
+            </div>
           </CardContent>
         </Card>
       </div>
@@ -250,43 +233,33 @@ export default function CMSFriendsPublicView() {
         />
       )}
 
-      {requirePass ? (
-        <Card>
-          <CardContent className="p-4 space-y-3">
-            <div>このページはパスコードで保護されています。</div>
-            <Input value={passcode} onChange={(e) => setPasscode(e.target.value)} placeholder="パスコード" />
-            <Button onClick={() => fetchData(passcode)}>送信</Button>
-          </CardContent>
-        </Card>
-      ) : (
-        <article className="prose max-w-none dark:prose-invert">
-          {Array.isArray(data.content_blocks) && data.content_blocks.length > 0 ? (
-            data.content_blocks.map((block, idx) => {
-              const html = DOMPurify.sanitize(block || "");
-              // フォーム埋め込みの処理
-              if (html.includes('class="form-embed"') && html.includes('data-form-id=')) {
-                const formIdMatch = html.match(/data-form-id="([^"]+)"/);
-                if (formIdMatch) {
-                  const formId = formIdMatch[1];
-                  return (
-                    <div key={idx} className="mt-4 first:mt-0">
-                      <iframe 
-                        src={`${window.location.origin}/form/${formId}${uid ? `?uid=${uid}` : ''}`}
-                        className="w-full min-h-[400px] border rounded"
-                        title="埋め込みフォーム"
-                        style={{ background: 'white' }}
-                      />
-                    </div>
-                  );
-                }
+      {/* requirePassは上部で処理済みのため削除 */}
+      <article className="prose max-w-none dark:prose-invert">
+        {Array.isArray(data.content_blocks) && data.content_blocks.length > 0 ? (
+          data.content_blocks.map((block, idx) => {
+            const html = DOMPurify.sanitize(block || "");
+            if (html.includes('class="form-embed"') && html.includes('data-form-id=')) {
+              const formIdMatch = html.match(/data-form-id="([^"]+)"/);
+              if (formIdMatch) {
+                const formId = formIdMatch[1];
+                return (
+                  <div key={idx} className="mt-4 first:mt-0">
+                    <iframe 
+                      src={`${window.location.origin}/form/${formId}${uid ? `?uid=${uid}` : ''}`}
+                      className="w-full min-h-[400px] border rounded"
+                      title="埋め込みフォーム"
+                      style={{ background: 'white' }}
+                    />
+                  </div>
+                );
               }
-              return <div key={idx} className="mt-4 first:mt-0" dangerouslySetInnerHTML={{ __html: html }} />;
-            })
-          ) : (
-            <div dangerouslySetInnerHTML={{ __html: sanitized }} />
-          )}
-        </article>
-      )}
+            }
+            return <div key={idx} className="mt-4 first:mt-0" dangerouslySetInnerHTML={{ __html: html }} />;
+          })
+        ) : (
+          <div dangerouslySetInnerHTML={{ __html: sanitized }} />
+        )}
+      </article>
     </div>
   );
 }
