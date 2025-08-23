@@ -27,9 +27,9 @@ interface PagePayload {
   timer_hour_label?: string | null;
   timer_minute_label?: string | null;
   timer_second_label?: string | null;
+  expire_action?: 'hide' | 'keep_public'; // 追加
 }
 
-// 【追加】friendInfoの型定義を拡張
 interface FriendInfo {
   account_name: string | null;
   line_id: string | null;
@@ -50,16 +50,9 @@ export default function CMSFriendsPublicView() {
   const [passcode, setPasscode] = useState("");
   const [requirePass, setRequirePass] = useState(false);
   const [friendInfo, setFriendInfo] = useState<FriendInfo | null>(null);
+  const [isExpired, setIsExpired] = useState(false); // タイマー切れ状態
 
   const isPreview = !!pageId;
-
-  useEffect(() => {
-    document.title = data?.title ? `${data.title} | ページ` : "ページ";
-    const meta = document.querySelector('meta[name="description"]');
-    if (meta && data?.tag_label) meta.setAttribute("content", data.tag_label);
-    const link = document.querySelector('link[rel="canonical"]') as HTMLLinkElement | null;
-    if (link) link.href = window.location.href;
-  }, [data?.title, data?.tag_label]);
 
   const fetchData = async (withPasscode?: string) => {
     try {
@@ -67,44 +60,47 @@ export default function CMSFriendsPublicView() {
       setError(null);
       setFriendInfo(null);
       setRequirePass(false);
+      setIsExpired(false);
 
-      // 【修正】プレビュー機能のロジックを全面的に修正
       if (isPreview) {
-        // プレビューモード：作成者として直接ページデータを取得
-        const { data: page, error: pageError } = await supabase
+        const { data: pageData, error: pageError } = await supabase
           .from("cms_pages")
           .select("*")
           .eq("id", pageId)
-          .maybeSingle();
+          .single();
 
-        if (pageError || !page) {
+        if (pageError || !pageData) {
           throw new Error("プレビュー対象のページが見つかりません。");
         }
-        setData(page as PagePayload);
-        return;
+        setData(pageData as PagePayload);
+      } else {
+        if (!shareCode) {
+          throw new Error("共有コードが指定されていません。");
+        }
+        
+        const { data: res, error: fnErr } = await supabase.functions.invoke("cms-page-view", {
+          body: { shareCode, uid, passcode: withPasscode },
+        });
+
+        if (fnErr) throw new Error(fnErr.message || "ページの読み込みに失敗しました。");
+        if (!res) throw new Error("サーバーから応答がありません。");
+        
+        if (res.error) {
+          if (res.errorType === 'expired') {
+            setIsExpired(true);
+          } else {
+            throw new Error(res.error);
+          }
+        } else if (res.require_passcode) {
+          setRequirePass(true);
+        } else if (res.require_friend) {
+          setFriendInfo(res.friend_info || null);
+        } else {
+          setData(res as PagePayload);
+        }
       }
-
-      // 通常の公開ページ表示
-      if (!shareCode) {
-        setError("共有コードがありません");
-        return;
-      }
-
-      const { data: res, error: fnErr } = await supabase.functions.invoke("cms-page-view", {
-        body: { shareCode, uid, passcode: withPasscode },
-      });
-      
-      if (fnErr) throw new Error(fnErr.message || "エッジ関数でエラーが発生しました");
-      if (!res) throw new Error("レスポンスがありません");
-      
-      if (res.error) throw new Error(res.error);
-      if (res.require_passcode) return setRequirePass(true);
-      if (res.require_friend) return setFriendInfo(res.friend_info || null);
-
-      setData(res as PagePayload);
-
     } catch (e: any) {
-      setError(e?.message || "読み込みに失敗しました");
+      setError(e?.message || "ページの読み込み中にエラーが発生しました。");
     } finally {
       setLoading(false);
     }
@@ -112,12 +108,21 @@ export default function CMSFriendsPublicView() {
 
   useEffect(() => {
     fetchData();
-  }, [shareCode, pageId, uid]); // 依存配列を修正
+  }, [pageId, shareCode, uid]);
 
   if (loading) return <div className="container mx-auto p-6">読み込み中…</div>;
   if (error) return <div className="container mx-auto p-6 text-destructive">{error}</div>;
 
-  // 【修正】パスコード入力画面の表示ロジックを優先
+  // 【修正】タイマー切れの表示を最優先
+  if (isExpired) {
+    return (
+      <div className="container mx-auto p-6 text-center">
+        <h1 className="text-2xl font-bold text-destructive">閲覧期間が終了しました</h1>
+        <p className="text-muted-foreground">このページの閲覧期間は終了しました。</p>
+      </div>
+    );
+  }
+
   if (requirePass) {
     return (
       <div className="container mx-auto max-w-3xl p-4">
@@ -137,64 +142,60 @@ export default function CMSFriendsPublicView() {
     );
   }
 
-  // 【修正】権限なし画面の表示ロジックと宣伝バナー
   if (friendInfo) {
+    // ... 権限なし画面 + L!JUMPバナーのコード ...
     return (
-      <div className="container mx-auto max-w-3xl p-4 space-y-4">
-        <Card>
-          <CardContent className="p-6 space-y-4">
-            <h1 className="text-xl font-semibold">アクセス権限がありません</h1>
-            <p className="text-sm text-muted-foreground">
-              {friendInfo.message || "このページを閲覧する権限がありません。詳細については管理者にお問い合わせください。"}
-            </p>
-            
-            {(friendInfo.account_name || friendInfo.line_id || friendInfo.add_friend_url) && (
-              <div className="mt-4 p-4 bg-muted rounded-lg">
-                <p className="text-sm font-medium mb-2">お問い合わせ先：</p>
-                <div className="space-y-1">
-                  {friendInfo.account_name && (
-                    <p className="text-sm">管理者: {friendInfo.account_name}</p>
-                  )}
-                  {friendInfo.line_id && (
-                    <p className="text-sm">LINE ID: {friendInfo.line_id}</p>
-                  )}
+        <div className="container mx-auto max-w-3xl p-4 space-y-4">
+            <Card>
+            <CardContent className="p-6 space-y-4">
+                <h1 className="text-xl font-semibold">アクセス権限がありません</h1>
+                <p className="text-sm text-muted-foreground">
+                {friendInfo.message || "このページを閲覧する権限がありません。詳細については管理者にお問い合わせください。"}
+                </p>
+                {(friendInfo.account_name || friendInfo.line_id || friendInfo.add_friend_url) && (
+                <div className="mt-4 p-4 bg-muted rounded-lg">
+                    <p className="text-sm font-medium mb-2">お問い合わせ先：</p>
+                    <div className="space-y-1">
+                    {friendInfo.account_name && (
+                        <p className="text-sm">管理者: {friendInfo.account_name}</p>
+                    )}
+                    {friendInfo.line_id && (
+                        <p className="text-sm">LINE ID: {friendInfo.line_id}</p>
+                    )}
+                    </div>
+                    {friendInfo.add_friend_url && (
+                    <Button 
+                        className="mt-3" 
+                        onClick={() => window.open(friendInfo.add_friend_url!, '_blank')}
+                    >
+                        お問い合わせ
+                    </Button>
+                    )}
                 </div>
-                {friendInfo.add_friend_url && (
-                  <Button 
-                    className="mt-3" 
-                    onClick={() => window.open(friendInfo.add_friend_url!, '_blank')}
-                  >
-                    お問い合わせ
-                  </Button>
                 )}
-              </div>
-            )}
-          </CardContent>
-        </Card>
-        
-        <Card className="bg-gradient-to-r from-blue-500 to-blue-600 text-white">
-          <CardContent className="p-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <h3 className="text-lg font-bold">L!JUMP</h3>
-                <p className="text-sm opacity-90">次世代LINEマーケティングツール</p>
-              </div>
-              <Button 
-                variant="secondary"
-                onClick={() => window.open('https://ljump.com', '_blank')}
-              >
-                詳細を見る
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
+            </CardContent>
+            </Card>
+            <Card className="bg-gradient-to-r from-blue-500 to-blue-600 text-white">
+            <CardContent className="p-6">
+                <div className="flex items-center justify-between">
+                <div>
+                    <h3 className="text-lg font-bold">L!JUMP</h3>
+                    <p className="text-sm opacity-90">次世代LINEマーケティングツール</p>
+                </div>
+                <Button 
+                    variant="secondary"
+                    onClick={() => window.open('https://ljump.com', '_blank')}
+                >
+                    詳細を見る
+                </Button>
+                </div>
+            </CardContent>
+            </Card>
+        </div>
     );
   }
 
   if (!data) return null;
-
-  const sanitized = DOMPurify.sanitize(data.content || "");
 
   return (
     <div className="container mx-auto max-w-3xl p-4 space-y-4">
@@ -215,25 +216,27 @@ export default function CMSFriendsPublicView() {
       {data.timer_enabled && (
         <TimerPreview
           mode={data.timer_mode || "absolute"}
-          deadline={data.timer_mode === 'absolute' ? data.timer_deadline || undefined : undefined}
-          durationSeconds={data.timer_mode === 'per_access' ? data.timer_duration_seconds || undefined : undefined}
+          deadline={data.timer_mode === 'absolute' ? data.timer_deadline : undefined}
+          durationSeconds={data.timer_mode === 'per_access' ? data.timer_duration_seconds : undefined}
           showMilliseconds={!!data.show_milliseconds}
           styleVariant={data.timer_style || "solid"}
           bgColor={data.timer_bg_color || "#0cb386"}
           textColor={data.timer_text_color || "#ffffff"}
-          shareCode={shareCode}
-          uid={uid}
+          internalTimer={!!data.internal_timer}
+          timerText={data.timer_text || "期間限定公開"}
           dayLabel={data.timer_day_label || "日"}
           hourLabel={data.timer_hour_label || "時間"}
           minuteLabel={data.timer_minute_label || "分"}
           secondLabel={data.timer_second_label || "秒"}
-          internalTimer={!!data.internal_timer}
-          timerText={data.timer_text || "期間限定公開"}
-          showEndDate={data.timer_mode === 'per_access'}
+          onExpire={() => {
+            if (data.expire_action === 'hide') {
+              setIsExpired(true);
+            }
+          }}
+          preview={isPreview}
         />
       )}
 
-      {/* requirePassは上部で処理済みのため削除 */}
       <article className="prose max-w-none dark:prose-invert">
         {Array.isArray(data.content_blocks) && data.content_blocks.length > 0 ? (
           data.content_blocks.map((block, idx) => {
@@ -257,7 +260,7 @@ export default function CMSFriendsPublicView() {
             return <div key={idx} className="mt-4 first:mt-0" dangerouslySetInnerHTML={{ __html: html }} />;
           })
         ) : (
-          <div dangerouslySetInnerHTML={{ __html: sanitized }} />
+          <div dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(data.content || "") }} />
         )}
       </article>
     </div>
