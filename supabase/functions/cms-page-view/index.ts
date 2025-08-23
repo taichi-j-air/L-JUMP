@@ -7,13 +7,22 @@ const corsHeaders = {
   "Access-Control-Allow-Methods": "GET,POST,OPTIONS",
 };
 
+// 未変換・ダミー値を無効とする（例: [UID], UID, 空, null, undefined）
+const isPlaceholder = (v?: string | null) => {
+  if (v == null) return true;
+  const s = String(v).trim();
+  if (!s) return true;
+  const lower = s.toLowerCase();
+  return ["[uid]", "uid", "[[uid]]", "{uid}", "undefined", "null"].includes(lower);
+};
+
 serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
   }
 
   try {
-    // 入力をクエリ/JSONの両方から拾う
+    // クエリ/JSONの両方から取得
     const url = new URL(req.url);
     const isJSON = req.headers.get("content-type")?.includes("application/json");
     const body = isJSON && req.method === "POST" ? await req.json().catch(() => ({})) : {};
@@ -21,11 +30,14 @@ serve(async (req) => {
     const shareCode = (body.shareCode ?? url.searchParams.get("shareCode") ?? "").trim();
     const passcode  = (body.passcode  ?? url.searchParams.get("passcode")  ?? "") || undefined;
 
-    // フォーム同等：uid or line_user_id どちらでも照合
-    const uidRaw       = body.uid ?? url.searchParams.get("uid") ?? body.suid ?? url.searchParams.get("suid");
-    const lineUserId   = body.line_user_id ?? url.searchParams.get("line_user_id") ?? url.searchParams.get("lu") ?? undefined;
+    // フォーム同等：uid or line_user_id どちらでも照合可
+    let uid: string | undefined = body.uid ?? url.searchParams.get("uid") ?? body.suid ?? url.searchParams.get("suid") ?? undefined;
+    let lineUserId: string | undefined = body.line_user_id ?? url.searchParams.get("line_user_id") ?? url.searchParams.get("lu") ?? undefined;
 
-    const uid = typeof uidRaw === "string" && uidRaw.trim() ? uidRaw.trim() : undefined;
+    // 未変換/ダミーを無効化
+    if (isPlaceholder(uid)) uid = undefined; else uid = String(uid).trim();
+    if (isPlaceholder(lineUserId)) lineUserId = undefined; else lineUserId = String(lineUserId).trim();
+
     const uidUpper = uid ? uid.toUpperCase() : undefined;
 
     if (!shareCode) {
@@ -61,11 +73,11 @@ serve(async (req) => {
       });
     }
 
-    // 友だち認証（フォーム準拠：uid/line_user_id の両対応、短縮UIDはCI吸収）
+    // ===== 友だち認証（厳格）=====
     let friend: { id: string | number; line_user_id: string } | null = null;
 
     if (page.visibility === "friends_only") {
-      // (A) uid で照合（short_uid / short_uid_ci の OR）
+      // A) uid で照合（short_uid / short_uid_ci の OR）
       if (uid || uidUpper) {
         const orParts = [
           uid ? `short_uid.eq.${uid}` : "",
@@ -73,34 +85,34 @@ serve(async (req) => {
         ].filter(Boolean).join(",");
 
         if (orParts) {
-          const { data: f1, error: e1 } = await supabase
+          const { data: f1 } = await supabase
             .from("line_friends")
             .select("id, line_user_id")
-            .eq("user_id", page.user_id)         // テナント一致
+            .eq("user_id", page.user_id) // テナント一致
             .or(orParts)
             .maybeSingle();
 
-          if (!e1 && f1) {
+          if (f1) {
             friend = { id: f1.id, line_user_id: f1.line_user_id };
           }
         }
       }
 
-      // (B) 未発見なら line_user_id で照合（LINEアプリ内想定）
+      // B) 見つからず、かつ line_user_id があれば照合（LIFF想定）
       if (!friend && lineUserId) {
-        const { data: f2, error: e2 } = await supabase
+        const { data: f2 } = await supabase
           .from("line_friends")
           .select("id, line_user_id")
           .eq("user_id", page.user_id)
-          .eq("line_user_id", String(lineUserId))
+          .eq("line_user_id", lineUserId)
           .maybeSingle();
 
-        if (!e2 && f2) {
+        if (f2) {
           friend = { id: f2.id, line_user_id: f2.line_user_id };
         }
       }
 
-      // (C) どちらもダメなら友だち追加誘導（200で返す：フロントでUI分岐）
+      // C) 友だち確定できなければ 403（payload は返さない）
       if (!friend) {
         const { data: profile } = await supabase
           .from("profiles")
@@ -108,30 +120,31 @@ serve(async (req) => {
           .eq("user_id", page.user_id)
           .maybeSingle();
 
-        const friendInfo = {
-          account_name: profile?.display_name || null,
-          line_id: profile?.line_user_id || null,
-          add_friend_url: profile?.add_friend_url || null,
-        };
-
         return new Response(
-          JSON.stringify({ require_friend: true, friend_info: friendInfo }),
-          { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          JSON.stringify({
+            require_friend: true,
+            friend_info: {
+              account_name: profile?.display_name || null,
+              line_id: profile?.line_user_id || null,
+              add_friend_url: profile?.add_friend_url || null,
+            },
+          }),
+          { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } }
         );
       }
     }
 
-    // パスコード（フォーム相当：未入力/不一致はUI分岐させたいので200で返す）
+    // ===== パスコード（厳格）=====
     if (page.require_passcode) {
       if (!passcode || passcode !== page.passcode) {
         return new Response(JSON.stringify({ require_passcode: true }), {
-          status: 200,
+          status: 401,
           headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       }
     }
 
-    // タグ制御（友だち確定時のみ）
+    // ===== タグ制御 =====
     if (friend) {
       const allowed: string[] = Array.isArray(page.allowed_tag_ids) ? page.allowed_tag_ids : [];
       const blocked: string[] = Array.isArray(page.blocked_tag_ids) ? page.blocked_tag_ids : [];
@@ -160,7 +173,7 @@ serve(async (req) => {
       }
     }
 
-    // レスポンス（ページ内容）
+    // ===== コンテンツ返却（認可済みのみ）=====
     const payload = {
       title: page.title,
       tag_label: page.tag_label,
