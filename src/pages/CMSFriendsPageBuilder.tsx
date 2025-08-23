@@ -159,7 +159,8 @@ export default function CMSFriendsPageBuilder() {
     setSlug(selected.slug || "");
     setTitle(selected.title || "");
     setContentHtml((selected as any).content || "");
-    setContentBlocks(Array.isArray((selected as any).content_blocks) ? (selected as any).content_blocks : []);
+    setContentBlocks(Array.isArray((selected as any).content_blocks) ? 
+      (selected as any).content_blocks.filter((block: any) => typeof block === 'string') : []);
     setAllowedTags(selected.allowed_tag_ids || []);
     setBlockedTags(selected.blocked_tag_ids || []);
     setRequirePass(!!selected.require_passcode);
