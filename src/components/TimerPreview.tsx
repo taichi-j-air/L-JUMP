@@ -98,7 +98,7 @@ export const TimerPreview = ({
       return deadlineTime;
     }
     
-    if (mode === "per_access" && durationSeconds && durationSeconds > 0) {
+    if ((mode === "per_access" || mode === "step_delivery") && durationSeconds && durationSeconds > 0) {
       // In preview mode, always start from now for live reflection
       if (preview) {
         return Date.now() + durationSeconds * 1000;
@@ -204,7 +204,7 @@ export const TimerPreview = ({
   };
 
   // タイマーが0になった場合の表示
-  const isExpired = remainingMs <= 0 && (mode === "absolute" || (mode === "per_access" && !preview));
+  const isExpired = remainingMs <= 0 && (mode === "absolute" || ((mode === "per_access" || mode === "step_delivery") && !preview));
 
   // デバッグ情報を開発環境でのみ表示
   if (process.env.NODE_ENV === 'development') {
