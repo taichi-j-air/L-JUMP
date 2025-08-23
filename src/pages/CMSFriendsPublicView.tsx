@@ -40,9 +40,16 @@ export default function CMSFriendsPublicView() {
   const [data, setData] = useState<PagePayload | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-const [passcode, setPasscode] = useState("");
-const [requirePass, setRequirePass] = useState(false);
-const [friendInfo, setFriendInfo] = useState<{ account_name: string | null; line_id: string | null; add_friend_url: string | null } | null>(null);
+  const [passcode, setPasscode] = useState("");
+  const [requirePass, setRequirePass] = useState(false);
+  
+  // 【修正】friendInfoにmessageフィールドを追加
+  const [friendInfo, setFriendInfo] = useState<{ 
+    account_name: string | null; 
+    line_id: string | null; 
+    add_friend_url: string | null;
+    message?: string | null;
+  } | null>(null);
 
   const isPreview = !!pageId; // preview route for owners
 
@@ -160,30 +167,49 @@ const [friendInfo, setFriendInfo] = useState<{ account_name: string | null; line
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [shareCode, uid, pageId]);
 
-if (loading) return <div className="container mx-auto p-6">読み込み中…</div>;
-if (error) return <div className="container mx-auto p-6 text-destructive">{error}</div>;
+  if (loading) return <div className="container mx-auto p-6">読み込み中…</div>;
+  if (error) return <div className="container mx-auto p-6 text-destructive">{error}</div>;
 
-if (!data && friendInfo) {
-  return (
-    <div className="container mx-auto max-w-3xl p-4 space-y-4">
-      <Card>
-        <CardContent className="p-6 space-y-3">
-          <h1 className="text-xl font-semibold">このページは友だち限定です</h1>
-          <p className="text-sm text-muted-foreground">下記の公式アカウントを友だち追加してください。</p>
-          <div className="text-sm space-y-1">
-            {friendInfo.account_name && <div>公式アカウント名：{friendInfo.account_name}</div>}
-            {friendInfo.line_id && <div>LINE ID：{friendInfo.line_id}</div>}
-          </div>
-          {friendInfo.add_friend_url && (
-            <Button onClick={() => window.open(friendInfo.add_friend_url!, '_blank')}>友だち追加する</Button>
-          )}
-        </CardContent>
-      </Card>
-    </div>
-  );
-}
+  // 【修正】友達限定画面の表示を改善
+  if (!data && friendInfo) {
+    return (
+      <div className="container mx-auto max-w-3xl p-4 space-y-4">
+        <Card>
+          <CardContent className="p-6 space-y-4">
+            <h1 className="text-xl font-semibold">アクセス権限がありません</h1>
+            <p className="text-sm text-muted-foreground">
+              {friendInfo.message || "このページを閲覧する権限がありません。詳細については管理者にお問い合わせください。"}
+            </p>
+            
+            {/* 管理者情報がある場合のみ表示 */}
+            {(friendInfo.account_name || friendInfo.line_id || friendInfo.add_friend_url) && (
+              <div className="mt-4 p-4 bg-muted rounded-lg">
+                <p className="text-sm font-medium mb-2">お問い合わせ先：</p>
+                <div className="space-y-1">
+                  {friendInfo.account_name && (
+                    <p className="text-sm">管理者: {friendInfo.account_name}</p>
+                  )}
+                  {friendInfo.line_id && (
+                    <p className="text-sm">LINE ID: {friendInfo.line_id}</p>
+                  )}
+                </div>
+                {friendInfo.add_friend_url && (
+                  <Button 
+                    className="mt-3" 
+                    onClick={() => window.open(friendInfo.add_friend_url!, '_blank')}
+                  >
+                    お問い合わせ
+                  </Button>
+                )}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
 
-if (!data) return null;
+  if (!data) return null;
 
   const sanitized = DOMPurify.sanitize(data.content || "");
 
