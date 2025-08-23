@@ -120,6 +120,12 @@ export default function CMSFriendsPageBuilder() {
     setFormBlocks(prev => prev.filter((_, i) => i !== index));
   };
 
+  const openPreview = () => {
+    if (!selected) return;
+    const previewUrl = `/cms/friends-public/${selected.share_code}/${selected.id}`;
+    window.open(previewUrl, '_blank');
+  };
+
   // 既存のuseEffectやその他の関数は変更なし（省略）
   useEffect(() => {
     document.title = "LINE友達ページ作成 | CMS";
