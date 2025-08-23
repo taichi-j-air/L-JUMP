@@ -141,23 +141,15 @@ if (!data) return null;
   return (
     <div className="container mx-auto max-w-3xl p-4 space-y-4">
       {isPreview && (
-        <div className="flex justify-between items-center mb-4">
+        <div className="fixed top-4 right-4 z-50">
           <Button
             variant="outline"
-            onClick={() => navigate('/cms/friends-page')}
-            className="flex items-center gap-2"
-          >
-            <ArrowLeft className="h-4 w-4" />
-            設定に戻る
-          </Button>
-          <Button
-            variant="ghost"
             size="sm"
             onClick={() => window.close()}
             className="flex items-center gap-2"
           >
             <X className="h-4 w-4" />
-            閉じる
+            プレビュー画面を閉じる
           </Button>
         </div>
       )}
@@ -193,7 +185,6 @@ if (!data) return null;
         </Card>
       ) : (
         <article className="prose max-w-none dark:prose-invert">
-          <h1>{data.title}</h1>
           {Array.isArray(data.content_blocks) && data.content_blocks.length > 0 ? (
             data.content_blocks.map((block, idx) => {
               const html = DOMPurify.sanitize(block || "");

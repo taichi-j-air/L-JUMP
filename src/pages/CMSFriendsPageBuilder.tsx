@@ -419,22 +419,14 @@ export default function CMSFriendsPageBuilder() {
                 <p className="text-sm text-muted-foreground">左からページを選択するか作成してください。</p>
               ) : (
                 <>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div className="grid grid-cols-1 gap-4">
                     <div className="space-y-2">
                       <Label>ページ名（ツール内）</Label>
                       <Input value={internalName} onChange={(e) => setInternalName(e.target.value)} placeholder="例）会員限定ページA" />
                     </div>
                     <div className="space-y-2">
-                      <Label>タグ名（ウェブサイト上）</Label>
-                      <Input value={tagLabel} onChange={(e) => setTagLabel(e.target.value)} placeholder="例）特別公開" />
-                    </div>
-                    <div className="space-y-2">
-                      <Label>ページタイトル</Label>
+                      <Label>ページタブ名</Label>
                       <Input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="例）会員限定のお知らせ" />
-                    </div>
-                    <div className="space-y-2">
-                      <Label>スラッグ（URLの一部）</Label>
-                      <Input value={slug} onChange={(e) => setSlug(e.target.value)} placeholder="例）member-news" />
                     </div>
                   </div>
 
@@ -621,7 +613,7 @@ export default function CMSFriendsPageBuilder() {
                       ) : (
                         <div className="space-y-2">
                           <Label>カウント時間</Label>
-                          <div className="grid grid-cols-4 gap-3">
+                          <div className="grid grid-cols-4 gap-2">
                             <div className="space-y-1">
                               <Label className="text-xs">日</Label>
                               <Input 
@@ -635,7 +627,7 @@ export default function CMSFriendsPageBuilder() {
                                   setDurationSeconds(newSeconds);
                                   console.log('Updated duration (days):', { days: v, hours: durHours, minutes: durMinutes, seconds: durSecs, total: newSeconds });
                                 }}
-                                className="h-10 min-w-[96px] text-base"
+                                className="h-8 w-full text-sm"
                                 inputMode="numeric"
                                 pattern="[0-9]*"
                               />
@@ -653,7 +645,7 @@ export default function CMSFriendsPageBuilder() {
                                   setDurationSeconds(newSeconds);
                                   console.log('Updated duration (hours):', { days: durDays, hours: v, minutes: durMinutes, seconds: durSecs, total: newSeconds });
                                 }}
-                                className="h-10 min-w-[96px] text-base"
+                                className="h-8 w-full text-sm"
                                 inputMode="numeric"
                                 pattern="[0-9]*"
                               />
@@ -671,7 +663,7 @@ export default function CMSFriendsPageBuilder() {
                                   setDurationSeconds(newSeconds);
                                   console.log('Updated duration (minutes):', { days: durDays, hours: durHours, minutes: v, seconds: durSecs, total: newSeconds });
                                 }}
-                                className="h-10 min-w-[96px] text-base"
+                                className="h-8 w-full text-sm"
                                 inputMode="numeric"
                                 pattern="[0-9]*"
                               />
@@ -689,7 +681,7 @@ export default function CMSFriendsPageBuilder() {
                                   setDurationSeconds(newSeconds);
                                   console.log('Updated duration (seconds):', { days: durDays, hours: durHours, minutes: durMinutes, seconds: v, total: newSeconds });
                                 }}
-                                className="h-10 min-w-[96px] text-base"
+                                className="h-8 w-full text-sm"
                                 inputMode="numeric"
                                 pattern="[0-9]*"
                               />
