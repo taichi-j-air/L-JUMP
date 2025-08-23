@@ -65,7 +65,7 @@ serve(async (req) => {
     let friend: { id: string | number; line_user_id: string } | null = null;
 
     if (page.visibility === "friends_only") {
-      // ★ 修正1: パラメータが存在しない場合は即座にエラー
+      // UIDまたはlineUserIdが必要
       if (!uid && !uidUpper && !lineUserId) {
         const { data: profile } = await supabase
           .from("profiles")
@@ -85,7 +85,7 @@ serve(async (req) => {
             require_friend: true, 
             friend_info: friendInfo 
           }),
-          { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
         );
       }
 
@@ -124,7 +124,7 @@ serve(async (req) => {
         }
       }
 
-      // ★ 修正2: 友だち認証に完全に失敗した場合は403エラー
+      // 友だち認証に失敗した場合
       if (!friend) {
         const { data: profile } = await supabase
           .from("profiles")
@@ -140,11 +140,11 @@ serve(async (req) => {
 
         return new Response(
           JSON.stringify({ 
-            error: "Forbidden: Friend authentication failed", 
+            error: "Friend authentication failed", 
             require_friend: true, 
             friend_info: friendInfo 
           }),
-          { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
         );
       }
 
@@ -179,7 +179,7 @@ serve(async (req) => {
           error: "Passcode required", 
           require_passcode: true 
         }), {
-          status: 401,
+          status: 200,
           headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       }

@@ -77,7 +77,18 @@ const [friendInfo, setFriendInfo] = useState<{ account_name: string | null; line
             passcode: withPasscode || undefined 
           },
         });
-        if (fnErr) throw fnErr;
+        
+        // エラーハンドリングを改善
+        if (fnErr) {
+          console.error("Edge function error:", fnErr);
+          throw new Error(fnErr.message || "エッジ関数でエラーが発生しました");
+        }
+        
+        // レスポンスがnullの場合
+        if (!res) {
+          throw new Error("レスポンスがありません");
+        }
+        
         if (res?.require_passcode) {
           setRequirePass(true);
           setFriendInfo(null);
@@ -89,6 +100,9 @@ const [friendInfo, setFriendInfo] = useState<{ account_name: string | null; line
           setData(null);
           setRequirePass(false);
           return;
+        }
+        if (res?.error) {
+          throw new Error(res.error);
         }
         setFriendInfo(null);
         setRequirePass(false);
@@ -104,7 +118,18 @@ const [friendInfo, setFriendInfo] = useState<{ account_name: string | null; line
       const { data: res, error: fnErr } = await supabase.functions.invoke("cms-page-view", {
         body: { shareCode, uid, passcode: withPasscode || undefined },
       });
-      if (fnErr) throw fnErr;
+      
+      // エラーハンドリングを改善
+      if (fnErr) {
+        console.error("Edge function error:", fnErr);
+        throw new Error(fnErr.message || "エッジ関数でエラーが発生しました");
+      }
+      
+      // レスポンスがnullの場合
+      if (!res) {
+        throw new Error("レスポンスがありません");
+      }
+      
       if (res?.require_passcode) {
         setRequirePass(true);
         setFriendInfo(null);
@@ -116,6 +141,9 @@ const [friendInfo, setFriendInfo] = useState<{ account_name: string | null; line
         setData(null);
         setRequirePass(false);
         return;
+      }
+      if (res?.error) {
+        throw new Error(res.error);
       }
       setFriendInfo(null);
       setRequirePass(false);
