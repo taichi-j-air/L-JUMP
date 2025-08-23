@@ -228,6 +228,11 @@ export default function CMSFriendsPublicView() {
           hourLabel={data.timer_hour_label || "時間"}
           minuteLabel={data.timer_minute_label || "分"}
           secondLabel={data.timer_second_label || "秒"}
+          onExpire={() => {
+            if (data.expire_action === 'hide') {
+              setIsExpired(true);
+            }
+          }}
           preview={isPreview}
         />
       )}
