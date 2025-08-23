@@ -4,6 +4,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+  "Access-Control-Allow-Methods": "GET,POST,OPTIONS",
 };
 
 serve(async (req) => {
@@ -12,8 +13,20 @@ serve(async (req) => {
   }
 
   try {
-    const body = await req.json();
-    const { shareCode, uid, passcode } = body || {};
+    // 入力をクエリ/JSONの両方から拾う
+    const url = new URL(req.url);
+    const isJSON = req.headers.get("content-type")?.includes("application/json");
+    const body = isJSON && req.method === "POST" ? await req.json().catch(() => ({})) : {};
+
+    const shareCode = (body.shareCode ?? url.searchParams.get("shareCode") ?? "").trim();
+    const passcode  = (body.passcode  ?? url.searchParams.get("passcode")  ?? "") || undefined;
+
+    // フォーム同等：uid or line_user_id どちらでも照合
+    const uidRaw       = body.uid ?? url.searchParams.get("uid") ?? body.suid ?? url.searchParams.get("suid");
+    const lineUserId   = body.line_user_id ?? url.searchParams.get("line_user_id") ?? url.searchParams.get("lu") ?? undefined;
+
+    const uid = typeof uidRaw === "string" && uidRaw.trim() ? uidRaw.trim() : undefined;
+    const uidUpper = uid ? uid.toUpperCase() : undefined;
 
     if (!shareCode) {
       return new Response(JSON.stringify({ error: "shareCode is required" }), {
@@ -27,14 +40,19 @@ serve(async (req) => {
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
     );
 
-    // Fetch page by share code
+    // ページ取得
     const { data: page, error: pageErr } = await supabase
       .from("cms_pages")
       .select(
-        "id, user_id, title, tag_label, content, content_blocks, visibility, allowed_tag_ids, blocked_tag_ids, require_passcode, passcode, timer_enabled, timer_mode, timer_deadline, timer_duration_seconds, show_milliseconds, timer_style, timer_bg_color, timer_text_color, internal_timer, timer_text, timer_day_label, timer_hour_label, timer_minute_label, timer_second_label"
+        "id, user_id, title, tag_label, content, content_blocks, visibility, " +
+        "allowed_tag_ids, blocked_tag_ids, require_passcode, passcode, " +
+        "timer_enabled, timer_mode, timer_deadline, timer_duration_seconds, " +
+        "show_milliseconds, timer_style, timer_bg_color, timer_text_color, " +
+        "internal_timer, timer_text, timer_day_label, timer_hour_label, " +
+        "timer_minute_label, timer_second_label"
       )
       .eq("share_code", shareCode)
-      .single();
+      .maybeSingle();
 
     if (pageErr || !page) {
       return new Response(JSON.stringify({ error: "page not found" }), {
@@ -43,131 +61,47 @@ serve(async (req) => {
       });
     }
 
-    // Public pages don't require UID, friends-only pages do
-    if (page.visibility === 'friends_only' && !uid) {
-      const { data: profile } = await supabase
-        .from("profiles")
-        .select("display_name, line_user_id, add_friend_url")
-        .eq("user_id", page.user_id)
-        .maybeSingle();
+    // 友だち認証（フォーム準拠：uid/line_user_id の両対応、短縮UIDはCI吸収）
+    let friend: { id: string | number; line_user_id: string } | null = null;
 
-      const friendInfo = {
-        account_name: profile?.display_name || null,
-        line_id: profile?.line_user_id || null,
-        add_friend_url: profile?.add_friend_url || null,
-      };
+    if (page.visibility === "friends_only") {
+      // (A) uid で照合（short_uid / short_uid_ci の OR）
+      if (uid || uidUpper) {
+        const orParts = [
+          uid ? `short_uid.eq.${uid}` : "",
+          uidUpper ? `short_uid_ci.eq.${uidUpper}` : "",
+        ].filter(Boolean).join(",");
 
-      return new Response(
-        JSON.stringify({ require_friend: true, friend_info: friendInfo }),
-        { headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
-    }
-
-    // Validate friend relationship for friends-only pages and when UID is provided
-    let friend = null;
-    if (page.visibility === 'friends_only' || uid) {
-      if (!uid) {
-        const { data: profile } = await supabase
-          .from("profiles")
-          .select("display_name, line_user_id, add_friend_url")
-          .eq("user_id", page.user_id)
-          .maybeSingle();
-
-        const friendInfo = {
-          account_name: profile?.display_name || null,
-          line_id: profile?.line_user_id || null,
-          add_friend_url: profile?.add_friend_url || null,
-        };
-
-        return new Response(
-          JSON.stringify({ require_friend: true, friend_info: friendInfo }),
-          { headers: { ...corsHeaders, "Content-Type": "application/json" } }
-        );
-      }
-
-      // ✅ フォーム機能と同じ友達認証ロジックを使用
-      console.log("Friend authentication check:", { uid, user_id: page.user_id });
-
-      try {
-        // フォーム機能と同じlookup_friend_by_uid関数を使用
-        // まず仮想的なフォームIDとして page.id を使用してテスト
-        const { data: friendLookup, error: lookupErr } = await supabase
-          .rpc('lookup_friend_by_uid', {
-            p_form_id: page.id, // CMSページIDを使用
-            p_uid: uid
-          });
-
-        console.log("Friend lookup result:", { friendLookup, lookupErr });
-
-        if (lookupErr) {
-          console.log("RPC lookup failed, trying direct query...");
-          
-          // 直接クエリでフォーム機能と同じロジックを実装
-          const uidUpper = uid.toUpperCase().trim();
-          
-          const { data: friendData, error: friendErr } = await supabase
+        if (orParts) {
+          const { data: f1, error: e1 } = await supabase
             .from("line_friends")
             .select("id, line_user_id")
-            .eq("user_id", page.user_id)
-            .eq("short_uid_ci", uidUpper)
+            .eq("user_id", page.user_id)         // テナント一致
+            .or(orParts)
             .maybeSingle();
 
-          console.log("Direct friend query result:", { friendData, friendErr, uidUpper });
-
-          if (friendErr || !friendData) {
-            console.log("Friend not found or error:", { friendErr, uidUpper, user_id: page.user_id });
-            
-            const { data: profile } = await supabase
-              .from("profiles")
-              .select("display_name, line_user_id, add_friend_url")
-              .eq("user_id", page.user_id)
-              .maybeSingle();
-
-            const friendInfo = {
-              account_name: profile?.display_name || null,
-              line_id: profile?.line_user_id || null,
-              add_friend_url: profile?.add_friend_url || null,
-            };
-
-            return new Response(
-              JSON.stringify({ require_friend: true, friend_info: friendInfo }),
-              { headers: { ...corsHeaders, "Content-Type": "application/json" } }
-            );
+          if (!e1 && f1) {
+            friend = { id: f1.id, line_user_id: f1.line_user_id };
           }
-
-          // 友達認証成功
-          friend = { id: friendData.id, line_user_id: friendData.line_user_id };
-          console.log("Friend authentication successful via direct query");
-        } else if (friendLookup && friendLookup.length > 0) {
-          // RPC関数による認証成功
-          friend = { id: friendLookup[0].friend_id, line_user_id: friendLookup[0].line_user_id };
-          console.log("Friend authentication successful via RPC");
-        } else {
-          // 友達が見つからない
-          console.log("Friend not found via RPC");
-          
-          const { data: profile } = await supabase
-            .from("profiles")
-            .select("display_name, line_user_id, add_friend_url")
-            .eq("user_id", page.user_id)
-            .maybeSingle();
-
-          const friendInfo = {
-            account_name: profile?.display_name || null,
-            line_id: profile?.line_user_id || null,
-            add_friend_url: profile?.add_friend_url || null,
-          };
-
-          return new Response(
-            JSON.stringify({ require_friend: true, friend_info: friendInfo }),
-            { headers: { ...corsHeaders, "Content-Type": "application/json" } }
-          );
         }
+      }
 
-      } catch (error) {
-        console.error("Friend authentication error:", error);
-        
-        // エラー時は友達追加を要求
+      // (B) 未発見なら line_user_id で照合（LINEアプリ内想定）
+      if (!friend && lineUserId) {
+        const { data: f2, error: e2 } = await supabase
+          .from("line_friends")
+          .select("id, line_user_id")
+          .eq("user_id", page.user_id)
+          .eq("line_user_id", String(lineUserId))
+          .maybeSingle();
+
+        if (!e2 && f2) {
+          friend = { id: f2.id, line_user_id: f2.line_user_id };
+        }
+      }
+
+      // (C) どちらもダメなら友だち追加誘導（200で返す：フロントでUI分岐）
+      if (!friend) {
         const { data: profile } = await supabase
           .from("profiles")
           .select("display_name, line_user_id, add_friend_url")
@@ -182,23 +116,23 @@ serve(async (req) => {
 
         return new Response(
           JSON.stringify({ require_friend: true, friend_info: friendInfo }),
-          { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
         );
       }
     }
 
-    // Passcode check if required
+    // パスコード（フォーム相当：未入力/不一致はUI分岐させたいので200で返す）
     if (page.require_passcode) {
       if (!passcode || passcode !== page.passcode) {
         return new Response(JSON.stringify({ require_passcode: true }), {
-          status: 401,
+          status: 200,
           headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       }
     }
 
-    // Tag segmentation (only apply if friend relationship exists)
-    if (friend && friend.id !== "verified") {
+    // タグ制御（友だち確定時のみ）
+    if (friend) {
       const allowed: string[] = Array.isArray(page.allowed_tag_ids) ? page.allowed_tag_ids : [];
       const blocked: string[] = Array.isArray(page.blocked_tag_ids) ? page.blocked_tag_ids : [];
 
@@ -208,7 +142,9 @@ serve(async (req) => {
           .select("tag_id")
           .eq("user_id", page.user_id)
           .eq("friend_id", friend.id);
+
         const tagIds = new Set((friendTags || []).map((t: any) => t.tag_id));
+
         if (allowed.length > 0 && !allowed.some((id) => tagIds.has(id))) {
           return new Response(JSON.stringify({ error: "forbidden by allowed tags" }), {
             status: 403,
@@ -224,7 +160,7 @@ serve(async (req) => {
       }
     }
 
-    // Build payload
+    // レスポンス（ページ内容）
     const payload = {
       title: page.title,
       tag_label: page.tag_label,
@@ -247,6 +183,7 @@ serve(async (req) => {
     };
 
     return new Response(JSON.stringify(payload), {
+      status: 200,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   } catch (err) {
