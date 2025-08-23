@@ -17,14 +17,14 @@ import { TimerPreview } from "@/components/TimerPreview";
 import { useLiffValidation } from "@/hooks/useLiffValidation";
 import { Trash2 } from "lucide-react";
 
-// Type helpers (loosened to avoid tight coupling with generated types)
+// 【修正1】型定義にprivateを追加
 interface CmsPageRow {
   id: string;
   user_id: string;
   title: string;
   slug: string;
   share_code: string;
-  visibility: "friends_only" | "public";
+  visibility: "friends_only" | "public" | "private";  // ← private追加
   internal_name?: string | null;
   tag_label?: string | null;
   content_blocks?: any[];
@@ -188,7 +188,9 @@ export default function CMSFriendsPageBuilder() {
     setDurHours(h);
     setDurMinutes(m);
     setDurSecs(s);
-    setIsPublic(selected.visibility === 'public');
+    
+    // 【修正2】状態読み込みの論理を修正
+    setIsPublic(selected.visibility === 'friends_only'); // friends_onlyを公開として扱う
   }, [selectedId]);
 
   const handleAddPage = async () => {
@@ -206,7 +208,7 @@ export default function CMSFriendsPageBuilder() {
           title: defaultTitle,
           internal_name: defaultTitle,
           slug: defaultSlug,
-          visibility: 'friends_only',
+          visibility: 'private', // 【修正3】初期値をprivate（非公開）に変更
           content: "",
           allowed_tag_ids: [],
           blocked_tag_ids: [],
@@ -274,7 +276,10 @@ export default function CMSFriendsPageBuilder() {
         slug,
         internal_name: internalName,
         tag_label: tagLabel,
-        visibility: isPublic ? 'public' : 'friends_only',
+        
+        // 【修正4】保存ロジックを修正（論理反転）
+        visibility: isPublic ? 'friends_only' : 'private', // 公開=friends_only, 非公開=private
+        
         content: contentHtml,
         content_blocks: contentBlocks,
         allowed_tag_ids: allowedTags,
@@ -438,8 +443,9 @@ export default function CMSFriendsPageBuilder() {
                     </div>
                   </div>
 
+                  {/* 【修正5】UIラベルをプロフェッショナルに変更 */}
                   <div className="flex items-center justify-between">
-                    <Label>ページを公開する</Label>
+                    <Label>このページを{isPublic ? "公開" : "非公開"}</Label>
                     <Switch checked={isPublic} onCheckedChange={setIsPublic} />
                   </div>
                 </>
