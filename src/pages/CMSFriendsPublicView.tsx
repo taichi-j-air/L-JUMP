@@ -205,24 +205,6 @@ export default function CMSFriendsPublicView() {
             )}
           </CardContent>
         </Card>
-        
-        {/* L!JUMP宣伝バナー */}
-        <Card className="bg-gradient-to-r from-blue-500 to-blue-600 text-white">
-          <CardContent className="p-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <h3 className="text-lg font-bold">L!JUMP</h3>
-                <p className="text-sm opacity-90">次世代LINEマーケティングツール</p>
-              </div>
-              <Button 
-                variant="secondary"
-                onClick={() => window.open('https://ljump.com', '_blank')}
-              >
-                詳細を見る
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
       </div>
     );
   }
