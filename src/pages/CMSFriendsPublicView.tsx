@@ -59,19 +59,40 @@ const [friendInfo, setFriendInfo] = useState<{ account_name: string | null; line
       setLoading(true);
       setError(null);
 
-      if (isPreview) {
-        // Authenticated owner preview (no UID required)
+      // プレビューモードでも認証を適用する場合は、shareCodeから取得
+      if (isPreview && pageId) {
         const { data: page, error } = await (supabase as any)
           .from("cms_pages")
-          .select(
-            "title, tag_label, content, content_blocks, timer_enabled, timer_mode, timer_deadline, timer_duration_seconds, show_milliseconds, timer_style, timer_bg_color, timer_text_color, internal_timer, timer_text, timer_day_label, timer_hour_label, timer_minute_label, timer_second_label"
-          )
+          .select("share_code")
           .eq("id", pageId)
           .maybeSingle();
         if (error) throw error;
-        if (!page) throw new Error("ページが見つかりません");
-        setData(page as PagePayload);
+        if (!page?.share_code) throw new Error("ページが見つかりません");
+        
+        // プレビューモードでもエッジ関数を使用して認証を適用
+        const { data: res, error: fnErr } = await supabase.functions.invoke("cms-page-view", {
+          body: { 
+            shareCode: page.share_code, 
+            uid: uid, 
+            passcode: withPasscode || undefined 
+          },
+        });
+        if (fnErr) throw fnErr;
+        if (res?.require_passcode) {
+          setRequirePass(true);
+          setFriendInfo(null);
+          setData(null);
+          return;
+        }
+        if (res?.require_friend) {
+          setFriendInfo(res.friend_info || null);
+          setData(null);
+          setRequirePass(false);
+          return;
+        }
+        setFriendInfo(null);
         setRequirePass(false);
+        setData(res as PagePayload);
         return;
       }
 
