@@ -27,6 +27,8 @@ interface PagePayload {
   timer_hour_label?: string | null;
   timer_minute_label?: string | null;
   timer_second_label?: string | null;
+  timer_scenario_id?: string | null;
+  timer_step_id?: string | null;
 }
 
 // 【追加】friendInfoの型定義を拡張
@@ -230,6 +232,8 @@ export default function CMSFriendsPublicView() {
           internalTimer={!!data.internal_timer}
           timerText={data.timer_text || "期間限定公開"}
           showEndDate={data.timer_mode === 'per_access' || data.timer_mode === 'step_delivery'}
+          scenarioId={data.timer_scenario_id || undefined}
+          stepId={data.timer_step_id || undefined}
         />
       )}
 

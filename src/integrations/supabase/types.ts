@@ -121,7 +121,9 @@ export type Database = {
           timer_minute_label: string | null
           timer_mode: string
           timer_mode_step_delivery: boolean | null
+          timer_scenario_id: string | null
           timer_second_label: string | null
+          timer_step_id: string | null
           timer_style: string
           timer_text: string | null
           timer_text_color: string
@@ -156,7 +158,9 @@ export type Database = {
           timer_minute_label?: string | null
           timer_mode?: string
           timer_mode_step_delivery?: boolean | null
+          timer_scenario_id?: string | null
           timer_second_label?: string | null
+          timer_step_id?: string | null
           timer_style?: string
           timer_text?: string | null
           timer_text_color?: string
@@ -191,7 +195,9 @@ export type Database = {
           timer_minute_label?: string | null
           timer_mode?: string
           timer_mode_step_delivery?: boolean | null
+          timer_scenario_id?: string | null
           timer_second_label?: string | null
+          timer_step_id?: string | null
           timer_style?: string
           timer_text?: string | null
           timer_text_color?: string
@@ -200,7 +206,22 @@ export type Database = {
           user_id?: string
           visibility?: Database["public"]["Enums"]["page_visibility"]
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "cms_pages_timer_scenario_id_fkey"
+            columns: ["timer_scenario_id"]
+            isOneToOne: false
+            referencedRelation: "step_scenarios"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "cms_pages_timer_step_id_fkey"
+            columns: ["timer_step_id"]
+            isOneToOne: false
+            referencedRelation: "steps"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       flex_messages: {
         Row: {

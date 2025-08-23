@@ -22,6 +22,8 @@ interface TimerPreviewProps {
   internalTimer?: boolean; // 内部タイマーモード
   timerText?: string; // 内部タイマー時の表示テキスト
   showEndDate?: boolean; // 終了日時を表示するかどうか
+  scenarioId?: string; // step_delivery mode scenario ID
+  stepId?: string; // step_delivery mode step ID
 }
 
 function formatRemaining(
@@ -83,6 +85,8 @@ export const TimerPreview = ({
   internalTimer = false,
   timerText = "期間限定公開",
   showEndDate = false,
+  scenarioId,
+  stepId,
 }: TimerPreviewProps) => {
   const [remainingMs, setRemainingMs] = useState<number>(0);
   const intervalRef = useRef<number | null>(null);
@@ -104,31 +108,54 @@ export const TimerPreview = ({
         return Date.now() + durationSeconds * 1000;
       }
       
-      // per-visitor start time (local storage) to avoid DB changes for now
-      const key = `cms_page_first_access:${shareCode || "preview"}:${uid || "anon"}`;
-      
-      try {
-        const stored = localStorage.getItem(key);
-        let start = stored ? Number(stored) : Date.now();
+      if (mode === "step_delivery" && scenarioId && stepId && uid && shareCode) {
+        // ステップ配信モード: friend_page_accessテーブルからtimer_start_atを取得
+        const key = `step_delivery_timer:${shareCode}:${uid}:${scenarioId}:${stepId}`;
         
-        // 無効な値をチェック
-        if (isNaN(start)) {
-          start = Date.now();
+        try {
+          const stored = localStorage.getItem(key);
+          if (stored) {
+            const startTime = Number(stored);
+            if (!isNaN(startTime)) {
+              return startTime + durationSeconds * 1000;
+            }
+          }
+          
+          // フォールバック: 現在時刻から開始
+          const fallbackStart = Date.now();
+          localStorage.setItem(key, String(fallbackStart));
+          return fallbackStart + durationSeconds * 1000;
+        } catch (e) {
+          console.warn('localStorage not available:', e);
+          return Date.now() + durationSeconds * 1000;
         }
+      } else {
+        // per-access mode
+        const key = `cms_page_first_access:${shareCode || "preview"}:${uid || "anon"}`;
         
-        if (!stored || isNaN(Number(stored))) {
-          localStorage.setItem(key, String(start));
+        try {
+          const stored = localStorage.getItem(key);
+          let start = stored ? Number(stored) : Date.now();
+          
+          // 無効な値をチェック
+          if (isNaN(start)) {
+            start = Date.now();
+          }
+          
+          if (!stored || isNaN(Number(stored))) {
+            localStorage.setItem(key, String(start));
+          }
+          return start + durationSeconds * 1000;
+        } catch (e) {
+          // localStorage使用できない場合のフォールバック
+          console.warn('localStorage not available:', e);
+          return Date.now() + durationSeconds * 1000;
         }
-        return start + durationSeconds * 1000;
-      } catch (e) {
-        // localStorage使用できない場合のフォールバック
-        console.warn('localStorage not available:', e);
-        return Date.now() + durationSeconds * 1000;
       }
     }
     
     return Date.now();
-  }, [mode, deadline, durationSeconds, shareCode, uid, preview]);
+  }, [mode, deadline, durationSeconds, shareCode, uid, preview, scenarioId, stepId]);
 
   useEffect(() => {
     // 既存のインターバルをクリア

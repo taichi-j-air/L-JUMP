@@ -36,7 +36,8 @@ serve(async (req) => {
         "timer_enabled, timer_mode, timer_deadline, timer_duration_seconds, " +
         "show_milliseconds, timer_style, timer_bg_color, timer_text_color, " +
         "internal_timer, timer_text, timer_day_label, timer_hour_label, " +
-        "timer_minute_label, timer_second_label, expire_action, timer_mode_step_delivery"
+        "timer_minute_label, timer_second_label, expire_action, " +
+        "timer_scenario_id, timer_step_id"
       )
       .eq("share_code", shareCode)
       .single();
@@ -143,26 +144,72 @@ serve(async (req) => {
         );
       }
 
-      // 初回アクセス時の記録（per_accessタイマー用）
-      if (page.timer_enabled && page.timer_mode === 'per_access') {
+      // タイマー初期設定
+      if (page.timer_enabled) {
         if (!accessData) {
           // 新規アクセス制御レコードを作成
+          const insertData: any = {
+            user_id: page.user_id,
+            friend_id: friend.id,
+            page_share_code: shareCode,
+            access_enabled: true,
+            access_source: 'page_view'
+          };
+
+          if (page.timer_mode === 'per_access') {
+            insertData.first_access_at = new Date().toISOString();
+            insertData.timer_start_at = new Date().toISOString();
+          } else if (page.timer_mode === 'step_delivery' && page.timer_scenario_id && page.timer_step_id) {
+            // ステップ配信時刻を取得
+            const { data: deliveryData } = await supabase
+              .from("step_delivery_tracking")
+              .select("delivered_at")
+              .eq("friend_id", friend.id)
+              .eq("scenario_id", page.timer_scenario_id)
+              .eq("step_id", page.timer_step_id)
+              .eq("status", "delivered")
+              .maybeSingle();
+
+            if (deliveryData?.delivered_at) {
+              insertData.timer_start_at = deliveryData.delivered_at;
+              insertData.scenario_id = page.timer_scenario_id;
+              insertData.step_id = page.timer_step_id;
+            }
+          }
+
           await supabase
             .from("friend_page_access")
-            .insert({
-              user_id: page.user_id,
-              friend_id: friend.id,
-              page_share_code: shareCode,
-              first_access_at: new Date().toISOString(),
-              access_enabled: true,
-              access_source: 'page_view'
-            });
-        } else if (!accessData.first_access_at) {
-          // 初回アクセス時刻を記録
-          await supabase
-            .from("friend_page_access")
-            .update({ first_access_at: new Date().toISOString() })
-            .eq("id", accessData.id);
+            .insert(insertData);
+        } else {
+          // 既存レコードの更新
+          const updateData: any = {};
+          
+          if (page.timer_mode === 'per_access' && !accessData.first_access_at) {
+            updateData.first_access_at = new Date().toISOString();
+            updateData.timer_start_at = new Date().toISOString();
+          } else if (page.timer_mode === 'step_delivery' && !accessData.timer_start_at) {
+            const { data: deliveryData } = await supabase
+              .from("step_delivery_tracking")
+              .select("delivered_at")
+              .eq("friend_id", friend.id)
+              .eq("scenario_id", page.timer_scenario_id)
+              .eq("step_id", page.timer_step_id)
+              .eq("status", "delivered")
+              .maybeSingle();
+
+            if (deliveryData?.delivered_at) {
+              updateData.timer_start_at = deliveryData.delivered_at;
+              updateData.scenario_id = page.timer_scenario_id;
+              updateData.step_id = page.timer_step_id;
+            }
+          }
+
+          if (Object.keys(updateData).length > 0) {
+            await supabase
+              .from("friend_page_access")
+              .update(updateData)
+              .eq("id", accessData.id);
+          }
         }
       }
     }
@@ -200,16 +247,98 @@ serve(async (req) => {
         const tagIds = new Set((friendTags || []).map((t: any) => t.tag_id));
 
         if (allowed.length > 0 && !allowed.some((id) => tagIds.has(id))) {
-          return new Response(JSON.stringify({ error: "forbidden by allowed tags" }), {
-            status: 403,
-            headers: { ...corsHeaders, "Content-Type": "application/json" },
-          });
+          console.log("Access denied by allowed tags");
+          
+          const { data: profile } = await supabase
+            .from("profiles")
+            .select("display_name, line_user_id, add_friend_url")
+            .eq("user_id", page.user_id)
+            .maybeSingle();
+
+          const friendInfo = {
+            account_name: profile?.display_name || null,
+            line_id: profile?.line_user_id || null,
+            add_friend_url: profile?.add_friend_url || null,
+            message: "このページを閲覧する権限がありません。必要なタグが設定されていません。"
+          };
+
+          return new Response(
+            JSON.stringify({ require_friend: true, friend_info: friendInfo }),
+            { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          );
         }
         if (blocked.length > 0 && blocked.some((id) => tagIds.has(id))) {
-          return new Response(JSON.stringify({ error: "forbidden by blocked tags" }), {
-            status: 403,
-            headers: { ...corsHeaders, "Content-Type": "application/json" },
-          });
+          console.log("Access denied by blocked tags");
+          
+          const { data: profile } = await supabase
+            .from("profiles")
+            .select("display_name, line_user_id, add_friend_url")
+            .eq("user_id", page.user_id)
+            .maybeSingle();
+
+          const friendInfo = {
+            account_name: profile?.display_name || null,
+            line_id: profile?.line_user_id || null,
+            add_friend_url: profile?.add_friend_url || null,
+            message: "このページを閲覧する権限がありません。ブロックされたタグが設定されています。"
+          };
+
+          return new Response(
+            JSON.stringify({ require_friend: true, friend_info: friendInfo }),
+            { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          );
+        }
+      }
+
+      // タイマー切れ後の非表示処理
+      if (page.timer_enabled && page.expire_action === 'hide') {
+        const { data: accessData } = await supabase
+          .from("friend_page_access")
+          .select("*")
+          .eq("friend_id", friend.id)
+          .eq("page_share_code", shareCode)
+          .maybeSingle();
+
+        // タイマー切れチェック
+        let isExpired = false;
+        if (page.timer_mode === 'absolute' && page.timer_deadline) {
+          isExpired = new Date() > new Date(page.timer_deadline);
+        } else if ((page.timer_mode === 'per_access' || page.timer_mode === 'step_delivery') && accessData) {
+          const startTime = accessData.timer_start_at || accessData.first_access_at;
+          if (startTime && page.timer_duration_seconds) {
+            const endTime = new Date(new Date(startTime).getTime() + page.timer_duration_seconds * 1000);
+            isExpired = new Date() > endTime;
+          }
+        }
+
+        // タイマー切れでアクセス無効化
+        if (isExpired) {
+          if (accessData && accessData.access_enabled) {
+            await supabase
+              .from("friend_page_access")
+              .update({ access_enabled: false, updated_at: new Date().toISOString() })
+              .eq("id", accessData.id);
+          }
+
+          console.log("Timer expired - access disabled");
+          
+          const { data: profile } = await supabase
+            .from("profiles")
+            .select("display_name, line_user_id, add_friend_url")
+            .eq("user_id", page.user_id)
+            .maybeSingle();
+
+          const friendInfo = {
+            account_name: profile?.display_name || null,
+            line_id: profile?.line_user_id || null,
+            add_friend_url: profile?.add_friend_url || null,
+            message: "このページの閲覧期限が終了しました。"
+          };
+
+          return new Response(
+            JSON.stringify({ require_friend: true, friend_info: friendInfo }),
+            { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          );
         }
       }
     }
