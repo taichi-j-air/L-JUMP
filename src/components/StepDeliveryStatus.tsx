@@ -60,10 +60,14 @@ export function StepDeliveryStatus({ step }: StepDeliveryStatusProps) {
         .select('friend_id')
         .eq('step_id', step.id)
         .eq('delivery_status', 'delivered')
-  if (!delErr) {
-    const uniq = new Set<string>((deliveredLogs || []).map((r: any) => r.friend_id).filter(Boolean))
-    statsCount.delivered = Math.max(statsCount.delivered, uniq.size)
-  }
+        
+      if (!delErr && deliveredLogs) {
+        const uniq = new Set<string>(deliveredLogs.map((r: any) => r.friend_id).filter(Boolean))
+        statsCount.delivered = Math.max(statsCount.delivered, uniq.size)
+        console.log(`ステップ${step.id}配信完了数:`, uniq.size, '配信ログ:', deliveredLogs.length)
+      } else if (delErr) {
+        console.error('配信完了ログ取得エラー:', delErr)
+      }
 
       // 当該ステップでの配信失敗（ブロック等）数（ログ基準、重複排除）
       const { data: failedLogs, error: logErr } = await supabase
@@ -136,13 +140,19 @@ export function StepDeliveryStatus({ step }: StepDeliveryStatusProps) {
           setDetailUsers([])
         }
       } else if (type === 'delivered') {
-        // 配信完了はログ基準で取得（離脱後も残る）
+        // 配信完了はログ基準で取得（シナリオ解除されても削除されない）
         const { data: logs, error: dErr } = await supabase
           .from('step_delivery_logs')
           .select('friend_id, delivered_at')
           .eq('step_id', step.id)
           .eq('delivery_status', 'delivered')
-        if (dErr) throw dErr
+        
+        if (dErr) {
+          console.error('配信完了ログ取得エラー:', dErr)
+          setDetailUsers([])
+          return
+        }
+        
         // 友だちごとに最新の delivered_at を採用
         const latestByFriend = new Map<string, string>()
         for (const r of logs || []) {
@@ -153,13 +163,28 @@ export function StepDeliveryStatus({ step }: StepDeliveryStatusProps) {
           if (!current || new Date(ts) > new Date(current)) latestByFriend.set(fid, ts)
         }
         const friendIds = Array.from(latestByFriend.keys())
+        
+        console.log('配信完了friendIds:', friendIds)
+        
         if (friendIds.length > 0) {
           const { data: friends, error: fErr } = await supabase
             .from('line_friends')
             .select('id, display_name, picture_url, line_user_id')
             .in('id', friendIds)
-          if (fErr) throw fErr
-          setDetailUsers((friends || []).map((f: any) => ({ ...f, ts: latestByFriend.get(f.id) || null })))
+          
+          if (fErr) {
+            console.error('友だち情報取得エラー:', fErr)
+            setDetailUsers([])
+            return
+          }
+          
+          const friendsWithTs = (friends || []).map((f: any) => ({ 
+            ...f, 
+            ts: latestByFriend.get(f.id) || null 
+          }))
+          
+          console.log('配信完了友だち詳細:', friendsWithTs)
+          setDetailUsers(friendsWithTs)
         } else {
           setDetailUsers([])
         }
@@ -293,12 +318,14 @@ export function StepDeliveryStatus({ step }: StepDeliveryStatusProps) {
                         <img src={u.picture_url} alt={u.display_name ?? u.line_user_id} className="h-full w-full object-cover" />
                       ) : null}
                     </div>
-                    <span className="text-xs">
-                      {u.display_name || u.line_user_id}
-                      {showDetails && u.ts ? (
-                        <span className="ml-2 text-muted-foreground">{u.ts ? format(new Date(u.ts), 'yyyy/MM/dd HH:mm') : ''}</span>
-                      ) : null}
-                    </span>
+                     <span className="text-xs">
+                       {u.display_name || u.line_user_id}
+                       {u.ts && (
+                         <span className="ml-2 text-muted-foreground">
+                           {format(new Date(u.ts), 'yyyy/MM/dd HH:mm')}
+                         </span>
+                       )}
+                     </span>
                   </li>
                 ))}
               </ul>

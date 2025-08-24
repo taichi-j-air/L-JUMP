@@ -6,9 +6,10 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
-import { X, Plus } from "lucide-react";
+import { X, Plus, Image } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
+import { MediaLibrarySelector } from "@/components/MediaLibrarySelector";
 
 interface StepMessage {
   id?: string;
@@ -22,6 +23,7 @@ interface StepMessage {
     title?: string;
     button_text?: string;
     target_scenario_id?: string;
+    image_url?: string;
   };
 }
 
@@ -87,12 +89,15 @@ export default function StepMessageEditor({
 
   const updateMessage = async (index: number, updates: Partial<StepMessage>) => {
     const message = messages[index];
+    
+    // Update local state immediately for instant feedback
+    const updated = messages.map((msg, i) => 
+      i === index ? { ...msg, ...updates } : msg
+    );
+    onMessagesChange(updated);
+
     if (!message.id) {
       // Local update for new messages
-      const updated = messages.map((msg, i) => 
-        i === index ? { ...msg, ...updates } : msg
-      );
-      onMessagesChange(updated);
       return;
     }
 
@@ -117,15 +122,13 @@ export default function StepMessageEditor({
 
       if (error) throw error;
 
-      // Update local state
-      const updated = messages.map((msg, i) => 
-        i === index ? { ...msg, ...updates } : msg
-      );
-      onMessagesChange(updated);
       toast.success('メッセージを更新しました');
     } catch (error) {
       console.error('Error updating message:', error);
       toast.error('メッセージの更新に失敗しました');
+      
+      // Revert local state on error
+      onMessagesChange(messages);
     }
   };
 
@@ -188,13 +191,7 @@ export default function StepMessageEditor({
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <h3 className="text-lg font-semibold">メッセージ設定</h3>
-        <Button onClick={addMessage} size="sm">
-          <Plus className="h-4 w-4 mr-1" />
-          メッセージ追加
-        </Button>
-      </div>
+      <h3 className="text-lg font-semibold">メッセージ設定</h3>
 
       {messages.length === 0 ? (
         <p className="text-sm text-muted-foreground">
@@ -281,8 +278,8 @@ export default function StepMessageEditor({
                           <SelectValue />
                         </SelectTrigger>
                         <SelectContent>
-                          <SelectItem value="button">単一ボタン</SelectItem>
-                          <SelectItem value="image">画像（リッチメッセージ）</SelectItem>
+                          <SelectItem value="button">OKボタン</SelectItem>
+                          <SelectItem value="image">画像ボタン</SelectItem>
                         </SelectContent>
                       </Select>
                     </div>
@@ -290,7 +287,7 @@ export default function StepMessageEditor({
                     {message.restore_config?.type === "button" && (
                       <div className="grid grid-cols-2 gap-3">
                         <div className="space-y-2">
-                          <Label>タイトル</Label>
+                          <Label>メッセージテキスト</Label>
                           <Input
                             value={message.restore_config?.title || ""}
                             onChange={(e) => 
@@ -298,11 +295,11 @@ export default function StepMessageEditor({
                                 restore_config: { ...message.restore_config, title: e.target.value }
                               })
                             }
-                            placeholder="復活メッセージのタイトル"
+                            placeholder="確認メッセージのテキスト"
                           />
                         </div>
                         <div className="space-y-2">
-                          <Label>ボタンテキスト</Label>
+                          <Label>ボタンラベル</Label>
                           <Input
                             value={message.restore_config?.button_text || ""}
                             onChange={(e) => 
@@ -310,9 +307,40 @@ export default function StepMessageEditor({
                                 restore_config: { ...message.restore_config, button_text: e.target.value }
                               })
                             }
-                            placeholder="復活ボタンのテキスト"
+                            placeholder="ボタンに表示するテキスト"
                           />
                         </div>
+                      </div>
+                    )}
+
+                    {message.restore_config?.type === "image" && (
+                      <div className="space-y-3">
+                        <div className="space-y-2">
+                          <Label>画像選択</Label>
+                          <MediaLibrarySelector
+                            trigger={
+                              <Button variant="outline" className="w-full">
+                                <Image className="h-4 w-4 mr-2" />
+                                メディアライブラリから選択
+                              </Button>
+                            }
+                            onSelect={(url) => 
+                              updateMessage(index, {
+                                restore_config: { ...message.restore_config, image_url: url }
+                              })
+                            }
+                            selectedUrl={message.restore_config?.image_url}
+                          />
+                        </div>
+                        {message.restore_config?.image_url && (
+                          <div className="border rounded p-2">
+                            <img 
+                              src={message.restore_config.image_url} 
+                              alt="Selected restoration image" 
+                              className="max-w-full h-32 object-contain mx-auto"
+                            />
+                          </div>
+                        )}
                       </div>
                     )}
 
@@ -337,6 +365,33 @@ export default function StepMessageEditor({
                           ))}
                         </SelectContent>
                       </Select>
+                    </div>
+                    
+                    {/* Preview for restore_access messages */}
+                    <div className="mt-4 p-3 bg-gray-50 rounded border">
+                      <Label className="text-sm font-medium">プレビュー</Label>
+                      {message.restore_config?.type === "button" ? (
+                        <div className="mt-2 p-3 bg-white rounded border max-w-xs">
+                          <p className="text-sm mb-3">
+                            {message.restore_config?.title || "確認メッセージ"}
+                          </p>
+                          <Button size="sm" className="w-full">
+                            {message.restore_config?.button_text || "OK"}
+                          </Button>
+                        </div>
+                      ) : message.restore_config?.image_url ? (
+                        <div className="mt-2 max-w-xs">
+                          <img 
+                            src={message.restore_config.image_url} 
+                            alt="Restoration button preview" 
+                            className="w-full rounded border cursor-pointer hover:opacity-80"
+                          />
+                        </div>
+                      ) : (
+                        <p className="text-sm text-muted-foreground mt-2">
+                          画像を選択してください
+                        </p>
+                      )}
                     </div>
                   </div>
                 )}
@@ -396,9 +451,16 @@ export default function StepMessageEditor({
                 )}
               </CardContent>
             </Card>
-          ))}
+            ))}
         </div>
       )}
+      
+      <div className="flex justify-center pt-4">
+        <Button onClick={addMessage} size="sm">
+          <Plus className="h-4 w-4 mr-1" />
+          メッセージ追加
+        </Button>
+      </div>
     </div>
   );
 }
