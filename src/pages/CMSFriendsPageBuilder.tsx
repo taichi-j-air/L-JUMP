@@ -96,7 +96,10 @@ export default function CMSFriendsPageBuilder() {
 
   const fetchScenarios = async () => {
     try {
-      const { data } = await supabase.from('step_scenarios').select('*').order('name');
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+
+      const { data } = await supabase.from('step_scenarios').select('*').eq('user_id', user.id).order('name');
       setScenarios(data || []);
     } catch (e) {
       console.error(e);

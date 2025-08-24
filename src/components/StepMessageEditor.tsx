@@ -46,9 +46,13 @@ export default function StepMessageEditor({
 
   const fetchScenarios = async () => {
     try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+
       const { data } = await supabase
         .from('step_scenarios')
         .select('*')
+        .eq('user_id', user.id)
         .order('name');
       setScenarios(data || []);
     } catch (e) {
@@ -58,9 +62,13 @@ export default function StepMessageEditor({
 
   const fetchFlexMessages = async () => {
     try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+
       const { data } = await supabase
         .from('flex_messages')
         .select('*')
+        .eq('user_id', user.id)
         .order('name');
       setFlexMessages(data || []);
     } catch (e) {
