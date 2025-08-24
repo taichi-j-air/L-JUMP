@@ -85,20 +85,79 @@ export default function StepMessageEditor({
     onMessagesChange([...messages, newMessage]);
   };
 
-  const updateMessage = (index: number, updates: Partial<StepMessage>) => {
-    const updated = messages.map((msg, i) => 
-      i === index ? { ...msg, ...updates } : msg
-    );
-    onMessagesChange(updated);
+  const updateMessage = async (index: number, updates: Partial<StepMessage>) => {
+    const message = messages[index];
+    if (!message.id) {
+      // Local update for new messages
+      const updated = messages.map((msg, i) => 
+        i === index ? { ...msg, ...updates } : msg
+      );
+      onMessagesChange(updated);
+      return;
+    }
+
+    // Database update for existing messages
+    try {
+      const payload: any = {
+        message_type: updates.message_type || message.message_type,
+        content: updates.content !== undefined ? updates.content : message.content,
+        media_url: updates.media_url !== undefined ? updates.media_url : message.media_url,
+        flex_message_id: updates.flex_message_id !== undefined ? updates.flex_message_id : message.flex_message_id,
+        message_order: updates.message_order !== undefined ? updates.message_order : message.message_order,
+      };
+
+      if (updates.restore_config !== undefined) {
+        payload.restore_config = updates.restore_config;
+      }
+
+      const { error } = await supabase
+        .from('step_messages')
+        .update(payload)
+        .eq('id', message.id);
+
+      if (error) throw error;
+
+      // Update local state
+      const updated = messages.map((msg, i) => 
+        i === index ? { ...msg, ...updates } : msg
+      );
+      onMessagesChange(updated);
+      toast.success('メッセージを更新しました');
+    } catch (error) {
+      console.error('Error updating message:', error);
+      toast.error('メッセージの更新に失敗しました');
+    }
   };
 
-  const removeMessage = (index: number) => {
-    const filtered = messages.filter((_, i) => i !== index)
-      .map((msg, i) => ({ ...msg, message_order: i }));
-    onMessagesChange(filtered);
+  const removeMessage = async (index: number) => {
+    const message = messages[index];
+    if (!message.id) {
+      // Local removal for new messages
+      const filtered = messages.filter((_, i) => i !== index)
+        .map((msg, i) => ({ ...msg, message_order: i }));
+      onMessagesChange(filtered);
+      return;
+    }
+
+    try {
+      const { error } = await supabase
+        .from('step_messages')
+        .delete()
+        .eq('id', message.id);
+
+      if (error) throw error;
+
+      const filtered = messages.filter((_, i) => i !== index)
+        .map((msg, i) => ({ ...msg, message_order: i }));
+      onMessagesChange(filtered);
+      toast.success('メッセージを削除しました');
+    } catch (error) {
+      console.error('Error deleting message:', error);
+      toast.error('メッセージの削除に失敗しました');
+    }
   };
 
-  const moveMessage = (index: number, direction: 'up' | 'down') => {
+  const moveMessage = async (index: number, direction: 'up' | 'down') => {
     const newIndex = direction === 'up' ? index - 1 : index + 1;
     if (newIndex < 0 || newIndex >= messages.length) return;
 
@@ -108,6 +167,23 @@ export default function StepMessageEditor({
     // Update message_order
     const updated = reordered.map((msg, i) => ({ ...msg, message_order: i }));
     onMessagesChange(updated);
+
+    // Update database if messages have IDs
+    try {
+      for (const msg of updated) {
+        if (msg.id) {
+          const { error } = await supabase
+            .from('step_messages')
+            .update({ message_order: msg.message_order })
+            .eq('id', msg.id);
+
+          if (error) throw error;
+        }
+      }
+    } catch (error) {
+      console.error('Error reordering messages:', error);
+      toast.error('メッセージの並び替えに失敗しました');
+    }
   };
 
   return (
@@ -180,9 +256,9 @@ export default function StepMessageEditor({
                       <SelectItem value="image">画像メッセージ</SelectItem>
                       <SelectItem value="flex">Flexメッセージ</SelectItem>
                       <SelectItem value="restore_access">
-                        <div className="flex items-center gap-2">
-                          <span className="inline-block w-3 h-3 bg-green-400 rounded"></span>
-                          アクセス解除＆シナリオ再登録
+                        <div className="flex items-center gap-2 bg-green-50 px-2 py-1 rounded-md">
+                          <span className="inline-block w-2 h-2 bg-green-500 rounded-full"></span>
+                          <span className="text-green-800 font-medium">アクセス解除＆シナリオ再登録</span>
                         </div>
                       </SelectItem>
                     </SelectContent>

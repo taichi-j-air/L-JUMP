@@ -1383,6 +1383,7 @@ export type Database = {
           media_url: string | null
           message_order: number
           message_type: Database["public"]["Enums"]["step_message_type"]
+          restore_config: Json | null
           step_id: string
           updated_at: string
         }
@@ -1394,6 +1395,7 @@ export type Database = {
           media_url?: string | null
           message_order: number
           message_type: Database["public"]["Enums"]["step_message_type"]
+          restore_config?: Json | null
           step_id: string
           updated_at?: string
         }
@@ -1405,6 +1407,7 @@ export type Database = {
           media_url?: string | null
           message_order?: number
           message_type?: Database["public"]["Enums"]["step_message_type"]
+          restore_config?: Json | null
           step_id?: string
           updated_at?: string
         }
@@ -1958,7 +1961,7 @@ export type Database = {
       message_kind: "incoming" | "outgoing"
       page_visibility: "friends_only" | "public"
       plan_type: "free" | "basic" | "premium" | "developer"
-      step_message_type: "text" | "media" | "flex"
+      step_message_type: "text" | "media" | "flex" | "restore_access"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -2089,7 +2092,7 @@ export const Constants = {
       message_kind: ["incoming", "outgoing"],
       page_visibility: ["friends_only", "public"],
       plan_type: ["free", "basic", "premium", "developer"],
-      step_message_type: ["text", "media", "flex"],
+      step_message_type: ["text", "media", "flex", "restore_access"],
     },
   },
 } as const

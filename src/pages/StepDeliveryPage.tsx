@@ -23,6 +23,7 @@ import { ScenarioFolders } from "@/components/ScenarioFolders"
 import { useScenarioFolders } from "@/hooks/useScenarioFolders"
 import { useStepScenarios, StepScenario, Step, StepMessage } from "@/hooks/useStepScenarios"
 import { toast } from "sonner"
+import StepMessageEditor from "@/components/StepMessageEditor"
 import {
   DndContext,
   rectIntersection,
@@ -741,162 +742,75 @@ export default function StepDeliveryPage() {
                    <StepDeliveryStatus step={selectedStep} />
 
                    {/* Messages */}
-                  <div className="space-y-4">
-                    {selectedStepMessages.length === 0 && (
-                      <Card>
-                        <CardHeader>
-                          <CardTitle className="text-sm flex items-center gap-2">
-                            <MessageSquare className="h-4 w-4" />
-                            メッセージ 1
-                          </CardTitle>
-                        </CardHeader>
-                        <CardContent className="space-y-4">
-                          <div>
-                            <Label>メッセージタイプ</Label>
-                             <Select
-                               value="text"
-                               onValueChange={(value: 'text' | 'media' | 'flex') => {
-                                 // 新しいメッセージを作成
-                                 createMessage(selectedStep.id, value)
-                               }}
-                             >
-                              <SelectTrigger>
-                                <SelectValue />
-                              </SelectTrigger>
-                              <SelectContent>
-                                 <SelectItem value="text">テキストメッセージ</SelectItem>
-                                <SelectItem value="media">メディアライブラリ</SelectItem>
-                                <SelectItem value="flex">Flexメッセージ</SelectItem>
-                              </SelectContent>
-                            </Select>
-                          </div>
-
-                          <div>
-                            <Label>メッセージ内容</Label>
-                            <Textarea
-                              placeholder="メッセージを入力してください..."
-                              rows={5}
-                              className="resize-none"
-                            />
-                            <div className="text-xs text-muted-foreground mt-1">
-                              0 / 5000 文字
-                            </div>
-                          </div>
-                        </CardContent>
-                      </Card>
-                    )}
-
-                    {selectedStepMessages.map((message, index) => {
-                      const isCollapsed = collapsedMessages.has(message.id)
-                      return (
-                        <Card key={message.id}>
-                          <CardHeader className="flex-row items-center justify-between space-y-0 pb-2">
-                            <CardTitle className="text-sm flex items-center gap-2">
-                              <MessageSquare className="h-4 w-4" />
-                              メッセージ {index + 1}
-                            </CardTitle>
-                            <div className="flex gap-1">
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                onClick={() => {
-                                  const newCollapsed = new Set(collapsedMessages)
-                                  if (isCollapsed) {
-                                    newCollapsed.delete(message.id)
-                                  } else {
-                                    newCollapsed.add(message.id)
-                                  }
-                                  setCollapsedMessages(newCollapsed)
+                   <div className="space-y-4">
+                     {selectedStepMessages.length === 0 ? (
+                       <Card>
+                         <CardHeader>
+                           <CardTitle className="text-sm flex items-center gap-2">
+                             <MessageSquare className="h-4 w-4" />
+                             メッセージ 1
+                           </CardTitle>
+                         </CardHeader>
+                         <CardContent className="space-y-4">
+                           <div>
+                             <Label>メッセージタイプ</Label>
+                              <Select
+                                value="text"
+                                onValueChange={(value: 'text' | 'media' | 'flex') => {
+                                  // 新しいメッセージを作成
+                                  createMessage(selectedStep.id, value)
                                 }}
                               >
-                                {isCollapsed ? <ChevronDown className="h-4 w-4" /> : <ChevronUp className="h-4 w-4" />}
-                              </Button>
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                onClick={() => deleteMessage(message.id)}
-                              >
-                                <Trash2 className="h-4 w-4 text-destructive" />
-                              </Button>
-                            </div>
-                          </CardHeader>
-                          {!isCollapsed && (
-                            <CardContent className="space-y-4">
-                              <div>
-                                <Label>メッセージタイプ</Label>
-                                 <Select
-                                   value={message.message_type}
-                                   onValueChange={(value: 'text' | 'media' | 'flex') => 
-                                     handleUpdateMessage(message.id, { message_type: value })
-                                   }
-                                 >
-                                  <SelectTrigger>
-                                    <SelectValue />
-                                  </SelectTrigger>
-                                  <SelectContent>
-                                   <SelectItem value="text">テキストメッセージ</SelectItem>
-                                    <SelectItem value="media">メディアライブラリ</SelectItem>
-                                    <SelectItem value="flex">Flexメッセージ</SelectItem>
-                                  </SelectContent>
-                                </Select>
-                              </div>
+                               <SelectTrigger>
+                                 <SelectValue />
+                               </SelectTrigger>
+                               <SelectContent>
+                                  <SelectItem value="text">テキストメッセージ</SelectItem>
+                                 <SelectItem value="media">メディアライブラリ</SelectItem>
+                                 <SelectItem value="flex">Flexメッセージ</SelectItem>
+                               </SelectContent>
+                             </Select>
+                           </div>
 
-                              {message.message_type === 'text' && (
-                                <div>
-                                  <Label>メッセージ内容</Label>
-                                  <Textarea
-                                    value={draftMessageContents[message.id] ?? ''}
-                                    onChange={(e) => setDraftMessageContents(prev => ({ ...prev, [message.id]: e.target.value }))}
-                                    onBlur={() => {
-                                      const draft = draftMessageContents[message.id] ?? ''
-                                      if (draft !== message.content) {
-                                        handleUpdateMessage(message.id, { content: draft })
-                                      }
-                                    }}
-                                    placeholder="メッセージを入力してください..."
-                                    rows={5}
-                                    className="resize-none"
-                                    lang="ja"
-                                  />
-                                  <div className="text-xs text-muted-foreground mt-1">
-                                    {(draftMessageContents[message.id] ?? '').length} / 5000 文字
-                                  </div>
-                                </div>
-                              )}
-
-                               {message.message_type === 'media' && (
-                                 <div>
-                                   <Label>メディア選択</Label>
-                                   <MediaSelector
-                                     onSelect={(url) => handleUpdateMessage(message.id, { media_url: url })}
-                                     selectedUrl={message.media_url || undefined}
-                                   />
-                                 </div>
-                               )}
-
-                               {message.message_type === 'flex' && (
-                                  <div>
-                                    <FlexMessageSelector
-                                      onSelect={(flexMessageId) => handleUpdateMessage(message.id, { flex_message_id: flexMessageId })}
-                                      selectedFlexMessageId={message.flex_message_id}
-                                    />
-                                  </div>
-                                )}
-                            </CardContent>
-                          )}
-                        </Card>
-                      )
-                    })}
-
-                    {selectedStepMessages.length > 0 && (
-                      <div className="text-center">
-                        <Button onClick={handleAddMessage} variant="outline" size="sm" className="gap-2">
-                          <Plus className="h-4 w-4" />
-                          メッセージ追加
-                        </Button>
-                      </div>
-                    )}
-                  </div>
+                           <div>
+                             <Label>メッセージ内容</Label>
+                             <Textarea
+                               placeholder="メッセージを入力してください..."
+                               rows={5}
+                               className="resize-none"
+                             />
+                             <div className="text-xs text-muted-foreground mt-1">
+                               0 / 5000 文字
+                             </div>
+                           </div>
+                         </CardContent>
+                       </Card>
+                     ) : (
+                       /* Use StepMessageEditor component */
+                       <StepMessageEditor
+                         stepId={selectedStep.id}
+                         messages={selectedStepMessages.map(msg => ({
+                           id: msg.id,
+                           message_type: msg.message_type === 'media' ? 'image' : msg.message_type as any,
+                           content: msg.content || '',
+                           media_url: msg.media_url,
+                           flex_message_id: msg.flex_message_id,
+                           message_order: msg.message_order,
+                           restore_config: (msg as any).restore_config
+                         }))}
+                         onMessagesChange={(messages) => {
+                           // Handle messages change - this will trigger updates through the component
+                           // The StepMessageEditor handles its own updates, so we just need to trigger refetch
+                           if (messages.length !== selectedStepMessages.length) {
+                             // Messages were added or removed, refetch data
+                             setTimeout(() => {
+                               window.location.reload()
+                             }, 100)
+                           }
+                         }}
+                       />
+                     )}
+                   </div>
                 </>
               )}
             </div>
