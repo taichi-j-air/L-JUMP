@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback, useRef } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -6,11 +6,10 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
-import { X, Plus, Image } from "lucide-react";
+import { X, Plus, Image, Save, Loader2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { MediaLibrarySelector } from "@/components/MediaLibrarySelector";
-import { debounce } from "lodash"; // npm install lodash @types/lodash
 
 interface StepMessage {
   id?: string;
@@ -32,7 +31,6 @@ interface StepMessageEditorProps {
   stepId: string;
   messages: StepMessage[];
   onMessagesChange: (messages: StepMessage[]) => void;
-  // 【追加】右側カラムにプレビューを表示するためのコールバック
   onPreviewChange?: (previewData: any) => void;
 }
 
@@ -45,64 +43,28 @@ export default function StepMessageEditor({
   const [scenarios, setScenarios] = useState<any[]>([]);
   const [flexMessages, setFlexMessages] = useState<any[]>([]);
   
-  // 【修正1】ローカル状態での編集内容管理（API更新を遅延させるため）
-  const [localMessages, setLocalMessages] = useState<StepMessage[]>(messages);
-  const [isUpdating, setIsUpdating] = useState(false);
-
-  // 【修正2】デバウンス関数の作成（500ms遅延）
-  const debouncedUpdateDB = useRef(
-    debounce(async (messageIndex: number, updates: Partial<StepMessage>) => {
-      const message = messages[messageIndex];
-      if (!message?.id) return; // 新規メッセージはDB更新しない
-
-      try {
-        setIsUpdating(true);
-        const payload: any = {
-          message_type: updates.message_type || message.message_type,
-          content: updates.content !== undefined ? updates.content : message.content,
-          media_url: updates.media_url !== undefined ? updates.media_url : message.media_url,
-          flex_message_id: updates.flex_message_id !== undefined ? updates.flex_message_id : message.flex_message_id,
-          message_order: updates.message_order !== undefined ? updates.message_order : message.message_order,
-        };
-
-        if (updates.restore_config !== undefined) {
-          payload.restore_config = updates.restore_config;
-        }
-
-        const { error } = await supabase
-          .from('step_messages')
-          .update(payload)
-          .eq('id', message.id);
-
-        if (error) throw error;
-
-        // トーストは最初の1回だけ表示（連続更新時のスパム防止）
-        if (!isUpdating) {
-          toast.success('メッセージを更新しました');
-        }
-      } catch (error) {
-        console.error('Error updating message:', error);
-        toast.error('メッセージの更新に失敗しました');
-      } finally {
-        setIsUpdating(false);
-      }
-    }, 500)
-  );
+  // 【修正】ローカル編集状態（保存されるまでは一時的な状態）
+  const [editingMessages, setEditingMessages] = useState<StepMessage[]>(messages);
+  
+  // 【修正】各メッセージの保存状態を管理
+  const [savingStates, setSavingStates] = useState<{ [key: number]: boolean }>({});
+  const [hasUnsavedChanges, setHasUnsavedChanges] = useState<{ [key: number]: boolean }>({});
 
   useEffect(() => {
     fetchScenarios();
     fetchFlexMessages();
   }, []);
 
-  // 【修正3】messagesプロップが変更された時にローカル状態を同期
+  // 【修正】親のmessagesが変更された時のみローカル状態を同期
   useEffect(() => {
-    setLocalMessages(messages);
+    setEditingMessages(messages);
+    setHasUnsavedChanges({});
   }, [messages]);
 
-  // 【修正4】プレビューデータを右カラムに送信
+  // 【修正】プレビューは保存済みデータのみから生成
   useEffect(() => {
-    if (onPreviewChange && localMessages.length > 0) {
-      const restoreMessage = localMessages.find(msg => msg.message_type === 'restore_access');
+    if (onPreviewChange && messages.length > 0) {
+      const restoreMessage = messages.find(msg => msg.message_type === 'restore_access');
       if (restoreMessage) {
         onPreviewChange({
           type: 'restore_access',
@@ -110,7 +72,7 @@ export default function StepMessageEditor({
         });
       }
     }
-  }, [localMessages, onPreviewChange]);
+  }, [messages, onPreviewChange]); // editingMessagesではなくmessagesを監視
 
   const fetchScenarios = async () => {
     try {
@@ -148,39 +110,155 @@ export default function StepMessageEditor({
     const newMessage: StepMessage = {
       message_type: "text",
       content: "",
-      message_order: localMessages.length,
+      message_order: editingMessages.length,
     };
-    const updatedMessages = [...localMessages, newMessage];
-    setLocalMessages(updatedMessages);
-    onMessagesChange(updatedMessages);
+    setEditingMessages(prev => [...prev, newMessage]);
+    
+    // 新規メッセージは未保存状態としてマーク
+    const newIndex = editingMessages.length;
+    setHasUnsavedChanges(prev => ({ ...prev, [newIndex]: true }));
   };
 
-  // 【修正5】ローカル状態とDB更新を分離
-  const updateMessage = useCallback((index: number, updates: Partial<StepMessage>) => {
-    // 1. ローカル状態を即座に更新（UI応答性向上）
-    const updatedLocal = localMessages.map((msg, i) => 
+  // 【修正】ローカル編集のみ（保存は別途）
+  const updateLocalMessage = (index: number, updates: Partial<StepMessage>) => {
+    const updated = editingMessages.map((msg, i) => 
       i === index ? { ...msg, ...updates } : msg
     );
-    setLocalMessages(updatedLocal);
+    setEditingMessages(updated);
     
-    // 2. 親コンポーネントにも即座に反映
-    const updatedParent = messages.map((msg, i) => 
-      i === index ? { ...msg, ...updates } : msg
-    );
-    onMessagesChange(updatedParent);
+    // 未保存状態としてマーク
+    setHasUnsavedChanges(prev => ({ ...prev, [index]: true }));
+  };
 
-    // 3. DB更新は遅延実行（デバウンス）
-    debouncedUpdateDB.current(index, updates);
-  }, [localMessages, messages, onMessagesChange]);
+  // 【修正】個別メッセージの保存機能
+  const saveMessage = async (index: number) => {
+    const message = editingMessages[index];
+    
+    // 保存中状態を設定
+    setSavingStates(prev => ({ ...prev, [index]: true }));
+    
+    try {
+      if (message.id) {
+        // 既存メッセージの更新
+        const payload: any = {
+          message_type: message.message_type,
+          content: message.content,
+          media_url: message.media_url,
+          flex_message_id: message.flex_message_id,
+          message_order: message.message_order,
+          restore_config: message.restore_config,
+        };
+
+        const { error, data } = await supabase
+          .from('step_messages')
+          .update(payload)
+          .eq('id', message.id)
+          .select()
+          .single();
+
+        if (error) throw error;
+
+        // 親の状態を更新（保存済みデータを反映）
+        const updatedMessages = messages.map((msg, i) => 
+          i === index ? data : msg
+        );
+        onMessagesChange(updatedMessages);
+        
+      } else {
+        // 新規メッセージの作成
+        const payload: any = {
+          step_id: stepId,
+          message_type: message.message_type,
+          content: message.content,
+          media_url: message.media_url,
+          flex_message_id: message.flex_message_id,
+          message_order: message.message_order,
+          restore_config: message.restore_config,
+        };
+
+        const { error, data } = await supabase
+          .from('step_messages')
+          .insert(payload)
+          .select()
+          .single();
+
+        if (error) throw error;
+
+        // 新規作成されたメッセージをローカル状態に反映
+        const updatedEditingMessages = editingMessages.map((msg, i) => 
+          i === index ? data : msg
+        );
+        setEditingMessages(updatedEditingMessages);
+
+        // 親の状態にも追加
+        const updatedMessages = [...messages];
+        updatedMessages[index] = data;
+        onMessagesChange(updatedMessages);
+      }
+
+      // 保存成功：未保存フラグをクリア
+      setHasUnsavedChanges(prev => {
+        const updated = { ...prev };
+        delete updated[index];
+        return updated;
+      });
+      
+      toast.success(`メッセージ ${index + 1} を保存しました`);
+      
+    } catch (error) {
+      console.error('Error saving message:', error);
+      toast.error('メッセージの保存に失敗しました');
+    } finally {
+      // 保存中状態をクリア
+      setSavingStates(prev => {
+        const updated = { ...prev };
+        delete updated[index];
+        return updated;
+      });
+    }
+  };
+
+  // 【修正】全メッセージの保存機能
+  const saveAllMessages = async () => {
+    const unsavedIndexes = Object.keys(hasUnsavedChanges).map(Number);
+    
+    if (unsavedIndexes.length === 0) {
+      toast.info('保存する変更がありません');
+      return;
+    }
+
+    // 各メッセージを順番に保存
+    for (const index of unsavedIndexes) {
+      await saveMessage(index);
+    }
+  };
 
   const removeMessage = async (index: number) => {
-    const message = localMessages[index];
+    const message = editingMessages[index];
+    
     if (!message.id) {
-      // 新規メッセージの削除（DB操作不要）
-      const filtered = localMessages.filter((_, i) => i !== index)
+      // 新規メッセージ（DBに未保存）の削除
+      const filtered = editingMessages.filter((_, i) => i !== index)
         .map((msg, i) => ({ ...msg, message_order: i }));
-      setLocalMessages(filtered);
-      onMessagesChange(filtered);
+      setEditingMessages(filtered);
+      
+      // 未保存状態もクリア
+      setHasUnsavedChanges(prev => {
+        const updated = { ...prev };
+        delete updated[index];
+        // インデックスをシフト
+        const newUnsaved: { [key: number]: boolean } = {};
+        Object.keys(updated).forEach(key => {
+          const keyNum = Number(key);
+          if (keyNum > index) {
+            newUnsaved[keyNum - 1] = true;
+          } else if (keyNum < index) {
+            newUnsaved[keyNum] = true;
+          }
+        });
+        return newUnsaved;
+      });
+      
       return;
     }
 
@@ -192,10 +270,16 @@ export default function StepMessageEditor({
 
       if (error) throw error;
 
-      const filtered = localMessages.filter((_, i) => i !== index)
+      // ローカル状態から削除
+      const filtered = editingMessages.filter((_, i) => i !== index)
         .map((msg, i) => ({ ...msg, message_order: i }));
-      setLocalMessages(filtered);
-      onMessagesChange(filtered);
+      setEditingMessages(filtered);
+      
+      // 親の状態からも削除
+      const parentFiltered = messages.filter((_, i) => i !== index)
+        .map((msg, i) => ({ ...msg, message_order: i }));
+      onMessagesChange(parentFiltered);
+      
       toast.success('メッセージを削除しました');
     } catch (error) {
       console.error('Error deleting message:', error);
@@ -205,45 +289,42 @@ export default function StepMessageEditor({
 
   const moveMessage = async (index: number, direction: 'up' | 'down') => {
     const newIndex = direction === 'up' ? index - 1 : index + 1;
-    if (newIndex < 0 || newIndex >= localMessages.length) return;
+    if (newIndex < 0 || newIndex >= editingMessages.length) return;
 
-    const reordered = [...localMessages];
+    const reordered = [...editingMessages];
     [reordered[index], reordered[newIndex]] = [reordered[newIndex], reordered[index]];
     
     const updated = reordered.map((msg, i) => ({ ...msg, message_order: i }));
-    setLocalMessages(updated);
-    onMessagesChange(updated);
+    setEditingMessages(updated);
 
-    // DB更新（既存メッセージのみ）
-    try {
-      for (const msg of updated) {
-        if (msg.id) {
-          const { error } = await supabase
-            .from('step_messages')
-            .update({ message_order: msg.message_order })
-            .eq('id', msg.id);
-
-          if (error) throw error;
-        }
-      }
-    } catch (error) {
-      console.error('Error reordering messages:', error);
-      toast.error('メッセージの並び替えに失敗しました');
-    }
+    // 両方のメッセージを未保存状態にマーク
+    setHasUnsavedChanges(prev => ({
+      ...prev,
+      [index]: true,
+      [newIndex]: true
+    }));
   };
 
   return (
     <div className="space-y-4">
-      <h3 className="text-lg font-semibold">メッセージ設定</h3>
+      <div className="flex items-center justify-between">
+        <h3 className="text-lg font-semibold">メッセージ設定</h3>
+        {Object.keys(hasUnsavedChanges).length > 0 && (
+          <Button onClick={saveAllMessages} size="sm" className="bg-blue-600 hover:bg-blue-700">
+            <Save className="h-4 w-4 mr-1" />
+            すべて保存 ({Object.keys(hasUnsavedChanges).length})
+          </Button>
+        )}
+      </div>
 
-      {localMessages.length === 0 ? (
+      {editingMessages.length === 0 ? (
         <p className="text-sm text-muted-foreground">
           メッセージが設定されていません。「メッセージ追加」ボタンで追加してください。
         </p>
       ) : (
         <div className="space-y-3">
-          {localMessages.map((message, index) => (
-            <Card key={index}>
+          {editingMessages.map((message, index) => (
+            <Card key={index} className={hasUnsavedChanges[index] ? "border-orange-200 bg-orange-50/30" : ""}>
               <CardHeader className="pb-3">
                 <div className="flex items-center justify-between">
                   <CardTitle className="text-sm flex items-center gap-2">
@@ -253,8 +334,27 @@ export default function StepMessageEditor({
                         アクセス解除＆シナリオ再登録
                       </Badge>
                     )}
+                    {hasUnsavedChanges[index] && (
+                      <Badge variant="outline" className="text-orange-600 border-orange-300 text-xs">
+                        未保存
+                      </Badge>
+                    )}
                   </CardTitle>
                   <div className="flex items-center gap-1">
+                    {hasUnsavedChanges[index] && (
+                      <Button
+                        size="sm"
+                        onClick={() => saveMessage(index)}
+                        disabled={savingStates[index]}
+                        className="h-7 bg-blue-600 hover:bg-blue-700"
+                      >
+                        {savingStates[index] ? (
+                          <Loader2 className="h-3 w-3 animate-spin" />
+                        ) : (
+                          <Save className="h-3 w-3" />
+                        )}
+                      </Button>
+                    )}
                     <Button
                       variant="ghost"
                       size="sm"
@@ -267,7 +367,7 @@ export default function StepMessageEditor({
                       variant="ghost"
                       size="sm"
                       onClick={() => moveMessage(index, 'down')}
-                      disabled={index === localMessages.length - 1}
+                      disabled={index === editingMessages.length - 1}
                     >
                       ↓
                     </Button>
@@ -286,7 +386,7 @@ export default function StepMessageEditor({
                   <Label>メッセージタイプ</Label>
                   <Select
                     value={message.message_type}
-                    onValueChange={(value: any) => updateMessage(index, { message_type: value })}
+                    onValueChange={(value: any) => updateLocalMessage(index, { message_type: value })}
                   >
                     <SelectTrigger>
                       <SelectValue />
@@ -312,7 +412,7 @@ export default function StepMessageEditor({
                       <Select
                         value={message.restore_config?.type || "button"}
                         onValueChange={(value: "button" | "image") => 
-                          updateMessage(index, {
+                          updateLocalMessage(index, {
                             restore_config: { 
                               ...message.restore_config, 
                               type: value 
@@ -337,7 +437,7 @@ export default function StepMessageEditor({
                           <Input
                             value={message.restore_config?.title || ""}
                             onChange={(e) => 
-                              updateMessage(index, {
+                              updateLocalMessage(index, {
                                 restore_config: { 
                                   ...message.restore_config, 
                                   title: e.target.value 
@@ -352,7 +452,7 @@ export default function StepMessageEditor({
                           <Input
                             value={message.restore_config?.button_text || ""}
                             onChange={(e) => 
-                              updateMessage(index, {
+                              updateLocalMessage(index, {
                                 restore_config: { 
                                   ...message.restore_config, 
                                   button_text: e.target.value 
@@ -377,7 +477,7 @@ export default function StepMessageEditor({
                               </Button>
                             }
                             onSelect={(url) => 
-                              updateMessage(index, {
+                              updateLocalMessage(index, {
                                 restore_config: { 
                                   ...message.restore_config, 
                                   image_url: url 
@@ -404,7 +504,7 @@ export default function StepMessageEditor({
                       <Select
                         value={message.restore_config?.target_scenario_id || ""}
                         onValueChange={(value) => 
-                          updateMessage(index, {
+                          updateLocalMessage(index, {
                             restore_config: { 
                               ...message.restore_config, 
                               target_scenario_id: value 
@@ -424,8 +524,6 @@ export default function StepMessageEditor({
                         </SelectContent>
                       </Select>
                     </div>
-                    
-                    {/* 【削除】プレビューを削除（右カラムに移動） */}
                   </div>
                 )}
 
@@ -434,7 +532,7 @@ export default function StepMessageEditor({
                     <Label>メッセージ内容</Label>
                     <Textarea
                       value={message.content}
-                      onChange={(e) => updateMessage(index, { content: e.target.value })}
+                      onChange={(e) => updateLocalMessage(index, { content: e.target.value })}
                       placeholder="メッセージ内容を入力してください"
                       rows={3}
                     />
@@ -447,7 +545,7 @@ export default function StepMessageEditor({
                       <Label>画像URL</Label>
                       <Input
                         value={message.media_url || ""}
-                        onChange={(e) => updateMessage(index, { media_url: e.target.value })}
+                        onChange={(e) => updateLocalMessage(index, { media_url: e.target.value })}
                         placeholder="https://example.com/image.jpg"
                       />
                     </div>
@@ -455,7 +553,7 @@ export default function StepMessageEditor({
                       <Label>代替テキスト</Label>
                       <Input
                         value={message.content}
-                        onChange={(e) => updateMessage(index, { content: e.target.value })}
+                        onChange={(e) => updateLocalMessage(index, { content: e.target.value })}
                         placeholder="画像の説明テキスト"
                       />
                     </div>
@@ -467,7 +565,7 @@ export default function StepMessageEditor({
                     <Label>Flexメッセージ</Label>
                     <Select
                       value={message.flex_message_id || ""}
-                      onValueChange={(value) => updateMessage(index, { flex_message_id: value })}
+                      onValueChange={(value) => updateLocalMessage(index, { flex_message_id: value })}
                     >
                       <SelectTrigger>
                         <SelectValue placeholder="Flexメッセージを選択" />
