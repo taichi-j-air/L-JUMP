@@ -303,7 +303,17 @@ export default function CMSFriendsPageBuilder() {
     if (!selected) return;
     // まず保存してからプレビューを開く
     handleSave().then(() => {
-      window.open(`/cms/preview/${selected.id}`, '_blank');
+      // Check if passcode is required
+      const url = requirePass 
+        ? `/cms/preview/${selected.id}?passcode=${passcode}`
+        : `/cms/preview/${selected.id}`;
+      window.open(url, '_blank');
+    }).catch(() => {
+      // If save fails, still open preview with current data
+      const url = requirePass 
+        ? `/cms/preview/${selected.id}?passcode=${passcode}`
+        : `/cms/preview/${selected.id}`;
+      window.open(url, '_blank');
     });
   };
   return (
@@ -358,7 +368,7 @@ export default function CMSFriendsPageBuilder() {
         </div>
 
         {/* Center: edit panel */}
-        <div className="col-span-12 md:col-span-6 space-y-3">
+        <div className="col-span-12 md:col-span-5 space-y-3">
           <Card>
             <CardHeader className="flex flex-row items-center justify-between py-3">
               <CardTitle className="text-base">ページ編集</CardTitle>
@@ -379,16 +389,34 @@ export default function CMSFriendsPageBuilder() {
                 <p className="text-sm text-muted-foreground">左側のリストからページを選択してください。</p>
               ) : (
                 <>
-                  <div className="grid grid-cols-2 gap-3">
-                    <div className="space-y-2">
-                      <Label>タイトル</Label>
-                      <Input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="ページタイトル" />
-                    </div>
-                    <div className="space-y-2">
-                      <Label>URL スラッグ</Label>
-                      <Input value={slug} onChange={(e) => setSlug(e.target.value)} placeholder="page-url" />
-                    </div>
+                  <div className="space-y-2">
+                    <Label>タイトル</Label>
+                    <Input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="ページタイトル" />
                   </div>
+
+                  {/* Timer Preview in center column */}
+                  {timerEnabled && (
+                    <div className="space-y-2">
+                      <Label>タイマープレビュー</Label>
+                      <TimerPreview
+                        mode={timerMode}
+                        deadline={timerMode === "absolute" && timerDeadline ? new Date(timerDeadline).toISOString() : undefined}
+                        durationSeconds={(timerMode === "per_access" || timerMode === "step_delivery") ? durationSeconds : undefined}
+                        showMilliseconds={showMilliseconds}
+                        styleVariant={timerStyle}
+                        bgColor={timerBgColor}
+                        textColor={timerTextColor}
+                        dayLabel={dayLabel}
+                        hourLabel={hourLabel}
+                        minuteLabel={minuteLabel}
+                        secondLabel={secondLabel}
+                        preview={true}
+                        internalTimer={internalTimer}
+                        timerText={timerText}
+                        showEndDate={timerMode === 'per_access' || timerMode === 'step_delivery'}
+                      />
+                    </div>
+                  )}
 
                   <div className="space-y-2">
                     <Label>コンテンツ</Label>
@@ -397,9 +425,6 @@ export default function CMSFriendsPageBuilder() {
                       onChange={setContentBlocks}
                     />
                     <div className="flex gap-2 flex-wrap">
-                      <Button size="sm" onClick={() => setShowFormInsert(true)}>
-                        フォーム
-                      </Button>
                       <Button size="sm" onClick={() => setShowFormEmbed(true)}>
                         フォーム埋め込み
                       </Button>
@@ -422,7 +447,7 @@ export default function CMSFriendsPageBuilder() {
         </div>
 
         {/* Right: settings */}
-        <div className="col-span-12 md:col-span-3 space-y-3">
+        <div className="col-span-12 md:col-span-4 space-y-3">
           <Card>
             <CardHeader className="py-3">
               <CardTitle className="text-base">公開設定</CardTitle>
@@ -449,13 +474,42 @@ export default function CMSFriendsPageBuilder() {
                     <div className="text-xs text-muted-foreground break-all p-2 bg-muted rounded">{shareUrl}</div>
                   </div>
 
+                  <div className="space-y-2">
+                    <Label className="flex items-center justify-between">
+                      公開設定
+                      <Switch 
+                        checked={selected?.visibility === "public"} 
+                        onCheckedChange={async (checked) => {
+                          if (!selected) return;
+                          try {
+                            const { data, error } = await supabase
+                              .from('cms_pages')
+                              .update({ visibility: checked ? "public" : "friends_only" })
+                              .eq('id', selected.id)
+                              .select('*')
+                              .maybeSingle();
+                            if (error) throw error;
+                            setPages(prev => prev.map(p => p.id === selected.id ? data : p));
+                            toast.success(checked ? "ページを公開しました" : "ページを非公開にしました");
+                          } catch (e: any) {
+                            console.error(e);
+                            toast.error("更新に失敗しました");
+                          }
+                        }}
+                      />
+                    </Label>
+                    <p className="text-xs text-muted-foreground">
+                      {selected?.visibility === "public" ? "このページは公開されています" : "このページは友達限定です"}
+                    </p>
+                  </div>
+
                   <Accordion type="multiple" className="w-full">
                     <AccordionItem value="tag-access">
                       <AccordionTrigger className="text-sm">タグアクセス制御</AccordionTrigger>
                       <AccordionContent className="space-y-3">
                         <div className="space-y-2">
                           <Label>閲覧を許可するタグ</Label>
-                          <div className="space-y-1">
+                          <div className="space-y-1 max-h-32 overflow-y-auto">
                             {tags.map(t => (
                               <label key={t.id} className="flex items-center gap-2 text-sm">
                                 <Checkbox checked={allowedTags.includes(t.id)} onCheckedChange={() => toggleAllowed(t.id)} />
@@ -466,7 +520,7 @@ export default function CMSFriendsPageBuilder() {
                         </div>
                         <div className="space-y-2">
                           <Label>閲覧を禁止するタグ</Label>
-                          <div className="space-y-1">
+                          <div className="space-y-1 max-h-32 overflow-y-auto">
                             {tags.map(t => (
                               <label key={t.id} className="flex items-center gap-2 text-sm">
                                 <Checkbox checked={blockedTags.includes(t.id)} onCheckedChange={() => toggleBlocked(t.id)} />
@@ -729,27 +783,6 @@ export default function CMSFriendsPageBuilder() {
                         </AccordionItem>
                       </Accordion>
 
-                      {/* Timer Preview */}
-                      <div className="space-y-2">
-                        <Label>プレビュー</Label>
-                        <TimerPreview
-                          mode={timerMode}
-                          deadline={timerMode === "absolute" && timerDeadline ? new Date(timerDeadline).toISOString() : undefined}
-                          durationSeconds={(timerMode === "per_access" || timerMode === "step_delivery") ? durationSeconds : undefined}
-                          showMilliseconds={showMilliseconds}
-                          styleVariant={timerStyle}
-                          bgColor={timerBgColor}
-                          textColor={timerTextColor}
-                          dayLabel={dayLabel}
-                          hourLabel={hourLabel}
-                          minuteLabel={minuteLabel}
-                          secondLabel={secondLabel}
-                          preview={true}
-                          internalTimer={internalTimer}
-                          timerText={timerText}
-                          showEndDate={timerMode === 'per_access' || timerMode === 'step_delivery'}
-                        />
-                      </div>
                     </>
                   )}
                 </>
@@ -760,20 +793,11 @@ export default function CMSFriendsPageBuilder() {
       </div>
 
       {/* Modals */}
-      {showFormInsert && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="bg-white p-4 rounded">
-            <p>フォーム選択機能は実装中です</p>
-            <Button onClick={() => setShowFormInsert(false)}>閉じる</Button>
-          </div>
-        </div>
-      )}
-
       {showFormEmbed && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
           <FormEmbedSelector
             onInsert={(formHtml) => {
-              setContentHtml(prev => prev + formHtml);
+              setContentBlocks(prev => [...prev, formHtml]);
               setShowFormEmbed(false);
             }}
             onClose={() => setShowFormEmbed(false)}

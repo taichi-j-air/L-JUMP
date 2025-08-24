@@ -82,6 +82,21 @@ export default function CMSFriendsPublicView() {
         if (pageError || !page) {
           throw new Error("プレビュー対象のページが見つかりません。");
         }
+
+        // Check passcode for preview if required
+        if (page.require_passcode && page.passcode) {
+          const urlParams = new URLSearchParams(window.location.search);
+          const urlPasscode = urlParams.get('passcode');
+          if (!urlPasscode && !withPasscode) {
+            setRequirePass(true);
+            setLoading(false);
+            return;
+          }
+          if ((urlPasscode || withPasscode) !== page.passcode) {
+            throw new Error("パスコードが正しくありません");
+          }
+        }
+
         setData(page as PagePayload);
         return;
       }

@@ -363,6 +363,8 @@ serve(async (req) => {
       timer_hour_label: page.timer_hour_label || null,
       timer_minute_label: page.timer_minute_label || null,
       timer_second_label: page.timer_second_label || null,
+      timer_scenario_id: page.timer_scenario_id || null,
+      timer_step_id: page.timer_step_id || null,
     };
 
     console.log("Success - returning page content");
