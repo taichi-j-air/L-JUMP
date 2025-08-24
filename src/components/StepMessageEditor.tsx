@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -10,6 +10,7 @@ import { X, Plus, Image } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { MediaLibrarySelector } from "@/components/MediaLibrarySelector";
+import { debounce } from "lodash"; // npm install lodash @types/lodash
 
 interface StepMessage {
   id?: string;
@@ -31,20 +32,85 @@ interface StepMessageEditorProps {
   stepId: string;
   messages: StepMessage[];
   onMessagesChange: (messages: StepMessage[]) => void;
+  // 【追加】右側カラムにプレビューを表示するためのコールバック
+  onPreviewChange?: (previewData: any) => void;
 }
 
 export default function StepMessageEditor({ 
   stepId, 
   messages, 
-  onMessagesChange 
+  onMessagesChange,
+  onPreviewChange 
 }: StepMessageEditorProps) {
   const [scenarios, setScenarios] = useState<any[]>([]);
   const [flexMessages, setFlexMessages] = useState<any[]>([]);
+  
+  // 【修正1】ローカル状態での編集内容管理（API更新を遅延させるため）
+  const [localMessages, setLocalMessages] = useState<StepMessage[]>(messages);
+  const [isUpdating, setIsUpdating] = useState(false);
+
+  // 【修正2】デバウンス関数の作成（500ms遅延）
+  const debouncedUpdateDB = useRef(
+    debounce(async (messageIndex: number, updates: Partial<StepMessage>) => {
+      const message = messages[messageIndex];
+      if (!message?.id) return; // 新規メッセージはDB更新しない
+
+      try {
+        setIsUpdating(true);
+        const payload: any = {
+          message_type: updates.message_type || message.message_type,
+          content: updates.content !== undefined ? updates.content : message.content,
+          media_url: updates.media_url !== undefined ? updates.media_url : message.media_url,
+          flex_message_id: updates.flex_message_id !== undefined ? updates.flex_message_id : message.flex_message_id,
+          message_order: updates.message_order !== undefined ? updates.message_order : message.message_order,
+        };
+
+        if (updates.restore_config !== undefined) {
+          payload.restore_config = updates.restore_config;
+        }
+
+        const { error } = await supabase
+          .from('step_messages')
+          .update(payload)
+          .eq('id', message.id);
+
+        if (error) throw error;
+
+        // トーストは最初の1回だけ表示（連続更新時のスパム防止）
+        if (!isUpdating) {
+          toast.success('メッセージを更新しました');
+        }
+      } catch (error) {
+        console.error('Error updating message:', error);
+        toast.error('メッセージの更新に失敗しました');
+      } finally {
+        setIsUpdating(false);
+      }
+    }, 500)
+  );
 
   useEffect(() => {
     fetchScenarios();
     fetchFlexMessages();
   }, []);
+
+  // 【修正3】messagesプロップが変更された時にローカル状態を同期
+  useEffect(() => {
+    setLocalMessages(messages);
+  }, [messages]);
+
+  // 【修正4】プレビューデータを右カラムに送信
+  useEffect(() => {
+    if (onPreviewChange && localMessages.length > 0) {
+      const restoreMessage = localMessages.find(msg => msg.message_type === 'restore_access');
+      if (restoreMessage) {
+        onPreviewChange({
+          type: 'restore_access',
+          config: restoreMessage.restore_config
+        });
+      }
+    }
+  }, [localMessages, onPreviewChange]);
 
   const fetchScenarios = async () => {
     try {
@@ -82,62 +148,38 @@ export default function StepMessageEditor({
     const newMessage: StepMessage = {
       message_type: "text",
       content: "",
-      message_order: messages.length,
+      message_order: localMessages.length,
     };
-    onMessagesChange([...messages, newMessage]);
+    const updatedMessages = [...localMessages, newMessage];
+    setLocalMessages(updatedMessages);
+    onMessagesChange(updatedMessages);
   };
 
-  const updateMessage = async (index: number, updates: Partial<StepMessage>) => {
-    const message = messages[index];
-    
-    // Update local state immediately for instant feedback
-    const updated = messages.map((msg, i) => 
+  // 【修正5】ローカル状態とDB更新を分離
+  const updateMessage = useCallback((index: number, updates: Partial<StepMessage>) => {
+    // 1. ローカル状態を即座に更新（UI応答性向上）
+    const updatedLocal = localMessages.map((msg, i) => 
       i === index ? { ...msg, ...updates } : msg
     );
-    onMessagesChange(updated);
+    setLocalMessages(updatedLocal);
+    
+    // 2. 親コンポーネントにも即座に反映
+    const updatedParent = messages.map((msg, i) => 
+      i === index ? { ...msg, ...updates } : msg
+    );
+    onMessagesChange(updatedParent);
 
-    if (!message.id) {
-      // Local update for new messages
-      return;
-    }
-
-    // Database update for existing messages
-    try {
-      const payload: any = {
-        message_type: updates.message_type || message.message_type,
-        content: updates.content !== undefined ? updates.content : message.content,
-        media_url: updates.media_url !== undefined ? updates.media_url : message.media_url,
-        flex_message_id: updates.flex_message_id !== undefined ? updates.flex_message_id : message.flex_message_id,
-        message_order: updates.message_order !== undefined ? updates.message_order : message.message_order,
-      };
-
-      if (updates.restore_config !== undefined) {
-        payload.restore_config = updates.restore_config;
-      }
-
-      const { error } = await supabase
-        .from('step_messages')
-        .update(payload)
-        .eq('id', message.id);
-
-      if (error) throw error;
-
-      toast.success('メッセージを更新しました');
-    } catch (error) {
-      console.error('Error updating message:', error);
-      toast.error('メッセージの更新に失敗しました');
-      
-      // Revert local state on error
-      onMessagesChange(messages);
-    }
-  };
+    // 3. DB更新は遅延実行（デバウンス）
+    debouncedUpdateDB.current(index, updates);
+  }, [localMessages, messages, onMessagesChange]);
 
   const removeMessage = async (index: number) => {
-    const message = messages[index];
+    const message = localMessages[index];
     if (!message.id) {
-      // Local removal for new messages
-      const filtered = messages.filter((_, i) => i !== index)
+      // 新規メッセージの削除（DB操作不要）
+      const filtered = localMessages.filter((_, i) => i !== index)
         .map((msg, i) => ({ ...msg, message_order: i }));
+      setLocalMessages(filtered);
       onMessagesChange(filtered);
       return;
     }
@@ -150,8 +192,9 @@ export default function StepMessageEditor({
 
       if (error) throw error;
 
-      const filtered = messages.filter((_, i) => i !== index)
+      const filtered = localMessages.filter((_, i) => i !== index)
         .map((msg, i) => ({ ...msg, message_order: i }));
+      setLocalMessages(filtered);
       onMessagesChange(filtered);
       toast.success('メッセージを削除しました');
     } catch (error) {
@@ -162,16 +205,16 @@ export default function StepMessageEditor({
 
   const moveMessage = async (index: number, direction: 'up' | 'down') => {
     const newIndex = direction === 'up' ? index - 1 : index + 1;
-    if (newIndex < 0 || newIndex >= messages.length) return;
+    if (newIndex < 0 || newIndex >= localMessages.length) return;
 
-    const reordered = [...messages];
+    const reordered = [...localMessages];
     [reordered[index], reordered[newIndex]] = [reordered[newIndex], reordered[index]];
     
-    // Update message_order
     const updated = reordered.map((msg, i) => ({ ...msg, message_order: i }));
+    setLocalMessages(updated);
     onMessagesChange(updated);
 
-    // Update database if messages have IDs
+    // DB更新（既存メッセージのみ）
     try {
       for (const msg of updated) {
         if (msg.id) {
@@ -193,13 +236,13 @@ export default function StepMessageEditor({
     <div className="space-y-4">
       <h3 className="text-lg font-semibold">メッセージ設定</h3>
 
-      {messages.length === 0 ? (
+      {localMessages.length === 0 ? (
         <p className="text-sm text-muted-foreground">
           メッセージが設定されていません。「メッセージ追加」ボタンで追加してください。
         </p>
       ) : (
         <div className="space-y-3">
-          {messages.map((message, index) => (
+          {localMessages.map((message, index) => (
             <Card key={index}>
               <CardHeader className="pb-3">
                 <div className="flex items-center justify-between">
@@ -224,7 +267,7 @@ export default function StepMessageEditor({
                       variant="ghost"
                       size="sm"
                       onClick={() => moveMessage(index, 'down')}
-                      disabled={index === messages.length - 1}
+                      disabled={index === localMessages.length - 1}
                     >
                       ↓
                     </Button>
@@ -270,7 +313,10 @@ export default function StepMessageEditor({
                         value={message.restore_config?.type || "button"}
                         onValueChange={(value: "button" | "image") => 
                           updateMessage(index, {
-                            restore_config: { ...message.restore_config, type: value }
+                            restore_config: { 
+                              ...message.restore_config, 
+                              type: value 
+                            }
                           })
                         }
                       >
@@ -292,7 +338,10 @@ export default function StepMessageEditor({
                             value={message.restore_config?.title || ""}
                             onChange={(e) => 
                               updateMessage(index, {
-                                restore_config: { ...message.restore_config, title: e.target.value }
+                                restore_config: { 
+                                  ...message.restore_config, 
+                                  title: e.target.value 
+                                }
                               })
                             }
                             placeholder="確認メッセージのテキスト"
@@ -304,7 +353,10 @@ export default function StepMessageEditor({
                             value={message.restore_config?.button_text || ""}
                             onChange={(e) => 
                               updateMessage(index, {
-                                restore_config: { ...message.restore_config, button_text: e.target.value }
+                                restore_config: { 
+                                  ...message.restore_config, 
+                                  button_text: e.target.value 
+                                }
                               })
                             }
                             placeholder="ボタンに表示するテキスト"
@@ -326,7 +378,10 @@ export default function StepMessageEditor({
                             }
                             onSelect={(url) => 
                               updateMessage(index, {
-                                restore_config: { ...message.restore_config, image_url: url }
+                                restore_config: { 
+                                  ...message.restore_config, 
+                                  image_url: url 
+                                }
                               })
                             }
                             selectedUrl={message.restore_config?.image_url}
@@ -350,7 +405,10 @@ export default function StepMessageEditor({
                         value={message.restore_config?.target_scenario_id || ""}
                         onValueChange={(value) => 
                           updateMessage(index, {
-                            restore_config: { ...message.restore_config, target_scenario_id: value }
+                            restore_config: { 
+                              ...message.restore_config, 
+                              target_scenario_id: value 
+                            }
                           })
                         }
                       >
@@ -367,32 +425,7 @@ export default function StepMessageEditor({
                       </Select>
                     </div>
                     
-                    {/* Preview for restore_access messages */}
-                    <div className="mt-4 p-3 bg-gray-50 rounded border">
-                      <Label className="text-sm font-medium">プレビュー</Label>
-                      {message.restore_config?.type === "button" ? (
-                        <div className="mt-2 p-3 bg-white rounded border max-w-xs">
-                          <p className="text-sm mb-3">
-                            {message.restore_config?.title || "確認メッセージ"}
-                          </p>
-                          <Button size="sm" className="w-full">
-                            {message.restore_config?.button_text || "OK"}
-                          </Button>
-                        </div>
-                      ) : message.restore_config?.image_url ? (
-                        <div className="mt-2 max-w-xs">
-                          <img 
-                            src={message.restore_config.image_url} 
-                            alt="Restoration button preview" 
-                            className="w-full rounded border cursor-pointer hover:opacity-80"
-                          />
-                        </div>
-                      ) : (
-                        <p className="text-sm text-muted-foreground mt-2">
-                          画像を選択してください
-                        </p>
-                      )}
-                    </div>
+                    {/* 【削除】プレビューを削除（右カラムに移動） */}
                   </div>
                 )}
 
@@ -451,7 +484,7 @@ export default function StepMessageEditor({
                 )}
               </CardContent>
             </Card>
-            ))}
+          ))}
         </div>
       )}
       
