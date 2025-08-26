@@ -341,55 +341,6 @@ export const useStepScenarios = (userId: string | undefined) => {
     }
   }
 
-  // メッセージ作成
-  const createMessage = async (stepId: string, type: 'text' | 'media' | 'flex' = 'text') => {
-    const stepMessages = messages.filter(m => m.step_id === stepId)
-    const messageOrder = stepMessages.length
-
-    try {
-      const { data, error } = await supabase
-        .from('step_messages')
-        .insert({
-          step_id: stepId,
-          message_order: messageOrder,
-          message_type: type,
-          content: ''
-        })
-        .select()
-        .single()
-
-      if (error) throw error
-
-      setMessages(prev => [...prev, data as StepMessage])
-      toast.success('メッセージを作成しました')
-      return data
-    } catch (error) {
-      console.error('メッセージの作成に失敗しました:', error)
-      toast.error('メッセージの作成に失敗しました')
-      return null
-    }
-  }
-
-  // メッセージ更新
-  const updateMessage = async (id: string, updates: Partial<StepMessage>) => {
-    try {
-      const { data, error } = await supabase
-        .from('step_messages')
-        .update(updates)
-        .eq('id', id)
-        .select()
-        .single()
-
-      if (error) throw error
-
-      setMessages(prev => prev.map(m => m.id === id ? data as StepMessage : m))
-      return data
-    } catch (error) {
-      console.error('メッセージの更新に失敗しました:', error)
-      toast.error('メッセージの更新に失敗しました')
-      return null
-    }
-  }
 
   // 移動設定作成
   const createTransition = async (fromScenarioId: string, toScenarioId: string) => {
@@ -469,6 +420,55 @@ export const useStepScenarios = (userId: string | undefined) => {
     } catch (error) {
       console.error('ステップの削除に失敗しました:', error)
       toast.error('ステップの削除に失敗しました')
+    }
+  }
+
+  // メッセージ作成
+  const createMessage = async (stepId: string) => {
+    try {
+      const { data, error } = await supabase
+        .from('step_messages')
+        .insert({
+          step_id: stepId,
+          message_type: 'text',
+          content: '',
+          message_order: messages.filter(m => m.step_id === stepId).length
+        })
+        .select()
+        .single()
+
+      if (error) throw error
+
+      const newMessage = data as StepMessage
+      setMessages(prev => [...prev, newMessage])
+      toast.success('メッセージを作成しました')
+      return newMessage
+    } catch (error) {
+      console.error('メッセージの作成に失敗しました:', error)
+      toast.error('メッセージの作成に失敗しました')
+      return null
+    }
+  }
+
+  // メッセージ更新
+  const updateMessage = async (id: string, updates: Partial<StepMessage>) => {
+    try {
+      const { data, error } = await supabase
+        .from('step_messages')
+        .update(updates)
+        .eq('id', id)
+        .select()
+        .single()
+
+      if (error) throw error
+
+      const updatedMessage = data as StepMessage
+      setMessages(prev => prev.map(m => m.id === id ? updatedMessage : m))
+      return updatedMessage
+    } catch (error) {
+      console.error('メッセージの更新に失敗しました:', error)
+      toast.error('メッセージの更新に失敗しました')
+      return null
     }
   }
 
@@ -554,6 +554,18 @@ export const useStepScenarios = (userId: string | undefined) => {
     }
   }
 
+  // データの再取得
+  const refetch = async () => {
+    if (!userId) return
+    await Promise.all([
+      fetchScenarios(),
+      fetchSteps(),
+      fetchMessages(),
+      fetchTransitions(),
+      fetchInviteCodes()
+    ])
+  }
+
   // 招待コードを無効化
   const deactivateInviteCode = async (codeId: string) => {
     try {
@@ -596,12 +608,6 @@ export const useStepScenarios = (userId: string | undefined) => {
     deleteTransition,
     generateInviteCode,
     deactivateInviteCode,
-    refetch: () => {
-      fetchScenarios()
-      fetchSteps()
-      fetchMessages()
-      fetchTransitions()
-      fetchInviteCodes()
-    }
+    refetch
   }
 }

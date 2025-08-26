@@ -112,7 +112,8 @@ export default function StepDeliveryPage() {
     createTransition,
     deleteTransition,
     generateInviteCode,
-    deactivateInviteCode
+    deactivateInviteCode,
+    refetch
   } = useStepScenarios(user?.id)
 
   // シナリオ名ドラフトを選択状態に同期（IME対応）
@@ -758,9 +759,9 @@ export default function StepDeliveryPage() {
                              <Label>メッセージタイプ</Label>
                               <Select
                                 value="text"
-                                onValueChange={(value: 'text' | 'media' | 'flex') => {
-                                  // 新しいメッセージを作成
-                                  createMessage(selectedStep.id, value)
+                                 onValueChange={async (value: 'text' | 'media' | 'flex') => {
+                                   // 新しいメッセージを作成
+                                   await createMessage(selectedStep.id)
                                 }}
                               >
                                <SelectTrigger>
@@ -800,14 +801,13 @@ export default function StepDeliveryPage() {
                             message_order: msg.message_order,
                             restore_config: (msg as any).restore_config
                           }))}
-                          onMessagesChange={(messages) => {
-                            // メッセージ変更時の処理 - 自動リロードは削除
-                            console.log('Messages updated:', messages.length)
+                          onMessagesChange={async (messages) => {
+                            // データの再取得
+                            await refetch()
                           }}
-                          onEditingMessagesChange={(editingMessages) => {
-                            // 編集中のメッセージをプレビュー用に保存
-                            setEditingStepMessages(editingMessages)
-                          }}
+                          onEditingMessagesChange={setEditingStepMessages}
+                          createMessage={createMessage}
+                          updateMessage={updateMessage}
                         />
                      )}
                    </div>

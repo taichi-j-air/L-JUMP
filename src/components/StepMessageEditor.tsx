@@ -34,6 +34,8 @@ interface StepMessageEditorProps {
   onMessagesChange: (messages: StepMessage[]) => void;
   onPreviewChange?: (previewData: any) => void;
   onEditingMessagesChange?: (editingMessages: StepMessage[]) => void;
+  createMessage: (stepId: string) => Promise<any>;
+  updateMessage: (id: string, updates: Partial<StepMessage>) => Promise<any>;
 }
 
 export default function StepMessageEditor({ 
@@ -41,7 +43,9 @@ export default function StepMessageEditor({
   messages, 
   onMessagesChange,
   onPreviewChange,
-  onEditingMessagesChange
+  onEditingMessagesChange,
+  createMessage,
+  updateMessage
 }: StepMessageEditorProps) {
   const [scenarios, setScenarios] = useState<any[]>([]);
   const [flexMessages, setFlexMessages] = useState<any[]>([]);
@@ -112,44 +116,16 @@ export default function StepMessageEditor({
 
   const addMessage = async () => {
     try {
-      // 直接データベースに新しいメッセージを作成
-      const newMessage = {
-        step_id: stepId,
-        message_type: "text" as const,
-        content: "",
-        message_order: messages.length, // 正しい順序を使用
-      };
-
-      const { data, error } = await supabase
-        .from('step_messages')
-        .insert(newMessage)
-        .select()
-        .single();
-
-      if (error) {
-        console.error('Database error:', error);
-        throw error;
+      console.log('メッセージ追加処理開始');
+      
+      // hook経由でメッセージを作成
+      const newMessage = await createMessage(stepId);
+      
+      if (newMessage) {
+        // 成功時はhookが自動的に状態を更新するので、
+        // ここでは何もする必要がない
+        console.log('メッセージが正常に追加されました:', newMessage);
       }
-
-      const createdMessage: StepMessage = {
-        id: data.id,
-        message_type: data.message_type as any,
-        content: data.content,
-        media_url: data.media_url,
-        flex_message_id: data.flex_message_id,
-        message_order: data.message_order,
-        restore_config: data.restore_config as any
-      };
-
-      // 親状態を即座に更新してページの表示を更新
-      const updatedMessages = [...messages, createdMessage];
-      onMessagesChange(updatedMessages);
-      
-      // ローカル状態も同期
-      setEditingMessages(updatedMessages);
-      
-      console.log('メッセージが正常に追加されました:', createdMessage);
-      toast.success('メッセージを追加しました');
     } catch (error) {
       console.error('Error adding message:', error);
       toast.error('メッセージの追加に失敗しました');
