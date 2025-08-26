@@ -10,10 +10,11 @@ import { X, Plus, Image, Save, Loader2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { MediaLibrarySelector } from "@/components/MediaLibrarySelector";
+import { FlexMessageSelector } from "@/components/FlexMessageSelector";
 
 interface StepMessage {
   id?: string;
-  message_type: "text" | "image" | "flex" | "restore_access";
+  message_type: "text" | "media" | "flex" | "restore_access";
   content: string;
   media_url?: string | null;
   flex_message_id?: string | null;
@@ -24,7 +25,7 @@ interface StepMessage {
     button_text?: string;
     target_scenario_id?: string;
     image_url?: string;
-  };
+  } | null;
 }
 
 interface StepMessageEditorProps {
@@ -43,10 +44,10 @@ export default function StepMessageEditor({
   const [scenarios, setScenarios] = useState<any[]>([]);
   const [flexMessages, setFlexMessages] = useState<any[]>([]);
   
-  // 【修正】ローカル編集状態（保存されるまでは一時的な状態）
+  // ローカル編集状態（保存されるまでは一時的な状態）
   const [editingMessages, setEditingMessages] = useState<StepMessage[]>(messages);
   
-  // 【修正】各メッセージの保存状態を管理
+  // 各メッセージの保存状態を管理
   const [savingStates, setSavingStates] = useState<{ [key: number]: boolean }>({});
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState<{ [key: number]: boolean }>({});
 
@@ -55,13 +56,13 @@ export default function StepMessageEditor({
     fetchFlexMessages();
   }, []);
 
-  // 【修正】親のmessagesが変更された時のみローカル状態を同期
+  // 親のmessagesが変更された時のみローカル状態を同期
   useEffect(() => {
     setEditingMessages(messages);
     setHasUnsavedChanges({});
   }, [messages]);
 
-  // 【修正】プレビューは保存済みデータのみから生成
+  // プレビューは保存済みデータのみから生成
   useEffect(() => {
     if (onPreviewChange && messages.length > 0) {
       const restoreMessage = messages.find(msg => msg.message_type === 'restore_access');
@@ -72,7 +73,7 @@ export default function StepMessageEditor({
         });
       }
     }
-  }, [messages, onPreviewChange]); // editingMessagesではなくmessagesを監視
+  }, [messages, onPreviewChange]);
 
   const fetchScenarios = async () => {
     try {
@@ -119,7 +120,7 @@ export default function StepMessageEditor({
     setHasUnsavedChanges(prev => ({ ...prev, [newIndex]: true }));
   };
 
-  // 【修正】ローカル編集のみ（保存は別途）
+  // ローカル編集のみ（保存は別途）
   const updateLocalMessage = (index: number, updates: Partial<StepMessage>) => {
     const updated = editingMessages.map((msg, i) => 
       i === index ? { ...msg, ...updates } : msg
@@ -130,7 +131,7 @@ export default function StepMessageEditor({
     setHasUnsavedChanges(prev => ({ ...prev, [index]: true }));
   };
 
-  // 【修正】個別メッセージの保存機能
+  // 個別メッセージの保存機能
   const saveMessage = async (index: number) => {
     const message = editingMessages[index];
     
@@ -160,7 +161,15 @@ export default function StepMessageEditor({
 
         // 親の状態を更新（保存済みデータを反映）
         const updatedMessages = messages.map((msg, i) => 
-          i === index ? data : msg
+          i === index ? {
+            id: data.id,
+            message_type: data.message_type as any,
+            content: data.content,
+            media_url: data.media_url,
+            flex_message_id: data.flex_message_id,
+            message_order: data.message_order,
+            restore_config: data.restore_config as any
+          } : msg
         );
         onMessagesChange(updatedMessages);
         
@@ -186,13 +195,29 @@ export default function StepMessageEditor({
 
         // 新規作成されたメッセージをローカル状態に反映
         const updatedEditingMessages = editingMessages.map((msg, i) => 
-          i === index ? data : msg
+          i === index ? {
+            id: data.id,
+            message_type: data.message_type as any,
+            content: data.content,
+            media_url: data.media_url,
+            flex_message_id: data.flex_message_id,
+            message_order: data.message_order,
+            restore_config: data.restore_config as any
+          } : msg
         );
         setEditingMessages(updatedEditingMessages);
 
         // 親の状態にも追加
         const updatedMessages = [...messages];
-        updatedMessages[index] = data;
+        updatedMessages[index] = {
+          id: data.id,
+          message_type: data.message_type as any,
+          content: data.content,
+          media_url: data.media_url,
+          flex_message_id: data.flex_message_id,
+          message_order: data.message_order,
+          restore_config: data.restore_config as any
+        };
         onMessagesChange(updatedMessages);
       }
 
@@ -218,7 +243,7 @@ export default function StepMessageEditor({
     }
   };
 
-  // 【修正】全メッセージの保存機能
+  // 全メッセージの保存機能
   const saveAllMessages = async () => {
     const unsavedIndexes = Object.keys(hasUnsavedChanges).map(Number);
     
@@ -341,20 +366,6 @@ export default function StepMessageEditor({
                     )}
                   </CardTitle>
                   <div className="flex items-center gap-1">
-                    {hasUnsavedChanges[index] && (
-                      <Button
-                        size="sm"
-                        onClick={() => saveMessage(index)}
-                        disabled={savingStates[index]}
-                        className="h-7 bg-blue-600 hover:bg-blue-700"
-                      >
-                        {savingStates[index] ? (
-                          <Loader2 className="h-3 w-3 animate-spin" />
-                        ) : (
-                          <Save className="h-3 w-3" />
-                        )}
-                      </Button>
-                    )}
                     <Button
                       variant="ghost"
                       size="sm"
@@ -386,14 +397,17 @@ export default function StepMessageEditor({
                   <Label>メッセージタイプ</Label>
                   <Select
                     value={message.message_type}
-                    onValueChange={(value: any) => updateLocalMessage(index, { message_type: value })}
+                    onValueChange={(value: any) => {
+                      updateLocalMessage(index, { message_type: value });
+                      setTimeout(() => saveMessage(index), 100);
+                    }}
                   >
                     <SelectTrigger>
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="text">テキストメッセージ</SelectItem>
-                      <SelectItem value="image">画像メッセージ</SelectItem>
+                      <SelectItem value="media">メディアメッセージ</SelectItem>
                       <SelectItem value="flex">Flexメッセージ</SelectItem>
                       <SelectItem value="restore_access">
                         <div className="flex items-center gap-2 bg-green-50 px-2 py-1 rounded-md">
@@ -411,14 +425,15 @@ export default function StepMessageEditor({
                       <Label>復活ボタンタイプ</Label>
                       <Select
                         value={message.restore_config?.type || "button"}
-                        onValueChange={(value: "button" | "image") => 
+                        onValueChange={(value: "button" | "image") => {
                           updateLocalMessage(index, {
                             restore_config: { 
                               ...message.restore_config, 
                               type: value 
                             }
                           })
-                        }
+                          setTimeout(() => saveMessage(index), 100)
+                        }}
                       >
                         <SelectTrigger>
                           <SelectValue />
@@ -444,6 +459,7 @@ export default function StepMessageEditor({
                                 }
                               })
                             }
+                            onBlur={() => saveMessage(index)}
                             placeholder="確認メッセージのテキスト"
                           />
                         </div>
@@ -459,6 +475,7 @@ export default function StepMessageEditor({
                                 }
                               })
                             }
+                            onBlur={() => saveMessage(index)}
                             placeholder="ボタンに表示するテキスト"
                           />
                         </div>
@@ -476,14 +493,15 @@ export default function StepMessageEditor({
                                 メディアライブラリから選択
                               </Button>
                             }
-                            onSelect={(url) => 
+                            onSelect={(url) => {
                               updateLocalMessage(index, {
                                 restore_config: { 
                                   ...message.restore_config, 
                                   image_url: url 
                                 }
                               })
-                            }
+                              setTimeout(() => saveMessage(index), 100)
+                            }}
                             selectedUrl={message.restore_config?.image_url}
                           />
                         </div>
@@ -503,14 +521,15 @@ export default function StepMessageEditor({
                       <Label>再登録先シナリオ</Label>
                       <Select
                         value={message.restore_config?.target_scenario_id || ""}
-                        onValueChange={(value) => 
+                        onValueChange={(value) => {
                           updateLocalMessage(index, {
                             restore_config: { 
                               ...message.restore_config, 
                               target_scenario_id: value 
                             }
                           })
-                        }
+                          setTimeout(() => saveMessage(index), 100)
+                        }}
                       >
                         <SelectTrigger>
                           <SelectValue placeholder="シナリオを選択" />
@@ -533,51 +552,46 @@ export default function StepMessageEditor({
                     <Textarea
                       value={message.content}
                       onChange={(e) => updateLocalMessage(index, { content: e.target.value })}
-                      placeholder="メッセージ内容を入力してください"
-                      rows={3}
+                      onBlur={() => saveMessage(index)}
+                      placeholder="テキストメッセージを入力..."
+                      rows={4}
                     />
                   </div>
                 )}
 
-                {message.message_type === "image" && (
-                  <div className="space-y-3">
-                    <div className="space-y-2">
-                      <Label>画像URL</Label>
-                      <Input
-                        value={message.media_url || ""}
-                        onChange={(e) => updateLocalMessage(index, { media_url: e.target.value })}
-                        placeholder="https://example.com/image.jpg"
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label>代替テキスト</Label>
-                      <Input
-                        value={message.content}
-                        onChange={(e) => updateLocalMessage(index, { content: e.target.value })}
-                        placeholder="画像の説明テキスト"
-                      />
-                    </div>
+                {message.message_type === "media" && (
+                  <div className="space-y-2">
+                    <Label>メディア選択</Label>
+                    <MediaLibrarySelector
+                      trigger={
+                        <Button variant="outline" className="w-full">
+                          <Image className="h-4 w-4 mr-2" />
+                          メディアライブラリから選択
+                        </Button>
+                      }
+                      onSelect={(url) => {
+                        updateLocalMessage(index, { media_url: url })
+                        setTimeout(() => saveMessage(index), 100)
+                      }}
+                    />
+                    {message.media_url && (
+                      <div className="text-sm text-muted-foreground">
+                        選択中: {message.media_url}
+                      </div>
+                    )}
                   </div>
                 )}
 
                 {message.message_type === "flex" && (
                   <div className="space-y-2">
                     <Label>Flexメッセージ</Label>
-                    <Select
-                      value={message.flex_message_id || ""}
-                      onValueChange={(value) => updateLocalMessage(index, { flex_message_id: value })}
-                    >
-                      <SelectTrigger>
-                        <SelectValue placeholder="Flexメッセージを選択" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {flexMessages.map((flex) => (
-                          <SelectItem key={flex.id} value={flex.id}>
-                            {flex.name}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                    <FlexMessageSelector
+                      selectedFlexMessageId={message.flex_message_id || ""}
+                      onSelect={(value) => {
+                        updateLocalMessage(index, { flex_message_id: value })
+                        setTimeout(() => saveMessage(index), 100)
+                      }}
+                    />
                   </div>
                 )}
               </CardContent>
@@ -586,9 +600,9 @@ export default function StepMessageEditor({
         </div>
       )}
       
-      <div className="flex justify-center pt-4">
-        <Button onClick={addMessage} size="sm">
-          <Plus className="h-4 w-4 mr-1" />
+      <div className="flex justify-center">
+        <Button onClick={addMessage} className="w-full max-w-md">
+          <Plus className="h-4 w-4 mr-2" />
           メッセージ追加
         </Button>
       </div>
