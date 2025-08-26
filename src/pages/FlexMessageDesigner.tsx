@@ -9,7 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Badge } from "@/components/ui/badge";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
-import { ArrowLeft, Send, Plus, Trash2, Image, MessageSquare, Save, Eye, GripVertical, ChevronDown, ChevronRight } from "lucide-react";
+import { ArrowLeft, Send, Plus, Trash2, Image, MessageSquare, Save, Eye, GripVertical, ChevronDown, ChevronRight, ImagePlus } from "lucide-react";
 import { MediaSelector } from "@/components/MediaSelector";
 import { ColorPicker } from "@/components/ui/color-picker";
 import {
@@ -30,8 +30,9 @@ import {
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 
-// ---------- 型 ----------
-
+/* =========================
+   型
+========================= */
 interface FlexMessage {
   id: string;
   name: string;
@@ -41,98 +42,75 @@ interface FlexMessage {
   user_id: string;
 }
 
-type ActionType = 'message' | 'uri' | 'postback';
-
-interface BaseAction {
-  type: ActionType;
-  label?: string;
-}
-interface UriAction extends BaseAction {
-  type: 'uri';
-  uri?: string;
-}
-interface MessageAction extends BaseAction {
-  type: 'message';
-  text?: string;
-}
-interface PostbackAction extends BaseAction {
-  type: 'postback';
-  data?: string;
-}
-type AnyAction = UriAction | MessageAction | PostbackAction;
-
-type ElementType = 'text' | 'image' | 'button';
+type BubbleSize = 'micro' | 'mega' | 'giga'; // 1=小:micro, 2=通常:mega(既定), 3=最大:giga
 
 interface FlexElement {
   id: string;
-  type: ElementType;
+  type: 'text' | 'image' | 'button';
   properties: {
     // text
     text?: string;
-    size?: string;            // xs/sm/md/lg/xl/xxl...
-    weight?: string;          // normal/bold
-    color?: string;
-    align?: string;           // start/center/end
-    backgroundColor?: string;
+    size?: string;
+    weight?: string; // normal | bold
+    color?: string;  // HEX
+    align?: string;  // start|center|end
+    backgroundColor?: string; // HEX（textに直接は付かないので自動でboxラップ）
 
     // image
     url?: string;
-    aspectRatio?: string;     // "20:13" など
-    aspectMode?: string;      // cover/fit
-    edgeToEdge?: boolean;     // ← 先頭に来たら hero に昇格してフチなしで表示
+    aspectRatio?: string; // "20:13", "1:1" etc.
+    aspectMode?: string;  // "cover" | "fit"
+    imgSize?: string;     // "full" など
 
     // button
-    style?: string;           // primary/secondary/link
-    height?: string;          // sm/md/lg
-    action?: AnyAction;
+    style?: string;   // primary | secondary | link
+    height?: string;  // sm|md|lg
+    action?: {
+      type: 'message' | 'uri' | 'postback';
+      label?: string;
+      text?: string;
+      uri?: string;
+      data?: string;
+    };
   };
 }
 
 interface FlexDesign {
   name: string;
+  altText?: string;
+  bubbleSize: BubbleSize; // 追加：吹き出し幅
+  styles?: {
+    body?: { backgroundColor?: string }; // バブル全体の背景
+  };
   body: {
-    type: 'box';
-    layout: 'vertical';
-    spacing?: string;
-    backgroundColor?: string;
-    paddingAll?: string;      // ← 追加: 全体パディング (0px/sm/md/lg/xl)
+    paddingAll?: string; // "0px", "sm", "md", "lg" などラインのトークン
     contents: FlexElement[];
   };
-  styles?: {
-    body?: {
-      backgroundColor?: string;
-    };
+  hero?: {
+    url?: string;
+    size?: string;        // "full"
+    aspectRatio?: string; // "20:13"
+    aspectMode?: string;  // "cover" | "fit"
+    action?: { type: 'uri'; uri: string };
   };
 }
 
-// ---------- ユーティリティ ----------
-
-const paddingPreviewPx: Record<string, number> = {
-  '0px': 0,
-  'none': 0,
-  'xs': 6,
-  'sm': 8,
-  'md': 12,
-  'lg': 16,
-  'xl': 20,
-};
-
-// ---------- 並び替えアイテム ----------
-
-const SortableItem = ({ element, onUpdate, onDelete }: {
+/* =========================
+   DnDアイテム
+========================= */
+const SortableItem = ({
+  element,
+  onUpdate,
+  onDelete,
+}: {
   element: FlexElement;
   onUpdate: (id: string, properties: any) => void;
   onDelete: (id: string) => void;
 }) => {
   const [isCollapsed, setIsCollapsed] = useState(true);
+  const { attributes, listeners, setNodeRef, transform, transition } = useSortable({ id: element.id });
 
-  const { attributes, listeners, setNodeRef, transform, transition } =
-    useSortable({ id: element.id });
-
-  const style = {
-    transform: CSS.Transform.toString(transform),
-    transition,
-  };
+  const style = { transform: CSS.Transform.toString(transform), transition };
 
   const renderElementEditor = () => {
     switch (element.type) {
@@ -148,7 +126,6 @@ const SortableItem = ({ element, onUpdate, onDelete }: {
                 rows={2}
               />
             </div>
-
             <div className="grid grid-cols-2 gap-2">
               <div className="space-y-2">
                 <Label>サイズ</Label>
@@ -158,12 +135,11 @@ const SortableItem = ({ element, onUpdate, onDelete }: {
                 >
                   <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="xs">XS</SelectItem>
-                    <SelectItem value="sm">SM</SelectItem>
-                    <SelectItem value="md">MD</SelectItem>
-                    <SelectItem value="lg">LG</SelectItem>
-                    <SelectItem value="xl">XL</SelectItem>
-                    <SelectItem value="xxl">XXL</SelectItem>
+                    <SelectItem value="xs">極小</SelectItem>
+                    <SelectItem value="sm">小</SelectItem>
+                    <SelectItem value="md">中</SelectItem>
+                    <SelectItem value="lg">大</SelectItem>
+                    <SelectItem value="xl">特大</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
@@ -181,7 +157,6 @@ const SortableItem = ({ element, onUpdate, onDelete }: {
                 </Select>
               </div>
             </div>
-
             <div className="grid grid-cols-2 gap-2">
               <div className="space-y-2">
                 <Label>文字色</Label>
@@ -205,13 +180,15 @@ const SortableItem = ({ element, onUpdate, onDelete }: {
                 </Select>
               </div>
             </div>
-
             <div className="space-y-2">
-              <Label>背景色</Label>
+              <Label>背景色（テキストブロック）</Label>
               <ColorPicker
                 color={element.properties.backgroundColor || '#ffffff'}
                 onChange={(backgroundColor) => onUpdate(element.id, { ...element.properties, backgroundColor })}
               />
+              <p className="text-[11px] text-muted-foreground">
+                ※Flexではtextに直接背景色は付かないため、送信時は内部的にboxでラップして背景色を適用します
+              </p>
             </div>
           </div>
         );
@@ -226,7 +203,6 @@ const SortableItem = ({ element, onUpdate, onDelete }: {
                 selectedUrl={element.properties.url}
               />
             </div>
-
             <div className="space-y-2">
               <Label>画像URL（直接入力）</Label>
               <Input
@@ -235,27 +211,7 @@ const SortableItem = ({ element, onUpdate, onDelete }: {
                 placeholder="https://example.com/image.jpg"
               />
             </div>
-
             <div className="grid grid-cols-2 gap-2">
-              <div className="space-y-2">
-                <Label>サイズ</Label>
-                <Select
-                  value={element.properties.size || 'full'}
-                  onValueChange={(value) => onUpdate(element.id, { ...element.properties, size: value })}
-                >
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="xxs">XXS</SelectItem>
-                    <SelectItem value="xs">XS</SelectItem>
-                    <SelectItem value="sm">SM</SelectItem>
-                    <SelectItem value="md">MD</SelectItem>
-                    <SelectItem value="lg">LG</SelectItem>
-                    <SelectItem value="xl">XL</SelectItem>
-                    <SelectItem value="xxl">XXL</SelectItem>
-                    <SelectItem value="full">Full</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
               <div className="space-y-2">
                 <Label>アスペクト比</Label>
                 <Select
@@ -271,17 +227,19 @@ const SortableItem = ({ element, onUpdate, onDelete }: {
                   </SelectContent>
                 </Select>
               </div>
-            </div>
-
-            <div className="space-y-2">
-              <label className="flex items-center gap-2 text-sm">
-                <input
-                  type="checkbox"
-                  checked={!!element.properties.edgeToEdge}
-                  onChange={(e) => onUpdate(element.id, { ...element.properties, edgeToEdge: e.target.checked })}
-                />
-                先頭に置いたら「フチなし（hero）」で表示する
-              </label>
+              <div className="space-y-2">
+                <Label>表示モード</Label>
+                <Select
+                  value={element.properties.aspectMode || 'cover'}
+                  onValueChange={(value) => onUpdate(element.id, { ...element.properties, aspectMode: value })}
+                >
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="cover">cover</SelectItem>
+                    <SelectItem value="fit">fit</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
             </div>
           </div>
         );
@@ -293,12 +251,10 @@ const SortableItem = ({ element, onUpdate, onDelete }: {
               <Label>ボタンラベル</Label>
               <Input
                 value={element.properties.action?.label || ''}
-                onChange={(e) =>
-                  onUpdate(element.id, {
-                    ...element.properties,
-                    action: { ...(element.properties.action || { type: 'uri' as ActionType }), label: e.target.value }
-                  })
-                }
+                onChange={(e) => onUpdate(element.id, {
+                  ...element.properties,
+                  action: { ...element.properties.action, label: e.target.value }
+                })}
                 placeholder="ボタンに表示するテキスト"
               />
             </div>
@@ -307,18 +263,15 @@ const SortableItem = ({ element, onUpdate, onDelete }: {
               <Label>ボタンタイプ</Label>
               <Select
                 value={element.properties.action?.type || 'uri'}
-                onValueChange={(value) =>
-                  onUpdate(element.id, {
-                    ...element.properties,
-                    action: { ...(element.properties.action || {}), type: value as ActionType }
-                  })
-                }
+                onValueChange={(value) => onUpdate(element.id, {
+                  ...element.properties,
+                  action: { ...element.properties.action, type: value }
+                })}
               >
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="message">メッセージ送信</SelectItem>
                   <SelectItem value="uri">URLを開く</SelectItem>
-                  <SelectItem value="postback">ポストバック</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -327,46 +280,25 @@ const SortableItem = ({ element, onUpdate, onDelete }: {
               <div className="space-y-2">
                 <Label>リンクURL</Label>
                 <Input
-                  value={(element.properties.action as UriAction)?.uri || ''}
-                  onChange={(e) =>
-                    onUpdate(element.id, {
-                      ...element.properties,
-                      action: { ...(element.properties.action as UriAction), type: 'uri', uri: e.target.value }
-                    })
-                  }
+                  value={element.properties.action?.uri || ''}
+                  onChange={(e) => onUpdate(element.id, {
+                    ...element.properties,
+                    action: { ...element.properties.action, uri: e.target.value }
+                  })}
                   placeholder="https://example.com"
                 />
               </div>
             )}
-
             {element.properties.action?.type === 'message' && (
               <div className="space-y-2">
                 <Label>送信メッセージ</Label>
                 <Input
-                  value={(element.properties.action as MessageAction)?.text || ''}
-                  onChange={(e) =>
-                    onUpdate(element.id, {
-                      ...element.properties,
-                      action: { ...(element.properties.action as MessageAction), type: 'message', text: e.target.value }
-                    })
-                  }
+                  value={element.properties.action?.text || ''}
+                  onChange={(e) => onUpdate(element.id, {
+                    ...element.properties,
+                    action: { ...element.properties.action, text: e.target.value }
+                  })}
                   placeholder="送信するメッセージ"
-                />
-              </div>
-            )}
-
-            {element.properties.action?.type === 'postback' && (
-              <div className="space-y-2">
-                <Label>データ（postback）</Label>
-                <Input
-                  value={(element.properties.action as PostbackAction)?.data || ''}
-                  onChange={(e) =>
-                    onUpdate(element.id, {
-                      ...element.properties,
-                      action: { ...(element.properties.action as PostbackAction), type: 'postback', data: e.target.value }
-                    })
-                  }
-                  placeholder="key=value&foo=bar"
                 />
               </div>
             )}
@@ -380,32 +312,33 @@ const SortableItem = ({ element, onUpdate, onDelete }: {
                 >
                   <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="primary">メイン（濃い色）</SelectItem>
-                    <SelectItem value="secondary">サブ（薄い色）</SelectItem>
-                    <SelectItem value="link">リンク（枠線）</SelectItem>
+                    <SelectItem value="primary">primary</SelectItem>
+                    <SelectItem value="secondary">secondary</SelectItem>
+                    <SelectItem value="link">link</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
               <div className="space-y-2">
-                <Label>ボタン色</Label>
+                <Label>ボタン色（HEX）</Label>
                 <ColorPicker
-                  color={element.properties.color || '#0066cc'}
+                  color={element.properties.color || '#905c44'}
                   onChange={(color) => onUpdate(element.id, { ...element.properties, color })}
                 />
+                <p className="text-[11px] text-muted-foreground">※LINEは6桁HEXのみ推奨</p>
               </div>
             </div>
 
             <div className="space-y-2">
-              <Label>ボタン高さ</Label>
+              <Label>高さ</Label>
               <Select
                 value={element.properties.height || 'md'}
                 onValueChange={(value) => onUpdate(element.id, { ...element.properties, height: value })}
               >
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="sm">小</SelectItem>
-                  <SelectItem value="md">中</SelectItem>
-                  <SelectItem value="lg">大</SelectItem>
+                  <SelectItem value="sm">sm</SelectItem>
+                  <SelectItem value="md">md</SelectItem>
+                  <SelectItem value="lg">lg</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -421,12 +354,7 @@ const SortableItem = ({ element, onUpdate, onDelete }: {
     <div ref={setNodeRef} style={style} className="bg-background border-2 border-dashed border-muted hover:border-primary/50 rounded-lg p-4 mb-3 shadow-sm">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
-          <div
-            {...attributes}
-            {...listeners}
-            className="cursor-grab active:cursor-grabbing p-2 hover:bg-primary/10 rounded-md border border-primary/20 transition-colors"
-            title="ドラッグして並び替え"
-          >
+          <div {...attributes} {...listeners} className="cursor-grab active:cursor-grabbing p-2 hover:bg-primary/10 rounded-md border border-primary/20">
             <GripVertical className="w-4 h-4 text-primary" />
           </div>
           <Badge variant="outline" className="text-xs">
@@ -442,13 +370,22 @@ const SortableItem = ({ element, onUpdate, onDelete }: {
           <Trash2 className="w-4 h-4" />
         </Button>
       </div>
-
       {!isCollapsed && <div className="mt-3">{renderElementEditor()}</div>}
     </div>
   );
 };
 
-// ---------- 本体 ----------
+/* =========================
+   ユーティリティ
+========================= */
+// 6桁HEXに正規化（#RGB→#RRGGBB、不正値はundefined）
+const toHex6 = (c?: string) => {
+  if (!c) return undefined;
+  const m = c.trim().toLowerCase();
+  if (/^#[0-9a-f]{6}$/.test(m)) return m;
+  if (/^#[0-9a-f]{3}$/.test(m)) return '#' + m[1] + m[1] + m[2] + m[2] + m[3] + m[3];
+  return undefined;
+};
 
 const FlexMessageDesigner = () => {
   const [loading, setLoading] = useState(false);
@@ -458,13 +395,11 @@ const FlexMessageDesigner = () => {
 
   const [design, setDesign] = useState<FlexDesign>({
     name: "",
-    body: {
-      type: 'box',
-      layout: 'vertical',
-      spacing: 'md',
-      paddingAll: '0px',     // ← 既定で余白ゼロ
-      contents: []
-    }
+    altText: "",
+    bubbleSize: "mega", // 2=通常
+    styles: { body: { backgroundColor: undefined } },
+    body: { paddingAll: "md", contents: [] },
+    hero: undefined,
   });
 
   const navigate = useNavigate();
@@ -475,17 +410,13 @@ const FlexMessageDesigner = () => {
     useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
   );
 
-  useEffect(() => {
-    checkAuthAndLoadMessages();
-  }, []);
+  useEffect(() => { void checkAuthAndLoadMessages(); }, []);
 
   const checkAuthAndLoadMessages = async () => {
     try {
       const { data: { user } } = await supabase.auth.getUser();
-      if (!user) {
-        navigate("/auth");
-        return;
-      }
+      if (!user) { navigate("/auth"); return; }
+
       const { data: flexMessages, error } = await supabase
         .from('flex_messages')
         .select('*')
@@ -494,14 +425,14 @@ const FlexMessageDesigner = () => {
       if (error) throw error;
       setMessages(flexMessages || []);
     } catch (error) {
-      console.error('Error:', error);
+      console.error(error);
       toast({ title: "エラー", description: "データの読み込みに失敗しました", variant: "destructive" });
     } finally {
       setInitialLoading(false);
     }
   };
 
-  const addElement = (type: ElementType) => {
+  const addElement = (type: 'text' | 'image' | 'button') => {
     const newElement: FlexElement = {
       id: `element-${Date.now()}`,
       type,
@@ -509,26 +440,16 @@ const FlexMessageDesigner = () => {
         type === 'text'
           ? { text: 'サンプルテキスト', size: 'md', weight: 'normal', color: '#000000' }
           : type === 'image'
-          ? { url: '', size: 'full', aspectRatio: '20:13', aspectMode: 'cover', edgeToEdge: true }
-          : { style: 'primary', action: { type: 'uri', label: 'ボタン', uri: 'https://line.me/' } as UriAction }
+          ? { url: '', aspectRatio: '20:13', aspectMode: 'cover' }
+          : { style: 'primary', action: { type: 'uri', label: 'ボタン', uri: 'https://line.me/' } },
     };
-
-    setDesign(prev => ({
-      ...prev,
-      body: {
-        ...prev.body,
-        contents: [...prev.body.contents, newElement]
-      }
-    }));
+    setDesign(prev => ({ ...prev, body: { ...prev.body, contents: [...prev.body.contents, newElement] } }));
   };
 
   const updateElement = (id: string, properties: any) => {
     setDesign(prev => ({
       ...prev,
-      body: {
-        ...prev.body,
-        contents: prev.body.contents.map(el => el.id === id ? { ...el, properties } : el)
-      }
+      body: { ...prev.body, contents: prev.body.contents.map(el => el.id === id ? { ...el, properties } : el) }
     }));
   };
 
@@ -542,116 +463,129 @@ const FlexMessageDesigner = () => {
   const handleDragEnd = (event: DragEndEvent) => {
     const { active, over } = event;
     if (!over || active.id === over.id) return;
-
     setDesign(prev => {
-      const oldIndex = prev.body.contents.findIndex(i => i.id === String(active.id));
-      const newIndex = prev.body.contents.findIndex(i => i.id === String(over.id));
-      return {
-        ...prev,
-        body: { ...prev.body, contents: arrayMove(prev.body.contents, oldIndex, newIndex) }
-      };
+      const oldIndex = prev.body.contents.findIndex(i => i.id === active.id);
+      const newIndex = prev.body.contents.findIndex(i => i.id === over.id);
+      return { ...prev, body: { ...prev.body, contents: arrayMove(prev.body.contents, oldIndex, newIndex) } };
     });
   };
 
-  // --------- ここが配信される JSON を組み立てる中核 ---------
+  /* =========================
+     JSON生成（重要：ここが配信に反映）
+  ========================= */
   const generateFlexJson = () => {
-    const rawContents = design.body.contents
-      .map((element, index) => {
-        const p = element.properties || {};
-        const notFirst = index > 0;
-        const margin = notFirst ? "md" : undefined; // トークンで安全に
+    if (!design?.body?.contents || design.body.contents.length === 0) return null;
 
-        switch (element.type) {
-          case "text": {
-            const text = (p.text || "").trim();
-            if (!text) return null;
-            return {
-              type: "text",
-              text,
-              wrap: true,
-              ...(p.size && { size: p.size }),
-              ...(p.weight && p.weight !== "normal" && { weight: p.weight }),
-              ...(p.color && { color: p.color }),
-              ...(p.align && { align: p.align }),
-              ...(p.backgroundColor && { backgroundColor: p.backgroundColor }),
-              ...(margin && { margin })
-            };
-          }
-          case "image": {
-            const url = (p.url || "").trim();
-            if (!url) return null;
-            return {
-              type: "image",
-              url,
-              ...(p.size && { size: p.size }),
-              ...(p.aspectRatio && { aspectRatio: p.aspectRatio }),
-              ...(p.aspectMode && { aspectMode: p.aspectMode }),
-              ...(p.action && { action: p.action }),
-              ...(margin && { margin }),
-              ...(typeof p.edgeToEdge === 'boolean' && { edgeToEdge: p.edgeToEdge }) // preview 用の目印（LINE には送らない）
-            };
-          }
-          case "button": {
-            const action = (p.action || { type: 'uri', uri: 'https://line.me/' }) as AnyAction;
-            return {
-              type: "button",
-              action,
-              ...(p.style && { style: p.style }),
-              ...(p.color && { color: p.color }),
-              ...(p.height && { height: p.height }),
-              ...(margin && { margin })
-            };
-          }
-          default:
-            return null;
+    const marginToken = (idx: number) => (idx === 0 ? undefined : "md");
+
+    const bodyContents = design.body.contents.map((element, index) => {
+      const p = element.properties || {};
+      const margin = marginToken(index);
+
+      if (element.type === 'text') {
+        const text = (p.text || '').toString().trim();
+        if (!text) return null;
+
+        const color = toHex6(p.color);
+        const bg = toHex6(p.backgroundColor);
+        const node: any = {
+          type: "text",
+          text,
+          wrap: true,
+          ...(p.size && { size: p.size }),
+          ...(p.weight && p.weight !== "normal" && { weight: p.weight }),
+          ...(p.align && p.align !== "start" && { align: p.align }),
+          ...(color && { color }),
+          ...(margin && { margin }),
+        };
+
+        if (bg) {
+          return {
+            type: "box",
+            layout: "vertical",
+            backgroundColor: bg,
+            paddingAll: "8px",
+            ...(margin && { margin }),
+            contents: [node],
+          };
         }
-      })
-      .filter(Boolean) as any[];
+        return node;
+      }
 
-    if (rawContents.length === 0) return null;
+      if (element.type === 'image') {
+        const url = (p.url || '').toString().trim();
+        if (!url) return null;
 
-    // 先頭が画像かつ edgeToEdge=true なら hero へ昇格（フチなし）
-    let hero: any | undefined;
-    let bodyContents = rawContents;
-    const first = rawContents[0];
-    if (first?.type === "image" && design.body.contents[0]?.properties?.edgeToEdge) {
-      hero = { ...first };
-      // LINE の hero は margin 等不要
-      delete hero.margin;
-      delete hero.edgeToEdge; // 送信不要
-      bodyContents = rawContents.slice(1);
+        const img: any = {
+          type: "image",
+          url,
+          ...(p.aspectRatio && { aspectRatio: p.aspectRatio }),
+          ...(p.aspectMode && { aspectMode: p.aspectMode }),
+          ...(margin && { margin }),
+        };
+        return img;
+      }
+
+      if (element.type === 'button') {
+        const action = p.action || { type: 'uri', label: 'Open', uri: 'https://line.me/' };
+        const color = toHex6(p.color);
+        const btn: any = {
+          type: "button",
+          action,
+          ...(p.style && { style: p.style }),
+          ...(color && { color }),
+          ...(p.height && { height: p.height }),
+          ...(margin && { margin }),
+        };
+        return btn;
+      }
+
+      return null;
+    }).filter(Boolean) as any[];
+
+    if (bodyContents.length === 0) return null;
+
+    // Hero
+    let hero: any = undefined;
+    if (design.hero?.url) {
+      hero = {
+        type: "image",
+        url: design.hero.url,
+        size: design.hero.size || "full",
+        aspectRatio: design.hero.aspectRatio || "20:13",
+        aspectMode: design.hero.aspectMode || "cover",
+        ...(design.hero.action?.uri && { action: { type: "uri", uri: design.hero.action.uri } }),
+      };
     }
 
-    // body box：既定で paddingAll: 0px（余白ゼロ）
-    const paddingAll = design.body.paddingAll || '0px';
+    // バブル背景色（styles）
+    const styles = design.styles?.body?.backgroundColor
+      ? { body: { backgroundColor: toHex6(design.styles.body.backgroundColor) } }
+      : undefined;
+
     const bodyBox: any = {
       type: "box",
       layout: "vertical",
-      spacing: "none",
-      paddingAll,
-      contents: bodyContents
+      spacing: "md",
+      ...(design.body.paddingAll && { paddingAll: design.body.paddingAll }),
+      contents: bodyContents,
     };
 
-    // bubble styles（背景色）
-    const bubbleStyles = design.styles?.body?.backgroundColor
-      ? { body: { backgroundColor: design.styles.body.backgroundColor } }
-      : undefined;
-
-    const altText = (design.name || "Flexメッセージ").slice(0, 400);
-
-    return {
-      type: "flex",
-      altText,
-      contents: {
-        type: "bubble",
-        ...(hero && { hero }),
-        body: bodyBox,
-        ...(bubbleStyles && { styles: bubbleStyles })
-      }
+    const bubble: any = {
+      type: "bubble",
+      ...(hero && { hero }),
+      body: bodyBox,
+      ...(styles && { styles }),
+      ...(design.bubbleSize && { size: design.bubbleSize }), // micro/mega/giga
     };
+
+    const altText = (design.altText || design.name || "Flexメッセージ").slice(0, 400);
+    return { type: "flex", altText, contents: bubble };
   };
-  // ---------------------------------------------------------
 
+  /* =========================
+     保存・読込・送信
+  ========================= */
   const saveMessage = async () => {
     if (!design.name.trim()) {
       toast({ title: "入力エラー", description: "メッセージ名を入力してください", variant: "destructive" });
@@ -660,70 +594,81 @@ const FlexMessageDesigner = () => {
     setLoading(true);
     try {
       const { data: { user } } = await supabase.auth.getUser();
-      if (!user) {
-        toast({ title: "認証エラー", description: "ログインが必要です", variant: "destructive" });
-        return;
-      }
+      if (!user) { toast({ title: "認証エラー", description: "ログインが必要です", variant: "destructive" }); return; }
+
       const flexJson = generateFlexJson();
+
       if (currentMessageId) {
-        const { error } = await supabase
-          .from('flex_messages')
-          .update({ name: design.name, content: flexJson })
-          .eq('id', currentMessageId);
+        const { error } = await supabase.from('flex_messages').update({
+          name: design.name,
+          content: flexJson
+        }).eq('id', currentMessageId);
         if (error) throw error;
         toast({ title: "更新成功", description: `「${design.name}」を更新しました` });
       } else {
-        const { data, error } = await supabase
-          .from('flex_messages')
-          .insert({ user_id: user.id, name: design.name, content: flexJson })
-          .select()
-          .single();
+        const { data, error } = await supabase.from('flex_messages').insert({
+          user_id: user.id, name: design.name, content: flexJson
+        }).select().single();
         if (error) throw error;
         setCurrentMessageId(data.id);
         toast({ title: "保存成功", description: `「${design.name}」を保存しました` });
       }
-      checkAuthAndLoadMessages();
-    } catch (error) {
-      console.error('Error saving message:', error);
+      void checkAuthAndLoadMessages();
+    } catch (e) {
+      console.error(e);
       toast({ title: "保存エラー", description: "メッセージの保存に失敗しました", variant: "destructive" });
-    } finally {
-      setLoading(false);
-    }
+    } finally { setLoading(false); }
   };
 
   const loadMessage = (message: FlexMessage) => {
-    // 保存済み JSON から UI 状態へ復元（hero を先頭 image に戻す）
-    const contents = message.content?.contents;
-    const body = contents?.body || {};
-    const hero = contents?.hero;
-
-    const bodyItems: any[] = (body?.contents || []).map((item: any, idx: number) => ({
-      id: `element-${Date.now()}-${idx}`,
-      type: item.type as ElementType,
-      properties: { ...item } // action 等は中に入っている
-    }));
-
-    if (hero && hero.type === 'image') {
-      // 先頭に hero を edgeToEdge=true の image として戻す
-      bodyItems.unshift({
-        id: `element-${Date.now()}-hero`,
-        type: 'image' as ElementType,
-        properties: { ...hero, edgeToEdge: true }
-      });
-    }
-
+    const flex = message.content;
+    const bubble = flex?.contents;
+    const body = bubble?.body;
     setCurrentMessageId(message.id);
+
     setDesign({
       name: message.name,
+      altText: flex?.altText || message.name,
+      bubbleSize: (bubble?.size as BubbleSize) || "mega",
+      styles: bubble?.styles,
       body: {
-        type: 'box',
-        layout: 'vertical',
-        spacing: 'md',
-        backgroundColor: body?.backgroundColor,
-        paddingAll: body?.paddingAll || '0px',
-        contents: bodyItems
+        paddingAll: body?.paddingAll || "md",
+        contents: (body?.contents || []).map((item: any, i: number) => {
+          // textがboxラップされている場合（背景色対応）、中のtextだけを拾って背景色をpropertiesへ戻す
+          if (item.type === 'box' && item.contents?.[0]?.type === 'text' && item.backgroundColor) {
+            const txt = item.contents[0];
+            return {
+              id: `element-${Date.now()}-${i}`,
+              type: 'text',
+              properties: {
+                text: txt.text,
+                size: txt.size,
+                weight: txt.weight,
+                color: txt.color,
+                align: txt.align,
+                backgroundColor: item.backgroundColor
+              }
+            } as FlexElement;
+          }
+          if (item.type === 'text') {
+            return { id: `element-${Date.now()}-${i}`, type: 'text', properties: { ...item } } as FlexElement;
+          }
+          if (item.type === 'image') {
+            return { id: `element-${Date.now()}-${i}`, type: 'image', properties: { url: item.url, aspectRatio: item.aspectRatio, aspectMode: item.aspectMode } } as FlexElement;
+          }
+          if (item.type === 'button') {
+            return { id: `element-${Date.now()}-${i}`, type: 'button', properties: { style: item.style, color: item.color, height: item.height, action: item.action } } as FlexElement;
+          }
+          return { id: `element-${Date.now()}-${i}`, type: 'text', properties: { text: '[未対応要素]' } } as FlexElement;
+        })
       },
-      styles: contents?.styles
+      hero: bubble?.hero ? {
+        url: bubble.hero.url,
+        size: bubble.hero.size,
+        aspectRatio: bubble.hero.aspectRatio,
+        aspectMode: bubble.hero.aspectMode,
+        action: bubble.hero.action
+      } : undefined
     });
 
     toast({ title: "読み込み完了", description: `「${message.name}」を読み込みました` });
@@ -737,18 +682,13 @@ const FlexMessageDesigner = () => {
     setLoading(true);
     try {
       const { data: { user } } = await supabase.auth.getUser();
-      if (!user) {
-        toast({ title: "認証エラー", description: "ログインが必要です", variant: "destructive" });
-        return;
-      }
+      if (!user) { toast({ title: "認証エラー", description: "ログインが必要です", variant: "destructive" }); return; }
+
       const flexJson = generateFlexJson();
       if (!flexJson) {
-        toast({ title: "検証エラー", description: "空の要素は送信できません", variant: "destructive" });
+        toast({ title: "検証エラー", description: "空要素は送信できません", variant: "destructive" });
         return;
       }
-
-      // 送信前に中身を確認したい時はこのログを見る
-      console.log("送信予定の Flex JSON:", JSON.stringify(flexJson, null, 2));
 
       const { error } = await supabase.functions.invoke('send-flex-message', {
         body: { flexMessage: flexJson, userId: user.id }
@@ -756,35 +696,24 @@ const FlexMessageDesigner = () => {
       if (error) throw error;
 
       toast({ title: "送信完了", description: "Flexメッセージを送信しました" });
-    } catch (error: any) {
-      console.error('Error sending message:', error);
-      toast({ title: "送信エラー", description: error.message || "メッセージの送信に失敗しました", variant: "destructive" });
-    } finally {
-      setLoading(false);
-    }
+    } catch (e: any) {
+      console.error(e);
+      toast({ title: "送信エラー", description: e.message || "メッセージの送信に失敗しました", variant: "destructive" });
+    } finally { setLoading(false); }
   };
 
   const sendSavedMessage = async (message: FlexMessage) => {
     setLoading(true);
     try {
       const { data: { user } } = await supabase.auth.getUser();
-      if (!user) {
-        toast({ title: "認証エラー", description: "ログインが必要です", variant: "destructive" });
-        return;
-      }
-      // 保存済み JSON をそのまま送る
-      const { error } = await supabase.functions.invoke('send-flex-message', {
-        body: { flexMessage: message.content, userId: user.id }
-      });
+      if (!user) { toast({ title: "認証エラー", description: "ログインが必要です", variant: "destructive" }); return; }
+      const { error } = await supabase.functions.invoke('send-flex-message', { body: { flexMessage: message.content, userId: user.id } });
       if (error) throw error;
-
       toast({ title: "送信完了", description: `「${message.name}」を送信しました` });
-    } catch (error: any) {
-      console.error('Error sending message:', error);
-      toast({ title: "送信エラー", description: error.message || "メッセージの送信に失敗しました", variant: "destructive" });
-    } finally {
-      setLoading(false);
-    }
+    } catch (e: any) {
+      console.error(e);
+      toast({ title: "送信エラー", description: e.message || "メッセージの送信に失敗しました", variant: "destructive" });
+    } finally { setLoading(false); }
   };
 
   const deleteMessage = async (messageId: string, messageName: string) => {
@@ -793,44 +722,30 @@ const FlexMessageDesigner = () => {
       const { error } = await supabase.from('flex_messages').delete().eq('id', messageId);
       if (error) throw error;
       toast({ title: "削除完了", description: `「${messageName}」を削除しました` });
-      checkAuthAndLoadMessages();
+      void checkAuthAndLoadMessages();
       if (currentMessageId === messageId) {
         setCurrentMessageId(null);
-        setDesign({
-          name: "",
-          body: { type: 'box', layout: 'vertical', spacing: 'md', paddingAll: '0px', contents: [] }
-        });
+        setDesign({ name: "", altText: "", bubbleSize: "mega", styles: { body: {} }, body: { paddingAll: "md", contents: [] }, hero: undefined });
       }
-    } catch (error) {
-      console.error('Error deleting message:', error);
+    } catch (e) {
+      console.error(e);
       toast({ title: "削除エラー", description: "メッセージの削除に失敗しました", variant: "destructive" });
     }
   };
 
   const newMessage = () => {
     setCurrentMessageId(null);
-    setDesign({
-      name: "",
-      body: { type: 'box', layout: 'vertical', spacing: 'md', paddingAll: '0px', contents: [] }
-    });
+    setDesign({ name: "", altText: "", bubbleSize: "mega", styles: { body: {} }, body: { paddingAll: "md", contents: [] }, hero: undefined });
     toast({ title: "新規作成", description: "新しいメッセージを作成します" });
   };
 
   if (initialLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background">
-        <div className="text-center">
-          <p className="text-xl text-muted-foreground">読み込み中...</p>
-        </div>
+        <div className="text-center"><p className="text-xl text-muted-foreground">読み込み中...</p></div>
       </div>
     );
   }
-
-  // hero/ body をプレビュー用に分割
-  const previewFirst = design.body.contents[0];
-  const previewHasHero = previewFirst?.type === 'image' && previewFirst.properties?.edgeToEdge;
-  const previewBodyList = previewHasHero ? design.body.contents.slice(1) : design.body.contents;
-  const previewPadding = paddingPreviewPx[design.body.paddingAll || '0px'] ?? 0;
 
   return (
     <div className="min-h-screen bg-background">
@@ -838,8 +753,7 @@ const FlexMessageDesigner = () => {
         <div className="container mx-auto px-4 py-4">
           <div className="flex items-center gap-4">
             <Button variant="ghost" size="sm" onClick={() => navigate("/")} className="flex items-center gap-2">
-              <ArrowLeft className="w-4 h-4" />
-              ダッシュボードに戻る
+              <ArrowLeft className="w-4 h-4" /> ダッシュボードに戻る
             </Button>
             <h1 className="text-2xl font-bold">Flexメッセージデザイナー</h1>
           </div>
@@ -866,44 +780,99 @@ const FlexMessageDesigner = () => {
 
               <CardContent>
                 <div className="space-y-4">
+                  {/* 基本設定 */}
                   <div className="space-y-2">
                     <Label htmlFor="message-name">メッセージ名</Label>
-                    <Input
-                      id="message-name"
-                      value={design.name}
-                      onChange={(e) => setDesign(prev => ({ ...prev, name: e.target.value }))}
-                      placeholder="メッセージに名前を付けてください"
-                    />
+                    <Input id="message-name" value={design.name} onChange={(e) => setDesign(prev => ({ ...prev, name: e.target.value }))} placeholder="メッセージに名前を付けてください" />
                   </div>
 
-                  <div className="grid grid-cols-2 gap-2">
+                  <div className="grid grid-cols-2 gap-3">
                     <div className="space-y-2">
-                      <Label>本体背景色</Label>
+                      <Label>吹き出し幅</Label>
+                      <Select value={design.bubbleSize} onValueChange={(v: BubbleSize) => setDesign(prev => ({ ...prev, bubbleSize: v }))}>
+                        <SelectTrigger><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="micro">小（micro）</SelectItem>
+                          <SelectItem value="mega">通常（mega）</SelectItem>
+                          <SelectItem value="giga">最大（giga）</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="space-y-2">
+                      <Label>バブル背景色</Label>
                       <ColorPicker
                         color={design.styles?.body?.backgroundColor || '#ffffff'}
-                        onChange={(backgroundColor) =>
-                          setDesign(prev => ({ ...prev, styles: { body: { backgroundColor } } }))
-                        }
+                        onChange={(color) => setDesign(prev => ({ ...prev, styles: { body: { backgroundColor: color } } }))}
                       />
                     </div>
                     <div className="space-y-2">
-                      <Label>本体パディング（paddingAll）</Label>
-                      <Select
-                        value={design.body.paddingAll || '0px'}
-                        onValueChange={(value) => setDesign(prev => ({ ...prev, body: { ...prev.body, paddingAll: value } }))}
-                      >
+                      <Label>Body内側余白（paddingAll）</Label>
+                      <Select value={design.body.paddingAll || 'md'} onValueChange={(v) => setDesign(prev => ({ ...prev, body: { ...prev.body, paddingAll: v } }))}>
                         <SelectTrigger><SelectValue /></SelectTrigger>
                         <SelectContent>
-                          <SelectItem value="0px">0px（なし）</SelectItem>
+                          <SelectItem value="0px">0px</SelectItem>
                           <SelectItem value="sm">sm</SelectItem>
                           <SelectItem value="md">md</SelectItem>
                           <SelectItem value="lg">lg</SelectItem>
                           <SelectItem value="xl">xl</SelectItem>
+                          <SelectItem value="xxl">xxl</SelectItem>
                         </SelectContent>
                       </Select>
                     </div>
+                    <div className="space-y-2">
+                      <Label>代替テキスト（通知文）</Label>
+                      <Input value={design.altText || ""} onChange={(e) => setDesign(prev => ({ ...prev, altText: e.target.value }))} placeholder="通知に表示される説明（最大400文字）" />
+                    </div>
                   </div>
 
+                  {/* Hero 設定 */}
+                  <div className="space-y-2 border rounded-md p-3">
+                    <div className="flex items-center gap-2">
+                      <ImagePlus className="w-4 h-4" />
+                      <span className="font-medium text-sm">Hero画像（任意）</span>
+                    </div>
+                    <div className="grid grid-cols-2 gap-3">
+                      <div className="space-y-2">
+                        <Label>画像選択</Label>
+                        <MediaSelector
+                          onSelect={(url) => setDesign(prev => ({ ...prev, hero: { ...(prev.hero || {}), url } }))}
+                          selectedUrl={design.hero?.url}
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label>URL（直接入力）</Label>
+                        <Input value={design.hero?.url || ''} onChange={(e) => setDesign(prev => ({ ...prev, hero: { ...(prev.hero || {}), url: e.target.value } }))} placeholder="https://example.com/hero.jpg" />
+                      </div>
+                      <div className="space-y-2">
+                        <Label>アスペクト比</Label>
+                        <Select value={design.hero?.aspectRatio || '20:13'} onValueChange={(v) => setDesign(prev => ({ ...prev, hero: { ...(prev.hero || {}), aspectRatio: v } }))}>
+                          <SelectTrigger><SelectValue /></SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="20:13">20:13</SelectItem>
+                            <SelectItem value="16:9">16:9</SelectItem>
+                            <SelectItem value="1:1">1:1</SelectItem>
+                            <SelectItem value="4:3">4:3</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div className="space-y-2">
+                        <Label>表示モード</Label>
+                        <Select value={design.hero?.aspectMode || 'cover'} onValueChange={(v) => setDesign(prev => ({ ...prev, hero: { ...(prev.hero || {}), aspectMode: v } }))}>
+                          <SelectTrigger><SelectValue /></SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="cover">cover</SelectItem>
+                            <SelectItem value="fit">fit</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div className="col-span-2 space-y-2">
+                        <Label>タップ時URL</Label>
+                        <Input value={design.hero?.action?.uri || ''} onChange={(e) => setDesign(prev => ({ ...prev, hero: { ...(prev.hero || {}), action: { type: 'uri', uri: e.target.value } } }))} placeholder="https://line.me/" />
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* 要素追加 */}
                   <div className="flex gap-2 flex-wrap">
                     <Button onClick={() => addElement('text')} size="sm" variant="outline">
                       <Plus className="w-4 h-4 mr-1" /> テキスト
@@ -916,8 +885,9 @@ const FlexMessageDesigner = () => {
                     </Button>
                   </div>
 
+                  {/* リスト */}
                   <div className="space-y-2">
-                    <Label>要素の並び替え（ドラッグして順序変更）</Label>
+                    <Label>要素の並び替え（ドラッグで順序変更）</Label>
                     <div className="max-h-96 overflow-y-auto">
                       {design.body.contents.length === 0 ? (
                         <div className="text-center py-8 text-muted-foreground border border-dashed rounded-lg">
@@ -928,12 +898,7 @@ const FlexMessageDesigner = () => {
                         <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
                           <SortableContext items={design.body.contents.map(i => i.id)} strategy={verticalListSortingStrategy}>
                             {design.body.contents.map((element) => (
-                              <SortableItem
-                                key={element.id}
-                                element={element}
-                                onUpdate={updateElement}
-                                onDelete={deleteElement}
-                              />
+                              <SortableItem key={element.id} element={element} onUpdate={updateElement} onDelete={deleteElement} />
                             ))}
                           </SortableContext>
                         </DndContext>
@@ -946,11 +911,7 @@ const FlexMessageDesigner = () => {
                       <Save className="w-4 h-4 mr-2" />
                       {loading ? "保存中..." : currentMessageId ? "上書き保存" : "保存する"}
                     </Button>
-                    <Button
-                      onClick={sendMessage}
-                      disabled={loading}
-                      className="bg-[#06c755] hover:bg-[#05b84c] text-white border-[#06c755]"
-                    >
+                    <Button onClick={sendMessage} disabled={loading} className="bg-[#06c755] hover:bg-[#05b84c] text-white border-[#06c755]">
                       <Send className="w-4 h-4 mr-2" />
                       {loading ? "送信中..." : "全体配信"}
                     </Button>
@@ -960,118 +921,99 @@ const FlexMessageDesigner = () => {
             </Card>
           </div>
 
-          {/* 右：プレビュー & 保存一覧 */}
+          {/* 右：プレビュー & 保存済み */}
           <div className="space-y-6 border-l border-border pl-4 flex-1">
             {/* プレビュー */}
             <Card>
               <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Eye className="w-5 h-5" /> プレビュー
-                </CardTitle>
-                <CardDescription>現在作成中のFlexメッセージのプレビューです</CardDescription>
+                <CardTitle className="flex items-center gap-2"><Eye className="w-5 h-5" /> プレビュー</CardTitle>
+                <CardDescription>作成中のFlexメッセージ</CardDescription>
               </CardHeader>
               <CardContent>
                 <div className="bg-muted/30 rounded-lg p-4 min-h-[200px]">
-                  {design.body.contents.length === 0 ? (
+                  {design.body.contents.length === 0 && !design.hero?.url ? (
                     <div className="text-center py-8 text-muted-foreground">
                       <MessageSquare className="w-8 h-8 mx-auto mb-2" />
                       <p className="text-sm">要素を追加するとプレビューが表示されます</p>
                     </div>
                   ) : (
-                    <div className="bg-white rounded-lg shadow-sm border max-w-[280px] mx-auto overflow-hidden">
-                      {/* hero（フチなし） */}
-                      {previewHasHero && previewFirst?.properties?.url && (
+                    <div
+                      className="rounded-lg shadow-sm border mx-auto"
+                      style={{
+                        maxWidth:
+                          design.bubbleSize === "micro" ? 260 :
+                          design.bubbleSize === "mega" ? 300 : 340,
+                        background: design.styles?.body?.backgroundColor || "#ffffff"
+                      }}
+                    >
+                      {/* hero */}
+                      {design.hero?.url && (
                         <img
-                          src={previewFirst.properties.url}
+                          src={design.hero.url}
                           alt="hero"
-                          className="w-full block"
+                          className="w-full"
                           style={{
-                            aspectRatio: (previewFirst.properties.aspectRatio || '20:13').replace(':', '/')
+                            aspectRatio: (design.hero.aspectRatio || "20:13").replace(":", "/"),
+                            objectFit: design.hero.aspectMode || "cover"
                           }}
                         />
                       )}
 
-                      {/* body */}
-                      <div
-                        style={{
-                          padding: previewPadding,
-                          backgroundColor: design.styles?.body?.backgroundColor || '#ffffff'
-                        }}
-                      >
-                        {previewBodyList.map((element, index) => {
-                          const isFirst = index === 0;
+                      <div className="p-4">
+                        {design.body.contents.map((el, idx) => {
+                          const isFirst = idx === 0;
                           return (
-                            <div key={element.id} style={{ marginTop: !isFirst ? 12 : 0 }}>
-                              {element.type === 'text' && (
+                            <div key={el.id} style={{ marginTop: isFirst ? undefined : 12 }}>
+                              {el.type === 'text' && (
                                 <div
-                                  className="flex-1"
                                   style={{
-                                    color: element.properties.color || '#000000',
-                                    backgroundColor:
-                                      element.properties.backgroundColor &&
-                                      element.properties.backgroundColor !== '#ffffff'
-                                        ? element.properties.backgroundColor
-                                        : undefined,
+                                    color: el.properties.color || '#000',
+                                    textAlign: (el.properties.align as any) || 'left',
+                                    fontWeight: el.properties.weight === 'bold' ? 700 : 400,
                                     fontSize:
-                                      element.properties.size === 'xs' ? 12 :
-                                      element.properties.size === 'sm' ? 14 :
-                                      element.properties.size === 'lg' ? 18 :
-                                      element.properties.size === 'xl' ? 20 :
-                                      element.properties.size === 'xxl' ? 22 : 16,
-                                    fontWeight: element.properties.weight === 'bold' ? 'bold' : 'normal',
-                                    textAlign: (element.properties.align as any) || 'left',
-                                    padding:
-                                      element.properties.backgroundColor &&
-                                      element.properties.backgroundColor !== '#ffffff'
-                                        ? '4px 8px'
-                                        : undefined,
-                                    borderRadius:
-                                      element.properties.backgroundColor &&
-                                      element.properties.backgroundColor !== '#ffffff'
-                                        ? 4
-                                        : undefined,
+                                      el.properties.size === 'xs' ? 12 :
+                                      el.properties.size === 'sm' ? 14 :
+                                      el.properties.size === 'lg' ? 18 :
+                                      el.properties.size === 'xl' ? 20 : 16,
+                                    background: el.properties.backgroundColor && el.properties.backgroundColor !== '#ffffff'
+                                      ? el.properties.backgroundColor : undefined,
+                                    padding: el.properties.backgroundColor && el.properties.backgroundColor !== '#ffffff' ? '6px 10px' : undefined,
+                                    borderRadius: el.properties.backgroundColor && el.properties.backgroundColor !== '#ffffff' ? 6 : undefined,
                                     whiteSpace: 'pre-wrap'
                                   }}
                                 >
-                                  {element.properties.text || 'テキスト'}
+                                  {el.properties.text || ""}
                                 </div>
                               )}
-
-                              {element.type === 'image' && element.properties.url && (
+                              {el.type === 'image' && el.properties.url && (
                                 <img
-                                  src={element.properties.url}
-                                  alt="image"
-                                  className="w-full h-auto rounded"
-                                  style={{ aspectRatio: (element.properties.aspectRatio || '20:13').replace(':', '/') }}
+                                  src={el.properties.url}
+                                  alt=""
+                                  className="w-full rounded"
+                                  style={{
+                                    aspectRatio: (el.properties.aspectRatio || "20:13").replace(":", "/"),
+                                    objectFit: el.properties.aspectMode || "cover"
+                                  }}
                                 />
                               )}
-
-                              {element.type === 'button' && (
+                              {el.type === 'button' && (
                                 <button
                                   className="w-full rounded text-sm font-medium"
                                   style={{
-                                    backgroundColor:
-                                      element.properties.style === 'primary'
-                                        ? (element.properties.color || '#0066cc')
-                                        : element.properties.style === 'secondary'
-                                        ? '#f0f0f0'
-                                        : 'transparent',
-                                    color:
-                                      element.properties.style === 'primary'
-                                        ? '#fff'
-                                        : element.properties.style === 'secondary'
-                                        ? '#333'
-                                        : (element.properties.color || '#0066cc'),
-                                    border:
-                                      element.properties.style === 'link'
-                                        ? `1px solid ${element.properties.color || '#0066cc'}`
-                                        : 'none',
+                                    backgroundColor: el.properties.color ||
+                                      (el.properties.style === 'primary' ? '#0066cc'
+                                        : el.properties.style === 'secondary' ? '#f0f0f0' : 'transparent'),
+                                    color: el.properties.color
+                                      ? '#fff'
+                                      : el.properties.style === 'primary' ? '#fff'
+                                        : el.properties.style === 'secondary' ? '#333' : '#0066cc',
+                                    border: el.properties.style === 'link' ? `1px solid ${el.properties.color || '#0066cc'}` : 'none',
                                     padding:
-                                      element.properties.height === 'sm' ? '8px 16px' :
-                                      element.properties.height === 'lg' ? '16px 16px' : '12px 16px'
+                                      el.properties.height === 'sm' ? '8px 12px' :
+                                        el.properties.height === 'lg' ? '14px 12px' : '10px 12px'
                                   }}
                                 >
-                                  {element.properties.action?.label || 'ボタン'}
+                                  {el.properties.action?.label || 'ボタン'}
                                 </button>
                               )}
                             </div>
@@ -1084,11 +1026,11 @@ const FlexMessageDesigner = () => {
               </CardContent>
             </Card>
 
-            {/* 保存済み一覧 */}
+            {/* 保存済み */}
             <Card>
               <CardHeader>
-                <CardTitle className="flex items-center gap-2">保存済みメッセージ</CardTitle>
-                <CardDescription>保存したFlexメッセージの一覧です</CardDescription>
+                <CardTitle>保存済みメッセージ</CardTitle>
+                <CardDescription>保存したFlexメッセージの一覧</CardDescription>
               </CardHeader>
               <CardContent>
                 {messages.length === 0 ? (
@@ -1098,22 +1040,20 @@ const FlexMessageDesigner = () => {
                   </div>
                 ) : (
                   <div className="space-y-3 max-h-96 overflow-y-auto">
-                    {messages.map((message) => (
-                      <div key={message.id} className={`border rounded-lg p-3 ${currentMessageId === message.id ? 'border-primary bg-primary/5' : ''}`}>
+                    {messages.map(m => (
+                      <div key={m.id} className={`border rounded-lg p-3 ${currentMessageId === m.id ? 'border-primary bg-primary/5' : ''}`}>
                         <div className="flex items-center justify-between mb-2">
-                          <h4 className="font-medium text-sm">{message.name}</h4>
+                          <h4 className="font-medium text-sm">{m.name}</h4>
                           <Badge variant="secondary" className="text-xs">
-                            {new Date(message.created_at).toLocaleDateString('ja-JP')}
+                            {new Date(m.created_at).toLocaleDateString('ja-JP')}
                           </Badge>
                         </div>
                         <div className="flex gap-2">
-                          <Button size="sm" variant="outline" onClick={() => loadMessage(message)} className="text-xs h-7 px-2">
-                            読込
-                          </Button>
-                          <Button size="sm" variant="outline" onClick={() => sendSavedMessage(message)} disabled={loading} className="text-xs h-7 px-2">
+                          <Button size="sm" variant="outline" onClick={() => loadMessage(m)} className="text-xs h-7 px-2">読込</Button>
+                          <Button size="sm" variant="outline" onClick={() => sendSavedMessage(m)} disabled={loading} className="text-xs h-7 px-2">
                             <Send className="w-3 h-3 mr-1" /> 配信
                           </Button>
-                          <Button size="sm" variant="outline" onClick={() => deleteMessage(message.id, message.name)} className="text-xs h-7 px-2 text-destructive hover:text-destructive">
+                          <Button size="sm" variant="outline" onClick={() => deleteMessage(m.id, m.name)} className="text-xs h-7 px-2 text-destructive hover:text-destructive">
                             <Trash2 className="w-3 h-3" />
                           </Button>
                         </div>
