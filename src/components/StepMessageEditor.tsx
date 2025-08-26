@@ -109,17 +109,43 @@ export default function StepMessageEditor({
     }
   };
 
-  const addMessage = () => {
-    const newMessage: StepMessage = {
-      message_type: "text",
-      content: "",
-      message_order: editingMessages.length,
-    };
-    setEditingMessages(prev => [...prev, newMessage]);
-    
-    // 新規メッセージは未保存状態としてマーク
-    const newIndex = editingMessages.length;
-    setHasUnsavedChanges(prev => ({ ...prev, [newIndex]: true }));
+  const addMessage = async () => {
+    try {
+      // 直接データベースに新しいメッセージを作成
+      const newMessage = {
+        step_id: stepId,
+        message_type: "text" as const,
+        content: "",
+        message_order: editingMessages.length,
+      };
+
+      const { data, error } = await supabase
+        .from('step_messages')
+        .insert(newMessage)
+        .select()
+        .single();
+
+      if (error) throw error;
+
+      const createdMessage: StepMessage = {
+        id: data.id,
+        message_type: data.message_type as any,
+        content: data.content,
+        media_url: data.media_url,
+        flex_message_id: data.flex_message_id,
+        message_order: data.message_order,
+        restore_config: data.restore_config as any
+      };
+
+      // ローカル状態と親状態を同期
+      setEditingMessages(prev => [...prev, createdMessage]);
+      onMessagesChange([...messages, createdMessage]);
+      
+      toast.success('メッセージを追加しました');
+    } catch (error) {
+      console.error('Error adding message:', error);
+      toast.error('メッセージの追加に失敗しました');
+    }
   };
 
   // ローカル編集のみ（保存は別途）
@@ -428,15 +454,21 @@ export default function StepMessageEditor({
                   <Select
                     value={message.message_type}
                     onValueChange={(value: any) => {
-                      updateLocalMessage(index, { 
+                      const updates: Partial<StepMessage> = { 
                         message_type: value,
                         // メッセージタイプ変更時に関連設定をリセット
                         media_url: value === 'media' ? message.media_url : null,
                         flex_message_id: value === 'flex' ? message.flex_message_id : null,
                         restore_config: value === 'restore_access' ? (message.restore_config || { type: 'button' }) : null
-                      });
-                      // 即座に保存
-                      setTimeout(() => saveMessage(index), 100);
+                      };
+                      
+                      // ローカル状態を即座に更新
+                      updateLocalMessage(index, updates);
+                      
+                      // 少し遅延してから保存（状態更新の完了を待つ）
+                      setTimeout(async () => {
+                        await saveMessage(index);
+                      }, 150);
                     }}
                   >
                     <SelectTrigger>
@@ -469,8 +501,10 @@ export default function StepMessageEditor({
                               type: value 
                             }
                           });
-                          // 即座に保存
-                          setTimeout(() => saveMessage(index), 100);
+                          // 少し遅延してから保存
+                          setTimeout(async () => {
+                            await saveMessage(index);
+                          }, 150);
                         }}
                       >
                         <SelectTrigger>
@@ -537,8 +571,10 @@ export default function StepMessageEditor({
                                   ...message.restore_config, 
                                   image_url: url 
                                 }
-                              })
-                              setTimeout(() => saveMessage(index), 100)
+                              });
+                              setTimeout(async () => {
+                                await saveMessage(index);
+                              }, 150);
                             }}
                             selectedUrl={message.restore_config?.image_url}
                           />
@@ -565,8 +601,10 @@ export default function StepMessageEditor({
                               ...message.restore_config, 
                               target_scenario_id: value 
                             }
-                          })
-                          setTimeout(() => saveMessage(index), 100)
+                          });
+                          setTimeout(async () => {
+                            await saveMessage(index);
+                          }, 150);
                         }}
                       >
                         <SelectTrigger>
@@ -608,8 +646,10 @@ export default function StepMessageEditor({
                         </Button>
                       }
                       onSelect={(url) => {
-                        updateLocalMessage(index, { media_url: url })
-                        setTimeout(() => saveMessage(index), 100)
+                        updateLocalMessage(index, { media_url: url });
+                        setTimeout(async () => {
+                          await saveMessage(index);
+                        }, 150);
                       }}
                     />
                     {message.media_url && (
@@ -626,8 +666,10 @@ export default function StepMessageEditor({
                     <FlexMessageSelector
                       selectedFlexMessageId={message.flex_message_id || ""}
                       onSelect={(value) => {
-                        updateLocalMessage(index, { flex_message_id: value })
-                        setTimeout(() => saveMessage(index), 100)
+                        updateLocalMessage(index, { flex_message_id: value });
+                        setTimeout(async () => {
+                          await saveMessage(index);
+                        }, 150);
                       }}
                     />
                   </div>
