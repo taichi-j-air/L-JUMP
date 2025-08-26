@@ -9,7 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Badge } from "@/components/ui/badge";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
-import { ArrowLeft, Send, Plus, Trash2, Image, MessageSquare, Save, Eye, GripVertical, ChevronDown, ChevronRight, ImagePlus } from "lucide-react";
+import { ArrowLeft, Send, Plus, Trash2, Image, MessageSquare, Save, Eye, GripVertical, ChevronDown, ChevronRight, Link as LinkIcon } from "lucide-react";
 import { MediaSelector } from "@/components/MediaSelector";
 import { ColorPicker } from "@/components/ui/color-picker";
 import {
@@ -30,10 +30,8 @@ import {
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 
-/* =========================
-   型
-========================= */
-interface FlexMessage {
+// ---------- Types ----------
+interface FlexMessageRow {
   id: string;
   name: string;
   content: any;
@@ -42,298 +40,332 @@ interface FlexMessage {
   user_id: string;
 }
 
-type BubbleSize = 'micro' | 'mega' | 'giga'; // 1=小:micro, 2=通常:mega(既定), 3=最大:giga
+type PaddingToken = "none" | "0px" | "sm" | "md" | "lg" | "xl" | "xxl";
+
+interface ActionDef {
+  type: "message" | "uri" | "postback";
+  label?: string;
+  text?: string;
+  uri?: string;
+  data?: string;
+}
+
+interface ElementProps {
+  text?: string;
+  url?: string;
+  size?: string;
+  weight?: string;
+  color?: string;
+  align?: string;
+  wrap?: boolean;
+  aspectRatio?: string;
+  aspectMode?: string;
+  style?: string;
+  height?: string;
+  action?: ActionDef;
+  backgroundColor?: string;       // wrapper box background
+  paddingAll?: PaddingToken;      // wrapper box padding
+}
+
+type ElementType = "text" | "image" | "button";
 
 interface FlexElement {
   id: string;
-  type: 'text' | 'image' | 'button';
-  properties: {
-    // text
-    text?: string;
-    size?: string;
-    weight?: string; // normal | bold
-    color?: string;  // HEX
-    align?: string;  // start|center|end
-    backgroundColor?: string; // HEX（textに直接は付かないので自動でboxラップ）
+  type: ElementType;
+  properties: ElementProps;
+}
 
-    // image
-    url?: string;
-    aspectRatio?: string; // "20:13", "1:1" etc.
-    aspectMode?: string;  // "cover" | "fit"
-    imgSize?: string;     // "full" など
-
-    // button
-    style?: string;   // primary | secondary | link
-    height?: string;  // sm|md|lg
-    action?: {
-      type: 'message' | 'uri' | 'postback';
-      label?: string;
-      text?: string;
-      uri?: string;
-      data?: string;
-    };
-  };
+interface HeroConfig {
+  enabled: boolean;
+  url?: string;
+  aspectRatio?: "20:13" | "16:9" | "1:1" | "4:3";
+  aspectMode?: "cover" | "fit";
+  action?: ActionDef;
 }
 
 interface FlexDesign {
   name: string;
-  altText?: string;
-  bubbleSize: BubbleSize; // 追加：吹き出し幅
-  styles?: {
-    body?: { backgroundColor?: string }; // バブル全体の背景
-  };
+  hero: HeroConfig;
   body: {
-    paddingAll?: string; // "0px", "sm", "md", "lg" などラインのトークン
+    spacing?: "none" | "sm" | "md" | "lg";
+    backgroundColor?: string | undefined; // bubble.body background
     contents: FlexElement[];
-  };
-  hero?: {
-    url?: string;
-    size?: string;        // "full"
-    aspectRatio?: string; // "20:13"
-    aspectMode?: string;  // "cover" | "fit"
-    action?: { type: 'uri'; uri: string };
   };
 }
 
-/* =========================
-   DnDアイテム
-========================= */
+// ---------- Utils ----------
+const padMap: Record<Exclude<PaddingToken,"none">, number> = {
+  "0px": 0,
+  sm: 6,
+  md: 12,
+  lg: 16,
+  xl: 20,
+  xxl: 24,
+};
+
+const toHex6 = (val?: string) => {
+  if (!val) return undefined;
+  const v = val.trim();
+  if (!v) return undefined;
+  if (/^#[0-9a-fA-F]{6}$/.test(v)) return v.toLowerCase();
+  if (/^#[0-9a-fA-F]{3}$/.test(v)) {
+    const r = v[1], g = v[2], b = v[3];
+    return `#${r}${r}${g}${g}${b}${b}`.toLowerCase();
+  }
+  // allow named colors? Flex spec expects hex,なので弾く
+  return undefined;
+};
+
+const compact = (obj: Record<string, any>) => {
+  const out: Record<string, any> = {};
+  Object.keys(obj).forEach(k => {
+    const v = (obj as any)[k];
+    if (v !== undefined && v !== null) out[k] = v;
+  });
+  return out;
+};
+
+// ---------- Sortable item ----------
 const SortableItem = ({
   element,
   onUpdate,
   onDelete,
 }: {
   element: FlexElement;
-  onUpdate: (id: string, properties: any) => void;
+  onUpdate: (id: string, properties: ElementProps) => void;
   onDelete: (id: string) => void;
 }) => {
-  const [isCollapsed, setIsCollapsed] = useState(true);
+  const [open, setOpen] = useState(true);
   const { attributes, listeners, setNodeRef, transform, transition } = useSortable({ id: element.id });
-
   const style = { transform: CSS.Transform.toString(transform), transition };
 
-  const renderElementEditor = () => {
+  // tidy 2-column form row
+  const Row = ({ children }: { children: React.ReactNode }) => (
+    <div className="grid grid-cols-2 gap-3 items-center">{children}</div>
+  );
+
+  const PaddingPicker = () => (
+    <Row>
+      <Label>内側余白（padding）</Label>
+      <Select
+        value={element.properties.paddingAll ?? "none"}
+        onValueChange={(v: PaddingToken) => onUpdate(element.id, { ...element.properties, paddingAll: v })}
+      >
+        <SelectTrigger><SelectValue placeholder="なし" /></SelectTrigger>
+        <SelectContent>
+          <SelectItem value="none">なし</SelectItem>
+          <SelectItem value="0px">0px</SelectItem>
+          <SelectItem value="sm">sm</SelectItem>
+          <SelectItem value="md">md</SelectItem>
+          <SelectItem value="lg">lg</SelectItem>
+          <SelectItem value="xl">xl</SelectItem>
+          <SelectItem value="xxl">xxl</SelectItem>
+        </SelectContent>
+      </Select>
+    </Row>
+  );
+
+  const BgPicker = () => (
+    <Row>
+      <Label>背景色（要素の箱）</Label>
+      <div className="flex items-center justify-between gap-3">
+        <ColorPicker
+          color={element.properties.backgroundColor ?? "#ffffff"}
+          onChange={(c) => onUpdate(element.id, { ...element.properties, backgroundColor: c })}
+        />
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={() => onUpdate(element.id, { ...element.properties, backgroundColor: undefined })}
+        >
+          クリア
+        </Button>
+      </div>
+    </Row>
+  );
+
+  const renderEditor = () => {
+    const p = element.properties;
     switch (element.type) {
-      case 'text':
+      case "text":
         return (
           <div className="space-y-3">
-            <div className="space-y-2">
-              <Label>テキスト内容</Label>
+            <Row>
+              <Label>テキスト</Label>
               <Textarea
-                value={element.properties.text || ''}
-                onChange={(e) => onUpdate(element.id, { ...element.properties, text: e.target.value })}
-                placeholder="テキストを入力してください"
                 rows={2}
+                value={p.text ?? ""}
+                onChange={(e) => onUpdate(element.id, { ...p, text: e.target.value })}
+                placeholder="テキストを入力"
               />
-            </div>
-            <div className="grid grid-cols-2 gap-2">
-              <div className="space-y-2">
-                <Label>サイズ</Label>
-                <Select
-                  value={element.properties.size || 'md'}
-                  onValueChange={(value) => onUpdate(element.id, { ...element.properties, size: value })}
-                >
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="xs">極小</SelectItem>
-                    <SelectItem value="sm">小</SelectItem>
-                    <SelectItem value="md">中</SelectItem>
-                    <SelectItem value="lg">大</SelectItem>
-                    <SelectItem value="xl">特大</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-2">
-                <Label>太さ</Label>
-                <Select
-                  value={element.properties.weight || 'normal'}
-                  onValueChange={(value) => onUpdate(element.id, { ...element.properties, weight: value })}
-                >
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="normal">標準</SelectItem>
-                    <SelectItem value="bold">太字</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-            <div className="grid grid-cols-2 gap-2">
-              <div className="space-y-2">
-                <Label>文字色</Label>
-                <ColorPicker
-                  color={element.properties.color || '#000000'}
-                  onChange={(color) => onUpdate(element.id, { ...element.properties, color })}
+            </Row>
+            <Row>
+              <Label>サイズ</Label>
+              <Select value={p.size ?? "md"} onValueChange={(v) => onUpdate(element.id, { ...p, size: v })}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="xs">xs</SelectItem>
+                  <SelectItem value="sm">sm</SelectItem>
+                  <SelectItem value="md">md</SelectItem>
+                  <SelectItem value="lg">lg</SelectItem>
+                  <SelectItem value="xl">xl</SelectItem>
+                </SelectContent>
+              </Select>
+            </Row>
+            <Row>
+              <Label>太さ</Label>
+              <Select value={p.weight ?? "normal"} onValueChange={(v) => onUpdate(element.id, { ...p, weight: v })}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="normal">normal</SelectItem>
+                  <SelectItem value="bold">bold</SelectItem>
+                </SelectContent>
+              </Select>
+            </Row>
+            <Row>
+              <Label>色</Label>
+              <ColorPicker color={p.color ?? "#000000"} onChange={(c) => onUpdate(element.id, { ...p, color: c })} />
+            </Row>
+            <Row>
+              <Label>揃え</Label>
+              <Select value={p.align ?? "start"} onValueChange={(v) => onUpdate(element.id, { ...p, align: v })}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="start">左</SelectItem>
+                  <SelectItem value="center">中央</SelectItem>
+                  <SelectItem value="end">右</SelectItem>
+                </SelectContent>
+              </Select>
+            </Row>
+            <PaddingPicker />
+            <BgPicker />
+          </div>
+        );
+      case "image":
+        return (
+          <div className="space-y-3">
+            <Row>
+              <Label>画像</Label>
+              <div className="flex items-center gap-2">
+                <MediaSelector
+                  onSelect={(url) => onUpdate(element.id, { ...p, url })}
+                  selectedUrl={p.url}
+                  // ここは小さめのトリガーだけにして大画像を出さない
+                />
+                <Input
+                  value={p.url ?? ""}
+                  onChange={(e) => onUpdate(element.id, { ...p, url: e.target.value })}
+                  placeholder="https://example.com/img.jpg"
                 />
               </div>
-              <div className="space-y-2">
-                <Label>配置</Label>
-                <Select
-                  value={element.properties.align || 'start'}
-                  onValueChange={(value) => onUpdate(element.id, { ...element.properties, align: value })}
-                >
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="start">左</SelectItem>
-                    <SelectItem value="center">中央</SelectItem>
-                    <SelectItem value="end">右</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-            <div className="space-y-2">
-              <Label>背景色（テキストブロック）</Label>
-              <ColorPicker
-                color={element.properties.backgroundColor || '#ffffff'}
-                onChange={(backgroundColor) => onUpdate(element.id, { ...element.properties, backgroundColor })}
+            </Row>
+            <Row>
+              <Label>アスペクト比</Label>
+              <Select value={p.aspectRatio ?? "20:13"} onValueChange={(v) => onUpdate(element.id, { ...p, aspectRatio: v })}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="20:13">20:13</SelectItem>
+                  <SelectItem value="16:9">16:9</SelectItem>
+                  <SelectItem value="1:1">1:1</SelectItem>
+                  <SelectItem value="4:3">4:3</SelectItem>
+                </SelectContent>
+              </Select>
+            </Row>
+            <Row>
+              <Label>表示モード</Label>
+              <Select value={p.aspectMode ?? "cover"} onValueChange={(v) => onUpdate(element.id, { ...p, aspectMode: v })}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="cover">cover</SelectItem>
+                  <SelectItem value="fit">fit</SelectItem>
+                </SelectContent>
+              </Select>
+            </Row>
+            <Row>
+              <Label className="flex items-center gap-1"><LinkIcon className="w-3 h-3" /> 画像タップ</Label>
+              <Input
+                value={p.action?.uri ?? ""}
+                onChange={(e) => onUpdate(element.id, { ...p, action: { type: "uri", uri: e.target.value, label: p.action?.label ?? "open" } })}
+                placeholder="https://..."
               />
-              <p className="text-[11px] text-muted-foreground">
-                ※Flexではtextに直接背景色は付かないため、送信時は内部的にboxでラップして背景色を適用します
-              </p>
-            </div>
+            </Row>
+            <PaddingPicker />
+            <BgPicker />
           </div>
         );
-
-      case 'image':
+      case "button":
         return (
           <div className="space-y-3">
-            <div className="space-y-2">
-              <Label>画像選択</Label>
-              <MediaSelector
-                onSelect={(url) => onUpdate(element.id, { ...element.properties, url })}
-                selectedUrl={element.properties.url}
-              />
-            </div>
-            <div className="space-y-2">
-              <Label>画像URL（直接入力）</Label>
+            <Row>
+              <Label>ラベル</Label>
               <Input
-                value={element.properties.url || ''}
-                onChange={(e) => onUpdate(element.id, { ...element.properties, url: e.target.value })}
-                placeholder="https://example.com/image.jpg"
+                value={p.action?.label ?? ""}
+                onChange={(e) => onUpdate(element.id, { ...p, action: { ...(p.action ?? { type: "uri" }), label: e.target.value } })}
+                placeholder="ボタン"
               />
-            </div>
-            <div className="grid grid-cols-2 gap-2">
-              <div className="space-y-2">
-                <Label>アスペクト比</Label>
-                <Select
-                  value={element.properties.aspectRatio || '20:13'}
-                  onValueChange={(value) => onUpdate(element.id, { ...element.properties, aspectRatio: value })}
-                >
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="1:1">1:1</SelectItem>
-                    <SelectItem value="20:13">20:13</SelectItem>
-                    <SelectItem value="16:9">16:9</SelectItem>
-                    <SelectItem value="4:3">4:3</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-2">
-                <Label>表示モード</Label>
-                <Select
-                  value={element.properties.aspectMode || 'cover'}
-                  onValueChange={(value) => onUpdate(element.id, { ...element.properties, aspectMode: value })}
-                >
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="cover">cover</SelectItem>
-                    <SelectItem value="fit">fit</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-          </div>
-        );
-
-      case 'button':
-        return (
-          <div className="space-y-3">
-            <div className="space-y-2">
-              <Label>ボタンラベル</Label>
-              <Input
-                value={element.properties.action?.label || ''}
-                onChange={(e) => onUpdate(element.id, {
-                  ...element.properties,
-                  action: { ...element.properties.action, label: e.target.value }
-                })}
-                placeholder="ボタンに表示するテキスト"
-              />
-            </div>
-
-            <div className="space-y-2">
-              <Label>ボタンタイプ</Label>
+            </Row>
+            <Row>
+              <Label>タイプ</Label>
               <Select
-                value={element.properties.action?.type || 'uri'}
-                onValueChange={(value) => onUpdate(element.id, {
-                  ...element.properties,
-                  action: { ...element.properties.action, type: value }
-                })}
+                value={p.action?.type ?? "uri"}
+                onValueChange={(v: ActionDef["type"]) => onUpdate(element.id, { ...p, action: { ...(p.action ?? {}), type: v } })}
               >
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="message">メッセージ送信</SelectItem>
                   <SelectItem value="uri">URLを開く</SelectItem>
+                  <SelectItem value="message">メッセージ送信</SelectItem>
+                  <SelectItem value="postback">ポストバック</SelectItem>
                 </SelectContent>
               </Select>
-            </div>
-
-            {element.properties.action?.type === 'uri' && (
-              <div className="space-y-2">
-                <Label>リンクURL</Label>
+            </Row>
+            { (p.action?.type ?? "uri") === "uri" && (
+              <Row>
+                <Label>URL</Label>
                 <Input
-                  value={element.properties.action?.uri || ''}
-                  onChange={(e) => onUpdate(element.id, {
-                    ...element.properties,
-                    action: { ...element.properties.action, uri: e.target.value }
-                  })}
-                  placeholder="https://example.com"
+                  value={p.action?.uri ?? ""}
+                  onChange={(e) => onUpdate(element.id, { ...p, action: { type: "uri", uri: e.target.value, label: p.action?.label ?? "Open" } })}
+                  placeholder="https://..."
                 />
-              </div>
+              </Row>
             )}
-            {element.properties.action?.type === 'message' && (
-              <div className="space-y-2">
-                <Label>送信メッセージ</Label>
+            { p.action?.type === "message" && (
+              <Row>
+                <Label>送信テキスト</Label>
                 <Input
-                  value={element.properties.action?.text || ''}
-                  onChange={(e) => onUpdate(element.id, {
-                    ...element.properties,
-                    action: { ...element.properties.action, text: e.target.value }
-                  })}
-                  placeholder="送信するメッセージ"
+                  value={p.action?.text ?? ""}
+                  onChange={(e) => onUpdate(element.id, { ...p, action: { type: "message", text: e.target.value, label: p.action?.label ?? "Send" } })}
+                  placeholder="こんにちは など"
                 />
-              </div>
+              </Row>
             )}
-
-            <div className="grid grid-cols-2 gap-2">
-              <div className="space-y-2">
-                <Label>スタイル</Label>
-                <Select
-                  value={element.properties.style || 'primary'}
-                  onValueChange={(value) => onUpdate(element.id, { ...element.properties, style: value })}
-                >
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="primary">primary</SelectItem>
-                    <SelectItem value="secondary">secondary</SelectItem>
-                    <SelectItem value="link">link</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-2">
-                <Label>ボタン色（HEX）</Label>
-                <ColorPicker
-                  color={element.properties.color || '#905c44'}
-                  onChange={(color) => onUpdate(element.id, { ...element.properties, color })}
+            { p.action?.type === "postback" && (
+              <Row>
+                <Label>data</Label>
+                <Input
+                  value={p.action?.data ?? ""}
+                  onChange={(e) => onUpdate(element.id, { ...p, action: { type: "postback", data: e.target.value, label: p.action?.label ?? "PB" } })}
+                  placeholder="key=value"
                 />
-                <p className="text-[11px] text-muted-foreground">※LINEは6桁HEXのみ推奨</p>
-              </div>
-            </div>
-
-            <div className="space-y-2">
+              </Row>
+            )}
+            <Row>
+              <Label>スタイル</Label>
+              <Select value={p.style ?? "primary"} onValueChange={(v) => onUpdate(element.id, { ...p, style: v })}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="primary">primary</SelectItem>
+                  <SelectItem value="secondary">secondary</SelectItem>
+                  <SelectItem value="link">link</SelectItem>
+                </SelectContent>
+              </Select>
+            </Row>
+            <Row>
+              <Label>色</Label>
+              <ColorPicker color={p.color ?? "#0066cc"} onChange={(c) => onUpdate(element.id, { ...p, color: c })} />
+            </Row>
+            <Row>
               <Label>高さ</Label>
-              <Select
-                value={element.properties.height || 'md'}
-                onValueChange={(value) => onUpdate(element.id, { ...element.properties, height: value })}
-              >
+              <Select value={p.height ?? "md"} onValueChange={(v) => onUpdate(element.id, { ...p, height: v })}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="sm">sm</SelectItem>
@@ -341,65 +373,50 @@ const SortableItem = ({
                   <SelectItem value="lg">lg</SelectItem>
                 </SelectContent>
               </Select>
-            </div>
+            </Row>
+            <PaddingPicker />
+            <BgPicker />
           </div>
         );
-
-      default:
-        return null;
     }
   };
 
   return (
-    <div ref={setNodeRef} style={style} className="bg-background border-2 border-dashed border-muted hover:border-primary/50 rounded-lg p-4 mb-3 shadow-sm">
+    <div ref={setNodeRef} style={style} className="rounded-xl border bg-card shadow-sm p-3">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
-          <div {...attributes} {...listeners} className="cursor-grab active:cursor-grabbing p-2 hover:bg-primary/10 rounded-md border border-primary/20">
-            <GripVertical className="w-4 h-4 text-primary" />
+          <div {...attributes} {...listeners} className="cursor-grab active:cursor-grabbing p-2 rounded-md hover:bg-muted border">
+            <GripVertical className="w-4 h-4" />
           </div>
           <Badge variant="outline" className="text-xs">
-            {element.type === 'text' && 'テキスト'}
-            {element.type === 'image' && '画像'}
-            {element.type === 'button' && 'ボタン'}
+            {element.type}
           </Badge>
-          <Button variant="ghost" size="sm" onClick={() => setIsCollapsed(!isCollapsed)} className="p-1">
-            {isCollapsed ? <ChevronRight className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+        </div>
+        <div className="flex items-center gap-1">
+          <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setOpen(!open)}>
+            {open ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
+          </Button>
+          <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive" onClick={() => onDelete(element.id)}>
+            <Trash2 className="w-4 h-4" />
           </Button>
         </div>
-        <Button variant="ghost" size="sm" onClick={() => onDelete(element.id)} className="text-destructive hover:text-destructive">
-          <Trash2 className="w-4 h-4" />
-        </Button>
       </div>
-      {!isCollapsed && <div className="mt-3">{renderElementEditor()}</div>}
+      {open && <div className="mt-3 space-y-3">{renderEditor()}</div>}
     </div>
   );
 };
 
-/* =========================
-   ユーティリティ
-========================= */
-// 6桁HEXに正規化（#RGB→#RRGGBB、不正値はundefined）
-const toHex6 = (c?: string) => {
-  if (!c) return undefined;
-  const m = c.trim().toLowerCase();
-  if (/^#[0-9a-f]{6}$/.test(m)) return m;
-  if (/^#[0-9a-f]{3}$/.test(m)) return '#' + m[1] + m[1] + m[2] + m[2] + m[3] + m[3];
-  return undefined;
-};
-
-const FlexMessageDesigner = () => {
+// ---------- Main ----------
+export default function FlexMessageDesigner() {
   const [loading, setLoading] = useState(false);
   const [initialLoading, setInitialLoading] = useState(true);
-  const [messages, setMessages] = useState<FlexMessage[]>([]);
+  const [messages, setMessages] = useState<FlexMessageRow[]>([]);
   const [currentMessageId, setCurrentMessageId] = useState<string | null>(null);
 
   const [design, setDesign] = useState<FlexDesign>({
     name: "",
-    altText: "",
-    bubbleSize: "mega", // 2=通常
-    styles: { body: { backgroundColor: undefined } },
-    body: { paddingAll: "md", contents: [] },
-    hero: undefined,
+    hero: { enabled: false, aspectRatio: "20:13", aspectMode: "cover", action: { type: "uri", uri: "https://line.me/", label: "Open" } },
+    body: { spacing: "md", backgroundColor: undefined, contents: [] },
   });
 
   const navigate = useNavigate();
@@ -410,610 +427,549 @@ const FlexMessageDesigner = () => {
     useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
   );
 
-  useEffect(() => { void checkAuthAndLoadMessages(); }, []);
-
-  const checkAuthAndLoadMessages = async () => {
-    try {
+  useEffect(() => {
+    (async () => {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) { navigate("/auth"); return; }
-
-      const { data: flexMessages, error } = await supabase
-        .from('flex_messages')
-        .select('*')
-        .order('created_at', { ascending: false });
-
-      if (error) throw error;
-      setMessages(flexMessages || []);
-    } catch (error) {
-      console.error(error);
-      toast({ title: "エラー", description: "データの読み込みに失敗しました", variant: "destructive" });
-    } finally {
+      const { data, error } = await supabase.from("flex_messages").select("*").order("created_at", { ascending: false });
+      if (error) console.error(error);
+      setMessages(data ?? []);
       setInitialLoading(false);
-    }
-  };
+    })();
+  }, []);
 
-  const addElement = (type: 'text' | 'image' | 'button') => {
-    const newElement: FlexElement = {
-      id: `element-${Date.now()}`,
-      type,
-      properties:
-        type === 'text'
-          ? { text: 'サンプルテキスト', size: 'md', weight: 'normal', color: '#000000' }
-          : type === 'image'
-          ? { url: '', aspectRatio: '20:13', aspectMode: 'cover' }
-          : { style: 'primary', action: { type: 'uri', label: 'ボタン', uri: 'https://line.me/' } },
+  // ---- actions ----
+  const addElement = (type: ElementType) => {
+    const id = `elm-${Date.now()}-${Math.random().toString(36).slice(2,7)}`;
+    const defaults: Record<ElementType, ElementProps> = {
+      text: { text: "テキスト", size: "md", weight: "normal", color: "#000000" },
+      image: { url: "", aspectRatio: "20:13", aspectMode: "cover" },
+      button: { style: "primary", color: "#0066cc", height: "md", action: { type: "uri", label: "Open", uri: "https://line.me/" } },
     };
-    setDesign(prev => ({ ...prev, body: { ...prev.body, contents: [...prev.body.contents, newElement] } }));
+    setDesign(prev => ({ ...prev, body: { ...prev.body, contents: [...prev.body.contents, { id, type, properties: defaults[type] }] }}));
   };
 
-  const updateElement = (id: string, properties: any) => {
+  const updateElement = (id: string, properties: ElementProps) => {
     setDesign(prev => ({
       ...prev,
-      body: { ...prev.body, contents: prev.body.contents.map(el => el.id === id ? { ...el, properties } : el) }
+      body: { ...prev.body, contents: prev.body.contents.map(e => e.id === id ? { ...e, properties } : e) }
     }));
   };
 
   const deleteElement = (id: string) => {
-    setDesign(prev => ({
-      ...prev,
-      body: { ...prev.body, contents: prev.body.contents.filter(el => el.id !== id) }
-    }));
+    setDesign(prev => ({ ...prev, body: { ...prev.body, contents: prev.body.contents.filter(e => e.id !== id) }}));
   };
 
-  const handleDragEnd = (event: DragEndEvent) => {
-    const { active, over } = event;
+  const onDragEnd = (e: DragEndEvent) => {
+    const { active, over } = e;
     if (!over || active.id === over.id) return;
     setDesign(prev => {
-      const oldIndex = prev.body.contents.findIndex(i => i.id === active.id);
-      const newIndex = prev.body.contents.findIndex(i => i.id === over.id);
+      const oldIndex = prev.body.contents.findIndex(e => e.id === active.id);
+      const newIndex = prev.body.contents.findIndex(e => e.id === over.id);
       return { ...prev, body: { ...prev.body, contents: arrayMove(prev.body.contents, oldIndex, newIndex) } };
     });
   };
 
-  /* =========================
-     JSON生成（重要：ここが配信に反映）
-  ========================= */
-  const generateFlexJson = () => {
-    if (!design?.body?.contents || design.body.contents.length === 0) return null;
-
-    const marginToken = (idx: number) => (idx === 0 ? undefined : "md");
-
-    const bodyContents = design.body.contents.map((element, index) => {
-      const p = element.properties || {};
-      const margin = marginToken(index);
-
-      if (element.type === 'text') {
-        const text = (p.text || '').toString().trim();
-        if (!text) return null;
-
-        const color = toHex6(p.color);
-        const bg = toHex6(p.backgroundColor);
-        const node: any = {
-          type: "text",
-          text,
-          wrap: true,
-          ...(p.size && { size: p.size }),
-          ...(p.weight && p.weight !== "normal" && { weight: p.weight }),
-          ...(p.align && p.align !== "start" && { align: p.align }),
-          ...(color && { color }),
-          ...(margin && { margin }),
-        };
-
-        if (bg) {
-          return {
-            type: "box",
-            layout: "vertical",
-            backgroundColor: bg,
-            paddingAll: "8px",
-            ...(margin && { margin }),
-            contents: [node],
-          };
-        }
-        return node;
-      }
-
-      if (element.type === 'image') {
-        const url = (p.url || '').toString().trim();
-        if (!url) return null;
-
-        const img: any = {
-          type: "image",
-          url,
-          ...(p.aspectRatio && { aspectRatio: p.aspectRatio }),
-          ...(p.aspectMode && { aspectMode: p.aspectMode }),
-          ...(margin && { margin }),
-        };
-        return img;
-      }
-
-      if (element.type === 'button') {
-        const action = p.action || { type: 'uri', label: 'Open', uri: 'https://line.me/' };
-        const color = toHex6(p.color);
-        const btn: any = {
-          type: "button",
-          action,
-          ...(p.style && { style: p.style }),
-          ...(color && { color }),
-          ...(p.height && { height: p.height }),
-          ...(margin && { margin }),
-        };
-        return btn;
-      }
-
-      return null;
-    }).filter(Boolean) as any[];
-
-    if (bodyContents.length === 0) return null;
-
-    // Hero
-    let hero: any = undefined;
-    if (design.hero?.url) {
-      hero = {
-        type: "image",
-        url: design.hero.url,
-        size: design.hero.size || "full",
-        aspectRatio: design.hero.aspectRatio || "20:13",
-        aspectMode: design.hero.aspectMode || "cover",
-        ...(design.hero.action?.uri && { action: { type: "uri", uri: design.hero.action.uri } }),
-      };
+  // ---- Flex JSON generation (padding-aware) ----
+  const wrapIfNeeded = (node: any, opts: { margin?: string; paddingAll?: PaddingToken; backgroundColor?: string }) => {
+    const needsWrap = (opts.paddingAll && opts.paddingAll !== "none") || !!opts.backgroundColor;
+    if (!needsWrap) {
+      if (opts.margin) node.margin = opts.margin;
+      return node;
     }
+    const box: any = { type: "box", layout: "vertical", contents: [node] };
+    if (opts.margin) box.margin = opts.margin;
+    if (opts.paddingAll && opts.paddingAll !== "none") box.paddingAll = opts.paddingAll;
+    if (opts.backgroundColor) box.backgroundColor = opts.backgroundColor;
+    return box;
+  };
 
-    // バブル背景色（styles）
-    const styles = design.styles?.body?.backgroundColor
-      ? { body: { backgroundColor: toHex6(design.styles.body.backgroundColor) } }
-      : undefined;
+  const generateFlexJson = () => {
+    const items = design.body.contents.map((el, idx) => {
+      const p = el.properties;
+      const margin = idx === 0 ? undefined : "md";
+      switch (el.type) {
+        case "text": {
+          const text = (p.text ?? "").toString().trim();
+          if (!text) return null;
+          const node: any = compact({
+            type: "text",
+            text,
+            wrap: true,
+            size: p.size,
+            weight: p.weight !== "normal" ? p.weight : undefined,
+            align: p.align && p.align !== "start" ? p.align : undefined,
+            color: toHex6(p.color),
+          });
+          return wrapIfNeeded(node, { margin, paddingAll: p.paddingAll, backgroundColor: toHex6(p.backgroundColor) });
+        }
+        case "image": {
+          const url = (p.url ?? "").toString().trim();
+          if (!url) return null;
+          const node: any = compact({
+            type: "image",
+            url,
+            aspectRatio: p.aspectRatio,
+            aspectMode: p.aspectMode,
+            action: p.action?.uri ? { type: "uri", uri: p.action.uri, label: p.action.label ?? "Open" } : undefined,
+          });
+          return wrapIfNeeded(node, { margin, paddingAll: p.paddingAll, backgroundColor: toHex6(p.backgroundColor) });
+        }
+        case "button": {
+          const node: any = compact({
+            type: "button",
+            style: p.style,
+            color: toHex6(p.color),
+            height: p.height,
+            action:
+              p.action?.type === "uri" && p.action.uri ? { type: "uri", uri: p.action.uri, label: p.action.label ?? "Open" }
+              : p.action?.type === "message" && p.action.text ? { type: "message", text: p.action.text, label: p.action.label ?? "Send" }
+              : p.action?.type === "postback" && p.action.data ? { type: "postback", data: p.action.data, label: p.action.label ?? "PB" }
+              : undefined,
+          });
+          return wrapIfNeeded(node, { margin, paddingAll: p.paddingAll, backgroundColor: toHex6(p.backgroundColor) });
+        }
+        default:
+          return null;
+      }
+    }).filter(Boolean);
 
-    const bodyBox: any = {
-      type: "box",
-      layout: "vertical",
-      spacing: "md",
-      ...(design.body.paddingAll && { paddingAll: design.body.paddingAll }),
-      contents: bodyContents,
-    };
+    if (items.length === 0) return null;
 
     const bubble: any = {
       type: "bubble",
-      ...(hero && { hero }),
-      body: bodyBox,
-      ...(styles && { styles }),
-      ...(design.bubbleSize && { size: design.bubbleSize }), // micro/mega/giga
+      body: compact({
+        type: "box",
+        layout: "vertical",
+        spacing: design.body.spacing ?? "md",
+        backgroundColor: toHex6(design.body.backgroundColor),
+        contents: items,
+      }),
     };
 
-    const altText = (design.altText || design.name || "Flexメッセージ").slice(0, 400);
-    return { type: "flex", altText, contents: bubble };
+    if (design.hero.enabled && design.hero.url) {
+      bubble.hero = compact({
+        type: "image",
+        url: design.hero.url,
+        size: "full",
+        aspectRatio: design.hero.aspectRatio ?? "20:13",
+        aspectMode: design.hero.aspectMode ?? "cover",
+        action: design.hero.action?.uri ? { type: "uri", uri: design.hero.action.uri, label: design.hero.action.label ?? "Open" } : undefined,
+      });
+    }
+
+    return {
+      type: "flex",
+      altText: (design.name || "Flex Message").slice(0, 400),
+      contents: bubble,
+    };
   };
 
-  /* =========================
-     保存・読込・送信
-  ========================= */
+  // ---- Save / Load / Send ----
   const saveMessage = async () => {
-    if (!design.name.trim()) {
-      toast({ title: "入力エラー", description: "メッセージ名を入力してください", variant: "destructive" });
-      return;
-    }
+    if (!design.name.trim()) { toast({ title: "入力エラー", description: "メッセージ名を入力してください", variant: "destructive" }); return; }
     setLoading(true);
     try {
       const { data: { user } } = await supabase.auth.getUser();
-      if (!user) { toast({ title: "認証エラー", description: "ログインが必要です", variant: "destructive" }); return; }
-
+      if (!user) throw new Error("ログインが必要です");
       const flexJson = generateFlexJson();
+      if (!flexJson) throw new Error("要素がありません");
 
       if (currentMessageId) {
-        const { error } = await supabase.from('flex_messages').update({
-          name: design.name,
-          content: flexJson
-        }).eq('id', currentMessageId);
+        const { error } = await supabase.from("flex_messages").update({ name: design.name, content: flexJson }).eq("id", currentMessageId);
         if (error) throw error;
-        toast({ title: "更新成功", description: `「${design.name}」を更新しました` });
+        toast({ title: "更新", description: "メッセージを更新しました" });
       } else {
-        const { data, error } = await supabase.from('flex_messages').insert({
-          user_id: user.id, name: design.name, content: flexJson
-        }).select().single();
+        const { data, error } = await supabase.from("flex_messages").insert({ user_id: user.id, name: design.name, content: flexJson }).select().single();
         if (error) throw error;
         setCurrentMessageId(data.id);
-        toast({ title: "保存成功", description: `「${design.name}」を保存しました` });
+        toast({ title: "保存", description: "メッセージを保存しました" });
       }
-      void checkAuthAndLoadMessages();
-    } catch (e) {
+
+      const { data, error } = await supabase.from("flex_messages").select("*").order("created_at", { ascending: false });
+      if (!error) setMessages(data ?? []);
+    } catch (e: any) {
       console.error(e);
-      toast({ title: "保存エラー", description: "メッセージの保存に失敗しました", variant: "destructive" });
+      toast({ title: "保存エラー", description: e.message ?? "失敗しました", variant: "destructive" });
     } finally { setLoading(false); }
   };
 
-  const loadMessage = (message: FlexMessage) => {
-    const flex = message.content;
-    const bubble = flex?.contents;
-    const body = bubble?.body;
-    setCurrentMessageId(message.id);
+  const loadMessage = (row: FlexMessageRow) => {
+    try {
+      const bubble = row.content?.contents;
+      const hero = bubble?.hero;
+      const body = bubble?.body;
 
-    setDesign({
-      name: message.name,
-      altText: flex?.altText || message.name,
-      bubbleSize: (bubble?.size as BubbleSize) || "mega",
-      styles: bubble?.styles,
-      body: {
-        paddingAll: body?.paddingAll || "md",
-        contents: (body?.contents || []).map((item: any, i: number) => {
-          // textがboxラップされている場合（背景色対応）、中のtextだけを拾って背景色をpropertiesへ戻す
-          if (item.type === 'box' && item.contents?.[0]?.type === 'text' && item.backgroundColor) {
-            const txt = item.contents[0];
-            return {
-              id: `element-${Date.now()}-${i}`,
-              type: 'text',
-              properties: {
-                text: txt.text,
-                size: txt.size,
-                weight: txt.weight,
-                color: txt.color,
-                align: txt.align,
-                backgroundColor: item.backgroundColor
-              }
-            } as FlexElement;
+      // unwrap padding wrapper: box(vertical) with single contents
+      const unwrap = (node: any): { type: ElementType; props: ElementProps } | null => {
+        let paddingAll: PaddingToken | undefined;
+        let backgroundColor: string | undefined;
+        let inner = node;
+
+        // padding用boxなら剥がす
+        if (inner?.type === "box" && Array.isArray(inner.contents) && inner.layout === "vertical" && inner.contents.length === 1) {
+          if (inner.paddingAll || inner.backgroundColor) {
+            paddingAll = inner.paddingAll as PaddingToken;
+            backgroundColor = inner.backgroundColor;
           }
-          if (item.type === 'text') {
-            return { id: `element-${Date.now()}-${i}`, type: 'text', properties: { ...item } } as FlexElement;
-          }
-          if (item.type === 'image') {
-            return { id: `element-${Date.now()}-${i}`, type: 'image', properties: { url: item.url, aspectRatio: item.aspectRatio, aspectMode: item.aspectMode } } as FlexElement;
-          }
-          if (item.type === 'button') {
-            return { id: `element-${Date.now()}-${i}`, type: 'button', properties: { style: item.style, color: item.color, height: item.height, action: item.action } } as FlexElement;
-          }
-          return { id: `element-${Date.now()}-${i}`, type: 'text', properties: { text: '[未対応要素]' } } as FlexElement;
+          inner = inner.contents[0];
+        }
+
+        if (inner?.type === "text") {
+          return {
+            type: "text",
+            props: {
+              text: inner.text,
+              size: inner.size,
+              weight: inner.weight,
+              align: inner.align,
+              color: inner.color,
+              paddingAll,
+              backgroundColor,
+            },
+          };
+        }
+        if (inner?.type === "image") {
+          return {
+            type: "image",
+            props: {
+              url: inner.url,
+              aspectRatio: inner.aspectRatio,
+              aspectMode: inner.aspectMode,
+              action: inner.action,
+              paddingAll,
+              backgroundColor,
+            },
+          };
+        }
+        if (inner?.type === "button") {
+          return {
+            type: "button",
+            props: {
+              style: inner.style,
+              color: inner.color,
+              height: inner.height,
+              action: inner.action,
+              paddingAll,
+              backgroundColor,
+            },
+          };
+        }
+        return null;
+      };
+
+      const contents: FlexElement[] = (body?.contents ?? [])
+        .map((n: any, i: number) => {
+          const res = unwrap(n);
+          if (!res) return null;
+          return {
+            id: `elm-${Date.now()}-${i}`,
+            type: res.type,
+            properties: res.props,
+          };
         })
-      },
-      hero: bubble?.hero ? {
-        url: bubble.hero.url,
-        size: bubble.hero.size,
-        aspectRatio: bubble.hero.aspectRatio,
-        aspectMode: bubble.hero.aspectMode,
-        action: bubble.hero.action
-      } : undefined
-    });
+        .filter(Boolean);
 
-    toast({ title: "読み込み完了", description: `「${message.name}」を読み込みました` });
+      setCurrentMessageId(row.id);
+      setDesign({
+        name: row.name,
+        hero: {
+          enabled: !!hero,
+          url: hero?.url,
+          aspectRatio: hero?.aspectRatio ?? "20:13",
+          aspectMode: hero?.aspectMode ?? "cover",
+          action: hero?.action,
+        },
+        body: {
+          spacing: body?.spacing ?? "md",
+          backgroundColor: body?.backgroundColor,
+          contents,
+        },
+      });
+      toast({ title: "読み込み", description: `「${row.name}」を読み込みました` });
+    } catch (e) {
+      console.error(e);
+      toast({ title: "読み込み失敗", description: "JSONの解析に失敗しました", variant: "destructive" });
+    }
   };
 
-  const sendMessage = async () => {
-    if (design.body.contents.length === 0) {
-      toast({ title: "入力エラー", description: "少なくとも1つの要素を追加してください", variant: "destructive" });
-      return;
-    }
+  const sendFlex = async (payload: any) => {
     setLoading(true);
     try {
       const { data: { user } } = await supabase.auth.getUser();
-      if (!user) { toast({ title: "認証エラー", description: "ログインが必要です", variant: "destructive" }); return; }
-
-      const flexJson = generateFlexJson();
-      if (!flexJson) {
-        toast({ title: "検証エラー", description: "空要素は送信できません", variant: "destructive" });
-        return;
-      }
-
-      const { error } = await supabase.functions.invoke('send-flex-message', {
-        body: { flexMessage: flexJson, userId: user.id }
+      if (!user) throw new Error("ログインが必要です");
+      const { error } = await supabase.functions.invoke("send-flex-message", {
+        body: { flexMessage: payload, userId: user.id },
       });
       if (error) throw error;
-
-      toast({ title: "送信完了", description: "Flexメッセージを送信しました" });
+      toast({ title: "送信完了", description: "Flexメッセージを配信しました" });
     } catch (e: any) {
       console.error(e);
-      toast({ title: "送信エラー", description: e.message || "メッセージの送信に失敗しました", variant: "destructive" });
+      toast({ title: "送信エラー", description: e.message ?? "送信に失敗しました", variant: "destructive" });
     } finally { setLoading(false); }
   };
 
-  const sendSavedMessage = async (message: FlexMessage) => {
-    setLoading(true);
-    try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) { toast({ title: "認証エラー", description: "ログインが必要です", variant: "destructive" }); return; }
-      const { error } = await supabase.functions.invoke('send-flex-message', { body: { flexMessage: message.content, userId: user.id } });
-      if (error) throw error;
-      toast({ title: "送信完了", description: `「${message.name}」を送信しました` });
-    } catch (e: any) {
-      console.error(e);
-      toast({ title: "送信エラー", description: e.message || "メッセージの送信に失敗しました", variant: "destructive" });
-    } finally { setLoading(false); }
+  const sendCurrent = async () => {
+    const flexJson = generateFlexJson();
+    if (!flexJson) { toast({ title: "検証エラー", description: "要素がありません", variant: "destructive" }); return; }
+    await sendFlex(flexJson);
   };
 
-  const deleteMessage = async (messageId: string, messageName: string) => {
-    if (!confirm(`「${messageName}」を削除しますか？この操作は取り消せません。`)) return;
-    try {
-      const { error } = await supabase.from('flex_messages').delete().eq('id', messageId);
-      if (error) throw error;
-      toast({ title: "削除完了", description: `「${messageName}」を削除しました` });
-      void checkAuthAndLoadMessages();
-      if (currentMessageId === messageId) {
-        setCurrentMessageId(null);
-        setDesign({ name: "", altText: "", bubbleSize: "mega", styles: { body: {} }, body: { paddingAll: "md", contents: [] }, hero: undefined });
-      }
-    } catch (e) {
-      console.error(e);
-      toast({ title: "削除エラー", description: "メッセージの削除に失敗しました", variant: "destructive" });
-    }
+  const sendSaved = async (row: FlexMessageRow) => {
+    await sendFlex(row.content);
   };
 
-  const newMessage = () => {
-    setCurrentMessageId(null);
-    setDesign({ name: "", altText: "", bubbleSize: "mega", styles: { body: {} }, body: { paddingAll: "md", contents: [] }, hero: undefined });
-    toast({ title: "新規作成", description: "新しいメッセージを作成します" });
-  };
-
+  // ---- UI ----
   if (initialLoading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-background">
-        <div className="text-center"><p className="text-xl text-muted-foreground">読み込み中...</p></div>
+      <div className="min-h-screen grid place-items-center">
+        <p className="text-muted-foreground">読み込み中...</p>
       </div>
     );
   }
 
+  const padPx = (t?: PaddingToken) => (t && t !== "none" ? padMap[t as Exclude<PaddingToken,"none">] ?? 0 : 0);
+
   return (
     <div className="min-h-screen bg-background">
       <header className="border-b">
-        <div className="container mx-auto px-4 py-4">
-          <div className="flex items-center gap-4">
-            <Button variant="ghost" size="sm" onClick={() => navigate("/")} className="flex items-center gap-2">
-              <ArrowLeft className="w-4 h-4" /> ダッシュボードに戻る
-            </Button>
-            <h1 className="text-2xl font-bold">Flexメッセージデザイナー</h1>
-          </div>
+        <div className="container mx-auto px-4 py-3 flex items-center gap-3">
+          <Button variant="ghost" size="sm" onClick={() => navigate("/")}>
+            <ArrowLeft className="w-4 h-4 mr-1" /> ダッシュボードへ
+          </Button>
+          <h1 className="text-xl font-bold">Flexメッセージデザイナー</h1>
         </div>
       </header>
 
-      <main className="container mx-auto px-2 py-8 max-w-7xl">
-        <div className="flex gap-0">
-          {/* 左：デザイナー */}
-          <div className="space-y-6 w-96 flex-shrink-0">
+      <main className="container mx-auto px-4 py-6 max-w-7xl">
+        <div className="grid grid-cols-12 gap-6">
+          {/* Left: Designer */}
+          <div className="col-span-12 md:col-span-5 space-y-6">
+            {/* Basic / Hero */}
             <Card>
               <CardHeader>
-                <div className="flex items-center justify-between">
-                  <div>
-                    <CardTitle className="flex items-center gap-2">
-                      <MessageSquare className="w-5 h-5" />
-                      メッセージデザイナー
-                    </CardTitle>
-                    <CardDescription>ドラッグ&ドロップで要素を並び替えできます</CardDescription>
-                  </div>
-                  <Button onClick={newMessage} variant="outline" size="sm">新規作成</Button>
-                </div>
+                <CardTitle className="text-base">基本設定 / ヒーロー</CardTitle>
+                <CardDescription>ヒーロー画像はカード上部の大きな画像です</CardDescription>
               </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="grid grid-cols-4 gap-3 items-center">
+                  <Label className="col-span-1">メッセージ名</Label>
+                  <Input className="col-span-3" value={design.name} onChange={(e) => setDesign(d => ({ ...d, name: e.target.value }))} />
+                </div>
 
-              <CardContent>
-                <div className="space-y-4">
-                  {/* 基本設定 */}
-                  <div className="space-y-2">
-                    <Label htmlFor="message-name">メッセージ名</Label>
-                    <Input id="message-name" value={design.name} onChange={(e) => setDesign(prev => ({ ...prev, name: e.target.value }))} placeholder="メッセージに名前を付けてください" />
-                  </div>
-
-                  <div className="grid grid-cols-2 gap-3">
-                    <div className="space-y-2">
-                      <Label>吹き出し幅</Label>
-                      <Select value={design.bubbleSize} onValueChange={(v: BubbleSize) => setDesign(prev => ({ ...prev, bubbleSize: v }))}>
-                        <SelectTrigger><SelectValue /></SelectTrigger>
+                <div className="grid grid-cols-4 gap-3 items-start">
+                  <Label className="col-span-1">ヒーロー</Label>
+                  <div className="col-span-3 space-y-3">
+                    <div className="flex items-center gap-3">
+                      <Select
+                        value={design.hero.enabled ? "on" : "off"}
+                        onValueChange={(v) => setDesign(d => ({ ...d, hero: { ...d.hero, enabled: v === "on" } }))}
+                      >
+                        <SelectTrigger className="w-28"><SelectValue /></SelectTrigger>
                         <SelectContent>
-                          <SelectItem value="micro">小（micro）</SelectItem>
-                          <SelectItem value="mega">通常（mega）</SelectItem>
-                          <SelectItem value="giga">最大（giga）</SelectItem>
+                          <SelectItem value="off">オフ</SelectItem>
+                          <SelectItem value="on">オン</SelectItem>
                         </SelectContent>
                       </Select>
-                    </div>
-                    <div className="space-y-2">
-                      <Label>バブル背景色</Label>
-                      <ColorPicker
-                        color={design.styles?.body?.backgroundColor || '#ffffff'}
-                        onChange={(color) => setDesign(prev => ({ ...prev, styles: { body: { backgroundColor: color } } }))}
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label>Body内側余白（paddingAll）</Label>
-                      <Select value={design.body.paddingAll || 'md'} onValueChange={(v) => setDesign(prev => ({ ...prev, body: { ...prev.body, paddingAll: v } }))}>
-                        <SelectTrigger><SelectValue /></SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="0px">0px</SelectItem>
-                          <SelectItem value="sm">sm</SelectItem>
-                          <SelectItem value="md">md</SelectItem>
-                          <SelectItem value="lg">lg</SelectItem>
-                          <SelectItem value="xl">xl</SelectItem>
-                          <SelectItem value="xxl">xxl</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    <div className="space-y-2">
-                      <Label>代替テキスト（通知文）</Label>
-                      <Input value={design.altText || ""} onChange={(e) => setDesign(prev => ({ ...prev, altText: e.target.value }))} placeholder="通知に表示される説明（最大400文字）" />
-                    </div>
-                  </div>
-
-                  {/* Hero 設定 */}
-                  <div className="space-y-2 border rounded-md p-3">
-                    <div className="flex items-center gap-2">
-                      <ImagePlus className="w-4 h-4" />
-                      <span className="font-medium text-sm">Hero画像（任意）</span>
-                    </div>
-                    <div className="grid grid-cols-2 gap-3">
-                      <div className="space-y-2">
-                        <Label>画像選択</Label>
-                        <MediaSelector
-                          onSelect={(url) => setDesign(prev => ({ ...prev, hero: { ...(prev.hero || {}), url } }))}
-                          selectedUrl={design.hero?.url}
-                        />
-                      </div>
-                      <div className="space-y-2">
-                        <Label>URL（直接入力）</Label>
-                        <Input value={design.hero?.url || ''} onChange={(e) => setDesign(prev => ({ ...prev, hero: { ...(prev.hero || {}), url: e.target.value } }))} placeholder="https://example.com/hero.jpg" />
-                      </div>
-                      <div className="space-y-2">
-                        <Label>アスペクト比</Label>
-                        <Select value={design.hero?.aspectRatio || '20:13'} onValueChange={(v) => setDesign(prev => ({ ...prev, hero: { ...(prev.hero || {}), aspectRatio: v } }))}>
-                          <SelectTrigger><SelectValue /></SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="20:13">20:13</SelectItem>
-                            <SelectItem value="16:9">16:9</SelectItem>
-                            <SelectItem value="1:1">1:1</SelectItem>
-                            <SelectItem value="4:3">4:3</SelectItem>
-                          </SelectContent>
-                        </Select>
-                      </div>
-                      <div className="space-y-2">
-                        <Label>表示モード</Label>
-                        <Select value={design.hero?.aspectMode || 'cover'} onValueChange={(v) => setDesign(prev => ({ ...prev, hero: { ...(prev.hero || {}), aspectMode: v } }))}>
-                          <SelectTrigger><SelectValue /></SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="cover">cover</SelectItem>
-                            <SelectItem value="fit">fit</SelectItem>
-                          </SelectContent>
-                        </Select>
-                      </div>
-                      <div className="col-span-2 space-y-2">
-                        <Label>タップ時URL</Label>
-                        <Input value={design.hero?.action?.uri || ''} onChange={(e) => setDesign(prev => ({ ...prev, hero: { ...(prev.hero || {}), action: { type: 'uri', uri: e.target.value } } }))} placeholder="https://line.me/" />
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* 要素追加 */}
-                  <div className="flex gap-2 flex-wrap">
-                    <Button onClick={() => addElement('text')} size="sm" variant="outline">
-                      <Plus className="w-4 h-4 mr-1" /> テキスト
-                    </Button>
-                    <Button onClick={() => addElement('image')} size="sm" variant="outline">
-                      <Image className="w-4 h-4 mr-1" /> 画像
-                    </Button>
-                    <Button onClick={() => addElement('button')} size="sm" variant="outline">
-                      <Plus className="w-4 h-4 mr-1" /> ボタン
-                    </Button>
-                  </div>
-
-                  {/* リスト */}
-                  <div className="space-y-2">
-                    <Label>要素の並び替え（ドラッグで順序変更）</Label>
-                    <div className="max-h-96 overflow-y-auto">
-                      {design.body.contents.length === 0 ? (
-                        <div className="text-center py-8 text-muted-foreground border border-dashed rounded-lg">
-                          <MessageSquare className="w-8 h-8 mx-auto mb-2" />
-                          <p className="text-sm">要素を追加して開始してください</p>
+                      {design.hero.enabled && (
+                        <div className="flex items-center gap-2">
+                          <MediaSelector onSelect={(url) => setDesign(d => ({ ...d, hero: { ...d.hero, url } }))} selectedUrl={design.hero.url} />
+                          <Input
+                            className="w-full"
+                            placeholder="https://..."
+                            value={design.hero.url ?? ""}
+                            onChange={(e) => setDesign(d => ({ ...d, hero: { ...d.hero, url: e.target.value } }))}
+                          />
                         </div>
-                      ) : (
-                        <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
-                          <SortableContext items={design.body.contents.map(i => i.id)} strategy={verticalListSortingStrategy}>
-                            {design.body.contents.map((element) => (
-                              <SortableItem key={element.id} element={element} onUpdate={updateElement} onDelete={deleteElement} />
-                            ))}
-                          </SortableContext>
-                        </DndContext>
                       )}
                     </div>
-                  </div>
 
-                  <div className="flex gap-3 pt-4">
-                    <Button onClick={saveMessage} disabled={loading} className="flex-1">
-                      <Save className="w-4 h-4 mr-2" />
-                      {loading ? "保存中..." : currentMessageId ? "上書き保存" : "保存する"}
-                    </Button>
-                    <Button onClick={sendMessage} disabled={loading} className="bg-[#06c755] hover:bg-[#05b84c] text-white border-[#06c755]">
-                      <Send className="w-4 h-4 mr-2" />
-                      {loading ? "送信中..." : "全体配信"}
-                    </Button>
+                    {design.hero.enabled && (
+                      <div className="grid grid-cols-3 gap-3">
+                        <div>
+                          <Label>比率</Label>
+                          <Select
+                            value={design.hero.aspectRatio ?? "20:13"}
+                            onValueChange={(v: any) => setDesign(d => ({ ...d, hero: { ...d.hero, aspectRatio: v } }))}
+                          >
+                            <SelectTrigger><SelectValue /></SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="20:13">20:13</SelectItem>
+                              <SelectItem value="16:9">16:9</SelectItem>
+                              <SelectItem value="1:1">1:1</SelectItem>
+                              <SelectItem value="4:3">4:3</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        <div>
+                          <Label>モード</Label>
+                          <Select
+                            value={design.hero.aspectMode ?? "cover"}
+                            onValueChange={(v: any) => setDesign(d => ({ ...d, hero: { ...d.hero, aspectMode: v } }))}
+                          >
+                            <SelectTrigger><SelectValue /></SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="cover">cover</SelectItem>
+                              <SelectItem value="fit">fit</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        <div>
+                          <Label>タップURL</Label>
+                          <Input
+                            value={design.hero.action?.uri ?? ""}
+                            onChange={(e) => setDesign(d => ({ ...d, hero: { ...d.hero, action: { type: "uri", uri: e.target.value, label: "Open" } } }))}
+                            placeholder="https://..."
+                          />
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-4 gap-3 items-center">
+                  <Label className="col-span-1">本文スペーシング</Label>
+                  <Select
+                    value={design.body.spacing ?? "md"}
+                    onValueChange={(v: any) => setDesign(d => ({ ...d, body: { ...d.body, spacing: v } }))}
+                  >
+                    <SelectTrigger className="col-span-3"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="none">none</SelectItem>
+                      <SelectItem value="sm">sm</SelectItem>
+                      <SelectItem value="md">md</SelectItem>
+                      <SelectItem value="lg">lg</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div className="grid grid-cols-4 gap-3 items-center">
+                  <Label className="col-span-1">本文背景色</Label>
+                  <div className="col-span-3 flex items-center gap-3">
+                    <ColorPicker
+                      color={design.body.backgroundColor ?? "#ffffff"}
+                      onChange={(c) => setDesign(d => ({ ...d, body: { ...d.body, backgroundColor: c } }))}
+                    />
+                    <Button variant="ghost" size="sm" onClick={() => setDesign(d => ({ ...d, body: { ...d.body, backgroundColor: undefined } }))}>クリア</Button>
                   </div>
                 </div>
               </CardContent>
             </Card>
-          </div>
 
-          {/* 右：プレビュー & 保存済み */}
-          <div className="space-y-6 border-l border-border pl-4 flex-1">
-            {/* プレビュー */}
+            {/* Elements */}
             <Card>
               <CardHeader>
-                <CardTitle className="flex items-center gap-2"><Eye className="w-5 h-5" /> プレビュー</CardTitle>
-                <CardDescription>作成中のFlexメッセージ</CardDescription>
+                <div className="flex items-center justify-between">
+                  <div>
+                    <CardTitle className="text-base">要素</CardTitle>
+                    <CardDescription>ドラッグで並べ替えできます</CardDescription>
+                  </div>
+                  <div className="flex gap-2">
+                    <Button size="sm" variant="outline" onClick={() => addElement("text")}><Plus className="w-4 h-4 mr-1" />テキスト</Button>
+                    <Button size="sm" variant="outline" onClick={() => addElement("image")}><Image className="w-4 h-4 mr-1" />画像</Button>
+                    <Button size="sm" variant="outline" onClick={() => addElement("button")}><Plus className="w-4 h-4 mr-1" />ボタン</Button>
+                  </div>
+                </div>
               </CardHeader>
               <CardContent>
-                <div className="bg-muted/30 rounded-lg p-4 min-h-[200px]">
-                  {design.body.contents.length === 0 && !design.hero?.url ? (
-                    <div className="text-center py-8 text-muted-foreground">
-                      <MessageSquare className="w-8 h-8 mx-auto mb-2" />
-                      <p className="text-sm">要素を追加するとプレビューが表示されます</p>
-                    </div>
-                  ) : (
-                    <div
-                      className="rounded-lg shadow-sm border mx-auto"
-                      style={{
-                        maxWidth:
-                          design.bubbleSize === "micro" ? 260 :
-                          design.bubbleSize === "mega" ? 300 : 340,
-                        background: design.styles?.body?.backgroundColor || "#ffffff"
-                      }}
-                    >
-                      {/* hero */}
-                      {design.hero?.url && (
-                        <img
-                          src={design.hero.url}
-                          alt="hero"
-                          className="w-full"
-                          style={{
-                            aspectRatio: (design.hero.aspectRatio || "20:13").replace(":", "/"),
-                            objectFit: design.hero.aspectMode || "cover"
-                          }}
-                        />
-                      )}
+                {design.body.contents.length === 0 ? (
+                  <div className="border border-dashed rounded-lg py-8 text-center text-muted-foreground">
+                    要素を追加してください
+                  </div>
+                ) : (
+                  <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={onDragEnd}>
+                    <SortableContext items={design.body.contents.map(e => e.id)} strategy={verticalListSortingStrategy}>
+                      <div className="space-y-3">
+                        {design.body.contents.map(el => (
+                          <SortableItem key={el.id} element={el} onUpdate={updateElement} onDelete={deleteElement} />
+                        ))}
+                      </div>
+                    </SortableContext>
+                  </DndContext>
+                )}
+              </CardContent>
+            </Card>
 
-                      <div className="p-4">
-                        {design.body.contents.map((el, idx) => {
-                          const isFirst = idx === 0;
+            {/* actions */}
+            <div className="flex gap-3">
+              <Button onClick={saveMessage} disabled={loading} className="flex-1">
+                <Save className="w-4 h-4 mr-2" /> {loading ? "保存中..." : currentMessageId ? "上書き保存" : "保存"}
+              </Button>
+              <Button onClick={sendCurrent} disabled={loading} className="bg-[#06c755] hover:bg-[#05b84c] text-white">
+                <Send className="w-4 h-4 mr-2" /> 全体配信
+              </Button>
+            </div>
+          </div>
+
+          {/* Right: Preview & Saved */}
+          <div className="col-span-12 md:col-span-7 space-y-6">
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-base flex items-center gap-2"><Eye className="w-5 h-5" /> プレビュー</CardTitle>
+                <CardDescription>実機と近い見た目（簡易）</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="grid md:grid-cols-2 gap-8">
+                  <div className="bg-muted/40 rounded-xl p-4">
+                    <div className="bg-white rounded-xl border shadow-sm max-w-[320px] mx-auto overflow-hidden">
+                      {design.hero.enabled && design.hero.url && (
+                        <div className="w-full">
+                          <img
+                            src={design.hero.url}
+                            alt="hero"
+                            className="w-full object-cover"
+                            style={{
+                              aspectRatio: (design.hero.aspectRatio ?? "20:13").replace(":", "/"),
+                              objectFit: design.hero.aspectMode === "fit" ? "contain" : "cover",
+                            }}
+                          />
+                        </div>
+                      )}
+                      <div
+                        className="p-4"
+                        style={{
+                          background: toHex6(design.body.backgroundColor),
+                        }}
+                      >
+                        {design.body.contents.map((el, i) => {
+                          const p = el.properties;
+                          const mt = i === 0 ? 0 : 12;
+                          const pad = padPx(p.paddingAll);
+                          const bg = toHex6(p.backgroundColor);
                           return (
-                            <div key={el.id} style={{ marginTop: isFirst ? undefined : 12 }}>
-                              {el.type === 'text' && (
+                            <div key={el.id} style={{ marginTop: mt, padding: pad, background: bg, borderRadius: bg ? 8 : 0 }}>
+                              {el.type === "text" && (
                                 <div
                                   style={{
-                                    color: el.properties.color || '#000',
-                                    textAlign: (el.properties.align as any) || 'left',
-                                    fontWeight: el.properties.weight === 'bold' ? 700 : 400,
-                                    fontSize:
-                                      el.properties.size === 'xs' ? 12 :
-                                      el.properties.size === 'sm' ? 14 :
-                                      el.properties.size === 'lg' ? 18 :
-                                      el.properties.size === 'xl' ? 20 : 16,
-                                    background: el.properties.backgroundColor && el.properties.backgroundColor !== '#ffffff'
-                                      ? el.properties.backgroundColor : undefined,
-                                    padding: el.properties.backgroundColor && el.properties.backgroundColor !== '#ffffff' ? '6px 10px' : undefined,
-                                    borderRadius: el.properties.backgroundColor && el.properties.backgroundColor !== '#ffffff' ? 6 : undefined,
-                                    whiteSpace: 'pre-wrap'
+                                    color: toHex6(p.color) ?? "#000",
+                                    fontSize: p.size === "xs" ? 12 : p.size === "sm" ? 14 : p.size === "lg" ? 18 : p.size === "xl" ? 20 : 16,
+                                    fontWeight: p.weight === "bold" ? 700 : 400,
+                                    textAlign: (p.align as any) ?? "start",
+                                    whiteSpace: "pre-wrap",
                                   }}
                                 >
-                                  {el.properties.text || ""}
+                                  {p.text}
                                 </div>
                               )}
-                              {el.type === 'image' && el.properties.url && (
+                              {el.type === "image" && p.url && (
                                 <img
-                                  src={el.properties.url}
+                                  src={p.url}
                                   alt=""
                                   className="w-full rounded"
-                                  style={{
-                                    aspectRatio: (el.properties.aspectRatio || "20:13").replace(":", "/"),
-                                    objectFit: el.properties.aspectMode || "cover"
-                                  }}
+                                  style={{ aspectRatio: (p.aspectRatio ?? "20:13").replace(":", "/"), objectFit: p.aspectMode === "fit" ? "contain" : "cover" }}
                                 />
                               )}
-                              {el.type === 'button' && (
+                              {el.type === "button" && (
                                 <button
                                   className="w-full rounded text-sm font-medium"
                                   style={{
-                                    backgroundColor: el.properties.color ||
-                                      (el.properties.style === 'primary' ? '#0066cc'
-                                        : el.properties.style === 'secondary' ? '#f0f0f0' : 'transparent'),
-                                    color: el.properties.color
-                                      ? '#fff'
-                                      : el.properties.style === 'primary' ? '#fff'
-                                        : el.properties.style === 'secondary' ? '#333' : '#0066cc',
-                                    border: el.properties.style === 'link' ? `1px solid ${el.properties.color || '#0066cc'}` : 'none',
-                                    padding:
-                                      el.properties.height === 'sm' ? '8px 12px' :
-                                        el.properties.height === 'lg' ? '14px 12px' : '10px 12px'
+                                    backgroundColor: p.style === "link" ? "transparent" : (toHex6(p.color) ?? (p.style === "secondary" ? "#f0f0f0" : "#0066cc")),
+                                    color: p.style === "link" ? (toHex6(p.color) ?? "#0066cc") : "#fff",
+                                    border: p.style === "link" ? `1px solid ${toHex6(p.color) ?? "#0066cc"}` : "none",
+                                    padding: p.height === "sm" ? "8px 12px" : p.height === "lg" ? "14px 16px" : "12px 14px",
                                   }}
                                 >
-                                  {el.properties.action?.label || 'ボタン'}
+                                  {p.action?.label ?? "Button"}
                                 </button>
                               )}
                             </div>
@@ -1021,46 +977,44 @@ const FlexMessageDesigner = () => {
                         })}
                       </div>
                     </div>
-                  )}
-                </div>
-              </CardContent>
-            </Card>
+                  </div>
 
-            {/* 保存済み */}
-            <Card>
-              <CardHeader>
-                <CardTitle>保存済みメッセージ</CardTitle>
-                <CardDescription>保存したFlexメッセージの一覧</CardDescription>
-              </CardHeader>
-              <CardContent>
-                {messages.length === 0 ? (
-                  <div className="text-center py-8 text-muted-foreground">
-                    <MessageSquare className="w-8 h-8 mx-auto mb-2" />
-                    <p className="text-sm">保存されたメッセージがありません</p>
-                  </div>
-                ) : (
-                  <div className="space-y-3 max-h-96 overflow-y-auto">
-                    {messages.map(m => (
-                      <div key={m.id} className={`border rounded-lg p-3 ${currentMessageId === m.id ? 'border-primary bg-primary/5' : ''}`}>
-                        <div className="flex items-center justify-between mb-2">
-                          <h4 className="font-medium text-sm">{m.name}</h4>
-                          <Badge variant="secondary" className="text-xs">
-                            {new Date(m.created_at).toLocaleDateString('ja-JP')}
-                          </Badge>
+                  {/* saved list */}
+                  <div>
+                    <div className="flex items-center justify-between mb-2">
+                      <h4 className="font-medium">保存済みメッセージ</h4>
+                    </div>
+                    <div className="space-y-3 max-h-[520px] overflow-y-auto pr-1">
+                      {messages.length === 0 ? (
+                        <div className="text-sm text-muted-foreground">まだありません</div>
+                      ) : messages.map(row => (
+                        <div key={row.id} className={`rounded-lg border p-3 ${currentMessageId === row.id ? "border-primary/60 bg-primary/5" : ""}`}>
+                          <div className="flex items-center justify-between">
+                            <div className="font-medium">{row.name}</div>
+                            <Badge variant="secondary" className="text-xs">{new Date(row.created_at).toLocaleDateString("ja-JP")}</Badge>
+                          </div>
+                          <div className="mt-2 flex gap-2">
+                            <Button size="sm" variant="outline" onClick={() => loadMessage(row)}>読込</Button>
+                            <Button size="sm" variant="outline" onClick={() => sendSaved(row)}><Send className="w-3 h-3 mr-1" />配信</Button>
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className="text-destructive"
+                              onClick={async () => {
+                                if (!confirm(`「${row.name}」を削除します。よろしいですか？`)) return;
+                                const { error } = await supabase.from("flex_messages").delete().eq("id", row.id);
+                                if (!error) setMessages(prev => prev.filter(r => r.id !== row.id));
+                              }}
+                            >
+                              <Trash2 className="w-3 h-3" />
+                            </Button>
+                          </div>
                         </div>
-                        <div className="flex gap-2">
-                          <Button size="sm" variant="outline" onClick={() => loadMessage(m)} className="text-xs h-7 px-2">読込</Button>
-                          <Button size="sm" variant="outline" onClick={() => sendSavedMessage(m)} disabled={loading} className="text-xs h-7 px-2">
-                            <Send className="w-3 h-3 mr-1" /> 配信
-                          </Button>
-                          <Button size="sm" variant="outline" onClick={() => deleteMessage(m.id, m.name)} className="text-xs h-7 px-2 text-destructive hover:text-destructive">
-                            <Trash2 className="w-3 h-3" />
-                          </Button>
-                        </div>
-                      </div>
-                    ))}
+                      ))}
+                    </div>
                   </div>
-                )}
+
+                </div>
               </CardContent>
             </Card>
           </div>
@@ -1068,6 +1022,4 @@ const FlexMessageDesigner = () => {
       </main>
     </div>
   );
-};
-
-export default FlexMessageDesigner;
+}
