@@ -21,9 +21,12 @@ interface StepMessage {
 
 interface MessagePreviewProps {
   messages: StepMessage[]
+  editingMessages?: StepMessage[]  // 編集中のメッセージ（未保存状態でもプレビュー表示）
 }
 
-export function MessagePreview({ messages }: MessagePreviewProps) {
+export function MessagePreview({ messages, editingMessages }: MessagePreviewProps) {
+  // 編集中のメッセージがあればそれを優先、なければ保存済みメッセージを使用
+  const displayMessages = editingMessages && editingMessages.length > 0 ? editingMessages : messages;
   return (
     <Card className="h-fit">
       <CardHeader className="pb-3">
@@ -34,13 +37,13 @@ export function MessagePreview({ messages }: MessagePreviewProps) {
       </CardHeader>
       <CardContent>
         <div className="space-y-3 max-h-[500px] overflow-y-auto">
-          {messages.length === 0 ? (
+          {displayMessages.length === 0 ? (
             <div className="text-center text-muted-foreground py-8">
               <Smartphone className="h-8 w-8 mx-auto mb-2 opacity-50" />
               <p className="text-sm">メッセージを追加してプレビューを確認</p>
             </div>
           ) : (
-            messages.map((message, index) => (
+            displayMessages.map((message, index) => (
               <div key={message.id} className="flex gap-2">
                 <Avatar className="h-6 w-6 flex-shrink-0">
                   <AvatarFallback className="text-xs bg-primary text-primary-foreground">

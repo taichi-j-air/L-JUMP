@@ -54,6 +54,8 @@ export default function StepDeliveryPage() {
   const [draftMessageContents, setDraftMessageContents] = useState<Record<string, string>>({})
   // シナリオ名もIME対応のためドラフト管理
   const [scenarioNameDraft, setScenarioNameDraft] = useState<string>("")
+  // 編集中のメッセージ（プレビュー用）
+  const [editingStepMessages, setEditingStepMessages] = useState<any[]>([])
 
   const { 
     folders,
@@ -787,28 +789,26 @@ export default function StepDeliveryPage() {
                        </Card>
                      ) : (
                        /* Use StepMessageEditor component */
-                       <StepMessageEditor
-                         stepId={selectedStep.id}
-                         messages={selectedStepMessages.map(msg => ({
-                           id: msg.id,
-                           message_type: msg.message_type === 'media' ? 'image' : msg.message_type as any,
-                           content: msg.content || '',
-                           media_url: msg.media_url,
-                           flex_message_id: msg.flex_message_id,
-                           message_order: msg.message_order,
-                           restore_config: (msg as any).restore_config
-                         }))}
-                         onMessagesChange={(messages) => {
-                           // Handle messages change - this will trigger updates through the component
-                           // The StepMessageEditor handles its own updates, so we just need to trigger refetch
-                           if (messages.length !== selectedStepMessages.length) {
-                             // Messages were added or removed, refetch data
-                             setTimeout(() => {
-                               window.location.reload()
-                             }, 100)
-                           }
-                         }}
-                       />
+                        <StepMessageEditor
+                          stepId={selectedStep.id}
+                          messages={selectedStepMessages.map(msg => ({
+                            id: msg.id,
+                            message_type: msg.message_type as any, // 元のタイプを保持
+                            content: msg.content || '',
+                            media_url: msg.media_url,
+                            flex_message_id: msg.flex_message_id,
+                            message_order: msg.message_order,
+                            restore_config: (msg as any).restore_config
+                          }))}
+                          onMessagesChange={(messages) => {
+                            // メッセージ変更時の処理 - 自動リロードは削除
+                            console.log('Messages updated:', messages.length)
+                          }}
+                          onEditingMessagesChange={(editingMessages) => {
+                            // 編集中のメッセージをプレビュー用に保存
+                            setEditingStepMessages(editingMessages)
+                          }}
+                        />
                      )}
                    </div>
                 </>
@@ -819,7 +819,18 @@ export default function StepDeliveryPage() {
           {/* Message Preview Panel */}
           {selectedStep && (
             <div className="w-80 border-l border-border pl-4 flex-shrink-0">
-              <MessagePreview messages={selectedStepMessages} />
+              <MessagePreview 
+                messages={selectedStepMessages.map(msg => ({
+                  id: msg.id,
+                  message_type: msg.message_type as any,
+                  content: msg.content || '',
+                  media_url: msg.media_url,
+                  flex_message_id: msg.flex_message_id,
+                  message_order: msg.message_order,
+                  restore_config: (msg as any).restore_config
+                }))}
+                editingMessages={editingStepMessages}
+              />
             </div>
           )}
 

@@ -33,13 +33,15 @@ interface StepMessageEditorProps {
   messages: StepMessage[];
   onMessagesChange: (messages: StepMessage[]) => void;
   onPreviewChange?: (previewData: any) => void;
+  onEditingMessagesChange?: (editingMessages: StepMessage[]) => void;
 }
 
 export default function StepMessageEditor({ 
   stepId, 
   messages, 
   onMessagesChange,
-  onPreviewChange 
+  onPreviewChange,
+  onEditingMessagesChange
 }: StepMessageEditorProps) {
   const [scenarios, setScenarios] = useState<any[]>([]);
   const [flexMessages, setFlexMessages] = useState<any[]>([]);
@@ -129,6 +131,22 @@ export default function StepMessageEditor({
     
     // 未保存状態としてマーク
     setHasUnsavedChanges(prev => ({ ...prev, [index]: true }));
+
+    // 編集中のメッセージを親に通知（プレビューの即座更新用）
+    if (onEditingMessagesChange) {
+      onEditingMessagesChange(updated);
+    }
+
+    // プレビューを即座に更新（編集中の状態でプレビューを更新）
+    if (onPreviewChange) {
+      const updatedMessage = updated[index];
+      if (updatedMessage.message_type === 'restore_access') {
+        onPreviewChange({
+          type: 'restore_access',
+          config: updatedMessage.restore_config
+        });
+      }
+    }
   };
 
   // 個別メッセージの保存機能
@@ -139,11 +157,17 @@ export default function StepMessageEditor({
     setSavingStates(prev => ({ ...prev, [index]: true }));
     
     try {
+      // メッセージデータの検証と準備
+      if (!message.content && !message.media_url && !message.flex_message_id && !message.restore_config) {
+        toast.error('メッセージの内容を入力してください');
+        return;
+      }
+
       if (message.id) {
         // 既存メッセージの更新
         const payload: any = {
           message_type: message.message_type,
-          content: message.content,
+          content: message.content || '',
           media_url: message.media_url,
           flex_message_id: message.flex_message_id,
           message_order: message.message_order,
@@ -157,7 +181,10 @@ export default function StepMessageEditor({
           .select()
           .single();
 
-        if (error) throw error;
+        if (error) {
+          console.error('Error updating message:', error);
+          throw error;
+        }
 
         // 親の状態を更新（保存済みデータを反映）
         const updatedMessages = messages.map((msg, i) => 
@@ -178,7 +205,7 @@ export default function StepMessageEditor({
         const payload: any = {
           step_id: stepId,
           message_type: message.message_type,
-          content: message.content,
+          content: message.content || '',
           media_url: message.media_url,
           flex_message_id: message.flex_message_id,
           message_order: message.message_order,
@@ -191,7 +218,10 @@ export default function StepMessageEditor({
           .select()
           .single();
 
-        if (error) throw error;
+        if (error) {
+          console.error('Error creating message:', error);
+          throw error;
+        }
 
         // 新規作成されたメッセージをローカル状態に反映
         const updatedEditingMessages = editingMessages.map((msg, i) => 
@@ -398,7 +428,14 @@ export default function StepMessageEditor({
                   <Select
                     value={message.message_type}
                     onValueChange={(value: any) => {
-                      updateLocalMessage(index, { message_type: value });
+                      updateLocalMessage(index, { 
+                        message_type: value,
+                        // メッセージタイプ変更時に関連設定をリセット
+                        media_url: value === 'media' ? message.media_url : null,
+                        flex_message_id: value === 'flex' ? message.flex_message_id : null,
+                        restore_config: value === 'restore_access' ? (message.restore_config || { type: 'button' }) : null
+                      });
+                      // 即座に保存
                       setTimeout(() => saveMessage(index), 100);
                     }}
                   >
@@ -431,8 +468,9 @@ export default function StepMessageEditor({
                               ...message.restore_config, 
                               type: value 
                             }
-                          })
-                          setTimeout(() => saveMessage(index), 100)
+                          });
+                          // 即座に保存
+                          setTimeout(() => saveMessage(index), 100);
                         }}
                       >
                         <SelectTrigger>
