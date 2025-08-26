@@ -1,8 +1,23 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { Smartphone } from "lucide-react"
-import { StepMessage } from "@/hooks/useStepScenarios"
 import { FlexMessagePreview } from "./FlexMessagePreview"
+
+interface StepMessage {
+  id?: string;
+  message_type: "text" | "media" | "flex" | "restore_access";
+  content: string;
+  media_url?: string | null;
+  flex_message_id?: string | null;
+  message_order: number;
+  restore_config?: {
+    type: "button" | "image";
+    title?: string;
+    button_text?: string;
+    target_scenario_id?: string;
+    image_url?: string;
+  } | null;
+}
 
 interface MessagePreviewProps {
   messages: StepMessage[]
@@ -70,19 +85,47 @@ export function MessagePreview({ messages }: MessagePreviewProps) {
                           </div>
                         )}
                       </div>
-                    ) : message.message_type === 'flex' ? (
-                      message.flex_message_id ? (
-                        <FlexMessagePreview flexMessageId={message.flex_message_id} />
-                      ) : (
-                        <div className="bg-background rounded border p-2">
-                          <p className="text-xs text-muted-foreground">Flexメッセージが選択されていません</p>
-                        </div>
-                      )
-                    ) : (
-                      <div className="bg-background rounded border p-2">
-                        <p className="text-xs text-muted-foreground">不明なメッセージタイプ</p>
-                      </div>
-                    )}
+                     ) : message.message_type === 'flex' ? (
+                       message.flex_message_id ? (
+                         <FlexMessagePreview flexMessageId={message.flex_message_id} />
+                       ) : (
+                         <div className="bg-background rounded border p-2">
+                           <p className="text-xs text-muted-foreground">Flexメッセージが選択されていません</p>
+                         </div>
+                       )
+                     ) : message.message_type === 'restore_access' ? (
+                       <div className="space-y-2">
+                         {message.restore_config?.type === 'button' ? (
+                           <div className="bg-background rounded border p-3 space-y-2">
+                             <p className="text-sm font-medium">
+                               {message.restore_config.title || 'アクセス復活'}
+                             </p>
+                             <div className="flex justify-center">
+                               <div className="bg-primary text-primary-foreground px-4 py-2 rounded text-sm">
+                                 {message.restore_config.button_text || 'OK'}
+                               </div>
+                             </div>
+                           </div>
+                         ) : message.restore_config?.type === 'image' && message.restore_config.image_url ? (
+                           <div className="bg-background rounded border p-2">
+                             <img 
+                               src={message.restore_config.image_url} 
+                               alt="Restoration action" 
+                               className="max-w-full h-auto rounded"
+                               style={{ maxHeight: '120px' }}
+                             />
+                           </div>
+                         ) : (
+                           <div className="bg-background rounded border p-2">
+                             <p className="text-xs text-muted-foreground">復活アクションが設定されていません</p>
+                           </div>
+                         )}
+                       </div>
+                     ) : (
+                       <div className="bg-background rounded border p-2">
+                         <p className="text-xs text-muted-foreground">不明なメッセージタイプ</p>
+                       </div>
+                     )}
                   </div>
                   <p className="text-xs text-muted-foreground mt-1">
                     メッセージ {index + 1}
