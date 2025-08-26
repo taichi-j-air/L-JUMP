@@ -72,6 +72,10 @@ serve(async (req) => {
     const rawFlexMessage = body.flexMessage
     const userId = body.userId as string
 
+    console.log(`[send-flex-message] Processing flex message for user: ${userId}`);
+    console.log(`[send-flex-message] flexMessage type:`, typeof rawFlexMessage);
+    console.log(`[send-flex-message] flexMessage:`, JSON.stringify(rawFlexMessage));
+
     // flexMessage が文字列（JSON文字列）で来るケースにも対応
     let flexMessage = rawFlexMessage
     if (typeof rawFlexMessage === 'string') {
@@ -136,6 +140,8 @@ serve(async (req) => {
           messages: [normalized],
         }
 
+        console.log(`[send-flex-message] Sending to ${friend.line_user_id}:`, JSON.stringify(payload));
+
         const lineRes = await fetch('https://api.line.me/v2/bot/message/push', {
           method: 'POST',
           headers: {
@@ -148,8 +154,10 @@ serve(async (req) => {
         if (!lineRes.ok) {
           let errBody: any = null
           try { errBody = await lineRes.json() } catch { errBody = await lineRes.text() }
+          console.log(`[send-flex-message] LINE API error for ${friend.line_user_id}:`, lineRes.status, errBody);
           results.push({ lineUserId: friend.line_user_id, success: false, error: errBody })
         } else {
+          console.log(`[send-flex-message] Successfully sent to ${friend.line_user_id}`);
           results.push({ lineUserId: friend.line_user_id, success: true })
         }
       } catch (e: any) {
