@@ -9,7 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Badge } from "@/components/ui/badge";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
-import { ArrowLeft, Send, Plus, Trash2, Image, MessageSquare, Move, Save, Eye, GripVertical, ChevronDown, ChevronRight } from "lucide-react";
+import { ArrowLeft, Send, Plus, Trash2, Image, MessageSquare, Save, Eye, GripVertical, ChevronDown, ChevronRight } from "lucide-react";
 import { MediaSelector } from "@/components/MediaSelector";
 import { ColorPicker } from "@/components/ui/color-picker";
 import {
@@ -27,10 +27,10 @@ import {
   sortableKeyboardCoordinates,
   verticalListSortingStrategy,
 } from '@dnd-kit/sortable';
-import {
-  useSortable,
-} from '@dnd-kit/sortable';
+import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
+
+// ---------- 型 ----------
 
 interface FlexMessage {
   id: string;
@@ -41,32 +41,50 @@ interface FlexMessage {
   user_id: string;
 }
 
+type ActionType = 'message' | 'uri' | 'postback';
+
+interface BaseAction {
+  type: ActionType;
+  label?: string;
+}
+interface UriAction extends BaseAction {
+  type: 'uri';
+  uri?: string;
+}
+interface MessageAction extends BaseAction {
+  type: 'message';
+  text?: string;
+}
+interface PostbackAction extends BaseAction {
+  type: 'postback';
+  data?: string;
+}
+type AnyAction = UriAction | MessageAction | PostbackAction;
+
+type ElementType = 'text' | 'image' | 'button';
+
 interface FlexElement {
   id: string;
-  type: 'text' | 'image' | 'button' | 'box' | 'icon';
+  type: ElementType;
   properties: {
+    // text
     text?: string;
-    url?: string;
-    size?: string;
-    weight?: string;
+    size?: string;            // xs/sm/md/lg/xl/xxl...
+    weight?: string;          // normal/bold
     color?: string;
-    align?: string;
-    margin?: string;
-    wrap?: boolean;
-    aspectRatio?: string;
-    aspectMode?: string;
-    style?: string;
-    height?: string;
-    action?: {
-      type: 'message' | 'uri' | 'postback';
-      label?: string;
-      text?: string;
-      uri?: string;
-      data?: string;
-    };
-    layout?: string;
-    spacing?: string;
+    align?: string;           // start/center/end
     backgroundColor?: string;
+
+    // image
+    url?: string;
+    aspectRatio?: string;     // "20:13" など
+    aspectMode?: string;      // cover/fit
+    edgeToEdge?: boolean;     // ← 先頭に来たら hero に昇格してフチなしで表示
+
+    // button
+    style?: string;           // primary/secondary/link
+    height?: string;          // sm/md/lg
+    action?: AnyAction;
   };
 }
 
@@ -77,13 +95,7 @@ interface FlexDesign {
     layout: 'vertical';
     spacing?: string;
     backgroundColor?: string;
-    contents: FlexElement[];
-  };
-  hero?: FlexElement;
-  footer?: {
-    type: 'box';
-    layout: 'vertical';
-    spacing: string;
+    paddingAll?: string;      // ← 追加: 全体パディング (0px/sm/md/lg/xl)
     contents: FlexElement[];
   };
   styles?: {
@@ -93,20 +105,29 @@ interface FlexDesign {
   };
 }
 
+// ---------- ユーティリティ ----------
+
+const paddingPreviewPx: Record<string, number> = {
+  '0px': 0,
+  'none': 0,
+  'xs': 6,
+  'sm': 8,
+  'md': 12,
+  'lg': 16,
+  'xl': 20,
+};
+
+// ---------- 並び替えアイテム ----------
+
 const SortableItem = ({ element, onUpdate, onDelete }: {
   element: FlexElement;
   onUpdate: (id: string, properties: any) => void;
   onDelete: (id: string) => void;
 }) => {
   const [isCollapsed, setIsCollapsed] = useState(true);
-  
-  const {
-    attributes,
-    listeners,
-    setNodeRef,
-    transform,
-    transition,
-  } = useSortable({ id: element.id });
+
+  const { attributes, listeners, setNodeRef, transform, transition } =
+    useSortable({ id: element.id });
 
   const style = {
     transform: CSS.Transform.toString(transform),
@@ -127,6 +148,7 @@ const SortableItem = ({ element, onUpdate, onDelete }: {
                 rows={2}
               />
             </div>
+
             <div className="grid grid-cols-2 gap-2">
               <div className="space-y-2">
                 <Label>サイズ</Label>
@@ -134,15 +156,14 @@ const SortableItem = ({ element, onUpdate, onDelete }: {
                   value={element.properties.size || 'md'}
                   onValueChange={(value) => onUpdate(element.id, { ...element.properties, size: value })}
                 >
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="xs">極小</SelectItem>
-                    <SelectItem value="sm">小</SelectItem>
-                    <SelectItem value="md">中</SelectItem>
-                    <SelectItem value="lg">大</SelectItem>
-                    <SelectItem value="xl">特大</SelectItem>
+                    <SelectItem value="xs">XS</SelectItem>
+                    <SelectItem value="sm">SM</SelectItem>
+                    <SelectItem value="md">MD</SelectItem>
+                    <SelectItem value="lg">LG</SelectItem>
+                    <SelectItem value="xl">XL</SelectItem>
+                    <SelectItem value="xxl">XXL</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
@@ -152,9 +173,7 @@ const SortableItem = ({ element, onUpdate, onDelete }: {
                   value={element.properties.weight || 'normal'}
                   onValueChange={(value) => onUpdate(element.id, { ...element.properties, weight: value })}
                 >
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="normal">標準</SelectItem>
                     <SelectItem value="bold">太字</SelectItem>
@@ -162,6 +181,7 @@ const SortableItem = ({ element, onUpdate, onDelete }: {
                 </Select>
               </div>
             </div>
+
             <div className="grid grid-cols-2 gap-2">
               <div className="space-y-2">
                 <Label>文字色</Label>
@@ -176,9 +196,7 @@ const SortableItem = ({ element, onUpdate, onDelete }: {
                   value={element.properties.align || 'start'}
                   onValueChange={(value) => onUpdate(element.id, { ...element.properties, align: value })}
                 >
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="start">左</SelectItem>
                     <SelectItem value="center">中央</SelectItem>
@@ -187,6 +205,7 @@ const SortableItem = ({ element, onUpdate, onDelete }: {
                 </Select>
               </div>
             </div>
+
             <div className="space-y-2">
               <Label>背景色</Label>
               <ColorPicker
@@ -202,11 +221,12 @@ const SortableItem = ({ element, onUpdate, onDelete }: {
           <div className="space-y-3">
             <div className="space-y-2">
               <Label>画像選択</Label>
-              <MediaSelector 
+              <MediaSelector
                 onSelect={(url) => onUpdate(element.id, { ...element.properties, url })}
                 selectedUrl={element.properties.url}
               />
             </div>
+
             <div className="space-y-2">
               <Label>画像URL（直接入力）</Label>
               <Input
@@ -215,6 +235,7 @@ const SortableItem = ({ element, onUpdate, onDelete }: {
                 placeholder="https://example.com/image.jpg"
               />
             </div>
+
             <div className="grid grid-cols-2 gap-2">
               <div className="space-y-2">
                 <Label>サイズ</Label>
@@ -222,15 +243,13 @@ const SortableItem = ({ element, onUpdate, onDelete }: {
                   value={element.properties.size || 'full'}
                   onValueChange={(value) => onUpdate(element.id, { ...element.properties, size: value })}
                 >
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="xxs">XXS</SelectItem>
                     <SelectItem value="xs">XS</SelectItem>
-                    <SelectItem value="sm">Small</SelectItem>
-                    <SelectItem value="md">Medium</SelectItem>
-                    <SelectItem value="lg">Large</SelectItem>
+                    <SelectItem value="sm">SM</SelectItem>
+                    <SelectItem value="md">MD</SelectItem>
+                    <SelectItem value="lg">LG</SelectItem>
                     <SelectItem value="xl">XL</SelectItem>
                     <SelectItem value="xxl">XXL</SelectItem>
                     <SelectItem value="full">Full</SelectItem>
@@ -240,12 +259,10 @@ const SortableItem = ({ element, onUpdate, onDelete }: {
               <div className="space-y-2">
                 <Label>アスペクト比</Label>
                 <Select
-                  value={element.properties.aspectRatio || '1:1'}
+                  value={element.properties.aspectRatio || '20:13'}
                   onValueChange={(value) => onUpdate(element.id, { ...element.properties, aspectRatio: value })}
                 >
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="1:1">1:1</SelectItem>
                     <SelectItem value="20:13">20:13</SelectItem>
@@ -254,6 +271,17 @@ const SortableItem = ({ element, onUpdate, onDelete }: {
                   </SelectContent>
                 </Select>
               </div>
+            </div>
+
+            <div className="space-y-2">
+              <label className="flex items-center gap-2 text-sm">
+                <input
+                  type="checkbox"
+                  checked={!!element.properties.edgeToEdge}
+                  onChange={(e) => onUpdate(element.id, { ...element.properties, edgeToEdge: e.target.checked })}
+                />
+                先頭に置いたら「フチなし（hero）」で表示する
+              </label>
             </div>
           </div>
         );
@@ -265,41 +293,47 @@ const SortableItem = ({ element, onUpdate, onDelete }: {
               <Label>ボタンラベル</Label>
               <Input
                 value={element.properties.action?.label || ''}
-                onChange={(e) => onUpdate(element.id, { 
-                  ...element.properties, 
-                  action: { ...element.properties.action, label: e.target.value } 
-                })}
+                onChange={(e) =>
+                  onUpdate(element.id, {
+                    ...element.properties,
+                    action: { ...(element.properties.action || { type: 'uri' as ActionType }), label: e.target.value }
+                  })
+                }
                 placeholder="ボタンに表示するテキスト"
               />
             </div>
+
             <div className="space-y-2">
               <Label>ボタンタイプ</Label>
               <Select
                 value={element.properties.action?.type || 'uri'}
-                onValueChange={(value) => onUpdate(element.id, { 
-                  ...element.properties, 
-                  action: { ...element.properties.action, type: value } 
-                })}
+                onValueChange={(value) =>
+                  onUpdate(element.id, {
+                    ...element.properties,
+                    action: { ...(element.properties.action || {}), type: value as ActionType }
+                  })
+                }
               >
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
+                <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="message">メッセージ送信</SelectItem>
-                  <SelectItem value="uri">URL開く</SelectItem>
+                  <SelectItem value="uri">URLを開く</SelectItem>
+                  <SelectItem value="postback">ポストバック</SelectItem>
                 </SelectContent>
               </Select>
             </div>
-            
+
             {element.properties.action?.type === 'uri' && (
               <div className="space-y-2">
                 <Label>リンクURL</Label>
                 <Input
-                  value={element.properties.action?.uri || ''}
-                  onChange={(e) => onUpdate(element.id, { 
-                    ...element.properties, 
-                    action: { ...element.properties.action, uri: e.target.value } 
-                  })}
+                  value={(element.properties.action as UriAction)?.uri || ''}
+                  onChange={(e) =>
+                    onUpdate(element.id, {
+                      ...element.properties,
+                      action: { ...(element.properties.action as UriAction), type: 'uri', uri: e.target.value }
+                    })
+                  }
                   placeholder="https://example.com"
                 />
               </div>
@@ -309,837 +343,24 @@ const SortableItem = ({ element, onUpdate, onDelete }: {
               <div className="space-y-2">
                 <Label>送信メッセージ</Label>
                 <Input
-                  value={element.properties.action?.text || ''}
-                  onChange={(e) => onUpdate(element.id, { 
-                    ...element.properties, 
-                    action: { ...element.properties.action, text: e.target.value } 
-                  })}
+                  value={(element.properties.action as MessageAction)?.text || ''}
+                  onChange={(e) =>
+                    onUpdate(element.id, {
+                      ...element.properties,
+                      action: { ...(element.properties.action as MessageAction), type: 'message', text: e.target.value }
+                    })
+                  }
                   placeholder="送信するメッセージ"
                 />
               </div>
             )}
-            
-            <div className="grid grid-cols-2 gap-2">
+
+            {element.properties.action?.type === 'postback' && (
               <div className="space-y-2">
-                <Label>スタイル</Label>
-                <Select
-                  value={element.properties.style || 'primary'}
-                  onValueChange={(value) => onUpdate(element.id, { ...element.properties, style: value })}
-                >
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="primary">メイン（濃い色）</SelectItem>
-                    <SelectItem value="secondary">サブ（薄い色）</SelectItem>
-                    <SelectItem value="link">リンク（枠線）</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-2">
-                <Label>ボタン色</Label>
-                <ColorPicker
-                  color={element.properties.color || '#0066cc'}
-                  onChange={(color) => onUpdate(element.id, { ...element.properties, color })}
-                />
-              </div>
-            </div>
-            <div className="space-y-2">
-              <Label>ボタン高さ</Label>
-              <Select
-                value={element.properties.height || 'md'}
-                onValueChange={(value) => onUpdate(element.id, { ...element.properties, height: value })}
-              >
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="sm">小</SelectItem>
-                  <SelectItem value="md">中</SelectItem>
-                  <SelectItem value="lg">大</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
-        );
-
-      default:
-        return null;
-    }
-  };
-
-  return (
-    <div ref={setNodeRef} style={style} className="bg-background border-2 border-dashed border-muted hover:border-primary/50 rounded-lg p-4 mb-3 shadow-sm">
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <div 
-            {...attributes} 
-            {...listeners} 
-            className="cursor-grab active:cursor-grabbing p-2 hover:bg-primary/10 rounded-md border border-primary/20 transition-colors"
-            title="ドラッグして並び替え"
-          >
-            <GripVertical className="w-4 h-4 text-primary" />
-          </div>
-          <Badge variant="outline" className="text-xs">
-            {element.type === 'text' && 'テキスト'}
-            {element.type === 'image' && '画像'}
-            {element.type === 'button' && 'ボタン'}
-          </Badge>
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => setIsCollapsed(!isCollapsed)}
-            className="p-1"
-          >
-            {isCollapsed ? <ChevronRight className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
-          </Button>
-        </div>
-        <Button
-          variant="ghost"
-          size="sm"
-          onClick={() => onDelete(element.id)}
-          className="text-destructive hover:text-destructive"
-        >
-          <Trash2 className="w-4 h-4" />
-        </Button>
-      </div>
-      
-      {!isCollapsed && (
-        <div className="mt-3">
-          {renderElementEditor()}
-        </div>
-      )}
-    </div>
-  );
-};
-
-const FlexMessageDesigner = () => {
-  const [loading, setLoading] = useState(false);
-  const [initialLoading, setInitialLoading] = useState(true);
-  const [messages, setMessages] = useState<FlexMessage[]>([]);
-  const [currentMessageId, setCurrentMessageId] = useState<string | null>(null);
-  
-  const [design, setDesign] = useState<FlexDesign>({
-    name: "",
-    body: {
-      type: 'box',
-      layout: 'vertical',
-      spacing: 'md',
-      contents: []
-    }
-  });
-
-  const navigate = useNavigate();
-  const { toast } = useToast();
-
-  const sensors = useSensors(
-    useSensor(PointerSensor),
-    useSensor(KeyboardSensor, {
-      coordinateGetter: sortableKeyboardCoordinates,
-    })
-  );
-
-  useEffect(() => {
-    checkAuthAndLoadMessages();
-  }, []);
-
-  const checkAuthAndLoadMessages = async () => {
-    try {
-      const { data: { user } } = await supabase.auth.getUser();
-      
-      if (!user) {
-        navigate("/auth");
-        return;
-      }
-
-      const { data: flexMessages, error } = await supabase
-        .from('flex_messages')
-        .select('*')
-        .order('created_at', { ascending: false });
-
-      if (error) {
-        throw error;
-      }
-
-      setMessages(flexMessages || []);
-    } catch (error) {
-      console.error('Error:', error);
-      toast({
-        title: "エラー",
-        description: "データの読み込みに失敗しました",
-        variant: "destructive",
-      });
-    } finally {
-      setInitialLoading(false);
-    }
-  };
-
-  const addElement = (type: 'text' | 'image' | 'button') => {
-    const newElement: FlexElement = {
-      id: `element-${Date.now()}`,
-      type,
-      properties: type === 'text' 
-        ? { text: 'サンプルテキスト', size: 'md', weight: 'normal', color: '#000000' }
-        : type === 'image'
-        ? { url: '', size: 'full', aspectRatio: '20:13', aspectMode: 'cover' }
-        : { style: 'primary', action: { type: 'uri', label: 'ボタン', uri: 'https://line.me/' } }
-    };
-
-    setDesign(prev => ({
-      ...prev,
-      body: {
-        ...prev.body,
-        contents: [...prev.body.contents, newElement]
-      }
-    }));
-  };
-
-  const updateElement = (id: string, properties: any) => {
-    setDesign(prev => ({
-      ...prev,
-      body: {
-        ...prev.body,
-        contents: prev.body.contents.map(element =>
-          element.id === id ? { ...element, properties } : element
-        )
-      }
-    }));
-  };
-
-  const deleteElement = (id: string) => {
-    setDesign(prev => ({
-      ...prev,
-      body: {
-        ...prev.body,
-        contents: prev.body.contents.filter(element => element.id !== id)
-      }
-    }));
-  };
-
-  const handleDragEnd = (event: DragEndEvent) => {
-    const { active, over } = event;
-
-    if (active.id !== over?.id) {
-      setDesign(prev => {
-        const oldIndex = prev.body.contents.findIndex(item => item.id === active.id);
-        const newIndex = prev.body.contents.findIndex(item => item.id === over?.id);
-
-        return {
-          ...prev,
-          body: {
-            ...prev.body,
-            contents: arrayMove(prev.body.contents, oldIndex, newIndex)
-          }
-        };
-      });
-    }
-  };
-
-  const generateFlexJson = () => {
-    // sanitize elements
-    const raw = design.body.contents.map((element, index) => {
-      const props = element.properties;
-      const isFirst = index === 0;
-      switch (element.type) {
-        case 'text': {
-          const text = (props.text || '').trim();
-          if (!text) return null; // remove empty texts
-          return {
-            type: 'text',
-            text: text.replace(/\n/g, '\n'),
-            ...(props.size && { size: props.size }),
-            ...(props.weight && props.weight !== 'normal' && { weight: props.weight }),
-            ...(props.color && props.color !== '#000000' && { color: props.color }),
-            ...(props.backgroundColor && props.backgroundColor !== '#ffffff' && { backgroundColor: props.backgroundColor }),
-            ...(props.align && props.align !== 'start' && { align: props.align }),
-            ...(!isFirst && { margin: "15px" }),
-            wrap: true,
-          };
-        }
-        case 'image': {
-          const url = (props.url || '').trim();
-          if (!url) return null; // remove empty images
-          return {
-            type: 'image',
-            url,
-            ...(props.size && { size: props.size }),
-            ...(props.aspectRatio && { aspectRatio: props.aspectRatio }),
-            ...(props.aspectMode && { aspectMode: props.aspectMode }),
-            ...(!isFirst && { margin: "15px" }),
-            ...(props.action && { action: props.action })
-          };
-        }
-        case 'button': {
-          const action = props.action || { type: 'uri', uri: 'https://line.me/' };
-          return {
-            type: 'button',
-            ...(props.style && { style: props.style }),
-            ...(props.color && { color: props.color }),
-            ...(props.height && { height: props.height }),
-            ...(!isFirst && { margin: "15px" }),
-            action,
-          };
-        }
-        default:
-          return null;
-      }
-    }).filter(Boolean) as any[];
-
-    if (raw.length === 0) return null;
-
-    const altText = (design.name || 'Flexメッセージ').slice(0, 400);
-    return {
-      type: "flex",
-      altText,
-      contents: {
-        type: "bubble",
-        body: {
-          type: "box",
-          layout: "vertical",
-          spacing: "none",
-          contents: raw
-        },
-        ...(design.styles && { styles: design.styles })
-      }
-    };
-  };
-
-  const saveMessage = async () => {
-    if (!design.name.trim()) {
-      toast({
-        title: "入力エラー",
-        description: "メッセージ名を入力してください",
-        variant: "destructive",
-      });
-      return;
-    }
-
-    setLoading(true);
-    try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) {
-        toast({
-          title: "認証エラー",
-          description: "ログインが必要です",
-          variant: "destructive",
-        });
-        return;
-      }
-
-      const flexJson = generateFlexJson();
-      
-      if (currentMessageId) {
-        // 上書き保存
-        const { error } = await supabase
-          .from('flex_messages')
-          .update({
-            name: design.name,
-            content: flexJson
-          })
-          .eq('id', currentMessageId);
-
-        if (error) throw error;
-        
-        toast({
-          title: "更新成功",
-          description: `「${design.name}」を更新しました`,
-        });
-      } else {
-        // 新規保存
-        const { data, error } = await supabase
-          .from('flex_messages')
-          .insert({
-            user_id: user.id,
-            name: design.name,
-            content: flexJson
-          })
-          .select()
-          .single();
-
-        if (error) throw error;
-        
-        setCurrentMessageId(data.id);
-        
-        toast({
-          title: "保存成功",
-          description: `「${design.name}」を保存しました`,
-        });
-      }
-
-      checkAuthAndLoadMessages();
-    } catch (error) {
-      console.error('Error saving message:', error);
-      toast({
-        title: "保存エラー",
-        description: "メッセージの保存に失敗しました",
-        variant: "destructive",
-      });
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const loadMessage = (message: FlexMessage) => {
-    const content = message.content.contents;
-    
-    setCurrentMessageId(message.id);
-    setDesign({
-      name: message.name,
-      body: {
-        type: 'box',
-        layout: 'vertical',
-        spacing: content.body?.spacing || 'md',
-        backgroundColor: content.body?.backgroundColor,
-        contents: (content.body?.contents || []).map((item: any, index: number) => ({
-          id: `element-${Date.now()}-${index}`,
-          type: item.type,
-          properties: { ...item, action: item.action }
-        }))
-      },
-      styles: content.styles
-    });
-    
-    toast({
-      title: "読み込み完了",
-      description: `「${message.name}」を読み込みました`,
-    });
-  };
-
-  const sendMessage = async () => {
-    if (design.body.contents.length === 0) {
-      toast({ title: "入力エラー", description: "少なくとも1つの要素を追加してください", variant: "destructive" });
-      return;
-    }
-
-    setLoading(true);
-    try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) {
-        toast({ title: "認証エラー", description: "ログインが必要です", variant: "destructive" });
-        return;
-      }
-
-      const flexJson = generateFlexJson();
-      if (!flexJson) {
-        toast({ title: "検証エラー", description: "空のテキストやURL未設定の画像は送信できません", variant: "destructive" });
-        return;
-      }
-      
-      const { data, error } = await supabase.functions.invoke('send-flex-message', {
-        body: {
-          flexMessage: flexJson,
-          userId: user.id
-        }
-      });
-
-      if (error) { throw error; }
-
-      toast({ title: "送信完了", description: "Flexメッセージを送信しました" });
-      
-    } catch (error: any) {
-      console.error('Error sending message:', error);
-      toast({ title: "送信エラー", description: error.message || "メッセージの送信に失敗しました", variant: "destructive" });
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const sendSavedMessage = async (message: FlexMessage) => {
-    setLoading(true);
-    try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) {
-        toast({
-          title: "認証エラー",
-          description: "ログインが必要です",
-          variant: "destructive",
-        });
-        return;
-      }
-
-      const { data, error } = await supabase.functions.invoke('send-flex-message', {
-        body: {
-          flexMessage: message.content,
-          userId: user.id
-        }
-      });
-
-      if (error) {
-        throw error;
-      }
-
-      toast({
-        title: "送信完了",
-        description: `「${message.name}」を送信しました`,
-      });
-      
-    } catch (error) {
-      console.error('Error sending message:', error);
-      toast({
-        title: "送信エラー",
-        description: error.message || "メッセージの送信に失敗しました",
-        variant: "destructive",
-      });
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const deleteMessage = async (messageId: string, messageName: string) => {
-    if (!confirm(`「${messageName}」を削除しますか？この操作は取り消せません。`)) {
-      return;
-    }
-
-    try {
-      const { error } = await supabase
-        .from('flex_messages')
-        .delete()
-        .eq('id', messageId);
-
-      if (error) {
-        throw error;
-      }
-
-      toast({
-        title: "削除完了",
-        description: `「${messageName}」を削除しました`,
-      });
-
-      checkAuthAndLoadMessages();
-      
-      // 削除したメッセージが現在編集中のものだった場合、編集状態をリセット
-      if (currentMessageId === messageId) {
-        setCurrentMessageId(null);
-        setDesign({
-          name: "",
-          body: {
-            type: 'box',
-            layout: 'vertical',
-            spacing: 'md',
-            contents: []
-          }
-        });
-      }
-    } catch (error) {
-      console.error('Error deleting message:', error);
-      toast({
-        title: "削除エラー",
-        description: "メッセージの削除に失敗しました",
-        variant: "destructive",
-      });
-    }
-  };
-
-  const newMessage = () => {
-    setCurrentMessageId(null);
-    setDesign({
-      name: "",
-      body: {
-        type: 'box',
-        layout: 'vertical',
-        spacing: 'md',
-        contents: []
-      }
-    });
-    toast({
-      title: "新規作成",
-      description: "新しいメッセージを作成します",
-    });
-  };
-
-  if (initialLoading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-background">
-        <div className="text-center">
-          <p className="text-xl text-muted-foreground">読み込み中...</p>
-        </div>
-      </div>
-    );
-  }
-
-  return (
-    <div className="min-h-screen bg-background">
-      <header className="border-b">
-        <div className="container mx-auto px-4 py-4">
-          <div className="flex items-center gap-4">
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => navigate("/")}
-              className="flex items-center gap-2"
-            >
-              <ArrowLeft className="w-4 h-4" />
-              ダッシュボードに戻る
-            </Button>
-            <h1 className="text-2xl font-bold">Flexメッセージデザイナー</h1>
-          </div>
-        </div>
-      </header>
-
-      <main className="container mx-auto px-2 py-8 max-w-7xl">
-        <div className="flex gap-0">
-          {/* 左側：デザイナー */}
-          <div className="space-y-6 w-96 flex-shrink-0">
-            <Card>
-              <CardHeader>
-                <div className="flex items-center justify-between">
-                  <div>
-                    <CardTitle className="flex items-center gap-2">
-                      <MessageSquare className="w-5 h-5" />
-                      メッセージデザイナー
-                    </CardTitle>
-                    <CardDescription>
-                      ドラッグ&ドロップで要素を並び替えできます
-                    </CardDescription>
-                  </div>
-                  <Button onClick={newMessage} variant="outline" size="sm">
-                    新規作成
-                  </Button>
-                </div>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="message-name">メッセージ名</Label>
-                    <Input
-                      id="message-name"
-                      value={design.name}
-                      onChange={(e) => setDesign(prev => ({ ...prev, name: e.target.value }))}
-                      placeholder="メッセージに名前を付けてください"
-                    />
-                  </div>
-
-                  <div className="flex gap-2 flex-wrap">
-                    <Button onClick={() => addElement('text')} size="sm" variant="outline">
-                      <Plus className="w-4 h-4 mr-1" />
-                      テキスト
-                    </Button>
-                    <Button onClick={() => addElement('image')} size="sm" variant="outline">
-                      <Image className="w-4 h-4 mr-1" />
-                      画像
-                    </Button>
-                    <Button onClick={() => addElement('button')} size="sm" variant="outline">
-                      <Plus className="w-4 h-4 mr-1" />
-                      ボタン
-                    </Button>
-                  </div>
-
-                  <div className="space-y-2">
-                    <Label>要素の並び替え（ドラッグして順序変更）</Label>
-                    <div className="max-h-96 overflow-y-auto">
-                      {design.body.contents.length === 0 ? (
-                        <div className="text-center py-8 text-muted-foreground border border-dashed rounded-lg">
-                          <MessageSquare className="w-8 h-8 mx-auto mb-2" />
-                          <p className="text-sm">要素を追加して開始してください</p>
-                        </div>
-                      ) : (
-                        <DndContext
-                          sensors={sensors}
-                          collisionDetection={closestCenter}
-                          onDragEnd={handleDragEnd}
-                        >
-                          <SortableContext
-                            items={design.body.contents.map(item => item.id)}
-                            strategy={verticalListSortingStrategy}
-                          >
-                            {design.body.contents.map((element) => (
-                              <SortableItem
-                                key={element.id}
-                                element={element}
-                                onUpdate={updateElement}
-                                onDelete={deleteElement}
-                              />
-                            ))}
-                          </SortableContext>
-                        </DndContext>
-                      )}
-                    </div>
-                  </div>
-
-                  <div className="flex gap-3 pt-4">
-                    <Button onClick={saveMessage} disabled={loading} className="flex-1">
-                      <Save className="w-4 h-4 mr-2" />
-                      {loading ? "保存中..." : currentMessageId ? "上書き保存" : "保存する"}
-                    </Button>
-                    <Button 
-                      onClick={sendMessage} 
-                      disabled={loading}
-                      className="bg-[#06c755] hover:bg-[#05b84c] text-white border-[#06c755]"
-                    >
-                      <Send className="w-4 h-4 mr-2" />
-                      {loading ? "送信中..." : "全体配信"}
-                    </Button>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          </div>
-
-          {/* 右側：プレビューと保存済みメッセージ一覧 */}
-          <div className="space-y-6 border-l border-border pl-4 flex-1">
-            {/* プレビュー画面 */}
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Eye className="w-5 h-5" />
-                  プレビュー
-                </CardTitle>
-                <CardDescription>
-                  現在作成中のFlexメッセージのプレビューです
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="bg-muted/30 rounded-lg p-4 min-h-[200px]">
-                  {design.body.contents.length === 0 ? (
-                    <div className="text-center py-8 text-muted-foreground">
-                      <MessageSquare className="w-8 h-8 mx-auto mb-2" />
-                      <p className="text-sm">要素を追加するとプレビューが表示されます</p>
-                    </div>
-                  ) : (
-                    <div className="bg-white rounded-lg shadow-sm border max-w-[280px] mx-auto">
-                      <div>
-                        {design.body.contents.map((element, index) => {
-                          const isFirst = index === 0;
-                          const isLast = index === design.body.contents.length - 1;
-                          
-                          return (
-                            <div 
-                              key={element.id} 
-                              className="flex"
-                              style={{
-                                marginTop: !isFirst ? '15px' : undefined,
-                                marginBottom: !isLast ? '15px' : undefined
-                              }}
-                            >
-                              {element.type === 'text' && (
-                                <div 
-                                  className="flex-1"
-                                  style={{
-                                    color: element.properties.color || '#000000',
-                                    backgroundColor: element.properties.backgroundColor !== '#ffffff' ? element.properties.backgroundColor : undefined,
-                                    fontSize: element.properties.size === 'xs' ? '12px' : 
-                                             element.properties.size === 'sm' ? '14px' :
-                                             element.properties.size === 'lg' ? '18px' :
-                                             element.properties.size === 'xl' ? '20px' : '16px',
-                                    fontWeight: element.properties.weight === 'bold' ? 'bold' : 'normal',
-                                    textAlign: element.properties.align as any || 'left',
-                                    padding: element.properties.backgroundColor !== '#ffffff' ? '4px 8px' : undefined,
-                                    borderRadius: element.properties.backgroundColor !== '#ffffff' ? '4px' : undefined,
-                                    whiteSpace: 'pre-wrap'
-                                  }}
-                                >
-                                  {element.properties.text || 'テキスト'}
-                                </div>
-                              )}
-                              {element.type === 'image' && element.properties.url && (
-                                <div className="flex-1">
-                                  <img 
-                                    src={element.properties.url} 
-                                    alt="プレビュー画像" 
-                                    className="w-full h-auto rounded"
-                                    style={{
-                                      aspectRatio: element.properties.aspectRatio?.replace(':', '/') || '20/13'
-                                    }}
-                                  />
-                                </div>
-                              )}
-                              {element.type === 'button' && (
-                                <div className="flex-1">
-                                  <button 
-                                    className="w-full rounded text-sm font-medium"
-                                    style={{
-                                      backgroundColor: element.properties.color || (
-                                        element.properties.style === 'primary' ? '#0066cc' : 
-                                        element.properties.style === 'secondary' ? '#f0f0f0' : 'transparent'
-                                      ),
-                                      color: element.properties.color ? 
-                                        (element.properties.color === '#ffffff' || element.properties.color === '#f0f0f0' ? '#333' : 'white') :
-                                        (element.properties.style === 'primary' ? 'white' : 
-                                         element.properties.style === 'secondary' ? '#333' : '#0066cc'),
-                                      border: element.properties.style === 'secondary' ? 'none' : 
-                                              element.properties.style === 'link' ? 
-                                                `1px solid ${element.properties.color || '#0066cc'}` : 'none',
-                                      padding: element.properties.height === 'sm' ? '8px 16px' : 
-                                               element.properties.height === 'lg' ? '16px 16px' : '12px 16px'
-                                    }}
-                                  >
-                                    {element.properties.action?.label || 'ボタン'}
-                                  </button>
-                                </div>
-                              )}
-                            </div>
-                          );
-                        })}
-                      </div>
-                    </div>
-                  )}
-                </div>
-              </CardContent>
-            </Card>
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  保存済みメッセージ
-                </CardTitle>
-                <CardDescription>
-                  保存したFlexメッセージの一覧です
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                {messages.length === 0 ? (
-                  <div className="text-center py-8 text-muted-foreground">
-                    <MessageSquare className="w-8 h-8 mx-auto mb-2" />
-                    <p className="text-sm">保存されたメッセージがありません</p>
-                  </div>
-                ) : (
-                  <div className="space-y-3 max-h-96 overflow-y-auto">
-                    {messages.map((message) => (
-                      <div key={message.id} className={`border rounded-lg p-3 ${currentMessageId === message.id ? 'border-primary bg-primary/5' : ''}`}>
-                        <div className="flex items-center justify-between mb-2">
-                          <h4 className="font-medium text-sm">{message.name}</h4>
-                          <Badge variant="secondary" className="text-xs">
-                            {new Date(message.created_at).toLocaleDateString('ja-JP')}
-                          </Badge>
-                        </div>
-                        <div className="flex gap-2">
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            onClick={() => loadMessage(message)}
-                            className="text-xs h-7 px-2"
-                          >
-                            読込
-                          </Button>
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            onClick={() => sendSavedMessage(message)}
-                            disabled={loading}
-                            className="text-xs h-7 px-2"
-                          >
-                            <Send className="w-3 h-3 mr-1" />
-                            配信
-                          </Button>
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            onClick={() => deleteMessage(message.id, message.name)}
-                            className="text-xs h-7 px-2 text-destructive hover:text-destructive"
-                          >
-                            <Trash2 className="w-3 h-3" />
-                          </Button>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-          </div>
-        </div>
-      </main>
-    </div>
-  );
-};
-
-export default FlexMessageDesigner;
+                <Label>データ（postback）</Label>
+                <Input
+                  value={(element.properties.action as PostbackAction)?.data || ''}
+                  onChange={(e) =>
+                    onUpdate(element.id, {
+                      ...element.properties,
+                      action: { ...(element.properties.action as PostbackAction), type: 'postback', data: e.t
