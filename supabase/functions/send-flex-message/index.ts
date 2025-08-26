@@ -31,6 +31,44 @@ function addUidToFlexContentSafely(flexMessage: any, friendShortUid: string | nu
   return deepReplaceUID(cloned, friendShortUid)
 }
 
+/** LINEで無効なフィールドを除去 */
+function sanitizeFlexMessage(obj: any): any {
+  if (obj === null || obj === undefined) return obj
+  
+  if (Array.isArray(obj)) {
+    return obj.map(item => sanitizeFlexMessage(item))
+  }
+  
+  if (typeof obj === 'object') {
+    const sanitized: any = {}
+    
+    // LINEで無効なフィールドのリスト
+    const invalidFields = [
+      'backgroundColor', // textコンポーネントには無効
+      'borderRadius',
+      'borderWidth', 
+      'borderColor',
+      'padding',
+      'className',
+      'style'
+    ]
+    
+    for (const [key, value] of Object.entries(obj)) {
+      // 無効フィールドを除去
+      if (invalidFields.includes(key)) {
+        console.log(`[send-flex-message] Removing invalid field: ${key}`)
+        continue
+      }
+      
+      sanitized[key] = sanitizeFlexMessage(value)
+    }
+    
+    return sanitized
+  }
+  
+  return obj
+}
+
 /** Flex入力を必ず { type:'flex', altText, contents } に正規化 */
 function normalizeFlexMessage(input: any): { type: 'flex'; altText: string; contents: any } | null {
   if (!input) return null
@@ -40,13 +78,13 @@ function normalizeFlexMessage(input: any): { type: 'flex'; altText: string; cont
     return {
       type: 'flex',
       altText: typeof input.altText === 'string' && input.altText.trim() ? input.altText : 'お知らせ',
-      contents: input.contents,
+      contents: sanitizeFlexMessage(input.contents),
     }
   }
 
   // ルートが bubble / carousel
   if (input.type === 'bubble' || input.type === 'carousel') {
-    return { type: 'flex', altText: 'お知らせ', contents: input }
+    return { type: 'flex', altText: 'お知らせ', contents: sanitizeFlexMessage(input) }
   }
 
   // { contents: bubble|carousel, altText? } 形式
@@ -54,7 +92,7 @@ function normalizeFlexMessage(input: any): { type: 'flex'; altText: string; cont
     return {
       type: 'flex',
       altText: typeof input.altText === 'string' && input.altText.trim() ? input.altText : 'お知らせ',
-      contents: input.contents,
+      contents: sanitizeFlexMessage(input.contents),
     }
   }
 
