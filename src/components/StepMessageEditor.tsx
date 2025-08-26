@@ -122,6 +122,38 @@ export default function StepMessageEditor({
 
   // ローカル編集＋即座に自動保存
   const updateLocalMessage = async (index: number, updates: Partial<StepMessage>) => {
+    const currentMessage = editingMessages[index];
+    
+    // メッセージタイプが変更された場合は、タイプ固有の設定を初期化
+    if (updates.message_type && updates.message_type !== currentMessage.message_type) {
+      const resetUpdates = { ...updates };
+      
+      // 新しいタイプに応じて設定を初期化
+      if (updates.message_type === 'restore_access') {
+        resetUpdates.restore_config = {
+          type: 'button',
+          title: '',
+          button_text: 'OK'
+        };
+        resetUpdates.media_url = null;
+        resetUpdates.flex_message_id = null;
+      } else if (updates.message_type === 'media') {
+        resetUpdates.media_url = null;
+        resetUpdates.flex_message_id = null;
+        resetUpdates.restore_config = null;
+      } else if (updates.message_type === 'flex') {
+        resetUpdates.flex_message_id = null;
+        resetUpdates.media_url = null;
+        resetUpdates.restore_config = null;
+      } else if (updates.message_type === 'text') {
+        resetUpdates.media_url = null;
+        resetUpdates.flex_message_id = null;
+        resetUpdates.restore_config = null;
+      }
+      
+      updates = resetUpdates;
+    }
+    
     const updated = editingMessages.map((msg, i) => 
       i === index ? { ...msg, ...updates } : msg
     );
