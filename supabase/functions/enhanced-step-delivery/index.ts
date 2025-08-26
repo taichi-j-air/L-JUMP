@@ -519,6 +519,34 @@ async function sendLineMessage(userId: string, message: any, accessToken: string
         }
       }
       break;
+
+    case 'restore_access':
+      // アクセス解除＆シナリオ再登録メッセージ
+      if (message.restore_config) {
+        const config = typeof message.restore_config === 'string' 
+          ? JSON.parse(message.restore_config) 
+          : message.restore_config;
+        
+        if (config.type === 'button') {
+          lineMessage = {
+            type: 'text',
+            text: config.text || 'アクセスを復活しますか？'
+          };
+        } else if (config.type === 'image' && config.image_url) {
+          lineMessage = {
+            type: 'image',
+            originalContentUrl: config.image_url,
+            previewImageUrl: config.image_url
+          };
+        }
+      }
+      if (!lineMessage) {
+        lineMessage = {
+          type: 'text',
+          text: 'アクセスを復活しますか？'
+        };
+      }
+      break;
       
     default:
       lineMessage = {
