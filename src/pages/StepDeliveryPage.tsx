@@ -124,9 +124,19 @@ export default function StepDeliveryPage() {
     : []
 
   // 選択されたステップのメッセージを取得
-  const selectedStepMessages = selectedStep 
-    ? messages.filter(m => m.step_id === selectedStep.id).sort((a, b) => a.message_order - b.message_order)
-    : []
+  const [selectedStepMessages, setSelectedStepMessages] = useState(
+    selectedStep 
+      ? messages.filter(m => m.step_id === selectedStep.id).sort((a, b) => a.message_order - b.message_order)
+      : []
+  )
+
+  // selectedStepが変更されたときにメッセージを同期
+  useEffect(() => {
+    const newMessages = selectedStep 
+      ? messages.filter(m => m.step_id === selectedStep.id).sort((a, b) => a.message_order - b.message_order)
+      : []
+    setSelectedStepMessages(newMessages)
+  }, [selectedStep?.id, messages])
 
   // メッセージ一覧の変化に応じてローカルドラフトを初期化（存在しないIDは削除）
   useEffect(() => {
@@ -787,28 +797,25 @@ export default function StepDeliveryPage() {
                        </Card>
                      ) : (
                        /* Use StepMessageEditor component */
-                       <StepMessageEditor
-                         stepId={selectedStep.id}
-                         messages={selectedStepMessages.map(msg => ({
-                           id: msg.id,
-                           message_type: msg.message_type === 'media' ? 'image' : msg.message_type as any,
-                           content: msg.content || '',
-                           media_url: msg.media_url,
-                           flex_message_id: msg.flex_message_id,
-                           message_order: msg.message_order,
-                           restore_config: (msg as any).restore_config
-                         }))}
-                         onMessagesChange={(messages) => {
-                           // Handle messages change - this will trigger updates through the component
-                           // The StepMessageEditor handles its own updates, so we just need to trigger refetch
-                           if (messages.length !== selectedStepMessages.length) {
-                             // Messages were added or removed, refetch data
-                             setTimeout(() => {
-                               window.location.reload()
-                             }, 100)
-                           }
-                         }}
-                       />
+                        <StepMessageEditor
+                          stepId={selectedStep.id}
+                          messages={selectedStepMessages.map(msg => ({
+                            id: msg.id,
+                            message_type: msg.message_type as any,
+                            content: msg.content || '',
+                            media_url: msg.media_url,
+                            flex_message_id: msg.flex_message_id,
+                            message_order: msg.message_order,
+                            restore_config: (msg as any).restore_config
+                          }))}
+                           onMessagesChange={(updatedMessages) => {
+                             // メッセージが更新されたら即座にプレビューに反映
+                             // updatedMessagesをそのまま使用せず、元のmessagesを同期させる
+                             const updatedStepMessages = messages.filter(m => m.step_id === selectedStep.id)
+                               .sort((a, b) => a.message_order - b.message_order);
+                             setSelectedStepMessages(updatedStepMessages);
+                           }}
+                        />
                      )}
                    </div>
                 </>
@@ -816,12 +823,20 @@ export default function StepDeliveryPage() {
             </div>
           )}
 
-          {/* Message Preview Panel */}
-          {selectedStep && (
-            <div className="w-80 border-l border-border pl-4 flex-shrink-0">
-              <MessagePreview messages={selectedStepMessages} />
-            </div>
-          )}
+           {/* Message Preview Panel */}
+           {selectedStep && (
+             <div className="w-80 border-l border-border pl-4 flex-shrink-0">
+               <MessagePreview messages={selectedStepMessages.map(msg => ({
+                 id: msg.id,
+                 message_type: msg.message_type as any,
+                 content: msg.content || '',
+                 media_url: msg.media_url,
+                 flex_message_id: msg.flex_message_id,
+                 message_order: msg.message_order,
+                 restore_config: (msg as any).restore_config
+               }))} />
+             </div>
+           )}
 
           {/* Empty state when no scenario is selected */}
           {!selectedScenario && (
