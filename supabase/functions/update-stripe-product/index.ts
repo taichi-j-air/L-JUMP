@@ -1,7 +1,7 @@
 // supabase/functions/update-stripe-product/index.ts
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
-import Stripe from "https://esm.sh/stripe@14.21.0";
+import Stripe from "https://esm.sh/stripe@14.21.0?target=deno";
 
 const cors = {
   "Access-Control-Allow-Origin": "*",
