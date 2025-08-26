@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -56,6 +56,9 @@ export default function StepMessageEditor({
   // 各メッセージの保存状態を管理
   const [savingStates, setSavingStates] = useState<{ [key: number]: boolean }>({});
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState<{ [key: number]: boolean }>({});
+  
+  // デバウンス用のタイマー参照
+  const saveTimerRefs = useRef<{ [key: number]: NodeJS.Timeout }>({});
 
   useEffect(() => {
     fetchScenarios();
@@ -159,6 +162,23 @@ export default function StepMessageEditor({
     }
   };
 
+  // デバウンス付きでローカル編集＋自動保存
+  const updateLocalMessageWithDebounce = (index: number, updates: Partial<StepMessage>) => {
+    // ローカル状態を即座に更新
+    updateLocalMessage(index, updates);
+    
+    // 既存のタイマーをクリア
+    if (saveTimerRefs.current[index]) {
+      clearTimeout(saveTimerRefs.current[index]);
+    }
+    
+    // 新しいタイマーを設定（1秒後に保存）
+    saveTimerRefs.current[index] = setTimeout(() => {
+      saveMessage(index);
+      delete saveTimerRefs.current[index];
+    }, 1000);
+  };
+
   // 個別メッセージの保存機能
   const saveMessage = async (index: number) => {
     const message = editingMessages[index];
@@ -216,6 +236,15 @@ export default function StepMessageEditor({
         setEditingMessages(prev => prev.map((msg, i) => 
           i === index ? savedMessage : msg
         ));
+        
+        // メッセージタイプ変更時の表示更新を強制
+        if (savedMessage.message_type !== message.message_type) {
+          setTimeout(() => {
+            setEditingMessages(prev => prev.map((msg, i) => 
+              i === index ? savedMessage : msg
+            ));
+          }, 100);
+        }
         
       } else {
         // 新規メッセージの作成
@@ -623,8 +652,7 @@ export default function StepMessageEditor({
                     <Label>メッセージ内容</Label>
                     <Textarea
                       value={message.content}
-                      onChange={(e) => updateLocalMessage(index, { content: e.target.value })}
-                      onBlur={() => saveMessage(index)}
+                      onChange={(e) => updateLocalMessageWithDebounce(index, { content: e.target.value })}
                       placeholder="テキストメッセージを入力..."
                       rows={4}
                     />
