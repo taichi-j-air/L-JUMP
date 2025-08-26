@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback, useRef } from "react";
+import { useEffect, useState, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -12,6 +12,18 @@ import { toast } from "sonner";
 import { MediaLibrarySelector } from "@/components/MediaLibrarySelector";
 import { FlexMessageSelector } from "@/components/FlexMessageSelector";
 
+/** SupabaseのJson互換型（衝突回避のためローカル別名を使用） */
+type DbJson = string | number | boolean | null | { [key: string]: DbJson } | DbJson[];
+
+/** アプリ側で使いたい厳密な型 */
+type RestoreConfig = {
+  type: "button" | "image";
+  title?: string;
+  button_text?: string;
+  target_scenario_id?: string;
+  image_url?: string;
+} | null;
+
 interface StepMessage {
   id?: string;
   message_type: "text" | "media" | "flex" | "restore_access";
@@ -19,13 +31,7 @@ interface StepMessage {
   media_url?: string | null;
   flex_message_id?: string | null;
   message_order: number;
-  restore_config?: {
-    type: "button" | "image";
-    title?: string;
-    button_text?: string;
-    target_scenario_id?: string;
-    image_url?: string;
-  } | null;
+  restore_config?: RestoreConfig;
 }
 
 interface StepMessageEditorProps {
@@ -36,6 +42,34 @@ interface StepMessageEditorProps {
   onEditingMessagesChange?: (editingMessages: StepMessage[]) => void;
   createMessage: (stepId: string) => Promise<any>;
   updateMessage: (id: string, updates: Partial<StepMessage>) => Promise<any>;
+}
+
+/** DBからのJsonをアプリの RestoreConfig に安全に変換 */
+function parseRestoreConfig(input: unknown): RestoreConfig {
+  if (!input || typeof input !== "object") return null;
+  const obj = input as Record<string, unknown>;
+  const t = obj.type;
+  if (t !== "button" && t !== "image") return null;
+
+  const pickStr = (v: unknown) => (typeof v === "string" ? v : undefined);
+
+  return {
+    type: t,
+    title: pickStr(obj.title),
+    button_text: pickStr(obj.button_text),
+    target_scenario_id: pickStr(obj.target_scenario_id),
+    image_url: pickStr(obj.image_url),
+  };
+}
+
+/** アプリの RestoreConfig をDBへ渡せるJsonへ（deep cloneして純粋オブジェクト化） */
+function toDbJson(v: unknown): DbJson {
+  if (v === undefined) return null;
+  try {
+    return JSON.parse(JSON.stringify(v)) as DbJson;
+  } catch {
+    return null;
+  }
 }
 
 export default function StepMessageEditor({ 
@@ -49,27 +83,24 @@ export default function StepMessageEditor({
   const [scenarios, setScenarios] = useState<any[]>([]);
   const [flexMessages, setFlexMessages] = useState<any[]>([]);
   
-  // ローカル編集状態（保存されるまでは一時的な状態）
+  // ローカル編集状態
   const [editingMessages, setEditingMessages] = useState<StepMessage[]>(messages);
-  
-  // 各メッセージの保存状態を管理（インデックス単位）
+
+  // 保存状態/未保存フラグ（インデックス単位）
   const [savingStates, setSavingStates] = useState<{ [key: number]: boolean }>({});
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState<{ [key: number]: boolean }>({});
-  
-  // デバウンス用のタイマー参照
+
+  // デバウンス用タイマー
   const saveTimerRefs = useRef<{ [key: number]: ReturnType<typeof setTimeout> }>({});
 
-  // 親→子同期は「未保存の変更が無いときだけ」反映して上書きを防ぐ
+  // 親→子同期：未保存がない時だけ同期（上書き防止）
   const prevMessagesRef = useRef<StepMessage[] | null>(null);
   useEffect(() => {
     if (Object.keys(hasUnsavedChanges).length === 0) {
       if (prevMessagesRef.current !== messages) {
         setEditingMessages(messages);
         prevMessagesRef.current = messages;
-        // console.log('Synced from parent messages');
       }
-    } else {
-      // console.log('Skip parent sync due to local unsaved changes');
     }
   }, [messages, hasUnsavedChanges]);
 
@@ -77,12 +108,11 @@ export default function StepMessageEditor({
     fetchScenarios();
     fetchFlexMessages();
     return () => {
-      // アンマウント時に保留タイマーをクリア
       Object.values(saveTimerRefs.current).forEach(t => clearTimeout(t));
     };
   }, []);
 
-  // プレビューは保存済みデータのみから生成（親 messages を参照）
+  // プレビューは保存済み messages から
   useEffect(() => {
     if (onPreviewChange && messages.length > 0) {
       const restoreMessage = messages.find(msg => msg.message_type === 'restore_access');
@@ -99,7 +129,6 @@ export default function StepMessageEditor({
     try {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
-
       const { data } = await supabase
         .from('step_scenarios')
         .select('*')
@@ -115,7 +144,6 @@ export default function StepMessageEditor({
     try {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
-
       const { data } = await supabase
         .from('flex_messages')
         .select('*')
@@ -131,7 +159,6 @@ export default function StepMessageEditor({
     try {
       const newMessage = await createMessage(stepId);
       if (newMessage) {
-        // createMessage が外側の状態を更新する前提（親→子同期で反映される）
         toast.success('メッセージを追加しました');
       }
     } catch (error) {
@@ -144,14 +171,11 @@ export default function StepMessageEditor({
   const updateLocalMessage = (index: number, updates: Partial<StepMessage>) => {
     setEditingMessages(prev => {
       const updated = prev.map((msg, i) => (i === index ? { ...msg, ...updates } : msg));
-      // 編集中のメッセージを親に通知（プレビュー即時更新用）
       if (onEditingMessagesChange) onEditingMessagesChange(updated);
       return updated;
     });
-    // 未保存状態としてマーク
     setHasUnsavedChanges(prev => ({ ...prev, [index]: true }));
 
-    // プレビューも即時更新（編集中データ）
     if (onPreviewChange) {
       const after = { ...editingMessages[index], ...updates };
       if (after.message_type === 'restore_access') {
@@ -163,7 +187,7 @@ export default function StepMessageEditor({
     }
   };
 
-  // override を渡せば、その内容で保存（直前の編集を確実に保存）
+  // 保存（override を渡すとその内容で保存）
   const saveMessage = async (index: number, override?: StepMessage) => {
     const message = override ?? editingMessages[index];
     if (!message) return;
@@ -177,14 +201,14 @@ export default function StepMessageEditor({
       }
 
       if (message.id) {
-        // 既存更新
+        // 更新
         const payload: any = {
           message_type: message.message_type,
           content: message.content || '',
           media_url: message.media_url ?? null,
           flex_message_id: message.flex_message_id ?? null,
           message_order: message.message_order,
-          restore_config: message.restore_config ?? null,
+          restore_config: toDbJson(message.restore_config), // ← DBへはJsonで渡す
         };
 
         const { error, data } = await supabase
@@ -203,19 +227,17 @@ export default function StepMessageEditor({
           media_url: data.media_url,
           flex_message_id: data.flex_message_id,
           message_order: data.message_order,
-          restore_config: data.restore_config
+          restore_config: parseRestoreConfig(data.restore_config), // ← Json を厳密型へ
         };
 
-        // 親へ反映
         const updatedParent = [...messages];
         updatedParent[index] = savedMessage;
         onMessagesChange(updatedParent);
 
-        // ローカルも同期
         setEditingMessages(prev => prev.map((m, i) => (i === index ? savedMessage : m)));
 
       } else {
-        // 新規作成
+        // 新規
         const payload: any = {
           step_id: stepId,
           message_type: message.message_type,
@@ -223,7 +245,7 @@ export default function StepMessageEditor({
           media_url: message.media_url ?? null,
           flex_message_id: message.flex_message_id ?? null,
           message_order: message.message_order,
-          restore_config: message.restore_config ?? null,
+          restore_config: toDbJson(message.restore_config),
         };
 
         const { error, data } = await supabase
@@ -241,17 +263,15 @@ export default function StepMessageEditor({
           media_url: data.media_url,
           flex_message_id: data.flex_message_id,
           message_order: data.message_order,
-          restore_config: data.restore_config
+          restore_config: parseRestoreConfig(data.restore_config),
         };
 
-        // 親・ローカルへ反映
         setEditingMessages(prev => prev.map((m, i) => (i === index ? savedMessage : m)));
         const updatedParent = [...messages];
         updatedParent[index] = savedMessage;
         onMessagesChange(updatedParent);
       }
 
-      // 未保存フラグをクリア
       setHasUnsavedChanges(prev => {
         const cp = { ...prev };
         delete cp[index];
@@ -271,20 +291,12 @@ export default function StepMessageEditor({
     }
   };
 
-  // デバウンス付きでローカル編集＋自動保存
+  // デバウンス保存（最新版で保存）
   const updateLocalMessageWithDebounce = (index: number, updates: Partial<StepMessage>) => {
-    // 先に「保存対象（最新版）」を作っておく
     const next: StepMessage = { ...editingMessages[index], ...updates };
-
-    // ローカル状態を即座に更新
     updateLocalMessage(index, updates);
-    
-    // 既存タイマーをクリア
-    if (saveTimerRefs.current[index]) {
-      clearTimeout(saveTimerRefs.current[index]);
-    }
-    
-    // 新しいタイマー（1秒後に最新内容で保存）
+
+    if (saveTimerRefs.current[index]) clearTimeout(saveTimerRefs.current[index]);
     saveTimerRefs.current[index] = setTimeout(() => {
       saveMessage(index, next);
       delete saveTimerRefs.current[index];
@@ -306,19 +318,16 @@ export default function StepMessageEditor({
     const message = editingMessages[index];
     
     if (!message.id) {
-      // 新規（未保存）をローカルから消す
       const filtered = editingMessages
         .filter((_, i) => i !== index)
         .map((msg, i) => ({ ...msg, message_order: i }));
       setEditingMessages(filtered);
 
-      // 親も同期
       const parentFiltered = messages
         .filter((_, i) => i !== index)
         .map((msg, i) => ({ ...msg, message_order: i }));
       onMessagesChange(parentFiltered);
 
-      // 未保存フラグのインデックスを詰める
       setHasUnsavedChanges(prev => {
         const updated = { ...prev };
         delete updated[index];
@@ -378,7 +387,6 @@ export default function StepMessageEditor({
     const updated = reordered.map((msg, i) => ({ ...msg, message_order: i }));
     setEditingMessages(updated);
 
-    // 親の状態は手動保存時に反映でもOK。ここでは未保存にマーク。
     setHasUnsavedChanges(prev => ({
       ...prev,
       [index]: true,
@@ -464,18 +472,16 @@ export default function StepMessageEditor({
                       onValueChange={(value: StepMessage["message_type"]) => {
                         const updates: Partial<StepMessage> = { 
                           message_type: value,
-                          // タイプ変更時に関連設定を整える
                           media_url: value === 'media' ? message.media_url ?? null : null,
                           flex_message_id: value === 'flex' ? message.flex_message_id ?? null : null,
                           restore_config: value === 'restore_access' 
-                            ? (message.restore_config || { type: 'button' }) 
+                            ? (message.restore_config || { type: 'button' })
                             : null
                         };
 
                         const next: StepMessage = { ...editingMessages[index], ...updates };
                         updateLocalMessage(index, updates);
-
-                        // 次フレームで保存（UI切替→保存の順）
+                        // UI更新後に保存
                         requestAnimationFrame(() => {
                           saveMessage(index, next).catch(console.error);
                         });
@@ -503,7 +509,7 @@ export default function StepMessageEditor({
                           value={message.restore_config?.type || "button"}
                           onValueChange={(value: "button" | "image") => {
                             const updates: Partial<StepMessage> = {
-                              restore_config: { ...message.restore_config, type: value }
+                              restore_config: { ...(message.restore_config ?? { type: "button" }), type: value }
                             };
                             const next = { ...editingMessages[index], ...updates } as StepMessage;
                             updateLocalMessage(index, updates);
@@ -528,10 +534,7 @@ export default function StepMessageEditor({
                               value={message.restore_config?.title || ""}
                               onChange={(e) => 
                                 updateLocalMessage(index, {
-                                  restore_config: { 
-                                    ...message.restore_config, 
-                                    title: e.target.value 
-                                  }
+                                  restore_config: { ...(message.restore_config ?? { type: "button" }), title: e.target.value }
                                 })
                               }
                               onBlur={() => saveMessage(index)}
@@ -544,10 +547,7 @@ export default function StepMessageEditor({
                               value={message.restore_config?.button_text || ""}
                               onChange={(e) => 
                                 updateLocalMessage(index, {
-                                  restore_config: { 
-                                    ...message.restore_config, 
-                                    button_text: e.target.value 
-                                  }
+                                  restore_config: { ...(message.restore_config ?? { type: "button" }), button_text: e.target.value }
                                 })
                               }
                               onBlur={() => saveMessage(index)}
@@ -570,10 +570,7 @@ export default function StepMessageEditor({
                               }
                               onSelect={(url) => {
                                 const updates: Partial<StepMessage> = {
-                                  restore_config: { 
-                                    ...message.restore_config, 
-                                    image_url: url 
-                                  }
+                                  restore_config: { ...(message.restore_config ?? { type: "image" }), image_url: url }
                                 };
                                 const next = { ...editingMessages[index], ...updates } as StepMessage;
                                 updateLocalMessage(index, updates);
@@ -600,10 +597,7 @@ export default function StepMessageEditor({
                           value={message.restore_config?.target_scenario_id || ""}
                           onValueChange={(value) => {
                             const updates: Partial<StepMessage> = {
-                              restore_config: { 
-                                ...message.restore_config, 
-                                target_scenario_id: value 
-                              }
+                              restore_config: { ...(message.restore_config ?? { type: "button" }), target_scenario_id: value }
                             };
                             const next = { ...editingMessages[index], ...updates } as StepMessage;
                             updateLocalMessage(index, updates);
