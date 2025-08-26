@@ -62,6 +62,7 @@ export default function StepMessageEditor({
   useEffect(() => {
     setEditingMessages(messages);
     setHasUnsavedChanges({});
+    console.log('Messages synchronized:', messages);
   }, [messages]);
 
   // プレビューは保存済みデータのみから生成
@@ -116,7 +117,7 @@ export default function StepMessageEditor({
         step_id: stepId,
         message_type: "text" as const,
         content: "",
-        message_order: editingMessages.length,
+        message_order: messages.length, // 正しい順序を使用
       };
 
       const { data, error } = await supabase
@@ -125,7 +126,10 @@ export default function StepMessageEditor({
         .select()
         .single();
 
-      if (error) throw error;
+      if (error) {
+        console.error('Database error:', error);
+        throw error;
+      }
 
       const createdMessage: StepMessage = {
         id: data.id,
@@ -137,10 +141,14 @@ export default function StepMessageEditor({
         restore_config: data.restore_config as any
       };
 
-      // ローカル状態と親状態を同期
-      setEditingMessages(prev => [...prev, createdMessage]);
-      onMessagesChange([...messages, createdMessage]);
+      // 親状態を即座に更新してページの表示を更新
+      const updatedMessages = [...messages, createdMessage];
+      onMessagesChange(updatedMessages);
       
+      // ローカル状態も同期
+      setEditingMessages(updatedMessages);
+      
+      console.log('メッセージが正常に追加されました:', createdMessage);
       toast.success('メッセージを追加しました');
     } catch (error) {
       console.error('Error adding message:', error);
@@ -213,18 +221,25 @@ export default function StepMessageEditor({
         }
 
         // 親の状態を更新（保存済みデータを反映）
+        const savedMessage = {
+          id: data.id,
+          message_type: data.message_type as any,
+          content: data.content,
+          media_url: data.media_url,
+          flex_message_id: data.flex_message_id,
+          message_order: data.message_order,
+          restore_config: data.restore_config as any
+        };
+        
         const updatedMessages = messages.map((msg, i) => 
-          i === index ? {
-            id: data.id,
-            message_type: data.message_type as any,
-            content: data.content,
-            media_url: data.media_url,
-            flex_message_id: data.flex_message_id,
-            message_order: data.message_order,
-            restore_config: data.restore_config as any
-          } : msg
+          i === index ? savedMessage : msg
         );
         onMessagesChange(updatedMessages);
+        
+        // ローカル状態も更新して表示を同期
+        setEditingMessages(prev => prev.map((msg, i) => 
+          i === index ? savedMessage : msg
+        ));
         
       } else {
         // 新規メッセージの作成
@@ -453,7 +468,9 @@ export default function StepMessageEditor({
                   <Label>メッセージタイプ</Label>
                   <Select
                     value={message.message_type}
-                    onValueChange={(value: any) => {
+                    onValueChange={async (value: any) => {
+                      console.log('メッセージタイプ変更:', value);
+                      
                       const updates: Partial<StepMessage> = { 
                         message_type: value,
                         // メッセージタイプ変更時に関連設定をリセット
@@ -465,10 +482,13 @@ export default function StepMessageEditor({
                       // ローカル状態を即座に更新
                       updateLocalMessage(index, updates);
                       
-                      // 少し遅延してから保存（状態更新の完了を待つ）
-                      setTimeout(async () => {
+                      // 即座に保存して確実にDBに反映
+                      try {
                         await saveMessage(index);
-                      }, 150);
+                        console.log('メッセージタイプが保存されました');
+                      } catch (error) {
+                        console.error('メッセージタイプの保存エラー:', error);
+                      }
                     }}
                   >
                     <SelectTrigger>
