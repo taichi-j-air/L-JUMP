@@ -118,6 +118,8 @@ serve(async (req) => {
           messages: [processedFlexMessage]
         }
 
+        console.log('Sending message payload:', JSON.stringify(messagePayload, null, 2))
+
         const lineResponse = await fetch('https://api.line.me/v2/bot/message/push', {
           method: 'POST',
           headers: {
@@ -128,12 +130,15 @@ serve(async (req) => {
         })
 
         if (lineResponse.ok) {
+          console.log(`Message sent successfully to ${friend.line_user_id}`)
           results.push({ lineUserId: friend.line_user_id, success: true })
         } else {
           const errorText = await lineResponse.text()
+          console.error(`LINE API error for ${friend.line_user_id}:`, errorText)
           results.push({ lineUserId: friend.line_user_id, success: false, error: errorText })
         }
       } catch (error) {
+        console.error(`Error sending to ${friend.line_user_id}:`, error.message)
         results.push({ lineUserId: friend.line_user_id, success: false, error: error.message })
       }
     }
