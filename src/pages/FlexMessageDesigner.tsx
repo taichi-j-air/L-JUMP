@@ -15,7 +15,7 @@ import { DndContext, closestCenter, DragEndEvent, KeyboardSensor, PointerSensor,
 import { arrayMove, SortableContext, sortableKeyboardCoordinates, verticalListSortingStrategy } from "@dnd-kit/sortable";
 import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { ArrowLeft, Save, Send, Plus, Trash2, GripVertical, ChevronRight, ChevronDown, Image as IconImage, MessageSquare, Copy, Layers } from "lucide-react";
+import { ArrowLeft, Save, Send, Plus, Trash2, GripVertical, ChevronRight, ChevronDown, Image as IconImage, MessageSquare, Copy, Layers, Eye } from "lucide-react";
 
 /**
  * =====================
@@ -406,7 +406,6 @@ const SortableItem = ({
                 <ColorPicker
                   color={p.backgroundColor || "#ffffff"}
                   onChange={(color) => onUpdate(element.id, { ...p, backgroundColor: color })}
-                  size="sm"
                 />
               </div>
             </div>
@@ -466,7 +465,7 @@ const SortableItem = ({
                   <div className="w-full">
                     <Label className="text-xs">文字色</Label>
                     <div className="h-7 flex items-center">
-                      <ColorPicker color={p.color || "#000000"} onChange={(c) => onUpdate(element.id, { ...p, color: c })} size="sm" />
+                      <ColorPicker color={p.color || "#000000"} onChange={(c) => onUpdate(element.id, { ...p, color: c })} />
                     </div>
                   </div>
                 </div>
@@ -633,7 +632,7 @@ const SortableItem = ({
                 <div>
                   <Label className="text-xs">色</Label>
                   <div className="h-7 flex items-center">
-                    <ColorPicker color={p.color || "#06c755"} onChange={(c) => onUpdate(element.id, { ...p, color: c })} size="sm" />
+                    <ColorPicker color={p.color || "#06c755"} onChange={(c) => onUpdate(element.id, { ...p, color: c })} />
                   </div>
                 </div>
               </div>
@@ -1225,7 +1224,6 @@ export default function FlexMessageDesigner() {
                             bubbles: prev.bubbles.map((b, i) => (i === prev.currentIndex ? { ...b, bodyBg: c } : b)),
                           }))
                         }
-                        size="sm"
                       />
                     </div>
                   </div>
