@@ -33,8 +33,8 @@ type AspectRatio = "1:1" | "20:13" | "16:9" | "4:3";
 type AspectMode = "cover" | "fit";
 type PaddingToken = "none" | "xs" | "sm" | "md" | "lg" | "xl";
 type MarginToken = "none" | "xs" | "sm" | "md" | "lg" | "xl" | "xxl";
+type SpacingToken = "none" | "xs" | "sm" | "md" | "lg";
 type ContainerType = "bubble" | "carousel";
-// Bubble width inside carousel. (3 段階: small / normal / max)
 type BubbleSize = "micro" | "kilo" | "giga";
 
 interface FlexMessageRow {
@@ -57,8 +57,8 @@ interface ElementAction {
 interface ElementProps {
   // common
   margin?: MarginToken;
-  padding?: PaddingToken; // UI用。JSON生成時は wrapper box の paddingAll に変換
-  backgroundColor?: string; // text/button 背景 (buttonはcolorが優先)
+  padding?: PaddingToken;
+  backgroundColor?: string;
 
   // text
   text?: string;
@@ -73,7 +73,7 @@ interface ElementProps {
   imgSize?: ImageSize;
   aspectRatio?: AspectRatio;
   aspectMode?: AspectMode;
-  isHero?: boolean; // この画像をヒーローにする（1バブル1つのみ）
+  isHero?: boolean;
   action?: ElementAction;
 
   // button
@@ -88,17 +88,18 @@ interface FlexElement {
 }
 
 interface BubbleDesign {
-  name: string; // 表示用
-  altText: string; // 代替テキスト
-  bubbleSize: BubbleSize; // 横幅
-  bodyBg?: string; // バブルのbody背景
-  contents: FlexElement[]; // body内の要素
+  name: string;
+  altText: string;
+  bubbleSize: BubbleSize;
+  bodyBg?: string;
+  bodySpacing?: SpacingToken; // 要素間隔
+  contents: FlexElement[];
 }
 
 interface DesignerState {
-  containerType: ContainerType; // bubble or carousel
-  bubbles: BubbleDesign[]; // 単体でも配列で保持
-  currentIndex: number; // 編集中バブル
+  containerType: ContainerType;
+  bubbles: BubbleDesign[];
+  currentIndex: number;
 }
 
 /**
@@ -109,27 +110,64 @@ interface DesignerState {
 
 const padToPx = (p: PaddingToken | undefined): string | undefined => {
   switch (p) {
-    case "xs":
-      return "4px";
-    case "sm":
-      return "8px";
-    case "md":
-      return "12px";
-    case "lg":
-      return "16px";
-    case "xl":
-      return "20px";
+    case "xs": return "4px";
+    case "sm": return "8px";
+    case "md": return "12px";
+    case "lg": return "16px";
+    case "xl": return "20px";
     case "none":
-    default:
-      return undefined;
+    default: return undefined;
+  }
+};
+
+const getMarginPx = (margin: MarginToken): string => {
+  switch (margin) {
+    case "xs": return "4px";
+    case "sm": return "8px";
+    case "md": return "12px";
+    case "lg": return "16px";
+    case "xl": return "20px";
+    case "xxl": return "24px";
+    case "none":
+    default: return "0px";
+  }
+};
+
+const getTextSizePx = (size: TextSize): string => {
+  switch (size) {
+    case "xs": return "11px";
+    case "sm": return "12px";
+    case "md": return "13px";
+    case "lg": return "16px";
+    case "xl": return "18px";
+    default: return "13px";
+  }
+};
+
+const getButtonHeightPx = (height: ButtonHeight): string => {
+  switch (height) {
+    case "sm": return "32px";
+    case "md": return "40px";
+    case "lg": return "48px";
+    default: return "40px";
+  }
+};
+
+const getBubbleWidthPx = (size: BubbleSize): string => {
+  switch (size) {
+    case "micro": return "240px";
+    case "kilo": return "300px";
+    case "giga": return "360px";
+    default: return "300px";
   }
 };
 
 const defaultBubble = (label = "バブル 1"): BubbleDesign => ({
   name: label,
-  altText: "通知: 新しいお知らせがあります", // 初期の代替テキスト
+  altText: "通知: 新しいお知らせがあります",
   bubbleSize: "kilo",
   bodyBg: undefined,
+  bodySpacing: "md",
   contents: [],
 });
 
@@ -203,7 +241,7 @@ function buildBubbleFromDesign(design: BubbleDesign) {
 
   // 2) body.contents
   const bodyContents = design.contents
-    .filter((el) => !heroCandidate || el.id !== heroCandidate.id) // ヒーローにした要素は本体から除外
+    .filter((el) => !heroCandidate || el.id !== heroCandidate.id)
     .map((el, index) => {
       const p = el.properties;
       const margin = p.margin && p.margin !== "none" ? p.margin : undefined;
@@ -239,7 +277,7 @@ function buildBubbleFromDesign(design: BubbleDesign) {
         node = {
           type: "button",
           ...(p.style && { style: p.style }),
-          ...(p.color && { color: p.color }), // primary: 背景色, secondary/link: テキスト色
+          ...(p.color && { color: p.color }),
           ...(p.height && { height: p.height }),
           ...(p.action ? { action: p.action } : {}),
           ...(margin ? { margin } : {}),
@@ -264,12 +302,12 @@ function buildBubbleFromDesign(design: BubbleDesign) {
   // 3) bubble JSON
   const bubble: any = {
     type: "bubble",
-    size: design.bubbleSize, // micro / kilo / giga
+    size: design.bubbleSize,
     ...(hero ? { hero } : {}),
     body: {
       type: "box",
       layout: "vertical",
-      spacing: "none",
+      spacing: design.bodySpacing || "md",
       contents: bodyContents,
       ...(design.bodyBg ? { backgroundColor: design.bodyBg } : {}),
     },
@@ -319,7 +357,7 @@ const SortableItem = ({
   onDelete: (id: string) => void;
   onHeroToggle?: (id: string, next: boolean) => void;
 }) => {
-  const [collapsed, setCollapsed] = useState(true); // デフォルト閉じる
+  const [collapsed, setCollapsed] = useState(true);
 
   const { attributes, listeners, setNodeRef, transform, transition } = useSortable({ id: element.id });
   const style = { transform: CSS.Transform.toString(transform), transition } as React.CSSProperties;
@@ -411,6 +449,7 @@ const SortableItem = ({
             </div>
           </div>
 
+          {/* テキスト要素固有設定 */}
           {element.type === "text" && (
             <div className="grid gap-2">
               <div>
@@ -474,6 +513,7 @@ const SortableItem = ({
             </div>
           )}
 
+          {/* 画像要素固有設定 */}
           {element.type === "image" && (
             <div className="grid gap-2">
               <div className="grid grid-cols-3 gap-2 items-end">
@@ -486,13 +526,26 @@ const SortableItem = ({
                     onChange={(e) => onUpdate(element.id, { ...p, url: e.target.value })}
                   />
                   {p.url && (
-                    <div className="mt-1 flex items-center gap-2">
-                      <div className="h-12 w-20 overflow-hidden rounded border bg-muted">
-                        {/* 小さなサムネイルでレイアウト崩れを防止 */}
-                        {/* eslint-disable-next-line @next/next/no-img-element */}
-                        <img src={p.url} alt="thumb" className="h-full w-full object-cover" />
+                    <div className="mt-1">
+                      <div className="h-16 w-full overflow-hidden rounded border bg-muted flex items-center justify-center">
+                        <img 
+                          src={p.url} 
+                          alt="thumb" 
+                          className="max-h-full max-w-full object-contain"
+                          onError={(e) => {
+                            e.currentTarget.style.display = 'none';
+                            const errorDiv = e.currentTarget.nextElementSibling as HTMLElement;
+                            if (errorDiv) errorDiv.style.display = 'block';
+                          }}
+                        />
+                        <div 
+                          className="text-xs text-muted-foreground" 
+                          style={{display: 'none'}}
+                        >
+                          画像エラー
+                        </div>
                       </div>
-                      <div className="truncate text-[11px] text-muted-foreground max-w-[200px]" title={p.url}>
+                      <div className="mt-1 text-[10px] text-muted-foreground truncate" title={p.url}>
                         {p.url}
                       </div>
                     </div>
@@ -568,7 +621,6 @@ const SortableItem = ({
                       </Select>
                     </div>
                     <div className="col-span-2">
-                      {/* URI / TEXT / DATA */}
                       {p.action?.type === "uri" && (
                         <Input
                           className="h-8 text-xs"
@@ -604,6 +656,7 @@ const SortableItem = ({
             </div>
           )}
 
+          {/* ボタン要素固有設定 */}
           {element.type === "button" && (
             <div className="grid gap-2">
               <div className="grid grid-cols-3 gap-2 items-end">
@@ -696,7 +749,7 @@ const SortableItem = ({
 
 /**
  * =====================
- * Main
+ * Main Component
  * =====================
  */
 
@@ -744,7 +797,7 @@ export default function FlexMessageDesigner() {
         setInitialLoading(false);
       }
     })();
-  }, []);
+  }, [navigate, toast]);
 
   // ================= Handlers =================
   const addElement = (type: FlexElement["type"]) => {
@@ -805,7 +858,6 @@ export default function FlexMessageDesigner() {
 
   // ======== Save / Load / Send ========
   const saveMessage = async () => {
-    // altText 入力チェック
     const alt = (current?.altText || "").trim();
     if (!alt) {
       toast({ title: "入力エラー", description: "代替テキスト(通知文)を入力してください", variant: "destructive" });
@@ -823,7 +875,6 @@ export default function FlexMessageDesigner() {
       const content = buildFlexMessage(state);
       const title = current?.name || "Flexメッセージ";
 
-      // 上書き or 新規かは、保存済み選択時などのフローによって分岐させたいなら別途 currentId を持つ
       const { error } = await supabase.from("flex_messages").insert({ user_id: user.id, name: title, content });
       if (error) throw error;
       toast({ title: "保存成功", description: `「${title}」を保存しました` });
@@ -973,6 +1024,7 @@ export default function FlexMessageDesigner() {
             altText: row.content?.altText || `${row.name}のお知らせ`,
             bubbleSize: (b.size as BubbleSize) || "kilo",
             bodyBg: b.body?.backgroundColor,
+            bodySpacing: b.body?.spacing as SpacingToken || "md",
             contents: items,
           } as BubbleDesign;
         });
@@ -1024,6 +1076,7 @@ export default function FlexMessageDesigner() {
               altText: row.content?.altText || `${row.name}のお知らせ`,
               bubbleSize: (b.size as BubbleSize) || "kilo",
               bodyBg: b.body?.backgroundColor,
+              bodySpacing: b.body?.spacing as SpacingToken || "md",
               contents: items,
             },
           ],
@@ -1076,6 +1129,25 @@ export default function FlexMessageDesigner() {
     }
   };
 
+  const sendSavedMessage = async (messageContent: any) => {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) {
+        toast({ title: "認証エラー", description: "ログインしてください", variant: "destructive" });
+        return;
+      }
+      
+      const { error } = await supabase.functions.invoke("send-flex-message", { 
+        body: { flexMessage: messageContent, userId: user.id } 
+      });
+      if (error) throw error;
+      toast({ title: "送信完了", description: "保存済みメッセージを配信しました" });
+    } catch (e: any) {
+      console.error(e);
+      toast({ title: "送信エラー", description: e.message || "送信に失敗", variant: "destructive" });
+    }
+  };
+
   // ================= UI =================
 
   if (initialLoading) {
@@ -1098,9 +1170,9 @@ export default function FlexMessageDesigner() {
       </header>
 
       <main className="container mx-auto px-2 py-4 max-w-7xl">
-        <div className="grid grid-cols-[260px_1fr_320px] gap-3">
+        <div className="grid lg:grid-cols-[260px_1fr_320px] md:grid-cols-[1fr_320px] grid-cols-1 gap-3">
           {/* 左: 保存済み */}
-          <Card className="h-[calc(100vh-140px)] sticky top-3 overflow-hidden">
+          <Card className="h-[calc(100vh-140px)] lg:sticky top-3 overflow-hidden">
             <CardHeader className="py-3">
               <CardTitle className="text-sm">保存済みメッセージ</CardTitle>
               <CardDescription className="text-xs">クリックで読込 / 右のボタンで配信</CardDescription>
@@ -1113,7 +1185,7 @@ export default function FlexMessageDesigner() {
                   {messages.map((m) => (
                     <div key={m.id} className="border rounded-md p-2">
                       <div className="flex items-center justify-between gap-2">
-                        <div className="min-w-0">
+                        <div className="min-w-0 flex-1">
                           <div className="text-sm font-medium truncate" title={m.name}>{m.name}</div>
                           <div className="text-[10px] text-muted-foreground">{new Date(m.created_at).toLocaleString("ja-JP")}</div>
                         </div>
@@ -1121,14 +1193,7 @@ export default function FlexMessageDesigner() {
                           <Button size="sm" variant="outline" className="h-7 px-2 text-xs" onClick={() => loadMessage(m)}>
                             読込
                           </Button>
-                          <Button size="sm" variant="outline" className="h-7 px-2 text-xs" onClick={() => {
-                            // 即送信
-                            const c = m.content;
-                            supabase.functions
-                              .invoke("send-flex-message", { body: { flexMessage: c, userId: supabase.auth.getUser().then(r=>r.data.user?.id) } })
-                              .then(() => toast({ title: "送信", description: `「${m.name}」を配信しました` }))
-                              .catch((e) => toast({ title: "送信エラー", description: e.message || "送信に失敗", variant: "destructive" }));
-                          }}>
+                          <Button size="sm" variant="outline" className="h-7 px-2 text-xs" onClick={() => sendSavedMessage(m.content)}>
                             配信
                           </Button>
                           <Button size="sm" variant="outline" className="h-7 px-2 text-xs text-destructive" onClick={() => deleteMessage(m.id, m.name)}>
@@ -1227,68 +1292,91 @@ export default function FlexMessageDesigner() {
                       />
                     </div>
                   </div>
-                  {state.containerType === "carousel" && (
-                    <div className="flex items-end justify-end gap-2">
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        className="h-8 text-xs"
-                        onClick={() =>
-                          setState((prev) => ({
-                            ...prev,
-                            bubbles: [...prev.bubbles, defaultBubble(`バブル ${prev.bubbles.length + 1}`)].slice(0, 10),
-                            currentIndex: Math.min(prev.bubbles.length, 9),
-                          }))
-                        }
-                      >
-                        <Plus className="w-4 h-4 mr-1" /> 追加
-                      </Button>
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        className="h-8 text-xs"
-                        onClick={() =>
-                          setState((prev) => ({
-                            ...prev,
-                            bubbles: prev.bubbles.length < 10 ? [...prev.bubbles, JSON.parse(JSON.stringify(prev.bubbles[prev.currentIndex]))] : prev.bubbles,
-                            currentIndex: Math.min(prev.bubbles.length, 9),
-                          }))
-                        }
-                      >
-                        <Copy className="w-4 h-4 mr-1" /> 複製
-                      </Button>
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        className="h-8 text-xs text-destructive"
-                        onClick={() =>
-                          setState((prev) => ({
-                            ...prev,
-                            bubbles: prev.bubbles.length > 1 ? prev.bubbles.filter((_, i) => i !== prev.currentIndex) : prev.bubbles,
-                            currentIndex: 0,
-                          }))
-                        }
-                      >
-                        <Trash2 className="w-4 h-4 mr-1" /> 削除
-                      </Button>
-                    </div>
-                  )}
+                  <div>
+                    <Label className="text-xs">要素間隔</Label>
+                    <Select
+                      value={current.bodySpacing || "md"}
+                      onValueChange={(v: SpacingToken) =>
+                        setState((prev) => ({
+                          ...prev,
+                          bubbles: prev.bubbles.map((b, i) => (i === prev.currentIndex ? { ...b, bodySpacing: v } : b)),
+                        }))
+                      }
+                    >
+                      <SelectTrigger className="h-8 text-xs" />
+                      <SelectContent>
+                        <SelectItem value="none">なし</SelectItem>
+                        <SelectItem value="xs">最小</SelectItem>
+                        <SelectItem value="sm">小</SelectItem>
+                        <SelectItem value="md">中</SelectItem>
+                        <SelectItem value="lg">大</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
                 </div>
 
                 {state.containerType === "carousel" && (
-                  <div className="flex flex-wrap gap-1">
-                    {state.bubbles.map((b, i) => (
-                      <Button
-                        key={i}
-                        size="sm"
-                        variant={i === state.currentIndex ? "default" : "outline"}
-                        className="h-7 text-xs"
-                        onClick={() => setState((prev) => ({ ...prev, currentIndex: i }))}
-                      >
-                        <Layers className="w-3.5 h-3.5 mr-1" /> {i + 1}
-                      </Button>
-                    ))}
-                  </div>
+                  <>
+                    <div className="flex items-center justify-between">
+                      <div className="flex flex-wrap gap-1">
+                        {state.bubbles.map((b, i) => (
+                          <Button
+                            key={i}
+                            size="sm"
+                            variant={i === state.currentIndex ? "default" : "outline"}
+                            className="h-7 text-xs"
+                            onClick={() => setState((prev) => ({ ...prev, currentIndex: i }))}
+                          >
+                            <Layers className="w-3.5 h-3.5 mr-1" /> {i + 1}
+                          </Button>
+                        ))}
+                      </div>
+                      <div className="flex gap-2">
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="h-8 text-xs"
+                          onClick={() =>
+                            setState((prev) => ({
+                              ...prev,
+                              bubbles: [...prev.bubbles, defaultBubble(`バブル ${prev.bubbles.length + 1}`)].slice(0, 10),
+                              currentIndex: Math.min(prev.bubbles.length, 9),
+                            }))
+                          }
+                        >
+                          <Plus className="w-4 h-4 mr-1" /> 追加
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="h-8 text-xs"
+                          onClick={() =>
+                            setState((prev) => ({
+                              ...prev,
+                              bubbles: prev.bubbles.length < 10 ? [...prev.bubbles, JSON.parse(JSON.stringify(prev.bubbles[prev.currentIndex]))] : prev.bubbles,
+                              currentIndex: Math.min(prev.bubbles.length, 9),
+                            }))
+                          }
+                        >
+                          <Copy className="w-4 h-4 mr-1" /> 複製
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="h-8 text-xs text-destructive"
+                          onClick={() =>
+                            setState((prev) => ({
+                              ...prev,
+                              bubbles: prev.bubbles.length > 1 ? prev.bubbles.filter((_, i) => i !== prev.currentIndex) : prev.bubbles,
+                              currentIndex: 0,
+                            }))
+                          }
+                        >
+                          <Trash2 className="w-4 h-4 mr-1" /> 削除
+                        </Button>
+                      </div>
+                    </div>
+                  </>
                 )}
 
                 {/* 要素ツールバー */}
@@ -1314,8 +1402,8 @@ export default function FlexMessageDesigner() {
                             onUpdate={updateElement}
                             onDelete={deleteElement}
                             onHeroToggle={handleHeroToggle}
-                          />)
-                        )}
+                          />
+                        ))}
                       </SortableContext>
                     </DndContext>
                   )}
@@ -1325,38 +1413,70 @@ export default function FlexMessageDesigner() {
           </div>
 
           {/* 右: プレビュー */}
-          <Card className="h-[calc(100vh-140px)] sticky top-3 overflow-hidden">
+          <Card className="h-[calc(100vh-140px)] lg:sticky top-3 overflow-hidden">
             <CardHeader className="py-3">
               <CardTitle className="text-sm flex items-center gap-2"><Eye className="w-4 h-4" />プレビュー</CardTitle>
               <CardDescription className="text-xs">おおよその見た目(実機と微差あり)</CardDescription>
             </CardHeader>
             <CardContent className="pt-0 overflow-auto h-full">
               {/* Phone-like preview */}
-              <div className="mx-auto w-[300px] rounded-lg border bg-white p-3">
+              <div 
+                className="mx-auto rounded-lg border bg-white p-3"
+                style={{
+                  width: getBubbleWidthPx(current.bubbleSize),
+                }}
+              >
                 {/* hero */}
                 {current.contents.find((c) => c.type === "image" && c.properties.isHero && c.properties.url) && (
                   <div className="mb-2">
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
                     <img
                       src={current.contents.find((c) => c.type === "image" && c.properties.isHero)?.properties.url}
                       alt="hero"
                       className="w-full rounded"
+                      style={{
+                        aspectRatio: current.contents.find((c) => c.type === "image" && c.properties.isHero)?.properties.aspectRatio?.replace(':', '/') || "auto",
+                        objectFit: current.contents.find((c) => c.type === "image" && c.properties.isHero)?.properties.aspectMode === "fit" ? "contain" : "cover",
+                      }}
                     />
                   </div>
                 )}
                 {/* body */}
-                <div className="rounded p-2" style={{ backgroundColor: current.bodyBg || undefined }}>
+                <div 
+                  className="rounded p-2" 
+                  style={{ 
+                    backgroundColor: current.bodyBg && current.bodyBg !== "#ffffff" 
+                      ? current.bodyBg 
+                      : undefined 
+                  }}
+                >
                   {current.contents.filter((c) => !(c.type === "image" && c.properties.isHero)).map((el, i) => (
-                    <div key={el.id} className="mb-2 last:mb-0">
+                    <div 
+                      key={el.id} 
+                      className="last:mb-0"
+                      style={{
+                        marginBottom: i < current.contents.filter((c) => !(c.type === "image" && c.properties.isHero)).length - 1 
+                          ? getMarginPx((current.bodySpacing || "md") as MarginToken)
+                          : "0"
+                      }}
+                    >
                       {el.type === "text" && (
                         <div
-                          className="text-[13px]"
                           style={{
                             color: el.properties.color || "#000",
                             textAlign: (el.properties.align || "start") as any,
-                            backgroundColor: el.properties.backgroundColor && el.properties.backgroundColor !== "#ffffff" ? el.properties.backgroundColor : undefined,
-                            padding: el.properties.padding && el.properties.padding !== "none" ? "6px" : undefined,
-                            borderRadius: el.properties.padding && el.properties.padding !== "none" ? 6 : undefined,
+                            backgroundColor: el.properties.backgroundColor && 
+                                            el.properties.backgroundColor !== "#ffffff" 
+                              ? el.properties.backgroundColor 
+                              : undefined,
+                            padding: el.properties.padding && el.properties.padding !== "none" 
+                              ? padToPx(el.properties.padding) 
+                              : undefined,
+                            margin: el.properties.margin && el.properties.margin !== "none"
+                              ? `${getMarginPx(el.properties.margin)} 0`
+                              : undefined,
+                            borderRadius: el.properties.backgroundColor && el.properties.backgroundColor !== "#ffffff" ? "4px" : undefined,
+                            fontSize: getTextSizePx(el.properties.size || "md"),
+                            fontWeight: el.properties.weight === "bold" ? "bold" : "normal",
                           }}
                         >
                           {(el.properties.text || "").split("\n").map((line, idx) => (
@@ -1365,19 +1485,52 @@ export default function FlexMessageDesigner() {
                         </div>
                       )}
                       {el.type === "image" && el.properties.url && (
-                        <img src={el.properties.url} alt="img" className="w-full rounded" />
+                        <div 
+                          style={{
+                            margin: el.properties.margin && el.properties.margin !== "none"
+                              ? `${getMarginPx(el.properties.margin)} 0`
+                              : undefined,
+                            padding: el.properties.padding && el.properties.padding !== "none"
+                              ? padToPx(el.properties.padding)
+                              : undefined,
+                          }}
+                        >
+                          <img 
+                            src={el.properties.url} 
+                            alt="img" 
+                            className="w-full rounded"
+                            style={{
+                              aspectRatio: el.properties.aspectRatio?.replace(':', '/') || "auto",
+                              objectFit: el.properties.aspectMode === "fit" ? "contain" : "cover",
+                            }}
+                            onError={(e) => {
+                              e.currentTarget.src = "data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjAwIiBoZWlnaHQ9IjEwMCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48cmVjdCB3aWR0aD0iMTAwJSIgaGVpZ2h0PSIxMDAlIiBmaWxsPSIjZjFmMWYxIi8+PHRleHQgeD0iNTAlIiB5PSI1MCUiIGZvbnQtZmFtaWx5PSJBcmlhbCIgZm9udC1zaXplPSIxMiIgZmlsbD0iIzk5OTk5OSIgdGV4dC1hbmNob3I9Im1pZGRsZSIgZHk9Ii4zZW0iPkVycm9yPC90ZXh0Pjwvc3ZnPg==";
+                            }}
+                          />
+                        </div>
                       )}
                       {el.type === "button" && (
                         <button
-                          className="w-full rounded text-[13px] py-2"
+                          className="w-full rounded text-[13px] px-3"
                           style={{
-                            backgroundColor:
-                              el.properties.style === "primary" ? el.properties.color || "#06c755" : "transparent",
-                            color:
-                              el.properties.style === "primary"
-                                ? "#fff"
-                                : el.properties.color || (el.properties.style === "secondary" ? "#333" : "#06c755"),
-                            border: el.properties.style === "link" ? `1px solid ${el.properties.color || "#06c755"}` : "none",
+                            backgroundColor: el.properties.style === "primary" 
+                              ? (el.properties.color || "#06c755") 
+                              : el.properties.style === "secondary" 
+                              ? `${el.properties.color || "#06c755"}20` 
+                              : "transparent",
+                            color: el.properties.style === "primary" 
+                              ? "#ffffff" 
+                              : (el.properties.color || "#06c755"),
+                            border: el.properties.style === "link" 
+                              ? `1px solid ${el.properties.color || "#06c755"}` 
+                              : "1px solid transparent",
+                            height: getButtonHeightPx(el.properties.height || "md"),
+                            margin: el.properties.margin && el.properties.margin !== "none"
+                              ? `${getMarginPx(el.properties.margin)} 0`
+                              : undefined,
+                            padding: el.properties.padding && el.properties.padding !== "none"
+                              ? padToPx(el.properties.padding)
+                              : undefined,
                           }}
                         >
                           {el.properties.action?.label || "ボタン"}
