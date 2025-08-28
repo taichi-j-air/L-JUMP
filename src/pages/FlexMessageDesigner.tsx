@@ -1529,6 +1529,7 @@ export default function FlexMessageDesigner() {
               <div
                 className="mx-auto rounded-lg bg-white overflow-hidden"
                 style={{
+                width: "100%",
                   width: getBubbleWidthPx(current.bubbleSize),
                 }}
               >
