@@ -1321,11 +1321,9 @@ export default function FlexMessageDesigner() {
                     <Button size="sm" className="h-8 text-xs" onClick={() => saveMessage(true)} disabled={loading}>
                       <Save className="w-4 h-4 mr-1" />新規保存
                     </Button>
-                    {state.loadedMessageId && (
-                      <Button size="sm" variant="outline" className="h-8 text-xs" onClick={() => saveMessage(false)} disabled={loading}>
-                        <FileEdit className="w-4 h-4 mr-1" />上書き保存
-                      </Button>
-                    )}
+                    <Button size="sm" variant="outline" className="h-8 text-xs" onClick={() => saveMessage(false)} disabled={loading || !state.loadedMessageId}>
+                      <FileEdit className="w-4 h-4 mr-1" />上書き保存
+                    </Button>
                     <Button size="sm" className="h-8 text-xs bg-[#06c755] hover:bg-[#05b84c]" onClick={sendNow} disabled={loading}>
                       <Send className="w-4 h-4 mr-1" />配信
                     </Button>
