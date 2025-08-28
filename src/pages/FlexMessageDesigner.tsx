@@ -559,7 +559,7 @@ const SortableItem = ({
                 <div>
                   <Label className="text-xs">メディア</Label>
                   <div className="h-8 flex items-center">
-                    <MediaSelector onSelect={(url) => onUpdate(element.id, { ...p, url })} selectedUrl={p.url} />
+                    <MediaSelector onSelect={(url) => onUpdate(element.id, { ...p, url })} />
                   </div>
                 </div>
               </div>
