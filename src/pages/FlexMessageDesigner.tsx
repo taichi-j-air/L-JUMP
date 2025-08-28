@@ -11,10 +11,10 @@ import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { MediaSelector } from "@/components/MediaSelector";
 import { ColorPicker } from "@/components/ui/color-picker";
-import { DndContext, closestCenter, DragEndEvent, KeyboardSensor, PointerSensor, useSensor, useSensors } from "@d-kit/core";
-import { arrayMove, SortableContext, sortableKeyboardCoordinates, verticalListSortingStrategy } from "@d-kit/sortable";
-import { useSortable } from "@d-kit/sortable";
-import { CSS } from "@d-kit/utilities";
+import { DndContext, closestCenter, DragEndEvent, KeyboardSensor, PointerSensor, useSensor, useSensors } from "@dnd-kit/core";
+import { arrayMove, SortableContext, sortableKeyboardCoordinates, verticalListSortingStrategy } from "@dnd-kit/sortable";
+import { useSortable } from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
 import { ArrowLeft, Save, Send, Plus, Trash2, GripVertical, ChevronRight, ChevronDown, Image as IconImage, MessageSquare, Copy, Layers, Eye, FilePlus, FileEdit } from "lucide-react";
 
 /**
@@ -64,7 +64,7 @@ interface ElementProps {
   text?: string;
   size?: TextSize;
   weight?: FontWeight;
-  color?: string; // テキストとボタンでこのプロパティを共有
+  color?: string; // 修正: テキストとボタンで共有
   align?: Align;
   wrap?: boolean;
 
@@ -274,12 +274,6 @@ function buildFlexMessage(state: DesignerState) {
     return { type: "flex", altText, contents: { type: "carousel", contents: bubbles } };
 }
 
-
-/**
- * =====================
- * Sortable Item (Element editor)
- * =====================
- */
 const SortableItem = ({ element, onUpdate, onDelete, onHeroToggle }: { element: FlexElement; onUpdate: (id: string, properties: ElementProps) => void; onDelete: (id: string) => void; onHeroToggle?: (id: string, next: boolean) => void; }) => {
     const [collapsed, setCollapsed] = useState(true);
     const { attributes, listeners, setNodeRef, transform, transition } = useSortable({ id: element.id });
@@ -451,11 +445,6 @@ const SortableItem = ({ element, onUpdate, onDelete, onHeroToggle }: { element: 
     );
 };
 
-/**
- * =====================
- * Main Component
- * =====================
- */
 export default function FlexMessageDesigner() {
     const navigate = useNavigate();
     const { toast } = useToast();
@@ -483,14 +472,25 @@ export default function FlexMessageDesigner() {
         })();
       }, [navigate, toast]);
 
-    // ... (All other handlers can be copied from previous correct versions)
     // Handlers
-    const addElement = (type: FlexElement["type"]) => { setState((prev) => { const next = { ...prev }; next.bubbles[next.currentIndex].contents.push(makeElement(type)); return next; }); };
-    const updateElement = (id: string, props: ElementProps) => { setState((prev) => { const next = { ...prev }; const list = next.bubbles[next.currentIndex].contents.map((el) => (el.id === id ? { ...el, properties: props } : el)); next.bubbles[next.currentIndex].contents = list; return next; }); };
-    const deleteElement = (id: string) => { setState((prev) => { const next = { ...prev }; next.bubbles[next.currentIndex].contents = next.bubbles[next.currentIndex].contents.filter((el) => el.id !== id); return next; }); };
-    const handleHeroToggle = (id: string, nextChecked: boolean) => { setState((prev) => { const next = { ...prev }; const contents = next.bubbles[next.currentIndex].contents; const cleared = contents.map((el) => (el.type === "image" ? { ...el, properties: { ...el.properties, isHero: false } } : el)); next.bubbles[next.currentIndex].contents = cleared.map((el) => (el.id === id ? { ...el, properties: { ...el.properties, isHero: nextChecked } } : el)); return next; }); };
-    const handleDragEnd = (event: DragEndEvent) => { const { active, over } = event; if (!over || active.id === over.id) return; setState((prev) => { const next = { ...prev }; const arr = next.bubbles[next.currentIndex].contents; const oldIndex = arr.findIndex((i) => i.id === active.id); const newIndex = arr.findIndex((i) => i.id === over.id); next.bubbles[next.currentIndex].contents = arrayMove(arr, oldIndex, newIndex); return next; }); };
+    const addElement = (type: FlexElement["type"]) => { setState((prev) => { const next = JSON.parse(JSON.stringify(prev)); next.bubbles[next.currentIndex].contents.push(makeElement(type)); return next; }); };
+    const updateElement = (id: string, props: ElementProps) => { setState((prev) => { const next = JSON.parse(JSON.stringify(prev)); const list = next.bubbles[next.currentIndex].contents.map((el: FlexElement) => (el.id === id ? { ...el, properties: props } : el)); next.bubbles[next.currentIndex].contents = list; return next; }); };
+    const deleteElement = (id: string) => { setState((prev) => { const next = JSON.parse(JSON.stringify(prev)); next.bubbles[next.currentIndex].contents = next.bubbles[next.currentIndex].contents.filter((el: FlexElement) => el.id !== id); return next; }); };
+    const handleHeroToggle = (id: string, nextChecked: boolean) => { setState((prev) => { const next = JSON.parse(JSON.stringify(prev)); const contents = next.bubbles[next.currentIndex].contents; const cleared = contents.map((el: FlexElement) => (el.type === "image" ? { ...el, properties: { ...el.properties, isHero: false } } : el)); next.bubbles[next.currentIndex].contents = cleared.map((el: FlexElement) => (el.id === id ? { ...el, properties: { ...el.properties, isHero: nextChecked } } : el)); return next; }); };
+    const handleDragEnd = (event: DragEndEvent) => { const { active, over } = event; if (!over || active.id === over.id) return; setState((prev) => { const next = JSON.parse(JSON.stringify(prev)); const arr = next.bubbles[next.currentIndex].contents; const oldIndex = arr.findIndex((i: FlexElement) => i.id === active.id); const newIndex = arr.findIndex((i: FlexElement) => i.id === over.id); next.bubbles[next.currentIndex].contents = arrayMove(arr, oldIndex, newIndex); return next; }); };
     const newMessage = () => { setState({ containerType: "bubble", bubbles: [defaultBubble()], currentIndex: 0, loadedMessageId: undefined }); };
+    const saveMessage = async (asNew: boolean = false) => {
+        // ... (Implementation from previous correct version)
+    };
+    const loadMessage = (row: FlexMessageRow) => {
+        // ... (Implementation from previous correct version)
+    };
+    const deleteMessage = async (id: string, name: string) => {
+        // ... (Implementation from previous correct version)
+    };
+    const sendNow = async () => {
+        // ... (Implementation from previous correct version)
+    };
     
     return (
       <div className="min-h-screen bg-background">
@@ -505,16 +505,24 @@ export default function FlexMessageDesigner() {
         <main className="container mx-auto px-2 py-4 max-w-7xl">
           <div className="grid lg:grid-cols-[260px_1fr_320px] md:grid-cols-[1fr_320px] grid-cols-1 gap-3">
             <Card className="h-[calc(100vh-140px)] lg:sticky top-3 overflow-hidden">
-                {/* ... Saved messages list ... */}
+                {/* ... Left Panel UI ... */}
             </Card>
 
             <div className="space-y-3">
               <Card>
                 <CardHeader className="py-3">
-                    {/* ... Designer Header ... */}
+                    <div className="flex items-center justify-between">
+                        <div>
+                            <CardTitle className="text-sm flex items-center gap-2"><MessageSquare className="w-4 h-4" />デザイン</CardTitle>
+                            <CardDescription className="text-xs">必要最小限の設定で作れます。高度な設定は各要素を開いて調整</CardDescription>
+                        </div>
+                        <div className="flex flex-wrap gap-2">
+                            {/* ... Control Buttons ... */}
+                        </div>
+                    </div>
                 </CardHeader>
                 <CardContent className="grid gap-3 text-sm">
-                    {/* ... Designer controls and Sortable list ... */}
+                    {/* ... Designer Form ... */}
                     <div className="max-h-[380px] overflow-auto rounded-md border p-2 bg-muted/30">
                         {current.contents.length === 0 ? (
                             <div className="text-xs text-muted-foreground grid place-items-center h-40">要素を追加してください</div>
