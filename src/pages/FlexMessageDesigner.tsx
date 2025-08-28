@@ -1,3 +1,4 @@
+// FlexMessageDesigner.tsx
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
@@ -15,7 +16,7 @@ import { DndContext, closestCenter, DragEndEvent, KeyboardSensor, PointerSensor,
 import { arrayMove, SortableContext, sortableKeyboardCoordinates, verticalListSortingStrategy } from "@dnd-kit/sortable";
 import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { ArrowLeft, Save, Send, Plus, Trash2, GripVertical, ChevronRight, ChevronDown, Image as IconImage, MessageSquare, Copy, Layers, Eye, FilePlus, FileEdit } from "lucide-react";
+import { ArrowLeft, Save, Send, Plus, Trash2, GripVertical, ChevronRight, ChevronDown, Image as IconImage, MessageSquare, Copy, Layers, Eye } from "lucide-react";
 
 /**
  * =====================
@@ -24,7 +25,7 @@ import { ArrowLeft, Save, Send, Plus, Trash2, GripVertical, ChevronRight, Chevro
  */
 
 type ButtonStyle = "primary" | "secondary" | "link";
-type ButtonHeight = "sm" | "md" | "lg";
+type ButtonHeight = "sm" | "md"; // LINE仕様に合わせて lg を削除
 type TextSize = "xs" | "sm" | "md" | "lg" | "xl";
 type FontWeight = "normal" | "bold";
 type Align = "start" | "center" | "end";
@@ -46,19 +47,21 @@ interface FlexMessageRow {
   user_id: string;
 }
 
+type ActionType = "none" | "message" | "uri" | "postback";
+
 interface ElementAction {
-  type: "message" | "uri" | "postback";
-  label?: string;
-  text?: string;
-  uri?: string;
-  data?: string;
+  type: ActionType;
+  label?: string; // ボタンのみ実質利用
+  text?: string;  // message
+  uri?: string;   // uri(https)
+  data?: string;  // postback
 }
 
 interface ElementProps {
   // common
   margin?: MarginToken;
   padding?: PaddingToken;
-  backgroundColor?: string;
+  backgroundColor?: string; // ※ボタンではUI非表示
 
   // text
   text?: string;
@@ -75,12 +78,12 @@ interface ElementProps {
   aspectMode?: AspectMode;
   isHero?: boolean;
   action?: ElementAction;
+  /** fit時にアスペクト比を固定しない（＝レターボックス無しで高さ可変に） */
+  noFixedRatio?: boolean;
 
   // button
   style?: ButtonStyle;
   height?: ButtonHeight;
-  buttonColor?: string; // ボタンの背景色
-  textColor?: string; // ボタンの文字色
 }
 
 interface FlexElement {
@@ -102,7 +105,6 @@ interface DesignerState {
   containerType: ContainerType;
   bubbles: BubbleDesign[];
   currentIndex: number;
-  loadedMessageId?: string; // 読み込んだメッセージのID
 }
 
 /**
@@ -119,11 +121,11 @@ const padToPx = (p: PaddingToken | undefined): string | undefined => {
     case "lg": return "16px";
     case "xl": return "20px";
     case "none":
-    default: return "0px";
+    default: return undefined;
   }
 };
 
-const getMarginPx = (margin: MarginToken | undefined): string => {
+const getMarginPx = (margin: MarginToken): string => {
   switch (margin) {
     case "xs": return "4px";
     case "sm": return "8px";
@@ -151,7 +153,6 @@ const getButtonHeightPx = (height: ButtonHeight): string => {
   switch (height) {
     case "sm": return "32px";
     case "md": return "40px";
-    case "lg": return "48px";
     default: return "40px";
   }
 };
@@ -170,7 +171,7 @@ const defaultBubble = (label = "バブル 1"): BubbleDesign => ({
   altText: "通知: 新しいお知らせがあります",
   bubbleSize: "kilo",
   bodyBg: undefined,
-  bodySpacing: "none", // デフォルトを none に変更
+  bodySpacing: "md",
   contents: [],
 });
 
@@ -185,7 +186,7 @@ const makeElement = (type: FlexElement["type"]): FlexElement => {
         size: "md",
         weight: "normal",
         color: "#000000",
-        margin: "none", // デフォルトを none に変更
+        margin: "md",
         padding: "none",
         align: "start",
         wrap: true,
@@ -201,9 +202,11 @@ const makeElement = (type: FlexElement["type"]): FlexElement => {
         imgSize: "full",
         aspectRatio: "20:13",
         aspectMode: "cover",
-        margin: "none", // デフォルトを none に変更
+        margin: "md",
         padding: "none",
         isHero: false,
+        action: { type: "none" },
+        noFixedRatio: false,
       },
     };
   }
@@ -214,14 +217,44 @@ const makeElement = (type: FlexElement["type"]): FlexElement => {
     properties: {
       style: "primary",
       height: "md",
-      buttonColor: "#06c755", // color を buttonColor に変更
-      textColor: "#ffffff", // 新しく textColor を追加
+      color: "#06c755",
       action: { type: "uri", label: "開く", uri: "https://line.me/" },
-      margin: "none", // デフォルトを none に変更
+      margin: "md",
       padding: "none",
     },
   };
 };
+
+/** Actionの最小バリデーション＆整形（不正はundefinedを返す） */
+function sanitizeAction(input?: ElementAction, forComponent: "button" | "image" | "hero" | "text" = "button"): ElementAction | undefined {
+  if (!input || input.type === "none") return undefined;
+  const base: ElementAction = { type: input.type };
+
+  if (input.type === "uri") {
+    const u = (input.uri || "").trim();
+    // LINEはhttps推奨。未入力やhttpは除外。
+    if (!/^https:\/\//i.test(u)) return undefined;
+    base.uri = u;
+    // image/heroではlabelは不要（あっても問題ないが含めない）
+    if (forComponent === "button" && input.label) base.label = input.label;
+    return base;
+  }
+  if (input.type === "message") {
+    const t = (input.text || "").trim();
+    if (!t) return undefined;
+    base.text = t;
+    if (forComponent === "button" && input.label) base.label = input.label;
+    return base;
+  }
+  if (input.type === "postback") {
+    const d = (input.data || "").trim();
+    if (!d) return undefined;
+    base.data = d;
+    if (forComponent === "button" && input.label) base.label = input.label;
+    return base;
+  }
+  return undefined;
+}
 
 /**
  * =====================
@@ -239,14 +272,14 @@ function buildBubbleFromDesign(design: BubbleDesign) {
         size: heroCandidate.properties.imgSize || "full",
         aspectRatio: heroCandidate.properties.aspectRatio || "20:13",
         aspectMode: heroCandidate.properties.aspectMode || "cover",
-        ...(heroCandidate.properties.action ? { action: heroCandidate.properties.action } : {}),
+        ...(sanitizeAction(heroCandidate.properties.action, "hero") ? { action: sanitizeAction(heroCandidate.properties.action, "hero") } : {}),
       }
     : undefined;
 
   // 2) body.contents
   const bodyContents = design.contents
     .filter((el) => !heroCandidate || el.id !== heroCandidate.id)
-    .map((el, index) => {
+    .map((el) => {
       const p = el.properties;
       const margin = p.margin && p.margin !== "none" ? p.margin : undefined;
 
@@ -268,29 +301,33 @@ function buildBubbleFromDesign(design: BubbleDesign) {
       } else if (el.type === "image") {
         const url = (p.url || "").trim();
         if (!url) return null;
+        const act = sanitizeAction(p.action, "image");
+        const useAspectRatio = !(p.aspectMode === "fit" && p.noFixedRatio); // fitかつ固定解除ONならaspectRatioを付けない
         node = {
           type: "image",
           url,
           ...(p.imgSize && { size: p.imgSize }),
-          ...(p.aspectRatio && { aspectRatio: p.aspectRatio }),
+          ...(useAspectRatio && p.aspectRatio && { aspectRatio: p.aspectRatio }),
           ...(p.aspectMode && { aspectMode: p.aspectMode }),
-          ...(p.action ? { action: p.action } : {}),
+          ...(act ? { action: act } : {}),
           ...(margin ? { margin } : {}),
         };
       } else if (el.type === "button") {
+        const act = sanitizeAction(p.action, "button");
+        const safeHeight: ButtonHeight = p.height === "sm" ? "sm" : "md"; // lgは存在しないためmdに
         node = {
           type: "button",
           ...(p.style && { style: p.style }),
-          ...(p.buttonColor && { color: p.buttonColor }), // buttonColor を color として出力
-          ...(p.height && { height: p.height }),
-          ...(p.action ? { action: p.action } : {}),
+          ...(p.color && { color: p.color }), // NOTE: primary/secondaryは背景色, linkは文字色
+          ...(safeHeight && { height: safeHeight }),
+          ...(act ? { action: act } : {}),
           ...(margin ? { margin } : {}),
         };
       }
 
       // padding 指定がある場合は wrapper box を被せる
       const pad = padToPx(p.padding);
-      if (node && pad && pad !== "0px") {
+      if (node && pad) {
         return {
           type: "box",
           layout: "vertical",
@@ -311,10 +348,9 @@ function buildBubbleFromDesign(design: BubbleDesign) {
     body: {
       type: "box",
       layout: "vertical",
-      spacing: design.bodySpacing || "none", // デフォルトを none に変更
+      spacing: design.bodySpacing || "md",
       contents: bodyContents,
       ...(design.bodyBg ? { backgroundColor: design.bodyBg } : {}),
-      paddingAll: "0px", // 全体の余白を除去
     },
   };
 
@@ -409,12 +445,12 @@ const SortableItem = ({
 
       {!collapsed && (
         <div className="mt-3 grid gap-3">
-          {/* 共通: 余白設定 */}
+          {/* 共通: 余白/背景（※ボタンでは背景は非表示） */}
           <div className="grid grid-cols-3 gap-2">
             <div>
               <Label className="text-xs">外側の余白</Label>
               <Select
-                value={p.margin || "none"}
+                value={p.margin || "md"}
                 onValueChange={(v: MarginToken) => onUpdate(element.id, { ...p, margin: v })}
               >
                 <SelectTrigger className="h-7 text-xs" />
@@ -443,15 +479,17 @@ const SortableItem = ({
                 </SelectContent>
               </Select>
             </div>
-            <div>
-              <Label className="text-xs">背景色(任意)</Label>
-              <div className="h-7 flex items-center">
-                <ColorPicker
-                  color={p.backgroundColor || "#ffffff"}
-                  onChange={(color) => onUpdate(element.id, { ...p, backgroundColor: color })}
-                />
+            {element.type !== "button" && (
+              <div>
+                <Label className="text-xs">背景色(任意)</Label>
+                <div className="h-7 flex items-center">
+                  <ColorPicker
+                    color={p.backgroundColor || "#ffffff"}
+                    onChange={(color) => onUpdate(element.id, { ...p, backgroundColor: color })}
+                  />
+                </div>
               </div>
-            </div>
+            )}
           </div>
 
           {/* テキスト要素固有設定 */}
@@ -533,9 +571,9 @@ const SortableItem = ({
                   {p.url && (
                     <div className="mt-1">
                       <div className="h-16 w-full overflow-hidden rounded border bg-muted flex items-center justify-center">
-                        <img
-                          src={p.url}
-                          alt="thumb"
+                        <img 
+                          src={p.url} 
+                          alt="thumb" 
                           className="max-h-full max-w-full object-contain"
                           onError={(e) => {
                             e.currentTarget.style.display = 'none';
@@ -543,8 +581,8 @@ const SortableItem = ({
                             if (errorDiv) errorDiv.style.display = 'block';
                           }}
                         />
-                        <div
-                          className="text-xs text-muted-foreground"
+                        <div 
+                          className="text-xs text-muted-foreground" 
                           style={{display: 'none'}}
                         >
                           画像エラー
@@ -559,7 +597,8 @@ const SortableItem = ({
                 <div>
                   <Label className="text-xs">メディア</Label>
                   <div className="h-8 flex items-center">
-                    <MediaSelector onSelect={(url) => onUpdate(element.id, { ...p, url })} selectedUrl={p.url} />
+                    {/* 「選択されたファイル」の表示を消したい要件に合わせ、selectedUrlは渡さない */}
+                    <MediaSelector onSelect={(url) => onUpdate(element.id, { ...p, url })} />
                   </div>
                 </div>
               </div>
@@ -606,82 +645,76 @@ const SortableItem = ({
                 </div>
               </div>
 
-              <div className="border-t pt-2">
-                <Label className="text-xs font-semibold">タップ時の動作 (任意)</Label>
-                <div className="grid gap-2 mt-2">
+              {p.aspectMode === "fit" && (
+                <div className="grid grid-cols-3 gap-2 items-center">
+                  <div className="col-span-2 text-[11px] text-muted-foreground">
+                    フィット時の上下の空白を無くす（実配信でも空白を抑えたい場合に推奨）
+                  </div>
+                  <div className="justify-self-end flex items-center gap-1">
+                    <input
+                      id={`noFixedRatio-${element.id}`}
+                      type="checkbox"
+                      className="h-3.5 w-3.5"
+                      checked={!!p.noFixedRatio}
+                      onChange={(e) => onUpdate(element.id, { ...p, noFixedRatio: e.target.checked })}
+                    />
+                    <Label htmlFor={`noFixedRatio-${element.id}`} className="text-xs">比率固定を解除</Label>
+                  </div>
+                </div>
+              )}
+
+              <div className="grid grid-cols-3 gap-2 items-end">
+                <div className="col-span-2">
+                  <Label className="text-xs">タップ時の動作 (任意)</Label>
                   <div className="grid grid-cols-3 gap-2">
-                    <div>
-                      <Label className="text-xs">アクションタイプ</Label>
+                    <div className="col-span-1">
                       <Select
-                        value={p.action?.type || "uri"}
-                        onValueChange={(v: ElementAction["type"]) =>
+                        value={p.action?.type || "none"}
+                        onValueChange={(v: ActionType) =>
                           onUpdate(element.id, { ...p, action: { ...(p.action || {}), type: v } })
                         }
                       >
                         <SelectTrigger className="h-7 text-xs" />
                         <SelectContent>
-                          <SelectItem value="uri">URLを開く</SelectItem>
-                          <SelectItem value="message">メッセージ送信</SelectItem>
+                          <SelectItem value="none">なし</SelectItem>
+                          <SelectItem value="uri">URL</SelectItem>
+                          <SelectItem value="message">定型文</SelectItem>
                           <SelectItem value="postback">ポストバック</SelectItem>
                         </SelectContent>
                       </Select>
                     </div>
                     <div className="col-span-2">
                       {p.action?.type === "uri" && (
-                        <div>
-                          <Label className="text-xs">URL</Label>
-                          <Input
-                            className="h-7 text-xs"
-                            placeholder="https://..."
-                            value={p.action?.uri || ""}
-                            onChange={(e) => onUpdate(element.id, { ...p, action: { ...(p.action || { type: "uri" }), uri: e.target.value } })}
-                          />
-                        </div>
+                        <Input
+                          className="h-8 text-xs"
+                          placeholder="https://..."
+                          value={p.action?.uri || ""}
+                          onChange={(e) => onUpdate(element.id, { ...p, action: { ...(p.action || { type: "uri" }), uri: e.target.value } })}
+                        />
                       )}
                       {p.action?.type === "message" && (
-                        <div>
-                          <Label className="text-xs">送信するテキスト</Label>
-                          <Input
-                            className="h-7 text-xs"
-                            placeholder="送信するテキスト"
-                            value={p.action?.text || ""}
-                            onChange={(e) => onUpdate(element.id, { ...p, action: { ...(p.action || { type: "message" }), text: e.target.value } })}
-                          />
-                        </div>
+                        <Input
+                          className="h-8 text-xs"
+                          placeholder="送信するテキスト"
+                          value={p.action?.text || ""}
+                          onChange={(e) => onUpdate(element.id, { ...p, action: { ...(p.action || { type: "message" }), text: e.target.value } })}
+                        />
                       )}
                       {p.action?.type === "postback" && (
-                        <div>
-                          <Label className="text-xs">ポストバックデータ</Label>
-                          <Input
-                            className="h-7 text-xs"
-                            placeholder="data=xxx"
-                            value={p.action?.data || ""}
-                            onChange={(e) => onUpdate(element.id, { ...p, action: { ...(p.action || { type: "postback" }), data: e.target.value } })}
-                          />
-                        </div>
+                        <Input
+                          className="h-8 text-xs"
+                          placeholder="data=xxx"
+                          value={p.action?.data || ""}
+                          onChange={(e) => onUpdate(element.id, { ...p, action: { ...(p.action || { type: "postback" }), data: e.target.value } })}
+                        />
                       )}
                     </div>
                   </div>
-                  {p.action?.type === "uri" && (
-                    <div className="text-[10px] text-muted-foreground">
-                      ※ タップすると指定したURLをブラウザで開きます
-                    </div>
-                  )}
-                  {p.action?.type === "message" && (
-                    <div className="text-[10px] text-muted-foreground">
-                      ※ タップすると指定したテキストをユーザーから送信します
-                    </div>
-                  )}
-                  {p.action?.type === "postback" && (
-                    <div className="text-[10px] text-muted-foreground">
-                      ※ タップするとWebhookにデータを送信します（開発者向け）
-                    </div>
-                  )}
                 </div>
-              </div>
-
-              <div className="text-[11px] text-muted-foreground">
-                <div>※ ヒーロー: バブル上部に大きく表示（余白なし）</div>
+                <div className="text-[11px] text-muted-foreground">
+                  <div>※ ヒーロー: バブル上部に大きく表示</div>
+                  <div>※ URLはhttpsのみ有効</div>
+                </div>
               </div>
             </div>
           )}
@@ -708,107 +741,71 @@ const SortableItem = ({
                     <SelectContent>
                       <SelectItem value="sm">小</SelectItem>
                       <SelectItem value="md">中</SelectItem>
-                      <SelectItem value="lg">大</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-2">
                 <div>
-                  <Label className="text-xs">背景色</Label>
+                  <Label className="text-xs">色</Label>
                   <div className="h-7 flex items-center">
-                    <ColorPicker color={p.buttonColor || "#06c755"} onChange={(c) => onUpdate(element.id, { ...p, buttonColor: c })} />
-                  </div>
-                </div>
-                <div>
-                  <Label className="text-xs">文字色</Label>
-                  <div className="h-7 flex items-center">
-                    <ColorPicker color={p.textColor || "#ffffff"} onChange={(c) => onUpdate(element.id, { ...p, textColor: c })} />
+                    <ColorPicker color={p.color || "#06c755"} onChange={(c) => onUpdate(element.id, { ...p, color: c })} />
                   </div>
                 </div>
               </div>
-
-              <div className="border-t pt-2">
-                <Label className="text-xs font-semibold">ボタンの動作</Label>
-                <div className="grid gap-2 mt-2">
-                  <div>
-                    <Label className="text-xs">ラベル</Label>
-                    <Input
-                      className="h-7 text-xs"
-                      value={p.action?.label || ""}
-                      onChange={(e) => onUpdate(element.id, { ...p, action: { ...(p.action || { type: "uri" }), label: e.target.value } })}
-                      placeholder="ボタンに表示するテキスト"
-                    />
-                  </div>
+              <div className="grid grid-cols-3 gap-2 items-end">
+                <div>
+                  <Label className="text-xs">ラベル</Label>
+                  <Input
+                    className="h-8 text-xs"
+                    value={p.action?.label || ""}
+                    onChange={(e) => onUpdate(element.id, { ...p, action: { ...(p.action || { type: "uri" }), label: e.target.value } })}
+                  />
+                </div>
+                <div className="col-span-2">
+                  <Label className="text-xs">ボタンの動作</Label>
                   <div className="grid grid-cols-3 gap-2">
-                    <div>
-                      <Label className="text-xs">アクションタイプ</Label>
-                      <Select
-                        value={p.action?.type || "uri"}
-                        onValueChange={(v: ElementAction["type"]) => onUpdate(element.id, { ...p, action: { ...(p.action || {}), type: v } })}
-                      >
-                        <SelectTrigger className="h-7 text-xs" />
-                        <SelectContent>
-                          <SelectItem value="uri">URLを開く</SelectItem>
-                          <SelectItem value="message">メッセージ送信</SelectItem>
-                          <SelectItem value="postback">ポストバック</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    <div className="col-span-2">
-                      {p.action?.type === "uri" && (
-                        <div>
-                          <Label className="text-xs">URL</Label>
-                          <Input
-                            className="h-7 text-xs"
-                            placeholder="https://..."
-                            value={p.action?.uri || ""}
-                            onChange={(e) => onUpdate(element.id, { ...p, action: { ...(p.action || { type: "uri" }), uri: e.target.value } })}
-                          />
-                        </div>
-                      )}
-                      {p.action?.type === "message" && (
-                        <div>
-                          <Label className="text-xs">送信するテキスト</Label>
-                          <Input
-                            className="h-7 text-xs"
-                            placeholder="送信するテキスト"
-                            value={p.action?.text || ""}
-                            onChange={(e) => onUpdate(element.id, { ...p, action: { ...(p.action || { type: "message" }), text: e.target.value } })}
-                          />
-                        </div>
-                      )}
-                      {p.action?.type === "postback" && (
-                        <div>
-                          <Label className="text-xs">ポストバックデータ</Label>
-                          <Input
-                            className="h-7 text-xs"
-                            placeholder="data=xxx"
-                            value={p.action?.data || ""}
-                            onChange={(e) => onUpdate(element.id, { ...p, action: { ...(p.action || { type: "postback" }), data: e.target.value } })}
-                          />
-                        </div>
-                      )}
-                    </div>
+                    <Select
+                      value={p.action?.type || "uri"}
+                      onValueChange={(v: ActionType) => onUpdate(element.id, { ...p, action: { ...(p.action || {}), type: v } })}
+                    >
+                      <SelectTrigger className="h-7 text-xs" />
+                      <SelectContent>
+  <SelectItem value="none">なし</SelectItem>
+  <SelectItem value="uri">URL</SelectItem>
+  <SelectItem value="message">定型文</SelectItem>
+  <SelectItem value="postback">ポストバック</SelectItem>
+</SelectContent>
+
+                    </Select>
+                    {p.action?.type === "uri" && (
+                      <Input
+                        className="h-8 text-xs col-span-2"
+                        placeholder="https://..."
+                        value={p.action?.uri || ""}
+                        onChange={(e) => onUpdate(element.id, { ...p, action: { ...(p.action || { type: "uri" }), uri: e.target.value } })}
+                      />
+                    )}
+                    {p.action?.type === "message" && (
+                      <Input
+                        className="h-8 text-xs col-span-2"
+                        placeholder="送信するテキスト"
+                        value={p.action?.text || ""}
+                        onChange={(e) => onUpdate(element.id, { ...p, action: { ...(p.action || { type: "message" }), text: e.target.value } })}
+                      />
+                    )}
+                    {p.action?.type === "postback" && (
+                      <Input
+                        className="h-8 text-xs col-span-2"
+                        placeholder="data=xxx"
+                        value={p.action?.data || ""}
+                        onChange={(e) => onUpdate(element.id, { ...p, action: { ...(p.action || { type: "postback" }), data: e.target.value } })}
+                      />
+                    )}
                   </div>
-                  {p.action?.type === "uri" && (
-                    <div className="text-[10px] text-muted-foreground">
-                      ※ タップすると指定したURLをブラウザで開きます
-                    </div>
-                  )}
-                  {p.action?.type === "message" && (
-                    <div className="text-[10px] text-muted-foreground">
-                      ※ タップすると指定したテキストをユーザーから送信します
-                    </div>
-                  )}
-                  {p.action?.type === "postback" && (
-                    <div className="text-[10px] text-muted-foreground">
-                      ※ タップするとWebhookにデータを送信します（開発者向け）
-                    </div>
-                  )}
                 </div>
               </div>
+              <p className="text-[11px] text-muted-foreground">
+                ※ primary/secondaryでは「色」は背景色、linkでは文字色になります。
+              </p>
             </div>
           )}
         </div>
@@ -923,11 +920,11 @@ export default function FlexMessageDesigner() {
   };
 
   const newMessage = () => {
-    setState({ containerType: "bubble", bubbles: [defaultBubble()], currentIndex: 0, loadedMessageId: undefined });
+    setState({ containerType: "bubble", bubbles: [defaultBubble()], currentIndex: 0 });
   };
 
   // ======== Save / Load / Send ========
-  const saveMessage = async (asNew: boolean = false) => {
+  const saveMessage = async () => {
     const alt = (current?.altText || "").trim();
     if (!alt) {
       toast({ title: "入力エラー", description: "代替テキスト(通知文)を入力してください", variant: "destructive" });
@@ -945,26 +942,9 @@ export default function FlexMessageDesigner() {
       const content = buildFlexMessage(state);
       const title = current?.name || "Flexメッセージ";
 
-      if (!asNew && state.loadedMessageId) {
-        // 上書き保存
-        const { error } = await supabase
-          .from("flex_messages")
-          .update({ name: title, content })
-          .eq("id", state.loadedMessageId);
-        if (error) throw error;
-        toast({ title: "上書き保存成功", description: `「${title}」を上書き保存しました` });
-      } else {
-        // 新規保存
-        const { data: newData, error } = await supabase
-          .from("flex_messages")
-          .insert({ user_id: user.id, name: title, content })
-          .select();
-        if (error) throw error;
-        if (newData && newData[0]) {
-          setState(prev => ({ ...prev, loadedMessageId: newData[0].id }));
-        }
-        toast({ title: "新規保存成功", description: `「${title}」を新規保存しました` });
-      }
+      const { error } = await supabase.from("flex_messages").insert({ user_id: user.id, name: title, content });
+      if (error) throw error;
+      toast({ title: "保存成功", description: `「${title}」を保存しました` });
 
       // 最新を再読込
       const { data, error: fetchErr } = await supabase
@@ -1003,6 +983,7 @@ export default function FlexMessageDesigner() {
                 margin: "none",
                 padding: "none",
                 action: b.hero.action,
+                noFixedRatio: false,
               },
             });
           }
@@ -1023,7 +1004,7 @@ export default function FlexMessageDesigner() {
                     weight: inner.weight || "normal",
                     color: inner.color || "#000000",
                     align: inner.align || "start",
-                    margin: inner.margin || "none",
+                    margin: inner.margin || "md",
                     padding: padding,
                     backgroundColor: inner.backgroundColor,
                     wrap: true,
@@ -1039,8 +1020,9 @@ export default function FlexMessageDesigner() {
                     aspectRatio: inner.aspectRatio || "20:13",
                     aspectMode: inner.aspectMode || "cover",
                     action: inner.action,
-                    margin: inner.margin || "none",
+                    margin: inner.margin || "md",
                     padding,
+                    noFixedRatio: false,
                   },
                 });
               } else if (inner.type === "button") {
@@ -1049,11 +1031,11 @@ export default function FlexMessageDesigner() {
                   type: "button",
                   properties: {
                     style: inner.style || "primary",
-                    buttonColor: inner.color,
-                    textColor: "#ffffff",
-                    height: inner.height || "md",
+                    color: inner.color,
+                    // 既存データにlgがあってもmdに落とす
+                    height: inner.height === "sm" ? "sm" : "md",
                     action: inner.action,
-                    margin: inner.margin || "none",
+                    margin: inner.margin || "md",
                     padding,
                   },
                 });
@@ -1070,7 +1052,7 @@ export default function FlexMessageDesigner() {
                     weight: node.weight || "normal",
                     color: node.color || "#000000",
                     align: node.align || "start",
-                    margin: node.margin || "none",
+                    margin: node.margin || "md",
                     padding: "none",
                     backgroundColor: node.backgroundColor,
                     wrap: true,
@@ -1086,8 +1068,9 @@ export default function FlexMessageDesigner() {
                     aspectRatio: node.aspectRatio || "20:13",
                     aspectMode: node.aspectMode || "cover",
                     action: node.action,
-                    margin: node.margin || "none",
+                    margin: node.margin || "md",
                     padding: "none",
+                    noFixedRatio: false,
                   },
                 });
               } else if (node.type === "button") {
@@ -1096,11 +1079,10 @@ export default function FlexMessageDesigner() {
                   type: "button",
                   properties: {
                     style: node.style || "primary",
-                    buttonColor: node.color,
-                    textColor: "#ffffff",
-                    height: node.height || "md",
+                    color: node.color,
+                    height: node.height === "sm" ? "sm" : "md",
                     action: node.action,
-                    margin: node.margin || "none",
+                    margin: node.margin || "md",
                     padding: "none",
                   },
                 });
@@ -1113,12 +1095,12 @@ export default function FlexMessageDesigner() {
             altText: row.content?.altText || `${row.name}のお知らせ`,
             bubbleSize: (b.size as BubbleSize) || "kilo",
             bodyBg: b.body?.backgroundColor,
-            bodySpacing: b.body?.spacing as SpacingToken || "none",
+            bodySpacing: (b.body?.spacing as SpacingToken) || "md",
             contents: items,
           } as BubbleDesign;
         });
 
-        setState({ containerType: "carousel", bubbles, currentIndex: 0, loadedMessageId: row.id });
+        setState({ containerType: "carousel", bubbles, currentIndex: 0 });
       } else {
         // bubble 単体
         const b = c;
@@ -1136,6 +1118,7 @@ export default function FlexMessageDesigner() {
               margin: "none",
               padding: "none",
               action: b.hero.action,
+              noFixedRatio: false,
             },
           });
         }
@@ -1144,16 +1127,16 @@ export default function FlexMessageDesigner() {
             const inner = node.contents[0];
             const padding: PaddingToken = node.paddingAll === "4px" ? "xs" : node.paddingAll === "8px" ? "sm" : node.paddingAll === "12px" ? "md" : node.paddingAll === "16px" ? "lg" : node.paddingAll === "20px" ? "xl" : "none";
             if (inner.type === "text") {
-              items.push({ id: `el-${i}`, type: "text", properties: { text: inner.text, size: inner.size || "md", weight: inner.weight || "normal", color: inner.color || "#000000", align: inner.align || "start", margin: inner.margin || "none", padding, backgroundColor: inner.backgroundColor, wrap: true } });
+              items.push({ id: `el-${i}`, type: "text", properties: { text: inner.text, size: inner.size || "md", weight: inner.weight || "normal", color: inner.color || "#000000", align: inner.align || "start", margin: inner.margin || "md", padding, backgroundColor: inner.backgroundColor, wrap: true } });
             } else if (inner.type === "image") {
-              items.push({ id: `el-${i}`, type: "image", properties: { url: inner.url, imgSize: inner.size || "full", aspectRatio: inner.aspectRatio || "20:13", aspectMode: inner.aspectMode || "cover", action: inner.action, margin: inner.margin || "none", padding } });
+              items.push({ id: `el-${i}`, type: "image", properties: { url: inner.url, imgSize: inner.size || "full", aspectRatio: inner.aspectRatio || "20:13", aspectMode: inner.aspectMode || "cover", action: inner.action, margin: inner.margin || "md", padding, noFixedRatio: false } });
             } else if (inner.type === "button") {
-              items.push({ id: `el-${i}`, type: "button", properties: { style: inner.style || "primary", buttonColor: inner.color, textColor: "#ffffff", height: inner.height || "md", action: inner.action, margin: inner.margin || "none", padding } });
+              items.push({ id: `el-${i}`, type: "button", properties: { style: inner.style || "primary", color: inner.color, height: inner.height === "sm" ? "sm" : "md", action: inner.action, margin: inner.margin || "md", padding } });
             }
           } else {
-            if (node.type === "text") items.push({ id: `el-${i}`, type: "text", properties: { text: node.text, size: node.size || "md", weight: node.weight || "normal", color: node.color || "#000000", align: node.align || "start", margin: node.margin || "none", padding: "none", backgroundColor: node.backgroundColor, wrap: true } });
-            if (node.type === "image") items.push({ id: `el-${i}`, type: "image", properties: { url: node.url, imgSize: node.size || "full", aspectRatio: node.aspectRatio || "20:13", aspectMode: node.aspectMode || "cover", action: node.action, margin: node.margin || "none", padding: "none" } });
-            if (node.type === "button") items.push({ id: `el-${i}`, type: "button", properties: { style: node.style || "primary", buttonColor: node.color, textColor: "#ffffff", height: node.height || "md", action: node.action, margin: node.margin || "none", padding: "none" } });
+            if (node.type === "text") items.push({ id: `el-${i}`, type: "text", properties: { text: node.text, size: node.size || "md", weight: node.weight || "normal", color: node.color || "#000000", align: node.align || "start", margin: node.margin || "md", padding: "none", backgroundColor: node.backgroundColor, wrap: true } });
+            if (node.type === "image") items.push({ id: `el-${i}`, type: "image", properties: { url: node.url, imgSize: node.size || "full", aspectRatio: node.aspectRatio || "20:13", aspectMode: node.aspectMode || "cover", action: node.action, margin: node.margin || "md", padding: "none", noFixedRatio: false } });
+            if (node.type === "button") items.push({ id: `el-${i}`, type: "button", properties: { style: node.style || "primary", color: node.color, height: node.height === "sm" ? "sm" : "md", action: node.action, margin: node.margin || "md", padding: "none" } });
           }
         });
 
@@ -1165,12 +1148,11 @@ export default function FlexMessageDesigner() {
               altText: row.content?.altText || `${row.name}のお知らせ`,
               bubbleSize: (b.size as BubbleSize) || "kilo",
               bodyBg: b.body?.backgroundColor,
-              bodySpacing: b.body?.spacing as SpacingToken || "none",
+              bodySpacing: (b.body?.spacing as SpacingToken) || "md",
               contents: items,
             },
           ],
           currentIndex: 0,
-          loadedMessageId: row.id,
         });
       }
 
@@ -1187,10 +1169,6 @@ export default function FlexMessageDesigner() {
       const { error } = await supabase.from("flex_messages").delete().eq("id", id);
       if (error) throw error;
       setMessages((prev) => prev.filter((m) => m.id !== id));
-      // 削除したメッセージが現在読み込んでいるメッセージの場合、リセット
-      if (state.loadedMessageId === id) {
-        newMessage();
-      }
       toast({ title: "削除", description: `「${name}」を削除しました` });
     } catch (e: any) {
       console.error(e);
@@ -1230,9 +1208,9 @@ export default function FlexMessageDesigner() {
         toast({ title: "認証エラー", description: "ログインしてください", variant: "destructive" });
         return;
       }
-
-      const { error } = await supabase.functions.invoke("send-flex-message", {
-        body: { flexMessage: messageContent, userId: user.id }
+      
+      const { error } = await supabase.functions.invoke("send-flex-message", { 
+        body: { flexMessage: messageContent, userId: user.id } 
       });
       if (error) throw error;
       toast({ title: "送信完了", description: "保存済みメッセージを配信しました" });
@@ -1256,7 +1234,7 @@ export default function FlexMessageDesigner() {
     <div className="min-h-screen bg-background">
       <header className="border-b">
         <div className="container mx-auto px-3 py-2 flex items-center gap-2">
-          <Button variant="ghost" size="sm" className="h-7 px-2" onClick={() => navigate("/")}>
+          <Button variant="ghost" size="sm" className="h-7 px-2" onClick={() => navigate("/")}> 
             <ArrowLeft className="w-4 h-4" />
           </Button>
           <h1 className="text-base font-semibold">Flexメッセージデザイナー</h1>
@@ -1277,14 +1255,11 @@ export default function FlexMessageDesigner() {
               ) : (
                 <div className="space-y-2">
                   {messages.map((m) => (
-                    <div key={m.id} className={`border rounded-md p-2 ${state.loadedMessageId === m.id ? 'border-primary bg-primary/10' : ''}`}>
+                    <div key={m.id} className="border rounded-md p-2">
                       <div className="flex items-center justify-between gap-2">
                         <div className="min-w-0 flex-1">
                           <div className="text-sm font-medium truncate" title={m.name}>{m.name}</div>
                           <div className="text-[10px] text-muted-foreground">{new Date(m.created_at).toLocaleString("ja-JP")}</div>
-                          {state.loadedMessageId === m.id && (
-                            <div className="text-[10px] text-primary">現在編集中</div>
-                          )}
                         </div>
                         <div className="flex gap-1">
                           <Button size="sm" variant="outline" className="h-7 px-2 text-xs" onClick={() => loadMessage(m)}>
@@ -1314,26 +1289,14 @@ export default function FlexMessageDesigner() {
                     <CardTitle className="text-sm flex items-center gap-2"><MessageSquare className="w-4 h-4" />デザイン</CardTitle>
                     <CardDescription className="text-xs">必要最小限の設定で作れます。高度な設定は各要素を開いて調整</CardDescription>
                   </div>
-                  <div className="flex flex-wrap gap-2">
-                    <Button size="sm" variant="outline" className="h-8 text-xs" onClick={newMessage}>
-                      <FilePlus className="w-4 h-4 mr-1" />新規
-                    </Button>
-                    <Button size="sm" className="h-8 text-xs" onClick={() => saveMessage(true)} disabled={loading}>
-                      <Save className="w-4 h-4 mr-1" />新規保存
-                    </Button>
-                    {state.loadedMessageId && (
-                      <Button size="sm" variant="outline" className="h-8 text-xs" onClick={() => saveMessage(false)} disabled={loading}>
-                        <FileEdit className="w-4 h-4 mr-1" />上書き保存
-                      </Button>
-                    )}
-                    <Button size="sm" className="h-8 text-xs bg-[#06c755] hover:bg-[#05b84c]" onClick={sendNow} disabled={loading}>
-                      <Send className="w-4 h-4 mr-1" />配信
-                    </Button>
+                  <div className="flex gap-2">
+                    <Button size="sm" variant="outline" className="h-8 text-xs" onClick={newMessage}>新規</Button>
+                    <Button size="sm" className="h-8 text-xs" onClick={saveMessage} disabled={loading}><Save className="w-4 h-4 mr-1" />保存</Button>
+                    <Button size="sm" className="h-8 text-xs bg-[#06c755] hover:bg-[#05b84c]" onClick={sendNow} disabled={loading}><Send className="w-4 h-4 mr-1" />配信</Button>
                   </div>
                 </div>
               </CardHeader>
               <CardContent className="grid gap-3 text-sm">
-                {/* --- ここからが追記部分 --- */}
                 {/* 上段: 基本情報 */}
                 <div className="grid grid-cols-3 gap-3">
                   <div>
@@ -1404,7 +1367,7 @@ export default function FlexMessageDesigner() {
                   <div>
                     <Label className="text-xs">要素間隔</Label>
                     <Select
-                      value={current.bodySpacing || "none"}
+                      value={current.bodySpacing || "md"}
                       onValueChange={(v: SpacingToken) =>
                         setState((prev) => ({
                           ...prev,
@@ -1527,48 +1490,48 @@ export default function FlexMessageDesigner() {
               <CardTitle className="text-sm flex items-center gap-2"><Eye className="w-4 h-4" />プレビュー</CardTitle>
               <CardDescription className="text-xs">おおよその見た目(実機と微差あり)</CardDescription>
             </CardHeader>
-            <CardContent className="pt-0 overflow-auto h-full bg-gray-200 p-4">
-              <div
-                className="mx-auto rounded-lg bg-white overflow-hidden"
+            <CardContent className="pt-0 overflow-auto h-full">
+              {/* Phone-like preview */}
+              <div 
+                className="mx-auto rounded-lg border bg-white p-3"
                 style={{
-                  width: getBubbleWidthPx(current.bubbleSize),
+                  // 右カラム(320px)に確実に収まるよう、maxWidthだけバブル幅に。表示は常に列幅にフィット。
+                  width: "100%",
+                  maxWidth: getBubbleWidthPx(current.bubbleSize),
                 }}
               >
                 {/* hero */}
-                {current.contents.find((c) => c.type === "image" && c.properties.isHero && c.properties.url) && (() => {
-                  const hero = current.contents.find((c) => c.type === "image" && c.properties.isHero);
-                  if (!hero) return null;
-                  return (
-                    <div>
-                      <img
-                        src={hero.properties.url}
-                        alt="hero"
-                        className="w-full block"
-                        style={{
-                          aspectRatio: hero.properties.aspectRatio?.replace(':', '/') || "auto",
-                          objectFit: hero.properties.aspectMode === "fit" ? "contain" : "cover",
-                        }}
-                      />
-                    </div>
-                  );
-                })()}
-
+                {current.contents.find((c) => c.type === "image" && c.properties.isHero && c.properties.url) && (
+                  <div className="mb-2">
+                    <img
+                      src={current.contents.find((c) => c.type === "image" && c.properties.isHero)?.properties.url}
+                      alt="hero"
+                      className="w-full rounded"
+                      style={{
+                        // ヒーローは常に比率を尊重
+                        aspectRatio: current.contents.find((c) => c.type === "image" && c.properties.isHero)?.properties.aspectRatio?.replace(':', '/') || undefined,
+                        objectFit: current.contents.find((c) => c.type === "image" && c.properties.isHero)?.properties.aspectMode === "fit" ? "contain" : "cover",
+                      }}
+                    />
+                  </div>
+                )}
                 {/* body */}
-                <div
-                  className="flex flex-col"
-                  style={{
-                    backgroundColor: current.bodyBg && current.bodyBg !== "#ffffff" ? current.bodyBg : undefined,
-                    gap: getMarginPx(current.bodySpacing),
+                <div 
+                  className="rounded p-2" 
+                  style={{ 
+                    backgroundColor: current.bodyBg && current.bodyBg !== "#ffffff" 
+                      ? current.bodyBg 
+                      : undefined 
                   }}
                 >
-                  {current.contents.filter((c) => !(c.type === "image" && c.properties.isHero)).map((el) => (
-                    <div
-                      key={el.id}
+                  {current.contents.filter((c) => !(c.type === "image" && c.properties.isHero)).map((el, i, arr) => (
+                    <div 
+                      key={el.id} 
+                      className="last:mb-0"
                       style={{
-                        marginTop: getMarginPx(el.properties.margin),
-                        padding: padToPx(el.properties.padding),
-                        backgroundColor: el.properties.backgroundColor && el.properties.backgroundColor !== "#ffffff" ? el.properties.backgroundColor : undefined,
-                        borderRadius: el.properties.backgroundColor && el.properties.backgroundColor !== "#ffffff" ? "4px" : undefined,
+                        marginBottom: i < arr.length - 1 
+                          ? getMarginPx((current.bodySpacing || "md") as MarginToken)
+                          : "0"
                       }}
                     >
                       {el.type === "text" && (
@@ -1576,24 +1539,48 @@ export default function FlexMessageDesigner() {
                           style={{
                             color: el.properties.color || "#000",
                             textAlign: (el.properties.align || "start") as any,
+                            backgroundColor: el.properties.backgroundColor && 
+                                            el.properties.backgroundColor !== "#ffffff" 
+                              ? el.properties.backgroundColor 
+                              : undefined,
+                            padding: el.properties.padding && el.properties.padding !== "none" 
+                              ? padToPx(el.properties.padding) 
+                              : undefined,
+                            margin: el.properties.margin && el.properties.margin !== "none"
+                              ? `${getMarginPx(el.properties.margin)} 0`
+                              : undefined,
+                            borderRadius: el.properties.backgroundColor && el.properties.backgroundColor !== "#ffffff" ? "4px" : undefined,
                             fontSize: getTextSizePx(el.properties.size || "md"),
                             fontWeight: el.properties.weight === "bold" ? "bold" : "normal",
-                            whiteSpace: "pre-wrap",
-                            overflowWrap: "break-word",
                           }}
                         >
-                          {el.properties.text || ""}
+                          {(el.properties.text || "").split("\n").map((line, idx) => (
+                            <div key={idx}>{line}</div>
+                          ))}
                         </div>
                       )}
                       {el.type === "image" && el.properties.url && (
-                        <div>
-                          <img
-                            src={el.properties.url}
-                            alt="img"
-                            className="w-full rounded block"
+                        <div 
+                          style={{
+                            margin: el.properties.margin && el.properties.margin !== "none"
+                              ? `${getMarginPx(el.properties.margin)} 0`
+                              : undefined,
+                            padding: el.properties.padding && el.properties.padding !== "none"
+                              ? padToPx(el.properties.padding)
+                              : undefined,
+                          }}
+                        >
+                          <img 
+                            src={el.properties.url} 
+                            alt="img" 
+                            className="w-full rounded"
                             style={{
-                              aspectRatio: el.properties.aspectRatio?.replace(':', '/') || "auto",
+                              // フィット+比率固定解除のときはaspectRatioを付けず高さ可変（＝レターボックス無し）
+                              aspectRatio: (el.properties.aspectMode === "fit" && el.properties.noFixedRatio)
+                                ? undefined
+                                : (el.properties.aspectRatio?.replace(':', '/') || undefined),
                               objectFit: el.properties.aspectMode === "fit" ? "contain" : "cover",
+                              display: "block",
                             }}
                             onError={(e) => {
                               e.currentTarget.src = "data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjAwIiBoZWlnaHQ9IjEwMCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48cmVjdCB3aWR0aD0iMTAwJSIgaGVpZ2h0PSIxMDAlIiBmaWxsPSIjZjFmMWYxIi8+PHRleHQgeD0iNTAlIiB5PSI1MCUiIGZvbnQtZmFtaWx5PSJBcmlhbCIgZm9udC1zaXplPSIxMiIgZmlsbD0iIzk5OTk5OSIgdGV4dC1hbmNob3I9Im1pZGRsZSIgZHk9Ii4zZW0iPkVycm9yPC90ZXh0Pjwvc3ZnPg==";
@@ -1603,18 +1590,26 @@ export default function FlexMessageDesigner() {
                       )}
                       {el.type === "button" && (
                         <button
-                          className="w-full rounded text-[13px] px-3 font-bold"
+                          className="w-full rounded text-[13px] px-3"
                           style={{
-                            backgroundColor: el.properties.style === "primary"
-                              ? (el.properties.buttonColor || "#06c755")
-                              : el.properties.style === "secondary"
-                              ? `${el.properties.buttonColor || "#06c755"}20`
+                            // プレビューではLINEの見た目に合わせて解釈：
+                            // primary/secondary ⇒ 背景色にcolorを使用、link ⇒ 背景透過＋文字色にcolor
+                            backgroundColor: el.properties.style === "primary" 
+                              ? (el.properties.color || "#06c755") 
+                              : el.properties.style === "secondary" 
+                              ? `${el.properties.color || "#06c755"}20` 
                               : "transparent",
-                            color: el.properties.textColor,
-                            border: el.properties.style === "link"
-                              ? `1px solid ${el.properties.buttonColor || "#06c755"}`
-                              : "none",
+                            color: el.properties.style === "link" ? (el.properties.color || "#06c755") : "#ffffff",
+                            border: el.properties.style === "link" 
+                              ? `1px solid ${el.properties.color || "#06c755"}` 
+                              : "1px solid transparent",
                             height: getButtonHeightPx(el.properties.height || "md"),
+                            margin: el.properties.margin && el.properties.margin !== "none"
+                              ? `${getMarginPx(el.properties.margin)} 0`
+                              : undefined,
+                            padding: el.properties.padding && el.properties.padding !== "none"
+                              ? padToPx(el.properties.padding)
+                              : undefined,
                           }}
                         >
                           {el.properties.action?.label || "ボタン"}
