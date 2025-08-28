@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -11,10 +11,10 @@ import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { MediaSelector } from "@/components/MediaSelector";
 import { ColorPicker } from "@/components/ui/color-picker";
-import { DndContext, closestCenter, DragEndEvent, KeyboardSensor, PointerSensor, useSensor, useSensors } from "@dnd-kit/core";
-import { arrayMove, SortableContext, sortableKeyboardCoordinates, verticalListSortingStrategy } from "@dnd-kit/sortable";
-import { useSortable } from "@dnd-kit/sortable";
-import { CSS } from "@dnd-kit/utilities";
+import { DndContext, closestCenter, DragEndEvent, KeyboardSensor, PointerSensor, useSensor, useSensors } from "@d-kit/core";
+import { arrayMove, SortableContext, sortableKeyboardCoordinates, verticalListSortingStrategy } from "@d-kit/sortable";
+import { useSortable } from "@d-kit/sortable";
+import { CSS } from "@d-kit/utilities";
 import { ArrowLeft, Save, Send, Plus, Trash2, GripVertical, ChevronRight, ChevronDown, Image as IconImage, MessageSquare, Copy, Layers, Eye, FilePlus, FileEdit } from "lucide-react";
 
 /**
@@ -79,7 +79,6 @@ interface ElementProps {
   // button
   style?: ButtonStyle;
   height?: ButtonHeight;
-  // 修正: ここにあった重複した `color?: string;` を削除しました
 }
 
 interface FlexElement {
@@ -185,16 +184,15 @@ const makeElement = (type: FlexElement["type"]): FlexElement => {
  */
 function buildAction(action: ElementAction | undefined): ElementAction | undefined {
   if (!action) return undefined;
-  // actionの各typeで必須フィールドが空 or 未定義ならaction自体をundefinedで返す
   switch (action.type) {
     case 'uri':
-      if (!action.uri) return undefined;
+      if (!action.uri?.trim()) return undefined;
       break;
     case 'message':
-      if (!action.text) return undefined;
+      if (!action.text?.trim()) return undefined;
       break;
     case 'postback':
-      if (!action.data) return undefined;
+      if (!action.data?.trim()) return undefined;
       break;
     default:
       return undefined;
@@ -234,7 +232,7 @@ function buildBubbleFromDesign(design: BubbleDesign) {
 
       if (node && p.padding && p.padding !== "none") {
           const wrapper: any = { type: "box", layout: "vertical", paddingAll: padToPx(p.padding), contents: [node], margin };
-          if (p.backgroundColor && p.backgroundColor !== "#ffffff") {
+          if (p.backgroundColor && p.backgroundColor !== "#ffffff" && el.type !== 'button') {
               wrapper.backgroundColor = p.backgroundColor;
           }
           return wrapper;
@@ -258,7 +256,7 @@ function buildBubbleFromDesign(design: BubbleDesign) {
     body: {
       type: "box",
       layout: "vertical",
-      spacing: design.bodySpacing,
+      spacing: design.bodySpacing || 'none',
       contents: bodyContents,
       paddingAll: '0px',
       ...(design.bodyBg && design.bodyBg !== '#ffffff' ? { backgroundColor: design.bodyBg } : {}),
@@ -339,16 +337,54 @@ const SortableItem = ({ element, onUpdate, onDelete, onHeroToggle }: { element: 
                     </div>
                     
                     {element.type === 'text' && (
-                        // Text specific UI
                         <div className="grid gap-2">
-                           <Textarea rows={2} className="text-sm" value={p.text || ""} onChange={(e) => onUpdate(element.id, { ...p, text: e.target.value })} placeholder="本文を入力" />
-                           {/* ... a row of selectors for size, weight, align, color */}
+                            <div>
+                                <Label className="text-xs">テキスト</Label>
+                                <Textarea rows={2} className="text-sm" value={p.text || ""} onChange={(e) => onUpdate(element.id, { ...p, text: e.target.value })} placeholder="本文を入力" />
+                            </div>
+                           <div className="grid grid-cols-4 gap-2">
+                                <div>
+                                    <Label className="text-xs">サイズ</Label>
+                                    <Select value={p.size || "md"} onValueChange={(v: TextSize) => onUpdate(element.id, { ...p, size: v })}>
+                                        <SelectTrigger className="h-7 text-xs" /><SelectContent>{(["xs", "sm", "md", "lg", "xl"] as TextSize[]).map((t) => <SelectItem key={t} value={t}>{t}</SelectItem>)}</SelectContent>
+                                    </Select>
+                                </div>
+                                <div>
+                                    <Label className="text-xs">太さ</Label>
+                                    <Select value={p.weight || "normal"} onValueChange={(v: FontWeight) => onUpdate(element.id, { ...p, weight: v })}>
+                                        <SelectTrigger className="h-7 text-xs" /><SelectContent><SelectItem value="normal">normal</SelectItem><SelectItem value="bold">bold</SelectItem></SelectContent>
+                                    </Select>
+                                </div>
+                                <div>
+                                    <Label className="text-xs">配置</Label>
+                                    <Select value={p.align || "start"} onValueChange={(v: Align) => onUpdate(element.id, { ...p, align: v })}>
+                                        <SelectTrigger className="h-7 text-xs" /><SelectContent><SelectItem value="start">左</SelectItem><SelectItem value="center">中央</SelectItem><SelectItem value="end">右</SelectItem></SelectContent>
+                                    </Select>
+                                </div>
+                                <div>
+                                    <Label className="text-xs">文字色</Label>
+                                    <div className="h-7 flex items-center">
+                                        <ColorPicker color={p.color || "#000000"} onChange={(c) => onUpdate(element.id, { ...p, color: c })} />
+                                    </div>
+                                </div>
+                           </div>
                         </div>
                     )}
                     
                     {element.type === "image" && (
                         <div className="grid gap-2">
-                           {/* ... Image specific UI ... */}
+                            <div className="grid grid-cols-3 gap-2 items-end">
+                                <div className="col-span-2">
+                                    <Label className="text-xs">画像URL</Label>
+                                    <Input className="h-8 text-xs" placeholder="https://..." value={p.url || ""} onChange={(e) => onUpdate(element.id, { ...p, url: e.target.value })} />
+                                </div>
+                                <div>
+                                    <Label className="text-xs">メディア</Label>
+                                    <div className="h-8 flex items-center">
+                                        <MediaSelector onSelect={(url) => onUpdate(element.id, { ...p, url })} selectedUrl={p.url} />
+                                    </div>
+                                </div>
+                            </div>
                            <div className="border-t pt-2">
                                 <Label className="text-xs font-semibold">タップ時の動作 (任意)</Label>
                                 <div className="grid gap-2 mt-2">
@@ -430,32 +466,78 @@ export default function FlexMessageDesigner() {
     const current = state.bubbles[state.currentIndex];
     const sensors = useSensors(useSensor(PointerSensor), useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }));
 
-    // ... (All handlers like useEffect, addElement, updateElement, etc. remain the same)
+    useEffect(() => {
+        (async () => {
+          try {
+            const { data: { user } } = await supabase.auth.getUser();
+            if (!user) { navigate("/auth"); return; }
+            const { data, error } = await supabase.from("flex_messages").select("*").order("created_at", { ascending: false });
+            if (error) throw error;
+            setMessages(data || []);
+          } catch (e) {
+            console.error(e);
+            toast({ title: "読み込みエラー", description: "保存済みメッセージの取得に失敗しました", variant: "destructive" });
+          } finally {
+            setInitialLoading(false);
+          }
+        })();
+      }, [navigate, toast]);
+
+    // ... (All other handlers can be copied from previous correct versions)
+    // Handlers
+    const addElement = (type: FlexElement["type"]) => { setState((prev) => { const next = { ...prev }; next.bubbles[next.currentIndex].contents.push(makeElement(type)); return next; }); };
+    const updateElement = (id: string, props: ElementProps) => { setState((prev) => { const next = { ...prev }; const list = next.bubbles[next.currentIndex].contents.map((el) => (el.id === id ? { ...el, properties: props } : el)); next.bubbles[next.currentIndex].contents = list; return next; }); };
+    const deleteElement = (id: string) => { setState((prev) => { const next = { ...prev }; next.bubbles[next.currentIndex].contents = next.bubbles[next.currentIndex].contents.filter((el) => el.id !== id); return next; }); };
+    const handleHeroToggle = (id: string, nextChecked: boolean) => { setState((prev) => { const next = { ...prev }; const contents = next.bubbles[next.currentIndex].contents; const cleared = contents.map((el) => (el.type === "image" ? { ...el, properties: { ...el.properties, isHero: false } } : el)); next.bubbles[next.currentIndex].contents = cleared.map((el) => (el.id === id ? { ...el, properties: { ...el.properties, isHero: nextChecked } } : el)); return next; }); };
+    const handleDragEnd = (event: DragEndEvent) => { const { active, over } = event; if (!over || active.id === over.id) return; setState((prev) => { const next = { ...prev }; const arr = next.bubbles[next.currentIndex].contents; const oldIndex = arr.findIndex((i) => i.id === active.id); const newIndex = arr.findIndex((i) => i.id === over.id); next.bubbles[next.currentIndex].contents = arrayMove(arr, oldIndex, newIndex); return next; }); };
+    const newMessage = () => { setState({ containerType: "bubble", bubbles: [defaultBubble()], currentIndex: 0, loadedMessageId: undefined }); };
     
-    // ... (The entire main component's JSX structure including Header, Main, Panels)
     return (
       <div className="min-h-screen bg-background">
         <header className="border-b">
-          {/* ... Header content ... */}
+          <div className="container mx-auto px-3 py-2 flex items-center gap-2">
+            <Button variant="ghost" size="sm" className="h-7 px-2" onClick={() => navigate("/")}> 
+              <ArrowLeft className="w-4 h-4" />
+            </Button>
+            <h1 className="text-base font-semibold">Flexメッセージデザイナー</h1>
+          </div>
         </header>
         <main className="container mx-auto px-2 py-4 max-w-7xl">
           <div className="grid lg:grid-cols-[260px_1fr_320px] md:grid-cols-[1fr_320px] grid-cols-1 gap-3">
-            {/* Left Panel */}
             <Card className="h-[calc(100vh-140px)] lg:sticky top-3 overflow-hidden">
-              {/* ... Saved Messages ... */}
+                {/* ... Saved messages list ... */}
             </Card>
 
-            {/* Center Panel */}
             <div className="space-y-3">
               <Card>
-                {/* ... Designer Header & Controls ... */}
-                <CardContent>
-                    {/* ... Designer UI ... */}
+                <CardHeader className="py-3">
+                    {/* ... Designer Header ... */}
+                </CardHeader>
+                <CardContent className="grid gap-3 text-sm">
+                    {/* ... Designer controls and Sortable list ... */}
+                    <div className="max-h-[380px] overflow-auto rounded-md border p-2 bg-muted/30">
+                        {current.contents.length === 0 ? (
+                            <div className="text-xs text-muted-foreground grid place-items-center h-40">要素を追加してください</div>
+                        ) : (
+                            <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+                            <SortableContext items={current.contents.map((e) => e.id)} strategy={verticalListSortingStrategy}>
+                                {current.contents.map((el) => (
+                                <SortableItem
+                                    key={el.id}
+                                    element={el}
+                                    onUpdate={updateElement}
+                                    onDelete={deleteElement}
+                                    onHeroToggle={handleHeroToggle}
+                                />
+                                ))}
+                            </SortableContext>
+                            </DndContext>
+                        )}
+                    </div>
                 </CardContent>
               </Card>
             </div>
 
-            {/* Right Panel: Preview */}
             <Card className="h-[calc(100vh-140px)] lg:sticky top-3 overflow-hidden">
               <CardHeader className="py-3">
                 <CardTitle className="text-sm flex items-center gap-2"><Eye className="w-4 h-4" />プレビュー</CardTitle>
@@ -465,8 +547,8 @@ export default function FlexMessageDesigner() {
                 <div className="mx-auto rounded-lg bg-white overflow-hidden" style={{ width: getBubbleWidthPx(current.bubbleSize) }}>
                   {current.contents.find((c) => c.type === "image" && c.properties.isHero && c.properties.url) && (() => {
                       const hero = current.contents.find((c) => c.type === "image" && c.properties.isHero);
-                      if (!hero) return null;
-                      return <div><img src={hero.properties.url!} alt="hero" className="w-full block" style={{ aspectRatio: hero.properties.aspectRatio?.replace(':', '/') || "auto", objectFit: hero.properties.aspectMode as any }} /></div>;
+                      if (!hero?.properties.url) return null;
+                      return <div><img src={hero.properties.url} alt="hero" className="w-full block" style={{ aspectRatio: hero.properties.aspectRatio?.replace(':', '/') || "auto", objectFit: hero.properties.aspectMode as any }} /></div>;
                   })()}
                   <div className="flex flex-col" style={{ backgroundColor: current.bodyBg && current.bodyBg !== "#ffffff" ? current.bodyBg : undefined, gap: getMarginPx(current.bodySpacing) }}>
                     {current.contents.filter((c) => !(c.type === "image" && c.properties.isHero)).map((el) => (
