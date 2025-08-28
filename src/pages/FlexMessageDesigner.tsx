@@ -15,7 +15,7 @@ import { DndContext, closestCenter, DragEndEvent, KeyboardSensor, PointerSensor,
 import { arrayMove, SortableContext, sortableKeyboardCoordinates, verticalListSortingStrategy } from "@dnd-kit/sortable";
 import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { ArrowLeft, Save, Send, Plus, Trash2, GripVertical, ChevronRight, ChevronDown, Image as IconImage, MessageSquare, Copy, Layers, Eye } from "lucide-react";
+import { ArrowLeft, Save, Send, Plus, Trash2, GripVertical, ChevronRight, ChevronDown, Image as IconImage, MessageSquare, Copy, Layers, Eye, FilePlus, FileEdit } from "lucide-react";
 
 /**
  * =====================
@@ -79,6 +79,8 @@ interface ElementProps {
   // button
   style?: ButtonStyle;
   height?: ButtonHeight;
+  buttonColor?: string; // ボタンの背景色
+  textColor?: string; // ボタンの文字色
 }
 
 interface FlexElement {
@@ -100,6 +102,7 @@ interface DesignerState {
   containerType: ContainerType;
   bubbles: BubbleDesign[];
   currentIndex: number;
+  loadedMessageId?: string; // 読み込んだメッセージのID
 }
 
 /**
@@ -116,11 +119,11 @@ const padToPx = (p: PaddingToken | undefined): string | undefined => {
     case "lg": return "16px";
     case "xl": return "20px";
     case "none":
-    default: return undefined;
+    default: return "0px";
   }
 };
 
-const getMarginPx = (margin: MarginToken): string => {
+const getMarginPx = (margin: MarginToken | undefined): string => {
   switch (margin) {
     case "xs": return "4px";
     case "sm": return "8px";
@@ -167,7 +170,7 @@ const defaultBubble = (label = "バブル 1"): BubbleDesign => ({
   altText: "通知: 新しいお知らせがあります",
   bubbleSize: "kilo",
   bodyBg: undefined,
-  bodySpacing: "md",
+  bodySpacing: "none", // デフォルトを none に変更
   contents: [],
 });
 
@@ -182,7 +185,7 @@ const makeElement = (type: FlexElement["type"]): FlexElement => {
         size: "md",
         weight: "normal",
         color: "#000000",
-        margin: "md",
+        margin: "none", // デフォルトを none に変更
         padding: "none",
         align: "start",
         wrap: true,
@@ -198,7 +201,7 @@ const makeElement = (type: FlexElement["type"]): FlexElement => {
         imgSize: "full",
         aspectRatio: "20:13",
         aspectMode: "cover",
-        margin: "md",
+        margin: "none", // デフォルトを none に変更
         padding: "none",
         isHero: false,
       },
@@ -211,9 +214,10 @@ const makeElement = (type: FlexElement["type"]): FlexElement => {
     properties: {
       style: "primary",
       height: "md",
-      color: "#06c755",
+      buttonColor: "#06c755", // color を buttonColor に変更
+      textColor: "#ffffff", // 新しく textColor を追加
       action: { type: "uri", label: "開く", uri: "https://line.me/" },
-      margin: "md",
+      margin: "none", // デフォルトを none に変更
       padding: "none",
     },
   };
@@ -242,7 +246,7 @@ function buildBubbleFromDesign(design: BubbleDesign) {
   // 2) body.contents
   const bodyContents = design.contents
     .filter((el) => !heroCandidate || el.id !== heroCandidate.id)
-    .map((el) => {
+    .map((el, index) => {
       const p = el.properties;
       const margin = p.margin && p.margin !== "none" ? p.margin : undefined;
 
@@ -277,7 +281,7 @@ function buildBubbleFromDesign(design: BubbleDesign) {
         node = {
           type: "button",
           ...(p.style && { style: p.style }),
-          ...(p.color && { color: p.color }),
+          ...(p.buttonColor && { color: p.buttonColor }), // buttonColor を color として出力
           ...(p.height && { height: p.height }),
           ...(p.action ? { action: p.action } : {}),
           ...(margin ? { margin } : {}),
@@ -307,9 +311,10 @@ function buildBubbleFromDesign(design: BubbleDesign) {
     body: {
       type: "box",
       layout: "vertical",
-      spacing: design.bodySpacing || "md",
+      spacing: design.bodySpacing || "none", // デフォルトを none に変更
       contents: bodyContents,
       ...(design.bodyBg ? { backgroundColor: design.bodyBg } : {}),
+      paddingAll: "0px", // 全体の余白を除去
     },
   };
 
@@ -409,7 +414,7 @@ const SortableItem = ({
             <div>
               <Label className="text-xs">外側の余白</Label>
               <Select
-                value={p.margin || "md"}
+                value={p.margin || "none"}
                 onValueChange={(v: MarginToken) => onUpdate(element.id, { ...p, margin: v })}
               >
                 <SelectTrigger className="h-7 text-xs" />
@@ -601,11 +606,12 @@ const SortableItem = ({
                 </div>
               </div>
 
-              <div className="grid grid-cols-3 gap-2 items-end">
-                <div className="col-span-2">
-                  <Label className="text-xs">タップ時の動作 (任意)</Label>
+              <div className="border-t pt-2">
+                <Label className="text-xs font-semibold">タップ時の動作 (任意)</Label>
+                <div className="grid gap-2 mt-2">
                   <div className="grid grid-cols-3 gap-2">
-                    <div className="col-span-1">
+                    <div>
+                      <Label className="text-xs">アクションタイプ</Label>
                       <Select
                         value={p.action?.type || "uri"}
                         onValueChange={(v: ElementAction["type"]) =>
@@ -614,44 +620,68 @@ const SortableItem = ({
                       >
                         <SelectTrigger className="h-7 text-xs" />
                         <SelectContent>
-                          <SelectItem value="uri">URL</SelectItem>
-                          <SelectItem value="message">定型文</SelectItem>
+                          <SelectItem value="uri">URLを開く</SelectItem>
+                          <SelectItem value="message">メッセージ送信</SelectItem>
                           <SelectItem value="postback">ポストバック</SelectItem>
                         </SelectContent>
                       </Select>
                     </div>
                     <div className="col-span-2">
                       {p.action?.type === "uri" && (
-                        <Input
-                          className="h-8 text-xs"
-                          placeholder="https://..."
-                          value={p.action?.uri || ""}
-                          onChange={(e) => onUpdate(element.id, { ...p, action: { ...(p.action || { type: "uri" }), uri: e.target.value } })}
-                        />
+                        <div>
+                          <Label className="text-xs">URL</Label>
+                          <Input
+                            className="h-7 text-xs"
+                            placeholder="https://..."
+                            value={p.action?.uri || ""}
+                            onChange={(e) => onUpdate(element.id, { ...p, action: { ...(p.action || { type: "uri" }), uri: e.target.value } })}
+                          />
+                        </div>
                       )}
                       {p.action?.type === "message" && (
-                        <Input
-                          className="h-8 text-xs"
-                          placeholder="送信するテキスト"
-                          value={p.action?.text || ""}
-                          onChange={(e) => onUpdate(element.id, { ...p, action: { ...(p.action || { type: "message" }), text: e.target.value } })}
-                        />
+                        <div>
+                          <Label className="text-xs">送信するテキスト</Label>
+                          <Input
+                            className="h-7 text-xs"
+                            placeholder="送信するテキスト"
+                            value={p.action?.text || ""}
+                            onChange={(e) => onUpdate(element.id, { ...p, action: { ...(p.action || { type: "message" }), text: e.target.value } })}
+                          />
+                        </div>
                       )}
                       {p.action?.type === "postback" && (
-                        <Input
-                          className="h-8 text-xs"
-                          placeholder="data=xxx"
-                          value={p.action?.data || ""}
-                          onChange={(e) => onUpdate(element.id, { ...p, action: { ...(p.action || { type: "postback" }), data: e.target.value } })}
-                        />
+                        <div>
+                          <Label className="text-xs">ポストバックデータ</Label>
+                          <Input
+                            className="h-7 text-xs"
+                            placeholder="data=xxx"
+                            value={p.action?.data || ""}
+                            onChange={(e) => onUpdate(element.id, { ...p, action: { ...(p.action || { type: "postback" }), data: e.target.value } })}
+                          />
+                        </div>
                       )}
                     </div>
                   </div>
+                  {p.action?.type === "uri" && (
+                    <div className="text-[10px] text-muted-foreground">
+                      ※ タップすると指定したURLをブラウザで開きます
+                    </div>
+                  )}
+                  {p.action?.type === "message" && (
+                    <div className="text-[10px] text-muted-foreground">
+                      ※ タップすると指定したテキストをユーザーから送信します
+                    </div>
+                  )}
+                  {p.action?.type === "postback" && (
+                    <div className="text-[10px] text-muted-foreground">
+                      ※ タップするとWebhookにデータを送信します（開発者向け）
+                    </div>
+                  )}
                 </div>
-                <div className="text-[11px] text-muted-foreground">
-                  <div>※ ヒーロー: バブル上部に大きく表示</div>
-                  <div>※ URL等は任意</div>
-                </div>
+              </div>
+
+              <div className="text-[11px] text-muted-foreground">
+                <div>※ ヒーロー: バブル上部に大きく表示（余白なし）</div>
               </div>
             </div>
           )}
@@ -682,61 +712,101 @@ const SortableItem = ({
                     </SelectContent>
                   </Select>
                 </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-2">
                 <div>
-                  <Label className="text-xs">色</Label>
+                  <Label className="text-xs">背景色</Label>
                   <div className="h-7 flex items-center">
-                    <ColorPicker color={p.color || "#06c755"} onChange={(c) => onUpdate(element.id, { ...p, color: c })} />
+                    <ColorPicker color={p.buttonColor || "#06c755"} onChange={(c) => onUpdate(element.id, { ...p, buttonColor: c })} />
+                  </div>
+                </div>
+                <div>
+                  <Label className="text-xs">文字色</Label>
+                  <div className="h-7 flex items-center">
+                    <ColorPicker color={p.textColor || "#ffffff"} onChange={(c) => onUpdate(element.id, { ...p, textColor: c })} />
                   </div>
                 </div>
               </div>
-              <div className="grid grid-cols-3 gap-2 items-end">
-                <div>
-                  <Label className="text-xs">ラベル</Label>
-                  <Input
-                    className="h-8 text-xs"
-                    value={p.action?.label || ""}
-                    onChange={(e) => onUpdate(element.id, { ...p, action: { ...(p.action || { type: "uri" }), label: e.target.value } })}
-                  />
-                </div>
-                <div className="col-span-2">
-                  <Label className="text-xs">ボタンの動作</Label>
-                  <div className="grid grid-cols-3 gap-2">
-                    <Select
-                      value={p.action?.type || "uri"}
-                      onValueChange={(v: ElementAction["type"]) => onUpdate(element.id, { ...p, action: { ...(p.action || {}), type: v } })}
-                    >
-                      <SelectTrigger className="h-7 text-xs" />
-                      <SelectContent>
-                        <SelectItem value="uri">URL</SelectItem>
-                        <SelectItem value="message">定型文</SelectItem>
-                        <SelectItem value="postback">ポストバック</SelectItem>
-                      </SelectContent>
-                    </Select>
-                    {p.action?.type === "uri" && (
-                      <Input
-                        className="h-8 text-xs col-span-2"
-                        placeholder="https://..."
-                        value={p.action?.uri || ""}
-                        onChange={(e) => onUpdate(element.id, { ...p, action: { ...(p.action || { type: "uri" }), uri: e.target.value } })}
-                      />
-                    )}
-                    {p.action?.type === "message" && (
-                      <Input
-                        className="h-8 text-xs col-span-2"
-                        placeholder="送信するテキスト"
-                        value={p.action?.text || ""}
-                        onChange={(e) => onUpdate(element.id, { ...p, action: { ...(p.action || { type: "message" }), text: e.target.value } })}
-                      />
-                    )}
-                    {p.action?.type === "postback" && (
-                      <Input
-                        className="h-8 text-xs col-span-2"
-                        placeholder="data=xxx"
-                        value={p.action?.data || ""}
-                        onChange={(e) => onUpdate(element.id, { ...p, action: { ...(p.action || { type: "postback" }), data: e.target.value } })}
-                      />
-                    )}
+
+              <div className="border-t pt-2">
+                <Label className="text-xs font-semibold">ボタンの動作</Label>
+                <div className="grid gap-2 mt-2">
+                  <div>
+                    <Label className="text-xs">ラベル</Label>
+                    <Input
+                      className="h-7 text-xs"
+                      value={p.action?.label || ""}
+                      onChange={(e) => onUpdate(element.id, { ...p, action: { ...(p.action || { type: "uri" }), label: e.target.value } })}
+                      placeholder="ボタンに表示するテキスト"
+                    />
                   </div>
+                  <div className="grid grid-cols-3 gap-2">
+                    <div>
+                      <Label className="text-xs">アクションタイプ</Label>
+                      <Select
+                        value={p.action?.type || "uri"}
+                        onValueChange={(v: ElementAction["type"]) => onUpdate(element.id, { ...p, action: { ...(p.action || {}), type: v } })}
+                      >
+                        <SelectTrigger className="h-7 text-xs" />
+                        <SelectContent>
+                          <SelectItem value="uri">URLを開く</SelectItem>
+                          <SelectItem value="message">メッセージ送信</SelectItem>
+                          <SelectItem value="postback">ポストバック</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="col-span-2">
+                      {p.action?.type === "uri" && (
+                        <div>
+                          <Label className="text-xs">URL</Label>
+                          <Input
+                            className="h-7 text-xs"
+                            placeholder="https://..."
+                            value={p.action?.uri || ""}
+                            onChange={(e) => onUpdate(element.id, { ...p, action: { ...(p.action || { type: "uri" }), uri: e.target.value } })}
+                          />
+                        </div>
+                      )}
+                      {p.action?.type === "message" && (
+                        <div>
+                          <Label className="text-xs">送信するテキスト</Label>
+                          <Input
+                            className="h-7 text-xs"
+                            placeholder="送信するテキスト"
+                            value={p.action?.text || ""}
+                            onChange={(e) => onUpdate(element.id, { ...p, action: { ...(p.action || { type: "message" }), text: e.target.value } })}
+                          />
+                        </div>
+                      )}
+                      {p.action?.type === "postback" && (
+                        <div>
+                          <Label className="text-xs">ポストバックデータ</Label>
+                          <Input
+                            className="h-7 text-xs"
+                            placeholder="data=xxx"
+                            value={p.action?.data || ""}
+                            onChange={(e) => onUpdate(element.id, { ...p, action: { ...(p.action || { type: "postback" }), data: e.target.value } })}
+                          />
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                  {p.action?.type === "uri" && (
+                    <div className="text-[10px] text-muted-foreground">
+                      ※ タップすると指定したURLをブラウザで開きます
+                    </div>
+                  )}
+                  {p.action?.type === "message" && (
+                    <div className="text-[10px] text-muted-foreground">
+                      ※ タップすると指定したテキストをユーザーから送信します
+                    </div>
+                  )}
+                  {p.action?.type === "postback" && (
+                    <div className="text-[10px] text-muted-foreground">
+                      ※ タップするとWebhookにデータを送信します（開発者向け）
+                    </div>
+                  )}
                 </div>
               </div>
             </div>
@@ -761,7 +831,6 @@ export default function FlexMessageDesigner() {
   const [initialLoading, setInitialLoading] = useState(true);
   const [loading, setLoading] = useState(false);
   const [messages, setMessages] = useState<FlexMessageRow[]>([]);
-  const [currentMessageId, setCurrentMessageId] = useState<string | null>(null);
 
   const [state, setState] = useState<DesignerState>({
     containerType: "bubble",
@@ -854,26 +923,11 @@ export default function FlexMessageDesigner() {
   };
 
   const newMessage = () => {
-    setState({ containerType: "bubble", bubbles: [defaultBubble()], currentIndex: 0 });
-    setCurrentMessageId(null);
-  };
-
-  const reloadSavedMessages = async () => {
-    try {
-      const { data, error } = await supabase
-        .from("flex_messages")
-        .select("*")
-        .order("created_at", { ascending: false });
-      if (error) throw error;
-      setMessages(data || []);
-    } catch (e) {
-      console.error(e);
-      toast({ title: "再読み込みエラー", description: "保存済みメッセージの再取得に失敗しました", variant: "destructive" });
-    }
+    setState({ containerType: "bubble", bubbles: [defaultBubble()], currentIndex: 0, loadedMessageId: undefined });
   };
 
   // ======== Save / Load / Send ========
-  const saveNewMessage = async () => {
+  const saveMessage = async (asNew: boolean = false) => {
     const alt = (current?.altText || "").trim();
     if (!alt) {
       toast({ title: "入力エラー", description: "代替テキスト(通知文)を入力してください", variant: "destructive" });
@@ -891,47 +945,37 @@ export default function FlexMessageDesigner() {
       const content = buildFlexMessage(state);
       const title = current?.name || "Flexメッセージ";
 
-      const { data: insertedData, error } = await supabase.from("flex_messages").insert({ user_id: user.id, name: title, content }).select();
-      if (error) throw error;
-      
-      if (insertedData && insertedData[0]) {
-        setCurrentMessageId(insertedData[0].id);
+      if (!asNew && state.loadedMessageId) {
+        // 上書き保存
+        const { error } = await supabase
+          .from("flex_messages")
+          .update({ name: title, content })
+          .eq("id", state.loadedMessageId);
+        if (error) throw error;
+        toast({ title: "上書き保存成功", description: `「${title}」を上書き保存しました` });
+      } else {
+        // 新規保存
+        const { data: newData, error } = await supabase
+          .from("flex_messages")
+          .insert({ user_id: user.id, name: title, content })
+          .select();
+        if (error) throw error;
+        if (newData && newData[0]) {
+          setState(prev => ({ ...prev, loadedMessageId: newData[0].id }));
+        }
+        toast({ title: "新規保存成功", description: `「${title}」を新規保存しました` });
       }
-      
-      toast({ title: "保存成功", description: `「${title}」を新規保存しました` });
-      await reloadSavedMessages();
 
+      // 最新を再読込
+      const { data, error: fetchErr } = await supabase
+        .from("flex_messages")
+        .select("*")
+        .order("created_at", { ascending: false });
+      if (fetchErr) throw fetchErr;
+      setMessages(data || []);
     } catch (e: any) {
       console.error(e);
       toast({ title: "保存失敗", description: e.message || "保存でエラーが発生しました", variant: "destructive" });
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const updateMessage = async () => {
-    if (!currentMessageId) return;
-
-    const alt = (current?.altText || "").trim();
-    if (!alt) {
-      toast({ title: "入力エラー", description: "代替テキスト(通知文)を入力してください", variant: "destructive" });
-      return;
-    }
-
-    setLoading(true);
-    try {
-      const content = buildFlexMessage(state);
-      const title = current?.name || "Flexメッセージ";
-      
-      const { error } = await supabase.from("flex_messages").update({ name: title, content }).eq("id", currentMessageId);
-      if (error) throw error;
-      
-      toast({ title: "上書き保存成功", description: `「${title}」を更新しました` });
-      await reloadSavedMessages();
-
-    } catch (e: any) {
-      console.error(e);
-      toast({ title: "更新失敗", description: e.message || "更新処理でエラーが発生しました", variant: "destructive" });
     } finally {
       setLoading(false);
     }
@@ -941,8 +985,6 @@ export default function FlexMessageDesigner() {
     try {
       const c = row.content?.contents;
       if (!c) throw new Error("不正なデータ形式");
-
-      setCurrentMessageId(row.id);
 
       if (c.type === "carousel") {
         const bubbles: BubbleDesign[] = (c.contents || []).map((b: any, idx: number) => {
@@ -981,7 +1023,7 @@ export default function FlexMessageDesigner() {
                     weight: inner.weight || "normal",
                     color: inner.color || "#000000",
                     align: inner.align || "start",
-                    margin: inner.margin || "md",
+                    margin: inner.margin || "none",
                     padding: padding,
                     backgroundColor: inner.backgroundColor,
                     wrap: true,
@@ -997,7 +1039,7 @@ export default function FlexMessageDesigner() {
                     aspectRatio: inner.aspectRatio || "20:13",
                     aspectMode: inner.aspectMode || "cover",
                     action: inner.action,
-                    margin: inner.margin || "md",
+                    margin: inner.margin || "none",
                     padding,
                   },
                 });
@@ -1007,10 +1049,11 @@ export default function FlexMessageDesigner() {
                   type: "button",
                   properties: {
                     style: inner.style || "primary",
-                    color: inner.color,
+                    buttonColor: inner.color,
+                    textColor: "#ffffff",
                     height: inner.height || "md",
                     action: inner.action,
-                    margin: inner.margin || "md",
+                    margin: inner.margin || "none",
                     padding,
                   },
                 });
@@ -1027,7 +1070,7 @@ export default function FlexMessageDesigner() {
                     weight: node.weight || "normal",
                     color: node.color || "#000000",
                     align: node.align || "start",
-                    margin: node.margin || "md",
+                    margin: node.margin || "none",
                     padding: "none",
                     backgroundColor: node.backgroundColor,
                     wrap: true,
@@ -1043,7 +1086,7 @@ export default function FlexMessageDesigner() {
                     aspectRatio: node.aspectRatio || "20:13",
                     aspectMode: node.aspectMode || "cover",
                     action: node.action,
-                    margin: node.margin || "md",
+                    margin: node.margin || "none",
                     padding: "none",
                   },
                 });
@@ -1053,10 +1096,11 @@ export default function FlexMessageDesigner() {
                   type: "button",
                   properties: {
                     style: node.style || "primary",
-                    color: node.color,
+                    buttonColor: node.color,
+                    textColor: "#ffffff",
                     height: node.height || "md",
                     action: node.action,
-                    margin: node.margin || "md",
+                    margin: node.margin || "none",
                     padding: "none",
                   },
                 });
@@ -1069,12 +1113,12 @@ export default function FlexMessageDesigner() {
             altText: row.content?.altText || `${row.name}のお知らせ`,
             bubbleSize: (b.size as BubbleSize) || "kilo",
             bodyBg: b.body?.backgroundColor,
-            bodySpacing: b.body?.spacing as SpacingToken || "md",
+            bodySpacing: b.body?.spacing as SpacingToken || "none",
             contents: items,
           } as BubbleDesign;
         });
 
-        setState({ containerType: "carousel", bubbles, currentIndex: 0 });
+        setState({ containerType: "carousel", bubbles, currentIndex: 0, loadedMessageId: row.id });
       } else {
         // bubble 単体
         const b = c;
@@ -1100,16 +1144,16 @@ export default function FlexMessageDesigner() {
             const inner = node.contents[0];
             const padding: PaddingToken = node.paddingAll === "4px" ? "xs" : node.paddingAll === "8px" ? "sm" : node.paddingAll === "12px" ? "md" : node.paddingAll === "16px" ? "lg" : node.paddingAll === "20px" ? "xl" : "none";
             if (inner.type === "text") {
-              items.push({ id: `el-${i}`, type: "text", properties: { text: inner.text, size: inner.size || "md", weight: inner.weight || "normal", color: inner.color || "#000000", align: inner.align || "start", margin: inner.margin || "md", padding, backgroundColor: inner.backgroundColor, wrap: true } });
+              items.push({ id: `el-${i}`, type: "text", properties: { text: inner.text, size: inner.size || "md", weight: inner.weight || "normal", color: inner.color || "#000000", align: inner.align || "start", margin: inner.margin || "none", padding, backgroundColor: inner.backgroundColor, wrap: true } });
             } else if (inner.type === "image") {
-              items.push({ id: `el-${i}`, type: "image", properties: { url: inner.url, imgSize: inner.size || "full", aspectRatio: inner.aspectRatio || "20:13", aspectMode: inner.aspectMode || "cover", action: inner.action, margin: inner.margin || "md", padding } });
+              items.push({ id: `el-${i}`, type: "image", properties: { url: inner.url, imgSize: inner.size || "full", aspectRatio: inner.aspectRatio || "20:13", aspectMode: inner.aspectMode || "cover", action: inner.action, margin: inner.margin || "none", padding } });
             } else if (inner.type === "button") {
-              items.push({ id: `el-${i}`, type: "button", properties: { style: inner.style || "primary", color: inner.color, height: inner.height || "md", action: inner.action, margin: inner.margin || "md", padding } });
+              items.push({ id: `el-${i}`, type: "button", properties: { style: inner.style || "primary", buttonColor: inner.color, textColor: "#ffffff", height: inner.height || "md", action: inner.action, margin: inner.margin || "none", padding } });
             }
           } else {
-            if (node.type === "text") items.push({ id: `el-${i}`, type: "text", properties: { text: node.text, size: node.size || "md", weight: node.weight || "normal", color: node.color || "#000000", align: node.align || "start", margin: node.margin || "md", padding: "none", backgroundColor: node.backgroundColor, wrap: true } });
-            if (node.type === "image") items.push({ id: `el-${i}`, type: "image", properties: { url: node.url, imgSize: node.size || "full", aspectRatio: node.aspectRatio || "20:13", aspectMode: node.aspectMode || "cover", action: node.action, margin: node.margin || "md", padding: "none" } });
-            if (node.type === "button") items.push({ id: `el-${i}`, type: "button", properties: { style: node.style || "primary", color: node.color, height: node.height || "md", action: node.action, margin: node.margin || "md", padding: "none" } });
+            if (node.type === "text") items.push({ id: `el-${i}`, type: "text", properties: { text: node.text, size: node.size || "md", weight: node.weight || "normal", color: node.color || "#000000", align: node.align || "start", margin: node.margin || "none", padding: "none", backgroundColor: node.backgroundColor, wrap: true } });
+            if (node.type === "image") items.push({ id: `el-${i}`, type: "image", properties: { url: node.url, imgSize: node.size || "full", aspectRatio: node.aspectRatio || "20:13", aspectMode: node.aspectMode || "cover", action: node.action, margin: node.margin || "none", padding: "none" } });
+            if (node.type === "button") items.push({ id: `el-${i}`, type: "button", properties: { style: node.style || "primary", buttonColor: node.color, textColor: "#ffffff", height: node.height || "md", action: node.action, margin: node.margin || "none", padding: "none" } });
           }
         });
 
@@ -1121,11 +1165,12 @@ export default function FlexMessageDesigner() {
               altText: row.content?.altText || `${row.name}のお知らせ`,
               bubbleSize: (b.size as BubbleSize) || "kilo",
               bodyBg: b.body?.backgroundColor,
-              bodySpacing: b.body?.spacing as SpacingToken || "md",
+              bodySpacing: b.body?.spacing as SpacingToken || "none",
               contents: items,
             },
           ],
           currentIndex: 0,
+          loadedMessageId: row.id,
         });
       }
 
@@ -1142,10 +1187,11 @@ export default function FlexMessageDesigner() {
       const { error } = await supabase.from("flex_messages").delete().eq("id", id);
       if (error) throw error;
       setMessages((prev) => prev.filter((m) => m.id !== id));
-      toast({ title: "削除", description: `「${name}」を削除しました` });
-      if (currentMessageId === id) {
+      // 削除したメッセージが現在読み込んでいるメッセージの場合、リセット
+      if (state.loadedMessageId === id) {
         newMessage();
       }
+      toast({ title: "削除", description: `「${name}」を削除しました` });
     } catch (e: any) {
       console.error(e);
       toast({ title: "削除失敗", description: e.message || "削除でエラーが発生しました", variant: "destructive" });
@@ -1231,11 +1277,14 @@ export default function FlexMessageDesigner() {
               ) : (
                 <div className="space-y-2">
                   {messages.map((m) => (
-                    <div key={m.id} className="border rounded-md p-2">
+                    <div key={m.id} className={`border rounded-md p-2 ${state.loadedMessageId === m.id ? 'border-primary bg-primary/10' : ''}`}>
                       <div className="flex items-center justify-between gap-2">
                         <div className="min-w-0 flex-1">
                           <div className="text-sm font-medium truncate" title={m.name}>{m.name}</div>
                           <div className="text-[10px] text-muted-foreground">{new Date(m.created_at).toLocaleString("ja-JP")}</div>
+                          {state.loadedMessageId === m.id && (
+                            <div className="text-[10px] text-primary">現在編集中</div>
+                          )}
                         </div>
                         <div className="flex gap-1">
                           <Button size="sm" variant="outline" className="h-7 px-2 text-xs" onClick={() => loadMessage(m)}>
@@ -1265,15 +1314,26 @@ export default function FlexMessageDesigner() {
                     <CardTitle className="text-sm flex items-center gap-2"><MessageSquare className="w-4 h-4" />デザイン</CardTitle>
                     <CardDescription className="text-xs">必要最小限の設定で作れます。高度な設定は各要素を開いて調整</CardDescription>
                   </div>
-                  <div className="flex gap-2">
-                    <Button size="sm" variant="outline" className="h-8 text-xs" onClick={newMessage}>新規</Button>
-                    <Button size="sm" variant="outline" className="h-8 text-xs" onClick={saveNewMessage} disabled={loading}><Save className="w-4 h-4 mr-1" />新規保存</Button>
-                    <Button size="sm" className="h-8 text-xs" onClick={updateMessage} disabled={loading || !currentMessageId}><Save className="w-4 h-4 mr-1" />上書き保存</Button>
-                    <Button size="sm" className="h-8 text-xs bg-[#06c755] hover:bg-[#05b84c]" onClick={sendNow} disabled={loading}><Send className="w-4 h-4 mr-1" />配信</Button>
+                  <div className="flex flex-wrap gap-2">
+                    <Button size="sm" variant="outline" className="h-8 text-xs" onClick={newMessage}>
+                      <FilePlus className="w-4 h-4 mr-1" />新規
+                    </Button>
+                    <Button size="sm" className="h-8 text-xs" onClick={() => saveMessage(true)} disabled={loading}>
+                      <Save className="w-4 h-4 mr-1" />新規保存
+                    </Button>
+                    {state.loadedMessageId && (
+                      <Button size="sm" variant="outline" className="h-8 text-xs" onClick={() => saveMessage(false)} disabled={loading}>
+                        <FileEdit className="w-4 h-4 mr-1" />上書き保存
+                      </Button>
+                    )}
+                    <Button size="sm" className="h-8 text-xs bg-[#06c755] hover:bg-[#05b84c]" onClick={sendNow} disabled={loading}>
+                      <Send className="w-4 h-4 mr-1" />配信
+                    </Button>
                   </div>
                 </div>
               </CardHeader>
               <CardContent className="grid gap-3 text-sm">
+                {/* --- ここからが追記部分 --- */}
                 {/* 上段: 基本情報 */}
                 <div className="grid grid-cols-3 gap-3">
                   <div>
@@ -1344,7 +1404,7 @@ export default function FlexMessageDesigner() {
                   <div>
                     <Label className="text-xs">要素間隔</Label>
                     <Select
-                      value={current.bodySpacing || "md"}
+                      value={current.bodySpacing || "none"}
                       onValueChange={(v: SpacingToken) =>
                         setState((prev) => ({
                           ...prev,
@@ -1467,9 +1527,9 @@ export default function FlexMessageDesigner() {
               <CardTitle className="text-sm flex items-center gap-2"><Eye className="w-4 h-4" />プレビュー</CardTitle>
               <CardDescription className="text-xs">おおよその見た目(実機と微差あり)</CardDescription>
             </CardHeader>
-            <CardContent className="pt-0 overflow-auto h-full">
+            <CardContent className="pt-0 overflow-auto h-full bg-gray-200 p-4">
               <div
-                className="mx-auto rounded-lg border bg-white overflow-hidden"
+                className="mx-auto rounded-lg bg-white overflow-hidden"
                 style={{
                   width: getBubbleWidthPx(current.bubbleSize),
                 }}
@@ -1498,15 +1558,15 @@ export default function FlexMessageDesigner() {
                   className="flex flex-col"
                   style={{
                     backgroundColor: current.bodyBg && current.bodyBg !== "#ffffff" ? current.bodyBg : undefined,
-                    gap: current.bodySpacing && current.bodySpacing !== "none" ? getMarginPx(current.bodySpacing) : "0px"
+                    gap: getMarginPx(current.bodySpacing),
                   }}
                 >
                   {current.contents.filter((c) => !(c.type === "image" && c.properties.isHero)).map((el) => (
                     <div
                       key={el.id}
                       style={{
-                        margin: el.properties.margin && el.properties.margin !== "none" ? getMarginPx(el.properties.margin) : undefined,
-                        padding: el.properties.padding && el.properties.padding !== "none" ? padToPx(el.properties.padding) : undefined,
+                        marginTop: getMarginPx(el.properties.margin),
+                        padding: padToPx(el.properties.padding),
                         backgroundColor: el.properties.backgroundColor && el.properties.backgroundColor !== "#ffffff" ? el.properties.backgroundColor : undefined,
                         borderRadius: el.properties.backgroundColor && el.properties.backgroundColor !== "#ffffff" ? "4px" : undefined,
                       }}
@@ -1546,15 +1606,14 @@ export default function FlexMessageDesigner() {
                           className="w-full rounded text-[13px] px-3 font-bold"
                           style={{
                             backgroundColor: el.properties.style === "primary"
-                              ? (el.properties.color || "#06c755")
+                              ? (el.properties.buttonColor || "#06c755")
                               : el.properties.style === "secondary"
-                              ? `${el.properties.color || "#06c755"}20`
+                              ? `${el.properties.buttonColor || "#06c755"}20`
                               : "transparent",
-                            color: el.properties.style === "primary"
-                              ? "#ffffff"
-                              : (el.properties.color || "#06c755"),
-                            border: 'none',
-                            textDecoration: el.properties.style === 'link' ? 'underline' : 'none',
+                            color: el.properties.textColor,
+                            border: el.properties.style === "link"
+                              ? `1px solid ${el.properties.buttonColor || "#06c755"}`
+                              : "none",
                             height: getButtonHeightPx(el.properties.height || "md"),
                           }}
                         >
