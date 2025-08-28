@@ -1,5 +1,4 @@
-// src/pages/FlexMessageDesigner.tsx
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -12,45 +11,20 @@ import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { MediaSelector } from "@/components/MediaSelector";
 import { ColorPicker } from "@/components/ui/color-picker";
-import {
-  DndContext,
-  closestCenter,
-  DragEndEvent,
-  KeyboardSensor,
-  PointerSensor,
-  useSensor,
-  useSensors,
-} from "@dnd-kit/core";
-import {
-  arrayMove,
-  SortableContext,
-  sortableKeyboardCoordinates,
-  verticalListSortingStrategy,
-} from "@dnd-kit/sortable";
+import { DndContext, closestCenter, DragEndEvent, KeyboardSensor, PointerSensor, useSensor, useSensors } from "@dnd-kit/core";
+import { arrayMove, SortableContext, sortableKeyboardCoordinates, verticalListSortingStrategy } from "@dnd-kit/sortable";
 import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import {
-  ArrowLeft,
-  Save,
-  Send,
-  Plus,
-  Trash2,
-  GripVertical,
-  ChevronRight,
-  ChevronDown,
-  Image as IconImage,
-  MessageSquare,
-  Copy,
-  Layers,
-  Eye,
-} from "lucide-react";
+import { ArrowLeft, Save, Send, Plus, Trash2, GripVertical, ChevronRight, ChevronDown, Image as IconImage, MessageSquare, Copy, Layers, Eye } from "lucide-react";
 
-/* =========================================================
-   Types / constants
-   ========================================================= */
+/**
+ * =====================
+ * Types
+ * =====================
+ */
 
 type ButtonStyle = "primary" | "secondary" | "link";
-type ButtonHeight = "sm" | "md"; // ← lg は不可（LINE仕様）
+type ButtonHeight = "sm" | "md" | "lg";
 type TextSize = "xs" | "sm" | "md" | "lg" | "xl";
 type FontWeight = "normal" | "bold";
 type Align = "start" | "center" | "end";
@@ -105,8 +79,6 @@ interface ElementProps {
   // button
   style?: ButtonStyle;
   height?: ButtonHeight;
-  actionBtn?: ElementAction; // UI側だけの名前（出力時は action に詰め替える）
-  color?: string; // button用（style=link の時は出力しない）
 }
 
 interface FlexElement {
@@ -120,7 +92,7 @@ interface BubbleDesign {
   altText: string;
   bubbleSize: BubbleSize;
   bodyBg?: string;
-  bodySpacing?: SpacingToken;
+  bodySpacing?: SpacingToken; // 要素間隔
   contents: FlexElement[];
 }
 
@@ -130,23 +102,26 @@ interface DesignerState {
   currentIndex: number;
 }
 
-/* =========================================================
-   Helpers
-   ========================================================= */
+/**
+ * =====================
+ * Helpers
+ * =====================
+ */
 
-const padToPx = (p?: PaddingToken): string | undefined => {
+const padToPx = (p: PaddingToken | undefined): string | undefined => {
   switch (p) {
     case "xs": return "4px";
     case "sm": return "8px";
     case "md": return "12px";
     case "lg": return "16px";
     case "xl": return "20px";
-    default: return undefined; // none / undefined
+    case "none":
+    default: return undefined;
   }
 };
 
-const getMarginPx = (m?: MarginToken): string => {
-  switch (m) {
+const getMarginPx = (margin: MarginToken): string => {
+  switch (margin) {
     case "xs": return "4px";
     case "sm": return "8px";
     case "md": return "12px";
@@ -158,8 +133,8 @@ const getMarginPx = (m?: MarginToken): string => {
   }
 };
 
-const getTextSizePx = (s?: TextSize): string => {
-  switch (s) {
+const getTextSizePx = (size: TextSize): string => {
+  switch (size) {
     case "xs": return "11px";
     case "sm": return "12px";
     case "md": return "13px";
@@ -169,10 +144,11 @@ const getTextSizePx = (s?: TextSize): string => {
   }
 };
 
-const getButtonHeightPx = (h?: ButtonHeight): string => {
-  switch (h) {
+const getButtonHeightPx = (height: ButtonHeight): string => {
+  switch (height) {
     case "sm": return "32px";
-    case "md":
+    case "md": return "40px";
+    case "lg": return "48px";
     default: return "40px";
   }
 };
@@ -182,6 +158,7 @@ const getBubbleWidthPx = (size: BubbleSize): string => {
     case "micro": return "240px";
     case "kilo": return "300px";
     case "giga": return "360px";
+    default: return "300px";
   }
 };
 
@@ -195,7 +172,7 @@ const defaultBubble = (label = "バブル 1"): BubbleDesign => ({
 });
 
 const makeElement = (type: FlexElement["type"]): FlexElement => {
-  const id = `el-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
+  const id = `el-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
   if (type === "text") {
     return {
       id,
@@ -205,7 +182,7 @@ const makeElement = (type: FlexElement["type"]): FlexElement => {
         size: "md",
         weight: "normal",
         color: "#000000",
-        margin: "none", // 既定で余白ゼロ
+        margin: "md",
         padding: "none",
         align: "start",
         wrap: true,
@@ -221,46 +198,40 @@ const makeElement = (type: FlexElement["type"]): FlexElement => {
         imgSize: "full",
         aspectRatio: "20:13",
         aspectMode: "cover",
-        margin: "none", // 既定で余白ゼロ
+        margin: "md",
         padding: "none",
         isHero: false,
       },
     };
   }
+  // button
   return {
     id,
     type: "button",
     properties: {
       style: "primary",
-      height: "md", // lg は使わない
+      height: "md",
       color: "#06c755",
-      actionBtn: { type: "uri", label: "開く", uri: "https://line.me/" },
-      margin: "none",
+      action: { type: "uri", label: "開く", uri: "https://line.me/" },
+      margin: "md",
       padding: "none",
     },
   };
 };
 
-// 画像URLかをざっくりチェック（動画排除）
-const isImageUrl = (url?: string) => {
-  if (!url) return false;
-  const u = url.toLowerCase().split("?")[0];
-  return /\.(png|jpg|jpeg|gif|webp)$/i.test(u);
-};
+/**
+ * =====================
+ * JSON Builder
+ * =====================
+ */
 
-/* =========================================================
-   JSON Builder / Loader
-   ========================================================= */
-
-function buildBubbleFromDesign(design: BubbleDesign, errors: string[]) {
-  // hero 1枚まで
-  const heroCandidate = design.contents.find(
-    (c) => c.type === "image" && c.properties.isHero && isImageUrl(c.properties.url)
-  );
+function buildBubbleFromDesign(design: BubbleDesign) {
+  // 1) ヒーロー画像（任意）
+  const heroCandidate = design.contents.find((c) => c.type === "image" && c.properties.isHero && c.properties.url);
   const hero = heroCandidate
     ? {
         type: "image",
-        url: heroCandidate.properties.url!,
+        url: heroCandidate.properties.url,
         size: heroCandidate.properties.imgSize || "full",
         aspectRatio: heroCandidate.properties.aspectRatio || "20:13",
         aspectMode: heroCandidate.properties.aspectMode || "cover",
@@ -268,16 +239,18 @@ function buildBubbleFromDesign(design: BubbleDesign, errors: string[]) {
       }
     : undefined;
 
-  // body.contents
+  // 2) body.contents
   const bodyContents = design.contents
     .filter((el) => !heroCandidate || el.id !== heroCandidate.id)
     .map((el) => {
       const p = el.properties;
+      const margin = p.margin && p.margin !== "none" ? p.margin : undefined;
 
+      let node: any = null;
       if (el.type === "text") {
         const text = (p.text || "").trim();
         if (!text) return null;
-        const node: any = {
+        node = {
           type: "text",
           text,
           ...(p.size && { size: p.size }),
@@ -286,67 +259,47 @@ function buildBubbleFromDesign(design: BubbleDesign, errors: string[]) {
           ...(p.align && p.align !== "start" && { align: p.align }),
           wrap: true,
           ...(p.backgroundColor ? { backgroundColor: p.backgroundColor } : {}),
-          ...(p.margin && p.margin !== "none" ? { margin: p.margin } : {}),
+          ...(margin ? { margin } : {}),
         };
-        // padding は wrapper で表現
-        const pad = padToPx(p.padding);
-        if (pad) {
-          return { type: "box", layout: "vertical", paddingAll: pad, contents: [node] };
-        }
-        return node;
-      }
-
-      if (el.type === "image") {
-        if (!isImageUrl(p.url)) {
-          errors.push("画像に動画/不正URLが指定されています。画像のみ使用できます。");
-          return null;
-        }
-        const node: any = {
+      } else if (el.type === "image") {
+        const url = (p.url || "").trim();
+        if (!url) return null;
+        node = {
           type: "image",
-          url: p.url!,
+          url,
           ...(p.imgSize && { size: p.imgSize }),
           ...(p.aspectRatio && { aspectRatio: p.aspectRatio }),
           ...(p.aspectMode && { aspectMode: p.aspectMode }),
           ...(p.action ? { action: p.action } : {}),
-          ...(p.margin && p.margin !== "none" ? { margin: p.margin } : {}),
+          ...(margin ? { margin } : {}),
         };
-        const pad = padToPx(p.padding);
-        if (pad) {
-          return { type: "box", layout: "vertical", paddingAll: pad, contents: [node] };
-        }
-        return node;
+      } else if (el.type === "button") {
+        node = {
+          type: "button",
+          ...(p.style && { style: p.style }),
+          ...(p.color && { color: p.color }),
+          ...(p.height && { height: p.height }),
+          ...(p.action ? { action: p.action } : {}),
+          ...(margin ? { margin } : {}),
+        };
       }
 
-      // button
-      const act = p.actionBtn;
-      if (!act || !act.type) {
-        errors.push("ボタンの動作が未設定です。");
-        return null;
-      }
-      // ラベルは通知 UX 的に必須とする（LINE的には action.label は必須推奨）
-      if (!act.label || !act.label.trim()) {
-        errors.push("ボタンのラベルが未入力です。");
-        return null;
-      }
-      const btn: any = {
-        type: "button",
-        ...(p.style && { style: p.style }),
-        ...(p.height && { height: p.height }), // sm | md のみ
-        action: act,
-        ...(p.margin && p.margin !== "none" ? { margin: p.margin } : {}),
-      };
-      // style=primary だけ color を付ける（link/secondary は付けない方が安全）
-      if (p.style === "primary" && p.color) {
-        btn.color = p.color;
-      }
+      // padding 指定がある場合は wrapper box を被せる
       const pad = padToPx(p.padding);
-      if (pad) {
-        return { type: "box", layout: "vertical", paddingAll: pad, contents: [btn] };
+      if (node && pad && pad !== "0px") {
+        return {
+          type: "box",
+          layout: "vertical",
+          paddingAll: pad,
+          contents: [node],
+        };
       }
-      return btn;
+
+      return node;
     })
     .filter(Boolean);
 
+  // 3) bubble JSON
   const bubble: any = {
     type: "bubble",
     size: design.bubbleSize,
@@ -364,35 +317,34 @@ function buildBubbleFromDesign(design: BubbleDesign, errors: string[]) {
 }
 
 function buildFlexMessage(state: DesignerState) {
-  const errors: string[] = [];
+  const altText = (state.bubbles[state.currentIndex]?.altText || "通知").slice(0, 400);
 
-  const cur = state.bubbles[state.currentIndex];
-  const altText = (cur?.altText || "通知").slice(0, 400);
+  if (state.containerType === "bubble") {
+    const bubble = buildBubbleFromDesign(state.bubbles[0]);
+    return {
+      type: "flex",
+      altText,
+      contents: bubble,
+    };
+  }
 
-  const buildAll = () => state.bubbles.map((b) => buildBubbleFromDesign(b, errors)).filter(Boolean);
-
-  const payload =
-    state.containerType === "bubble"
-      ? {
-          type: "flex",
-          altText,
-          contents: buildBubbleFromDesign(cur, errors),
-        }
-      : {
-          type: "flex",
-          altText,
-          contents: {
-            type: "carousel",
-            contents: buildAll(),
-          },
-        };
-
-  return { payload, errors };
+  // carousel
+  const bubbles = state.bubbles.map(buildBubbleFromDesign).filter(Boolean);
+  return {
+    type: "flex",
+    altText,
+    contents: {
+      type: "carousel",
+      contents: bubbles,
+    },
+  };
 }
 
-/* =========================================================
-   Sortable item editor
-   ========================================================= */
+/**
+ * =====================
+ * Sortable Item (Element editor)
+ * =====================
+ */
 
 const SortableItem = ({
   element,
@@ -406,15 +358,22 @@ const SortableItem = ({
   onHeroToggle?: (id: string, next: boolean) => void;
 }) => {
   const [collapsed, setCollapsed] = useState(true);
+
   const { attributes, listeners, setNodeRef, transform, transition } = useSortable({ id: element.id });
   const style = { transform: CSS.Transform.toString(transform), transition } as React.CSSProperties;
+
   const p = element.properties;
 
   return (
     <div ref={setNodeRef} style={style} className="rounded-lg border bg-background p-3 mb-2 text-sm">
       <div className="flex items-center justify-between gap-2">
         <div className="flex items-center gap-2 min-w-0">
-          <div {...attributes} {...listeners} className="shrink-0 cursor-grab active:cursor-grabbing p-1 rounded border hover:bg-muted">
+          <div
+            {...attributes}
+            {...listeners}
+            className="shrink-0 cursor-grab active:cursor-grabbing p-1 rounded border hover:bg-muted"
+            title="ドラッグして順序変更"
+          >
             <GripVertical className="w-3.5 h-3.5" />
           </div>
           <Badge variant="outline" className="text-[10px]">
@@ -423,15 +382,16 @@ const SortableItem = ({
             {element.type === "button" && "ボタン"}
           </Badge>
           {element.type === "image" && (
-            <label className="flex items-center gap-1 text-xs text-muted-foreground">
+            <div className="flex items-center gap-1 text-xs text-muted-foreground">
               <input
+                id={`hero-${element.id}`}
                 type="checkbox"
-                className="h-3.5 w-3.5"
                 checked={!!p.isHero}
                 onChange={(e) => onHeroToggle?.(element.id, e.target.checked)}
+                className="h-3.5 w-3.5"
               />
-              ヘッダー(ヒーロー)
-            </label>
+              <label htmlFor={`hero-${element.id}`}>ヘッダー(ヒーロー)</label>
+            </div>
           )}
           <Button variant="ghost" size="sm" className="h-6 px-2 ml-1" onClick={() => setCollapsed(!collapsed)}>
             {collapsed ? <ChevronRight className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
@@ -444,26 +404,36 @@ const SortableItem = ({
 
       {!collapsed && (
         <div className="mt-3 grid gap-3">
-          {/* 共通 */}
+          {/* 共通: 余白設定 */}
           <div className="grid grid-cols-3 gap-2">
             <div>
               <Label className="text-xs">外側の余白</Label>
-              <Select value={p.margin || "none"} onValueChange={(v: MarginToken) => onUpdate(element.id, { ...p, margin: v })}>
+              <Select
+                value={p.margin || "md"}
+                onValueChange={(v: MarginToken) => onUpdate(element.id, { ...p, margin: v })}
+              >
                 <SelectTrigger className="h-7 text-xs" />
                 <SelectContent>
                   {(["none", "xs", "sm", "md", "lg", "xl", "xxl"] as MarginToken[]).map((t) => (
-                    <SelectItem key={t} value={t}>{t}</SelectItem>
+                    <SelectItem key={t} value={t}>
+                      {t}
+                    </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
             </div>
             <div>
               <Label className="text-xs">内側の余白</Label>
-              <Select value={p.padding || "none"} onValueChange={(v: PaddingToken) => onUpdate(element.id, { ...p, padding: v })}>
+              <Select
+                value={p.padding || "none"}
+                onValueChange={(v: PaddingToken) => onUpdate(element.id, { ...p, padding: v })}
+              >
                 <SelectTrigger className="h-7 text-xs" />
                 <SelectContent>
                   {(["none", "xs", "sm", "md", "lg", "xl"] as PaddingToken[]).map((t) => (
-                    <SelectItem key={t} value={t}>{t}</SelectItem>
+                    <SelectItem key={t} value={t}>
+                      {t}
+                    </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
@@ -471,17 +441,26 @@ const SortableItem = ({
             <div>
               <Label className="text-xs">背景色(任意)</Label>
               <div className="h-7 flex items-center">
-                <ColorPicker color={p.backgroundColor || "#ffffff"} onChange={(c) => onUpdate(element.id, { ...p, backgroundColor: c })} />
+                <ColorPicker
+                  color={p.backgroundColor || "#ffffff"}
+                  onChange={(color) => onUpdate(element.id, { ...p, backgroundColor: color })}
+                />
               </div>
             </div>
           </div>
 
-          {/* テキスト */}
+          {/* テキスト要素固有設定 */}
           {element.type === "text" && (
             <div className="grid gap-2">
               <div>
-                <Label className="text-xs">本文</Label>
-                <Textarea rows={2} className="text-sm" value={p.text || ""} onChange={(e) => onUpdate(element.id, { ...p, text: e.target.value })} />
+                <Label className="text-xs">テキスト</Label>
+                <Textarea
+                  rows={2}
+                  className="text-sm"
+                  value={p.text || ""}
+                  onChange={(e) => onUpdate(element.id, { ...p, text: e.target.value })}
+                  placeholder="本文を入力"
+                />
               </div>
               <div className="grid grid-cols-4 gap-2">
                 <div>
@@ -489,13 +468,20 @@ const SortableItem = ({
                   <Select value={p.size || "md"} onValueChange={(v: TextSize) => onUpdate(element.id, { ...p, size: v })}>
                     <SelectTrigger className="h-7 text-xs" />
                     <SelectContent>
-                      {(["xs", "sm", "md", "lg", "xl"] as TextSize[]).map((t) => (<SelectItem key={t} value={t}>{t}</SelectItem>))}
+                      {(["xs", "sm", "md", "lg", "xl"] as TextSize[]).map((t) => (
+                        <SelectItem key={t} value={t}>
+                          {t}
+                        </SelectItem>
+                      ))}
                     </SelectContent>
                   </Select>
                 </div>
                 <div>
                   <Label className="text-xs">太さ</Label>
-                  <Select value={p.weight || "normal"} onValueChange={(v: FontWeight) => onUpdate(element.id, { ...p, weight: v })}>
+                  <Select
+                    value={p.weight || "normal"}
+                    onValueChange={(v: FontWeight) => onUpdate(element.id, { ...p, weight: v })}
+                  >
                     <SelectTrigger className="h-7 text-xs" />
                     <SelectContent>
                       <SelectItem value="normal">normal</SelectItem>
@@ -523,15 +509,16 @@ const SortableItem = ({
                   </div>
                 </div>
               </div>
+              <p className="text-[11px] text-muted-foreground">※ 改行はそのまま表示されます。長文は自動で折り返されます。</p>
             </div>
           )}
 
-          {/* 画像 */}
+          {/* 画像要素固有設定 */}
           {element.type === "image" && (
             <div className="grid gap-2">
               <div className="grid grid-cols-3 gap-2 items-end">
                 <div className="col-span-2">
-                  <Label className="text-xs">画像URL（画像のみ）</Label>
+                  <Label className="text-xs">画像URL</Label>
                   <Input
                     className="h-8 text-xs"
                     placeholder="https://..."
@@ -541,23 +528,33 @@ const SortableItem = ({
                   {p.url && (
                     <div className="mt-1">
                       <div className="h-16 w-full overflow-hidden rounded border bg-muted flex items-center justify-center">
-                        {isImageUrl(p.url) ? (
-                          <img src={p.url} alt="thumb" className="max-h-full max-w-full object-contain" />
-                        ) : (
-                          <div className="text-xs text-muted-foreground">画像URLではありません</div>
-                        )}
+                        <img
+                          src={p.url}
+                          alt="thumb"
+                          className="max-h-full max-w-full object-contain"
+                          onError={(e) => {
+                            e.currentTarget.style.display = 'none';
+                            const errorDiv = e.currentTarget.nextElementSibling as HTMLElement;
+                            if (errorDiv) errorDiv.style.display = 'block';
+                          }}
+                        />
+                        <div
+                          className="text-xs text-muted-foreground"
+                          style={{display: 'none'}}
+                        >
+                          画像エラー
+                        </div>
                       </div>
-                      <div className="mt-1 text-[10px] text-muted-foreground truncate" title={p.url}>{p.url}</div>
+                      <div className="mt-1 text-[10px] text-muted-foreground truncate" title={p.url}>
+                        {p.url}
+                      </div>
                     </div>
                   )}
                 </div>
                 <div>
                   <Label className="text-xs">メディア</Label>
                   <div className="h-8 flex items-center">
-                    <MediaSelector
-                      onSelect={(url) => onUpdate(element.id, { ...p, url })}
-                      selectedUrl={p.url}
-                    />
+                    <MediaSelector onSelect={(url) => onUpdate(element.id, { ...p, url })} selectedUrl={p.url} />
                   </div>
                 </div>
               </div>
@@ -568,16 +565,27 @@ const SortableItem = ({
                   <Select value={p.imgSize || "full"} onValueChange={(v: ImageSize) => onUpdate(element.id, { ...p, imgSize: v })}>
                     <SelectTrigger className="h-7 text-xs" />
                     <SelectContent>
-                      {(["xxs", "xs", "sm", "md", "lg", "xl", "xxl", "full"] as ImageSize[]).map((t) => (<SelectItem key={t} value={t}>{t}</SelectItem>))}
+                      {(["xxs", "xs", "sm", "md", "lg", "xl", "xxl", "full"] as ImageSize[]).map((t) => (
+                        <SelectItem key={t} value={t}>
+                          {t}
+                        </SelectItem>
+                      ))}
                     </SelectContent>
                   </Select>
                 </div>
                 <div>
                   <Label className="text-xs">アスペクト比</Label>
-                  <Select value={p.aspectRatio || "20:13"} onValueChange={(v: AspectRatio) => onUpdate(element.id, { ...p, aspectRatio: v })}>
+                  <Select
+                    value={p.aspectRatio || "20:13"}
+                    onValueChange={(v: AspectRatio) => onUpdate(element.id, { ...p, aspectRatio: v })}
+                  >
                     <SelectTrigger className="h-7 text-xs" />
                     <SelectContent>
-                      {(["1:1", "20:13", "16:9", "4:3"] as AspectRatio[]).map((t) => (<SelectItem key={t} value={t}>{t}</SelectItem>))}
+                      {(["1:1", "20:13", "16:9", "4:3"] as AspectRatio[]).map((t) => (
+                        <SelectItem key={t} value={t}>
+                          {t}
+                        </SelectItem>
+                      ))}
                     </SelectContent>
                   </Select>
                 </div>
@@ -593,11 +601,62 @@ const SortableItem = ({
                 </div>
               </div>
 
-              <p className="text-[11px] text-muted-foreground">※ 動画URLは使えません（画像のみ）。</p>
+              <div className="grid grid-cols-3 gap-2 items-end">
+                <div className="col-span-2">
+                  <Label className="text-xs">タップ時の動作 (任意)</Label>
+                  <div className="grid grid-cols-3 gap-2">
+                    <div className="col-span-1">
+                      <Select
+                        value={p.action?.type || "uri"}
+                        onValueChange={(v: ElementAction["type"]) =>
+                          onUpdate(element.id, { ...p, action: { ...(p.action || {}), type: v } })
+                        }
+                      >
+                        <SelectTrigger className="h-7 text-xs" />
+                        <SelectContent>
+                          <SelectItem value="uri">URL</SelectItem>
+                          <SelectItem value="message">定型文</SelectItem>
+                          <SelectItem value="postback">ポストバック</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="col-span-2">
+                      {p.action?.type === "uri" && (
+                        <Input
+                          className="h-8 text-xs"
+                          placeholder="https://..."
+                          value={p.action?.uri || ""}
+                          onChange={(e) => onUpdate(element.id, { ...p, action: { ...(p.action || { type: "uri" }), uri: e.target.value } })}
+                        />
+                      )}
+                      {p.action?.type === "message" && (
+                        <Input
+                          className="h-8 text-xs"
+                          placeholder="送信するテキスト"
+                          value={p.action?.text || ""}
+                          onChange={(e) => onUpdate(element.id, { ...p, action: { ...(p.action || { type: "message" }), text: e.target.value } })}
+                        />
+                      )}
+                      {p.action?.type === "postback" && (
+                        <Input
+                          className="h-8 text-xs"
+                          placeholder="data=xxx"
+                          value={p.action?.data || ""}
+                          onChange={(e) => onUpdate(element.id, { ...p, action: { ...(p.action || { type: "postback" }), data: e.target.value } })}
+                        />
+                      )}
+                    </div>
+                  </div>
+                </div>
+                <div className="text-[11px] text-muted-foreground">
+                  <div>※ ヒーロー: バブル上部に大きく表示</div>
+                  <div>※ URL等は任意</div>
+                </div>
+              </div>
             </div>
           )}
 
-          {/* ボタン */}
+          {/* ボタン要素固有設定 */}
           {element.type === "button" && (
             <div className="grid gap-2">
               <div className="grid grid-cols-3 gap-2 items-end">
@@ -608,7 +667,7 @@ const SortableItem = ({
                     <SelectContent>
                       <SelectItem value="primary">塗り(背景色)</SelectItem>
                       <SelectItem value="secondary">淡色</SelectItem>
-                      <SelectItem value="link">リンク風</SelectItem>
+                      <SelectItem value="link">リンク風(下線)</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
@@ -619,39 +678,32 @@ const SortableItem = ({
                     <SelectContent>
                       <SelectItem value="sm">小</SelectItem>
                       <SelectItem value="md">中</SelectItem>
+                      <SelectItem value="lg">大</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
                 <div>
-                  <Label className="text-xs">色（primaryのみ）</Label>
-                  <div className="h-7 flex items-center opacity-100">
-                    <ColorPicker
-                      color={p.color || "#06c755"}
-                      onChange={(c) => onUpdate(element.id, { ...p, color: c })}
-                    />
+                  <Label className="text-xs">色</Label>
+                  <div className="h-7 flex items-center">
+                    <ColorPicker color={p.color || "#06c755"} onChange={(c) => onUpdate(element.id, { ...p, color: c })} />
                   </div>
                 </div>
               </div>
-
               <div className="grid grid-cols-3 gap-2 items-end">
                 <div>
-                  <Label className="text-xs">ラベル（必須）</Label>
+                  <Label className="text-xs">ラベル</Label>
                   <Input
                     className="h-8 text-xs"
-                    value={p.actionBtn?.label || ""}
-                    onChange={(e) =>
-                      onUpdate(element.id, { ...p, actionBtn: { ...(p.actionBtn || { type: "uri" }), label: e.target.value } })
-                    }
+                    value={p.action?.label || ""}
+                    onChange={(e) => onUpdate(element.id, { ...p, action: { ...(p.action || { type: "uri" }), label: e.target.value } })}
                   />
                 </div>
                 <div className="col-span-2">
-                  <Label className="text-xs">動作</Label>
+                  <Label className="text-xs">ボタンの動作</Label>
                   <div className="grid grid-cols-3 gap-2">
                     <Select
-                      value={p.actionBtn?.type || "uri"}
-                      onValueChange={(v: ElementAction["type"]) =>
-                        onUpdate(element.id, { ...p, actionBtn: { ...(p.actionBtn || {}), type: v } })
-                      }
+                      value={p.action?.type || "uri"}
+                      onValueChange={(v: ElementAction["type"]) => onUpdate(element.id, { ...p, action: { ...(p.action || {}), type: v } })}
                     >
                       <SelectTrigger className="h-7 text-xs" />
                       <SelectContent>
@@ -660,42 +712,33 @@ const SortableItem = ({
                         <SelectItem value="postback">ポストバック</SelectItem>
                       </SelectContent>
                     </Select>
-                    {p.actionBtn?.type === "uri" && (
+                    {p.action?.type === "uri" && (
                       <Input
                         className="h-8 text-xs col-span-2"
                         placeholder="https://..."
-                        value={p.actionBtn?.uri || ""}
-                        onChange={(e) =>
-                          onUpdate(element.id, { ...p, actionBtn: { ...(p.actionBtn || { type: "uri" }), uri: e.target.value } })
-                        }
+                        value={p.action?.uri || ""}
+                        onChange={(e) => onUpdate(element.id, { ...p, action: { ...(p.action || { type: "uri" }), uri: e.target.value } })}
                       />
                     )}
-                    {p.actionBtn?.type === "message" && (
+                    {p.action?.type === "message" && (
                       <Input
                         className="h-8 text-xs col-span-2"
                         placeholder="送信するテキスト"
-                        value={p.actionBtn?.text || ""}
-                        onChange={(e) =>
-                          onUpdate(element.id, { ...p, actionBtn: { ...(p.actionBtn || { type: "message" }), text: e.target.value } })
-                        }
+                        value={p.action?.text || ""}
+                        onChange={(e) => onUpdate(element.id, { ...p, action: { ...(p.action || { type: "message" }), text: e.target.value } })}
                       />
                     )}
-                    {p.actionBtn?.type === "postback" && (
+                    {p.action?.type === "postback" && (
                       <Input
                         className="h-8 text-xs col-span-2"
                         placeholder="data=xxx"
-                        value={p.actionBtn?.data || ""}
-                        onChange={(e) =>
-                          onUpdate(element.id, { ...p, actionBtn: { ...(p.actionBtn || { type: "postback" }), data: e.target.value } })
-                        }
+                        value={p.action?.data || ""}
+                        onChange={(e) => onUpdate(element.id, { ...p, action: { ...(p.action || { type: "postback" }), data: e.target.value } })}
                       />
                     )}
                   </div>
                 </div>
               </div>
-              <p className="text-[11px] text-muted-foreground">
-                ※ `height` は `sm|md` のみ。`link/secondary` では背景色は送られません（仕様）。
-              </p>
             </div>
           )}
         </div>
@@ -704,17 +747,21 @@ const SortableItem = ({
   );
 };
 
-/* =========================================================
-   Main
-   ========================================================= */
+/**
+ * =====================
+ * Main Component
+ * =====================
+ */
 
 export default function FlexMessageDesigner() {
   const navigate = useNavigate();
   const { toast } = useToast();
 
+  // ================= State =================
   const [initialLoading, setInitialLoading] = useState(true);
   const [loading, setLoading] = useState(false);
   const [messages, setMessages] = useState<FlexMessageRow[]>([]);
+  const [currentMessageId, setCurrentMessageId] = useState<string | null>(null);
 
   const [state, setState] = useState<DesignerState>({
     containerType: "bubble",
@@ -724,6 +771,7 @@ export default function FlexMessageDesigner() {
 
   const current = state.bubbles[state.currentIndex];
 
+  // DnD sensors
   const sensors = useSensors(
     useSensor(PointerSensor),
     useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
@@ -752,7 +800,7 @@ export default function FlexMessageDesigner() {
     })();
   }, [navigate, toast]);
 
-  // Handlers
+  // ================= Handlers =================
   const addElement = (type: FlexElement["type"]) => {
     setState((prev) => {
       const next = { ...prev };
@@ -760,15 +808,16 @@ export default function FlexMessageDesigner() {
       return next;
     });
   };
+
   const updateElement = (id: string, props: ElementProps) => {
     setState((prev) => {
       const next = { ...prev };
-      next.bubbles[next.currentIndex].contents = next.bubbles[next.currentIndex].contents.map((el) =>
-        el.id === id ? { ...el, properties: props } : el
-      );
+      const list = next.bubbles[next.currentIndex].contents.map((el) => (el.id === id ? { ...el, properties: props } : el));
+      next.bubbles[next.currentIndex].contents = list;
       return next;
     });
   };
+
   const deleteElement = (id: string) => {
     setState((prev) => {
       const next = { ...prev };
@@ -776,20 +825,23 @@ export default function FlexMessageDesigner() {
       return next;
     });
   };
-  const handleHeroToggle = (id: string, checked: boolean) => {
+
+  const handleHeroToggle = (id: string, nextChecked: boolean) => {
     setState((prev) => {
       const next = { ...prev };
-      const list = next.bubbles[next.currentIndex].contents.map((el) =>
-        el.type === "image" ? { ...el, properties: { ...el.properties, isHero: false } } : el
-      );
-      next.bubbles[next.currentIndex].contents = list.map((el) =>
-        el.id === id ? { ...el, properties: { ...el.properties, isHero: checked } } : el
+      const contents = next.bubbles[next.currentIndex].contents;
+      // まず全解除
+      const cleared = contents.map((el) => (el.type === "image" ? { ...el, properties: { ...el.properties, isHero: false } } : el));
+      // 指定IDのみ付与（ONのとき）
+      next.bubbles[next.currentIndex].contents = cleared.map((el) =>
+        el.id === id ? { ...el, properties: { ...el.properties, isHero: nextChecked } } : el
       );
       return next;
     });
   };
-  const handleDragEnd = (e: DragEndEvent) => {
-    const { active, over } = e;
+
+  const handleDragEnd = (event: DragEndEvent) => {
+    const { active, over } = event;
     if (!over || active.id === over.id) return;
     setState((prev) => {
       const next = { ...prev };
@@ -801,39 +853,30 @@ export default function FlexMessageDesigner() {
     });
   };
 
-  // Validate before save / send
-  const validateBeforeExport = (): string[] => {
-    const { payload, errors } = buildFlexMessage(state);
-    // 要素有無
-    const hasBody =
-      state.containerType === "bubble"
-        ? (payload.contents?.body?.contents?.length || 0) > 0 || !!payload.contents?.hero
-        : (payload.contents?.contents?.some((b: any) => (b.body?.contents?.length || 0) > 0 || !!b.hero) ?? false);
-    if (!hasBody) errors.push("要素がありません。");
-    // 画像URLの最終チェック
-    state.bubbles.forEach((b, bi) => {
-      b.contents.forEach((el, ei) => {
-        if (el.type === "image" && !isImageUrl(el.properties.url)) {
-          errors.push(`画像(${bi + 1}-${ei + 1})に画像以外のURLが指定されています。`);
-        }
-      });
-    });
-    // ボタン高さチェック（念のため）
-    state.bubbles.forEach((b) =>
-      b.contents.forEach((el) => {
-        if (el.type === "button" && el.properties.height && !["sm", "md"].includes(el.properties.height)) {
-          errors.push("ボタンの高さは sm|md のみです。");
-        }
-      })
-    );
-    return errors;
+  const newMessage = () => {
+    setState({ containerType: "bubble", bubbles: [defaultBubble()], currentIndex: 0 });
+    setCurrentMessageId(null);
   };
 
-  // 追加保存（常に insert）
-  const saveAsNew = async () => {
-    const errs = validateBeforeExport();
-    if (errs.length) {
-      toast({ title: "保存できません", description: errs[0], variant: "destructive" });
+  const reloadSavedMessages = async () => {
+    try {
+      const { data, error } = await supabase
+        .from("flex_messages")
+        .select("*")
+        .order("created_at", { ascending: false });
+      if (error) throw error;
+      setMessages(data || []);
+    } catch (e) {
+      console.error(e);
+      toast({ title: "再読み込みエラー", description: "保存済みメッセージの再取得に失敗しました", variant: "destructive" });
+    }
+  };
+
+  // ======== Save / Load / Send ========
+  const saveNewMessage = async () => {
+    const alt = (current?.altText || "").trim();
+    if (!alt) {
+      toast({ title: "入力エラー", description: "代替テキスト(通知文)を入力してください", variant: "destructive" });
       return;
     }
 
@@ -844,19 +887,51 @@ export default function FlexMessageDesigner() {
         toast({ title: "認証エラー", description: "ログインしてください", variant: "destructive" });
         return;
       }
-      const { payload } = buildFlexMessage(state);
-      const title = current?.name || "Flexメッセージ";
-      const { error } = await supabase.from("flex_messages").insert({ user_id: user.id, name: title, content: payload });
-      if (error) throw error;
-      toast({ title: "追加保存", description: `「${title}」を新規保存しました` });
 
-      // 再取得
-      const { data, error: fetchErr } = await supabase.from("flex_messages").select("*").order("created_at", { ascending: false });
-      if (fetchErr) throw fetchErr;
-      setMessages(data || []);
+      const content = buildFlexMessage(state);
+      const title = current?.name || "Flexメッセージ";
+
+      const { data: insertedData, error } = await supabase.from("flex_messages").insert({ user_id: user.id, name: title, content }).select();
+      if (error) throw error;
+      
+      if (insertedData && insertedData[0]) {
+        setCurrentMessageId(insertedData[0].id);
+      }
+      
+      toast({ title: "保存成功", description: `「${title}」を新規保存しました` });
+      await reloadSavedMessages();
+
     } catch (e: any) {
       console.error(e);
-      toast({ title: "保存失敗", description: e.message || "保存に失敗しました", variant: "destructive" });
+      toast({ title: "保存失敗", description: e.message || "保存でエラーが発生しました", variant: "destructive" });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const updateMessage = async () => {
+    if (!currentMessageId) return;
+
+    const alt = (current?.altText || "").trim();
+    if (!alt) {
+      toast({ title: "入力エラー", description: "代替テキスト(通知文)を入力してください", variant: "destructive" });
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const content = buildFlexMessage(state);
+      const title = current?.name || "Flexメッセージ";
+      
+      const { error } = await supabase.from("flex_messages").update({ name: title, content }).eq("id", currentMessageId);
+      if (error) throw error;
+      
+      toast({ title: "上書き保存成功", description: `「${title}」を更新しました` });
+      await reloadSavedMessages();
+
+    } catch (e: any) {
+      console.error(e);
+      toast({ title: "更新失敗", description: e.message || "更新処理でエラーが発生しました", variant: "destructive" });
     } finally {
       setLoading(false);
     }
@@ -867,11 +942,12 @@ export default function FlexMessageDesigner() {
       const c = row.content?.contents;
       if (!c) throw new Error("不正なデータ形式");
 
-      // carousel
+      setCurrentMessageId(row.id);
+
       if (c.type === "carousel") {
         const bubbles: BubbleDesign[] = (c.contents || []).map((b: any, idx: number) => {
           const items: FlexElement[] = [];
-
+          // hero を image element として再構築
           if (b.hero?.url) {
             items.push({
               id: `el-h-${idx}`,
@@ -889,68 +965,102 @@ export default function FlexMessageDesigner() {
             });
           }
 
+          // body.contents
           (b.body?.contents || []).forEach((node: any, i: number) => {
-            // wrapper (padding) の復元
-            const unwrap = (n: any) => (n?.type === "box" && Array.isArray(n.contents) && n.contents.length === 1 ? n.contents[0] : n);
-            const inner = unwrap(node);
-            const padding: PaddingToken =
-              node.type === "box" && node.paddingAll
-                ? node.paddingAll === "4px"
-                  ? "xs"
-                  : node.paddingAll === "8px"
-                  ? "sm"
-                  : node.paddingAll === "12px"
-                  ? "md"
-                  : node.paddingAll === "16px"
-                  ? "lg"
-                  : node.paddingAll === "20px"
-                  ? "xl"
-                  : "none"
-                : "none";
-
-            if (inner.type === "text") {
-              items.push({
-                id: `el-${idx}-${i}`,
-                type: "text",
-                properties: {
-                  text: inner.text,
-                  size: inner.size || "md",
-                  weight: inner.weight || "normal",
-                  color: inner.color || "#000000",
-                  align: inner.align || "start",
-                  margin: inner.margin || "none",
-                  padding,
-                  backgroundColor: inner.backgroundColor,
-                  wrap: true,
-                },
-              });
-            } else if (inner.type === "image") {
-              items.push({
-                id: `el-${idx}-${i}`,
-                type: "image",
-                properties: {
-                  url: inner.url,
-                  imgSize: inner.size || "full",
-                  aspectRatio: inner.aspectRatio || "20:13",
-                  aspectMode: inner.aspectMode || "cover",
-                  action: inner.action,
-                  margin: inner.margin || "none",
-                  padding,
-                },
-              });
-            } else if (inner.type === "button") {
-              items.push({
-                id: `el-${idx}-${i}`,
-                type: "button",
-                properties: {
-                  style: inner.style || "primary",
-                  color: inner.color,
-                  height: (inner.height as ButtonHeight) || "md",
-                  actionBtn: inner.action,
-                  margin: inner.margin || "none",
-                  padding,
-                },
-              });
+            if (node.type === "box" && Array.isArray(node.contents) && node.contents.length === 1) {
+              // padding wrapper の復元
+              const inner = node.contents[0];
+              const padding: PaddingToken = node.paddingAll === "4px" ? "xs" : node.paddingAll === "8px" ? "sm" : node.paddingAll === "12px" ? "md" : node.paddingAll === "16px" ? "lg" : node.paddingAll === "20px" ? "xl" : "none";
+              if (inner.type === "text") {
+                items.push({
+                  id: `el-${idx}-${i}`,
+                  type: "text",
+                  properties: {
+                    text: inner.text,
+                    size: inner.size || "md",
+                    weight: inner.weight || "normal",
+                    color: inner.color || "#000000",
+                    align: inner.align || "start",
+                    margin: inner.margin || "md",
+                    padding: padding,
+                    backgroundColor: inner.backgroundColor,
+                    wrap: true,
+                  },
+                });
+              } else if (inner.type === "image") {
+                items.push({
+                  id: `el-${idx}-${i}`,
+                  type: "image",
+                  properties: {
+                    url: inner.url,
+                    imgSize: inner.size || "full",
+                    aspectRatio: inner.aspectRatio || "20:13",
+                    aspectMode: inner.aspectMode || "cover",
+                    action: inner.action,
+                    margin: inner.margin || "md",
+                    padding,
+                  },
+                });
+              } else if (inner.type === "button") {
+                items.push({
+                  id: `el-${idx}-${i}`,
+                  type: "button",
+                  properties: {
+                    style: inner.style || "primary",
+                    color: inner.color,
+                    height: inner.height || "md",
+                    action: inner.action,
+                    margin: inner.margin || "md",
+                    padding,
+                  },
+                });
+              }
+            } else {
+              // 直下
+              if (node.type === "text") {
+                items.push({
+                  id: `el-${idx}-${i}`,
+                  type: "text",
+                  properties: {
+                    text: node.text,
+                    size: node.size || "md",
+                    weight: node.weight || "normal",
+                    color: node.color || "#000000",
+                    align: node.align || "start",
+                    margin: node.margin || "md",
+                    padding: "none",
+                    backgroundColor: node.backgroundColor,
+                    wrap: true,
+                  },
+                });
+              } else if (node.type === "image") {
+                items.push({
+                  id: `el-${idx}-${i}`,
+                  type: "image",
+                  properties: {
+                    url: node.url,
+                    imgSize: node.size || "full",
+                    aspectRatio: node.aspectRatio || "20:13",
+                    aspectMode: node.aspectMode || "cover",
+                    action: node.action,
+                    margin: node.margin || "md",
+                    padding: "none",
+                  },
+                });
+              } else if (node.type === "button") {
+                items.push({
+                  id: `el-${idx}-${i}`,
+                  type: "button",
+                  properties: {
+                    style: node.style || "primary",
+                    color: node.color,
+                    height: node.height || "md",
+                    action: node.action,
+                    margin: node.margin || "md",
+                    padding: "none",
+                  },
+                });
+              }
             }
           });
 
@@ -959,14 +1069,14 @@ export default function FlexMessageDesigner() {
             altText: row.content?.altText || `${row.name}のお知らせ`,
             bubbleSize: (b.size as BubbleSize) || "kilo",
             bodyBg: b.body?.backgroundColor,
-            bodySpacing: (b.body?.spacing as SpacingToken) || "md",
+            bodySpacing: b.body?.spacing as SpacingToken || "md",
             contents: items,
           } as BubbleDesign;
         });
 
         setState({ containerType: "carousel", bubbles, currentIndex: 0 });
       } else {
-        // bubble
+        // bubble 単体
         const b = c;
         const items: FlexElement[] = [];
         if (b.hero?.url) {
@@ -986,66 +1096,20 @@ export default function FlexMessageDesigner() {
           });
         }
         (b.body?.contents || []).forEach((node: any, i: number) => {
-          const unwrap = (n: any) => (n?.type === "box" && Array.isArray(n.contents) && n.contents.length === 1 ? n.contents[0] : n);
-          const inner = unwrap(node);
-          const padding: PaddingToken =
-            node.type === "box" && node.paddingAll
-              ? node.paddingAll === "4px"
-                ? "xs"
-                : node.paddingAll === "8px"
-                ? "sm"
-                : node.paddingAll === "12px"
-                ? "md"
-                : node.paddingAll === "16px"
-                ? "lg"
-                : node.paddingAll === "20px"
-                ? "xl"
-                : "none"
-              : "none";
-
-          if (inner.type === "text") {
-            items.push({
-              id: `el-${i}`,
-              type: "text",
-              properties: {
-                text: inner.text,
-                size: inner.size || "md",
-                weight: inner.weight || "normal",
-                color: inner.color || "#000000",
-                align: inner.align || "start",
-                margin: inner.margin || "none",
-                padding,
-                backgroundColor: inner.backgroundColor,
-                wrap: true,
-              },
-            });
-          } else if (inner.type === "image") {
-            items.push({
-              id: `el-${i}`,
-              type: "image",
-              properties: {
-                url: inner.url,
-                imgSize: inner.size || "full",
-                aspectRatio: inner.aspectRatio || "20:13",
-                aspectMode: inner.aspectMode || "cover",
-                action: inner.action,
-                margin: inner.margin || "none",
-                padding,
-              },
-            });
-          } else if (inner.type === "button") {
-            items.push({
-              id: `el-${i}`,
-              type: "button",
-              properties: {
-                style: inner.style || "primary",
-                color: inner.color,
-                height: (inner.height as ButtonHeight) || "md",
-                actionBtn: inner.action,
-                margin: inner.margin || "none",
-                padding,
-              },
-            });
+          if (node.type === "box" && Array.isArray(node.contents) && node.contents.length === 1) {
+            const inner = node.contents[0];
+            const padding: PaddingToken = node.paddingAll === "4px" ? "xs" : node.paddingAll === "8px" ? "sm" : node.paddingAll === "12px" ? "md" : node.paddingAll === "16px" ? "lg" : node.paddingAll === "20px" ? "xl" : "none";
+            if (inner.type === "text") {
+              items.push({ id: `el-${i}`, type: "text", properties: { text: inner.text, size: inner.size || "md", weight: inner.weight || "normal", color: inner.color || "#000000", align: inner.align || "start", margin: inner.margin || "md", padding, backgroundColor: inner.backgroundColor, wrap: true } });
+            } else if (inner.type === "image") {
+              items.push({ id: `el-${i}`, type: "image", properties: { url: inner.url, imgSize: inner.size || "full", aspectRatio: inner.aspectRatio || "20:13", aspectMode: inner.aspectMode || "cover", action: inner.action, margin: inner.margin || "md", padding } });
+            } else if (inner.type === "button") {
+              items.push({ id: `el-${i}`, type: "button", properties: { style: inner.style || "primary", color: inner.color, height: inner.height || "md", action: inner.action, margin: inner.margin || "md", padding } });
+            }
+          } else {
+            if (node.type === "text") items.push({ id: `el-${i}`, type: "text", properties: { text: node.text, size: node.size || "md", weight: node.weight || "normal", color: node.color || "#000000", align: node.align || "start", margin: node.margin || "md", padding: "none", backgroundColor: node.backgroundColor, wrap: true } });
+            if (node.type === "image") items.push({ id: `el-${i}`, type: "image", properties: { url: node.url, imgSize: node.size || "full", aspectRatio: node.aspectRatio || "20:13", aspectMode: node.aspectMode || "cover", action: node.action, margin: node.margin || "md", padding: "none" } });
+            if (node.type === "button") items.push({ id: `el-${i}`, type: "button", properties: { style: node.style || "primary", color: node.color, height: node.height || "md", action: node.action, margin: node.margin || "md", padding: "none" } });
           }
         });
 
@@ -1057,7 +1121,7 @@ export default function FlexMessageDesigner() {
               altText: row.content?.altText || `${row.name}のお知らせ`,
               bubbleSize: (b.size as BubbleSize) || "kilo",
               bodyBg: b.body?.backgroundColor,
-              bodySpacing: (b.body?.spacing as SpacingToken) || "md",
+              bodySpacing: b.body?.spacing as SpacingToken || "md",
               contents: items,
             },
           ],
@@ -1079,6 +1143,9 @@ export default function FlexMessageDesigner() {
       if (error) throw error;
       setMessages((prev) => prev.filter((m) => m.id !== id));
       toast({ title: "削除", description: `「${name}」を削除しました` });
+      if (currentMessageId === id) {
+        newMessage();
+      }
     } catch (e: any) {
       console.error(e);
       toast({ title: "削除失敗", description: e.message || "削除でエラーが発生しました", variant: "destructive" });
@@ -1086,12 +1153,11 @@ export default function FlexMessageDesigner() {
   };
 
   const sendNow = async () => {
-    const errs = validateBeforeExport();
-    if (errs.length) {
-      toast({ title: "送信できません", description: errs[0], variant: "destructive" });
+    if (!current) return;
+    if (!current.altText?.trim()) {
+      toast({ title: "入力エラー", description: "代替テキスト(通知文)を入力してください", variant: "destructive" });
       return;
     }
-
     setLoading(true);
     try {
       const { data: { user } } = await supabase.auth.getUser();
@@ -1099,15 +1165,10 @@ export default function FlexMessageDesigner() {
         toast({ title: "認証エラー", description: "ログインしてください", variant: "destructive" });
         return;
       }
-      const { payload } = buildFlexMessage(state);
-      const { error } = await supabase.functions.invoke("send-flex-message", {
-        body: { flexMessage: payload, userId: user.id },
-      });
+      const payload = buildFlexMessage(state);
+      const { error } = await supabase.functions.invoke("send-flex-message", { body: { flexMessage: payload, userId: user.id } });
       if (error) throw error;
-      toast({
-        title: "送信しました",
-        description: state.containerType === "bubble" ? "単体バブルを配信" : "カルーセルを配信",
-      });
+      toast({ title: "送信しました", description: state.containerType === "bubble" ? "単体バブルを配信" : "カルーセルを配信" });
     } catch (e: any) {
       console.error(e);
       toast({ title: "送信エラー", description: e.message || "送信に失敗しました", variant: "destructive" });
@@ -1116,7 +1177,27 @@ export default function FlexMessageDesigner() {
     }
   };
 
-  // UI
+  const sendSavedMessage = async (messageContent: any) => {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) {
+        toast({ title: "認証エラー", description: "ログインしてください", variant: "destructive" });
+        return;
+      }
+
+      const { error } = await supabase.functions.invoke("send-flex-message", {
+        body: { flexMessage: messageContent, userId: user.id }
+      });
+      if (error) throw error;
+      toast({ title: "送信完了", description: "保存済みメッセージを配信しました" });
+    } catch (e: any) {
+      console.error(e);
+      toast({ title: "送信エラー", description: e.message || "送信に失敗", variant: "destructive" });
+    }
+  };
+
+  // ================= UI =================
+
   if (initialLoading) {
     return (
       <div className="min-h-screen grid place-items-center">
@@ -1160,27 +1241,7 @@ export default function FlexMessageDesigner() {
                           <Button size="sm" variant="outline" className="h-7 px-2 text-xs" onClick={() => loadMessage(m)}>
                             読込
                           </Button>
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            className="h-7 px-2 text-xs"
-                            onClick={async () => {
-                              try {
-                                const { data: { user } } = await supabase.auth.getUser();
-                                if (!user) {
-                                  toast({ title: "認証エラー", description: "ログインしてください", variant: "destructive" });
-                                  return;
-                                }
-                                const { error } = await supabase.functions.invoke("send-flex-message", {
-                                  body: { flexMessage: m.content, userId: user.id },
-                                });
-                                if (error) throw error;
-                                toast({ title: "送信完了", description: "保存済みメッセージを配信しました" });
-                              } catch (e: any) {
-                                toast({ title: "送信エラー", description: e.message || "送信に失敗", variant: "destructive" });
-                              }
-                            }}
-                          >
+                          <Button size="sm" variant="outline" className="h-7 px-2 text-xs" onClick={() => sendSavedMessage(m.content)}>
                             配信
                           </Button>
                           <Button size="sm" variant="outline" className="h-7 px-2 text-xs text-destructive" onClick={() => deleteMessage(m.id, m.name)}>
@@ -1201,61 +1262,32 @@ export default function FlexMessageDesigner() {
               <CardHeader className="py-3">
                 <div className="flex items-center justify-between">
                   <div>
-                    <CardTitle className="text-sm flex items-center gap-2">
-                      <MessageSquare className="w-4 h-4" />
-                      デザイン
-                    </CardTitle>
-                    <CardDescription className="text-xs">
-                      余白はデフォルトでゼロ。必要な要素だけ個別に設定できます。
-                    </CardDescription>
+                    <CardTitle className="text-sm flex items-center gap-2"><MessageSquare className="w-4 h-4" />デザイン</CardTitle>
+                    <CardDescription className="text-xs">必要最小限の設定で作れます。高度な設定は各要素を開いて調整</CardDescription>
                   </div>
                   <div className="flex gap-2">
-                    <Button size="sm" variant="outline" className="h-8 text-xs" onClick={() => setState({ containerType: "bubble", bubbles: [defaultBubble()], currentIndex: 0 })}>
-                      新規
-                    </Button>
-                    <Button size="sm" className="h-8 text-xs" onClick={saveAsNew} disabled={loading}>
-                      <Save className="w-4 h-4 mr-1" />
-                      追加保存
-                    </Button>
-                    <Button size="sm" className="h-8 text-xs bg-[#06c755] hover:bg-[#05b84c]" onClick={sendNow} disabled={loading}>
-                      <Send className="w-4 h-4 mr-1" />
-                      配信
-                    </Button>
+                    <Button size="sm" variant="outline" className="h-8 text-xs" onClick={newMessage}>新規</Button>
+                    <Button size="sm" variant="outline" className="h-8 text-xs" onClick={saveNewMessage} disabled={loading}><Save className="w-4 h-4 mr-1" />新規保存</Button>
+                    <Button size="sm" className="h-8 text-xs" onClick={updateMessage} disabled={loading || !currentMessageId}><Save className="w-4 h-4 mr-1" />上書き保存</Button>
+                    <Button size="sm" className="h-8 text-xs bg-[#06c755] hover:bg-[#05b84c]" onClick={sendNow} disabled={loading}><Send className="w-4 h-4 mr-1" />配信</Button>
                   </div>
                 </div>
               </CardHeader>
-
               <CardContent className="grid gap-3 text-sm">
+                {/* 上段: 基本情報 */}
                 <div className="grid grid-cols-3 gap-3">
                   <div>
                     <Label className="text-xs">メッセージ名</Label>
-                    <Input
-                      className="h-8 text-xs"
-                      value={current.name}
-                      onChange={(e) =>
-                        setState((prev) => ({
-                          ...prev,
-                          bubbles: prev.bubbles.map((b, i) => (i === prev.currentIndex ? { ...b, name: e.target.value } : b)),
-                        }))
-                      }
-                      placeholder="例) 新商品お知らせ"
-                    />
+                    <Input className="h-8 text-xs" value={current.name} onChange={(e) => setState((prev) => ({ ...prev, bubbles: prev.bubbles.map((b, i) => (i === prev.currentIndex ? { ...b, name: e.target.value } : b)) }))} placeholder="例) 新商品お知らせ" />
                   </div>
                   <div className="col-span-2">
-                    <Label className="text-xs">
-                      代替テキスト(通知文) <span className="text-[10px] text-muted-foreground">* 400文字まで</span>
-                    </Label>
+                    <Label className="text-xs">代替テキスト(通知文) <span className="text-[10px] text-muted-foreground">* 400文字まで / 端末の通知に使われます</span></Label>
                     <Input
                       className="h-8 text-xs"
                       value={current.altText}
                       maxLength={400}
-                      onChange={(e) =>
-                        setState((prev) => ({
-                          ...prev,
-                          bubbles: prev.bubbles.map((b, i) => (i === prev.currentIndex ? { ...b, altText: e.target.value } : b)),
-                        }))
-                      }
-                      placeholder="例) クーポン配布中！"
+                      onChange={(e) => setState((prev) => ({ ...prev, bubbles: prev.bubbles.map((b, i) => (i === prev.currentIndex ? { ...b, altText: e.target.value } : b)) }))}
+                      placeholder="例) クーポンを配布中！"
                     />
                   </div>
                 </div>
@@ -1273,7 +1305,7 @@ export default function FlexMessageDesigner() {
                         <SelectItem value="carousel">カルーセル</SelectItem>
                       </SelectContent>
                     </Select>
-                    <p className="text-[11px] text-muted-foreground mt-1">カルーセルは最大10枚</p>
+                    <p className="text-[11px] text-muted-foreground mt-1">カルーセルは最大10枚まで</p>
                   </div>
                   <div>
                     <Label className="text-xs">バブル幅</Label>
@@ -1293,6 +1325,7 @@ export default function FlexMessageDesigner() {
                         <SelectItem value="giga">最大</SelectItem>
                       </SelectContent>
                     </Select>
+                    <p className="text-[11px] text-muted-foreground mt-1">カルーセル時の横幅</p>
                   </div>
                   <div>
                     <Label className="text-xs">バブル背景色</Label>
@@ -1332,85 +1365,79 @@ export default function FlexMessageDesigner() {
                 </div>
 
                 {state.containerType === "carousel" && (
-                  <div className="flex items-center justify-between">
-                    <div className="flex flex-wrap gap-1">
-                      {state.bubbles.map((b, i) => (
+                  <>
+                    <div className="flex items-center justify-between">
+                      <div className="flex flex-wrap gap-1">
+                        {state.bubbles.map((b, i) => (
+                          <Button
+                            key={i}
+                            size="sm"
+                            variant={i === state.currentIndex ? "default" : "outline"}
+                            className="h-7 text-xs"
+                            onClick={() => setState((prev) => ({ ...prev, currentIndex: i }))}
+                          >
+                            <Layers className="w-3.5 h-3.5 mr-1" /> {i + 1}
+                          </Button>
+                        ))}
+                      </div>
+                      <div className="flex gap-2">
                         <Button
-                          key={i}
                           size="sm"
-                          variant={i === state.currentIndex ? "default" : "outline"}
-                          className="h-7 text-xs"
-                          onClick={() => setState((prev) => ({ ...prev, currentIndex: i }))}
+                          variant="outline"
+                          className="h-8 text-xs"
+                          onClick={() =>
+                            setState((prev) => ({
+                              ...prev,
+                              bubbles: [...prev.bubbles, defaultBubble(`バブル ${prev.bubbles.length + 1}`)].slice(0, 10),
+                              currentIndex: Math.min(prev.bubbles.length, 9),
+                            }))
+                          }
                         >
-                          <Layers className="w-3.5 h-3.5 mr-1" /> {i + 1}
+                          <Plus className="w-4 h-4 mr-1" /> 追加
                         </Button>
-                      ))}
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="h-8 text-xs"
+                          onClick={() =>
+                            setState((prev) => ({
+                              ...prev,
+                              bubbles: prev.bubbles.length < 10 ? [...prev.bubbles, JSON.parse(JSON.stringify(prev.bubbles[prev.currentIndex]))] : prev.bubbles,
+                              currentIndex: Math.min(prev.bubbles.length, 9),
+                            }))
+                          }
+                        >
+                          <Copy className="w-4 h-4 mr-1" /> 複製
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="h-8 text-xs text-destructive"
+                          onClick={() =>
+                            setState((prev) => ({
+                              ...prev,
+                              bubbles: prev.bubbles.length > 1 ? prev.bubbles.filter((_, i) => i !== prev.currentIndex) : prev.bubbles,
+                              currentIndex: 0,
+                            }))
+                          }
+                        >
+                          <Trash2 className="w-4 h-4 mr-1" /> 削除
+                        </Button>
+                      </div>
                     </div>
-                    <div className="flex gap-2">
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        className="h-8 text-xs"
-                        onClick={() =>
-                          setState((prev) => ({
-                            ...prev,
-                            bubbles: [...prev.bubbles, defaultBubble(`バブル ${prev.bubbles.length + 1}`)].slice(0, 10),
-                            currentIndex: Math.min(prev.bubbles.length, 9),
-                          }))
-                        }
-                      >
-                        <Plus className="w-4 h-4 mr-1" /> 追加
-                      </Button>
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        className="h-8 text-xs"
-                        onClick={() =>
-                          setState((prev) => ({
-                            ...prev,
-                            bubbles:
-                              prev.bubbles.length < 10
-                                ? [...prev.bubbles, JSON.parse(JSON.stringify(prev.bubbles[prev.currentIndex]))]
-                                : prev.bubbles,
-                            currentIndex: Math.min(prev.bubbles.length, 9),
-                          }))
-                        }
-                      >
-                        <Copy className="w-4 h-4 mr-1" /> 複製
-                      </Button>
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        className="h-8 text-xs text-destructive"
-                        onClick={() =>
-                          setState((prev) => ({
-                            ...prev,
-                            bubbles: prev.bubbles.length > 1 ? prev.bubbles.filter((_, i) => i !== prev.currentIndex) : prev.bubbles,
-                            currentIndex: 0,
-                          }))
-                        }
-                      >
-                        <Trash2 className="w-4 h-4 mr-1" /> 削除
-                      </Button>
-                    </div>
-                  </div>
+                  </>
                 )}
 
                 {/* 要素ツールバー */}
                 <div className="flex flex-wrap gap-2">
-                  <Button size="sm" variant="outline" className="h-8 text-xs" onClick={() => addElement("text")}>
-                    + テキスト
-                  </Button>
+                  <Button size="sm" variant="outline" className="h-8 text-xs" onClick={() => addElement("text")}>+ テキスト</Button>
                   <Button size="sm" variant="outline" className="h-8 text-xs" onClick={() => addElement("image")}>
-                    <IconImage className="w-4 h-4 mr-1" />
-                    画像
+                    <IconImage className="w-4 h-4 mr-1" /> 画像
                   </Button>
-                  <Button size="sm" variant="outline" className="h-8 text-xs" onClick={() => addElement("button")}>
-                    + ボタン
-                  </Button>
+                  <Button size="sm" variant="outline" className="h-8 text-xs" onClick={() => addElement("button")}>+ ボタン</Button>
                 </div>
 
-                {/* 要素リスト */}
+                {/* ソート可能リスト */}
                 <div className="max-h-[380px] overflow-auto rounded-md border p-2 bg-muted/30">
                   {current.contents.length === 0 ? (
                     <div className="text-xs text-muted-foreground grid place-items-center h-40">要素を追加してください</div>
@@ -1434,137 +1461,108 @@ export default function FlexMessageDesigner() {
             </Card>
           </div>
 
-          {/* 右: プレビュー（固定パディング無し） */}
+          {/* 右: プレビュー */}
           <Card className="h-[calc(100vh-140px)] lg:sticky top-3 overflow-hidden">
             <CardHeader className="py-3">
-              <CardTitle className="text-sm flex items-center gap-2">
-                <Eye className="w-4 h-4" />
-                プレビュー
-              </CardTitle>
-              <CardDescription className="text-xs">実機と多少の差があります</CardDescription>
+              <CardTitle className="text-sm flex items-center gap-2"><Eye className="w-4 h-4" />プレビュー</CardTitle>
+              <CardDescription className="text-xs">おおよその見た目(実機と微差あり)</CardDescription>
             </CardHeader>
             <CardContent className="pt-0 overflow-auto h-full">
-              <div style={{ width: getBubbleWidthPx(current.bubbleSize) }} className="mx-auto">
+              <div
+                className="mx-auto rounded-lg border bg-white overflow-hidden"
+                style={{
+                  width: getBubbleWidthPx(current.bubbleSize),
+                }}
+              >
                 {/* hero */}
-                {current.contents.find((c) => c.type === "image" && c.properties.isHero && isImageUrl(c.properties.url)) && (
-                  <img
-                    src={current.contents.find((c) => c.type === "image" && c.properties.isHero)?.properties.url}
-                    alt="hero"
-                    className="w-full rounded-t-lg"
-                    style={{
-                      aspectRatio:
-                        current.contents.find((c) => c.type === "image" && c.properties.isHero)?.properties.aspectRatio?.replace(":", "/") ||
-                        "auto",
-                      objectFit:
-                        current.contents.find((c) => c.type === "image" && c.properties.isHero)?.properties.aspectMode === "fit"
-                          ? "contain"
-                          : "cover",
-                    }}
-                  />
-                )}
+                {current.contents.find((c) => c.type === "image" && c.properties.isHero && c.properties.url) && (() => {
+                  const hero = current.contents.find((c) => c.type === "image" && c.properties.isHero);
+                  if (!hero) return null;
+                  return (
+                    <div>
+                      <img
+                        src={hero.properties.url}
+                        alt="hero"
+                        className="w-full block"
+                        style={{
+                          aspectRatio: hero.properties.aspectRatio?.replace(':', '/') || "auto",
+                          objectFit: hero.properties.aspectMode === "fit" ? "contain" : "cover",
+                        }}
+                      />
+                    </div>
+                  );
+                })()}
+
                 {/* body */}
                 <div
-                  className={`${current.contents.some((c) => c.type === "image" && c.properties.isHero) ? "rounded-b-lg" : "rounded-lg"} border border-t-0`}
+                  className="flex flex-col"
                   style={{
-                    backgroundColor: current.bodyBg && current.bodyBg !== "#ffffff" ? current.bodyBg : "#ffffff",
+                    backgroundColor: current.bodyBg && current.bodyBg !== "#ffffff" ? current.bodyBg : undefined,
+                    gap: current.bodySpacing && current.bodySpacing !== "none" ? getMarginPx(current.bodySpacing) : "0px"
                   }}
                 >
-                  <div className="p-0">
-                    {current.contents
-                      .filter((c) => !(c.type === "image" && c.properties.isHero))
-                      .map((el, i, arr) => (
+                  {current.contents.filter((c) => !(c.type === "image" && c.properties.isHero)).map((el) => (
+                    <div
+                      key={el.id}
+                      style={{
+                        margin: el.properties.margin && el.properties.margin !== "none" ? getMarginPx(el.properties.margin) : undefined,
+                        padding: el.properties.padding && el.properties.padding !== "none" ? padToPx(el.properties.padding) : undefined,
+                        backgroundColor: el.properties.backgroundColor && el.properties.backgroundColor !== "#ffffff" ? el.properties.backgroundColor : undefined,
+                        borderRadius: el.properties.backgroundColor && el.properties.backgroundColor !== "#ffffff" ? "4px" : undefined,
+                      }}
+                    >
+                      {el.type === "text" && (
                         <div
-                          key={el.id}
-                          className="last:mb-0 px-3"
                           style={{
-                            marginTop: i === 0 ? "0" : getMarginPx((current.bodySpacing || "md") as MarginToken),
+                            color: el.properties.color || "#000",
+                            textAlign: (el.properties.align || "start") as any,
+                            fontSize: getTextSizePx(el.properties.size || "md"),
+                            fontWeight: el.properties.weight === "bold" ? "bold" : "normal",
+                            whiteSpace: "pre-wrap",
+                            overflowWrap: "break-word",
                           }}
                         >
-                          {el.type === "text" && (
-                            <div
-                              style={{
-                                color: el.properties.color || "#000",
-                                textAlign: (el.properties.align || "start") as any,
-                                backgroundColor:
-                                  el.properties.backgroundColor && el.properties.backgroundColor !== "#ffffff"
-                                    ? el.properties.backgroundColor
-                                    : undefined,
-                                padding: el.properties.padding && el.properties.padding !== "none" ? padToPx(el.properties.padding) : undefined,
-                                margin:
-                                  el.properties.margin && el.properties.margin !== "none"
-                                    ? `${getMarginPx(el.properties.margin)} 0`
-                                    : undefined,
-                                borderRadius:
-                                  el.properties.backgroundColor && el.properties.backgroundColor !== "#ffffff" ? "4px" : undefined,
-                                fontSize: getTextSizePx(el.properties.size),
-                                fontWeight: el.properties.weight === "bold" ? "bold" : "normal",
-                              }}
-                            >
-                              {(el.properties.text || "").split("\n").map((line, idx) => (
-                                <div key={idx}>{line}</div>
-                              ))}
-                            </div>
-                          )}
-
-                          {el.type === "image" && isImageUrl(el.properties.url) && (
-                            <div
-                              style={{
-                                margin:
-                                  el.properties.margin && el.properties.margin !== "none"
-                                    ? `${getMarginPx(el.properties.margin)} 0`
-                                    : undefined,
-                                padding:
-                                  el.properties.padding && el.properties.padding !== "none"
-                                    ? padToPx(el.properties.padding)
-                                    : undefined,
-                              }}
-                            >
-                              <img
-                                src={el.properties.url}
-                                alt="img"
-                                className="w-full rounded"
-                                style={{
-                                  aspectRatio: el.properties.aspectRatio?.replace(":", "/") || "auto",
-                                  objectFit: el.properties.aspectMode === "fit" ? "contain" : "cover",
-                                }}
-                                onError={(e) => {
-                                  e.currentTarget.src =
-                                    "data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjAwIiBoZWlnaHQ9IjEwMCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48cmVjdCB3aWR0aD0iMTAwJSIgaGVpZ2h0PSIxMDAlIiBmaWxsPSIjZjFmMWYxIi8+PHRleHQgeD0iNTAlIiB5PSI1MCUiIGZvbnQtZmFtaWx5PSJBcmlhbCIgZm9udC1zaXplPSIxMiIgZmlsbD0iIzk5OTk5OSIgdGV4dC1hbmNob3I9Im1pZGRsZSIgZHk9Ii4zZW0iPkVycm9yPC90ZXh0Pjwvc3ZnPg==";
-                                }}
-                              />
-                            </div>
-                          )}
-
-                          {el.type === "button" && (
-                            <button
-                              className="w-full rounded text-[13px] px-3"
-                              style={{
-                                backgroundColor:
-                                  el.properties.style === "primary"
-                                    ? el.properties.color || "#06c755"
-                                    : el.properties.style === "secondary"
-                                    ? "#f4f4f4"
-                                    : "transparent",
-                                color: el.properties.style === "primary" ? "#ffffff" : "#0066cc",
-                                border:
-                                  el.properties.style === "link" ? `1px solid ${el.properties.color || "#06c755"}` : "1px solid transparent",
-                                height: getButtonHeightPx(el.properties.height),
-                                margin:
-                                  el.properties.margin && el.properties.margin !== "none"
-                                    ? `${getMarginPx(el.properties.margin)} 0`
-                                    : undefined,
-                                padding:
-                                  el.properties.padding && el.properties.padding !== "none"
-                                    ? padToPx(el.properties.padding)
-                                    : undefined,
-                              }}
-                            >
-                              {el.properties.actionBtn?.label || "ボタン"}
-                            </button>
-                          )}
+                          {el.properties.text || ""}
                         </div>
-                      ))}
-                  </div>
+                      )}
+                      {el.type === "image" && el.properties.url && (
+                        <div>
+                          <img
+                            src={el.properties.url}
+                            alt="img"
+                            className="w-full rounded block"
+                            style={{
+                              aspectRatio: el.properties.aspectRatio?.replace(':', '/') || "auto",
+                              objectFit: el.properties.aspectMode === "fit" ? "contain" : "cover",
+                            }}
+                            onError={(e) => {
+                              e.currentTarget.src = "data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjAwIiBoZWlnaHQ9IjEwMCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48cmVjdCB3aWR0aD0iMTAwJSIgaGVpZ2h0PSIxMDAlIiBmaWxsPSIjZjFmMWYxIi8+PHRleHQgeD0iNTAlIiB5PSI1MCUiIGZvbnQtZmFtaWx5PSJBcmlhbCIgZm9udC1zaXplPSIxMiIgZmlsbD0iIzk5OTk5OSIgdGV4dC1hbmNob3I9Im1pZGRsZSIgZHk9Ii4zZW0iPkVycm9yPC90ZXh0Pjwvc3ZnPg==";
+                            }}
+                          />
+                        </div>
+                      )}
+                      {el.type === "button" && (
+                        <button
+                          className="w-full rounded text-[13px] px-3 font-bold"
+                          style={{
+                            backgroundColor: el.properties.style === "primary"
+                              ? (el.properties.color || "#06c755")
+                              : el.properties.style === "secondary"
+                              ? `${el.properties.color || "#06c755"}20`
+                              : "transparent",
+                            color: el.properties.style === "primary"
+                              ? "#ffffff"
+                              : (el.properties.color || "#06c755"),
+                            border: 'none',
+                            textDecoration: el.properties.style === 'link' ? 'underline' : 'none',
+                            height: getButtonHeightPx(el.properties.height || "md"),
+                          }}
+                        >
+                          {el.properties.action?.label || "ボタン"}
+                        </button>
+                      )}
+                    </div>
+                  ))}
                 </div>
               </div>
             </CardContent>
