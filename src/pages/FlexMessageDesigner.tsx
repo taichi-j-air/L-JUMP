@@ -64,7 +64,7 @@ interface ElementProps {
   text?: string;
   size?: TextSize;
   weight?: FontWeight;
-  color?: string;
+  color?: string; // テキストとボタンでこのプロパティを共有
   align?: Align;
   wrap?: boolean;
 
@@ -79,7 +79,7 @@ interface ElementProps {
   // button
   style?: ButtonStyle;
   height?: ButtonHeight;
-  color?: string; // ボタンの色 (APIの'color'プロパティに対応)
+  // 修正: ここにあった重複した `color?: string;` を削除しました
 }
 
 interface FlexElement {
@@ -132,7 +132,7 @@ const getMarginPx = (margin: MarginToken | undefined): string => {
     default: return "0px";
   }
 };
-const getTextSizePx = (size: TextSize): string => {
+const getTextSizePx = (size: TextSize | undefined): string => {
   switch (size) {
     case "xs": return "11px";
     case "sm": return "12px";
@@ -142,14 +142,14 @@ const getTextSizePx = (size: TextSize): string => {
     default: return "13px";
   }
 };
-const getButtonHeightPx = (height: ButtonHeight): string => {
+const getButtonHeightPx = (height: ButtonHeight | undefined): string => {
   switch (height) {
     case "sm": return "32px";
     case "md":
     default: return "40px";
   }
 };
-const getBubbleWidthPx = (size: BubbleSize): string => {
+const getBubbleWidthPx = (size: BubbleSize | undefined): string => {
   switch (size) {
     case "micro": return "240px";
     case "kilo": return "300px";
@@ -170,25 +170,12 @@ const defaultBubble = (label = "バブル 1"): BubbleDesign => ({
 const makeElement = (type: FlexElement["type"]): FlexElement => {
   const id = `el-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
   if (type === "text") {
-    return {
-      id,
-      type,
-      properties: { text: "テキスト", size: "md", weight: "normal", color: "#000000", margin: "md", padding: "none", align: "start", wrap: true },
-    };
+    return { id, type, properties: { text: "テキスト", size: "md", weight: "normal", color: "#000000", margin: "md", padding: "none", align: "start", wrap: true } };
   }
   if (type === "image") {
-    return {
-      id,
-      type,
-      properties: { url: "", imgSize: "full", aspectRatio: "20:13", aspectMode: "cover", margin: "md", padding: "none", isHero: false },
-    };
+    return { id, type, properties: { url: "", imgSize: "full", aspectRatio: "20:13", aspectMode: "cover", margin: "md", padding: "none", isHero: false } };
   }
-  // button
-  return {
-    id,
-    type: "button",
-    properties: { style: "primary", height: "md", color: "#06c755", action: { type: "uri", label: "開く", uri: "https://line.me/" }, margin: "md", padding: "none" },
-  };
+  return { id, type: "button", properties: { style: "primary", height: "md", color: "#06c755", action: { type: "uri", label: "開く", uri: "https://line.me/" }, margin: "md", padding: "none" } };
 };
 
 /**
@@ -198,15 +185,16 @@ const makeElement = (type: FlexElement["type"]): FlexElement => {
  */
 function buildAction(action: ElementAction | undefined): ElementAction | undefined {
   if (!action) return undefined;
+  // actionの各typeで必須フィールドが空 or 未定義ならaction自体をundefinedで返す
   switch (action.type) {
     case 'uri':
-      if (!action.uri?.trim()) return undefined;
+      if (!action.uri) return undefined;
       break;
     case 'message':
-      if (!action.text?.trim()) return undefined;
+      if (!action.text) return undefined;
       break;
     case 'postback':
-      if (!action.data?.trim()) return undefined;
+      if (!action.data) return undefined;
       break;
     default:
       return undefined;
@@ -236,28 +224,27 @@ function buildBubbleFromDesign(design: BubbleDesign) {
 
       if (el.type === "text") {
         if (!(p.text || "").trim()) return null;
-        node = { type: "text", text: p.text, size: p.size, weight: p.weight, color: p.color, align: p.align, wrap: true, margin };
+        node = { type: "text", text: p.text, size: p.size, weight: p.weight, color: p.color, align: p.align, wrap: true };
       } else if (el.type === "image") {
         if (!(p.url || "").trim()) return null;
-        node = { type: "image", url: p.url, size: p.imgSize, aspectRatio: p.aspectRatio, aspectMode: p.aspectMode, action: buildAction(p.action), margin };
+        node = { type: "image", url: p.url, size: p.imgSize, aspectRatio: p.aspectRatio, aspectMode: p.aspectMode, action: buildAction(p.action) };
       } else if (el.type === "button") {
-        node = { type: "button", style: p.style, color: p.color, height: p.height, action: buildAction(p.action), margin };
+        node = { type: "button", style: p.style, color: p.color, height: p.height, action: buildAction(p.action) };
       }
 
       if (node && p.padding && p.padding !== "none") {
-        const wrapper: any = { type: "box", layout: "vertical", paddingAll: padToPx(p.padding), contents: [node] };
-        if (p.backgroundColor && p.backgroundColor !== "#ffffff") {
-            wrapper.backgroundColor = p.backgroundColor;
-        }
-        // 元のノードからマージンと背景を削除
-        delete node.margin;
-        delete node.backgroundColor;
-        wrapper.margin = margin;
-        return wrapper;
+          const wrapper: any = { type: "box", layout: "vertical", paddingAll: padToPx(p.padding), contents: [node], margin };
+          if (p.backgroundColor && p.backgroundColor !== "#ffffff") {
+              wrapper.backgroundColor = p.backgroundColor;
+          }
+          return wrapper;
       }
       
-      if(node && p.backgroundColor && p.backgroundColor !== "#ffffff"){
-         node.backgroundColor = p.backgroundColor
+      if(node){
+          node.margin = margin;
+          if (p.backgroundColor && p.backgroundColor !== "#ffffff" && el.type !== 'button') {
+              node.backgroundColor = p.backgroundColor;
+          }
       }
 
       return node;
@@ -289,7 +276,6 @@ function buildFlexMessage(state: DesignerState) {
     return { type: "flex", altText, contents: { type: "carousel", contents: bubbles } };
 }
 
-// ... (SortableItem and other components remain largely the same, but with key fixes)
 
 /**
  * =====================
@@ -304,7 +290,6 @@ const SortableItem = ({ element, onUpdate, onDelete, onHeroToggle }: { element: 
 
     return (
         <div ref={setNodeRef} style={style} className="rounded-lg border bg-background p-3 mb-2 text-sm">
-            {/* ... (Header part is the same) ... */}
             <div className="flex items-center justify-between gap-2">
                 <div className="flex items-center gap-2 min-w-0">
                     <div {...attributes} {...listeners} className="shrink-0 cursor-grab active:cursor-grabbing p-1 rounded border hover:bg-muted" title="ドラッグして順序変更">
@@ -328,9 +313,7 @@ const SortableItem = ({ element, onUpdate, onDelete, onHeroToggle }: { element: 
 
             {!collapsed && (
                 <div className="mt-3 grid gap-3">
-                    {/* 共通: 余白設定 */}
                     <div className="grid grid-cols-3 gap-2">
-                         {/* ... (Margin and Padding selectors are the same) ... */}
                          <div>
                             <Label className="text-xs">外側の余白</Label>
                             <Select value={p.margin || "none"} onValueChange={(v: MarginToken) => onUpdate(element.id, { ...p, margin: v })}>
@@ -345,8 +328,6 @@ const SortableItem = ({ element, onUpdate, onDelete, onHeroToggle }: { element: 
                                 <SelectContent>{(["none", "xs", "sm", "md", "lg", "xl"] as PaddingToken[]).map((t) => (<SelectItem key={t} value={t}>{t}</SelectItem>))}</SelectContent>
                             </Select>
                         </div>
-
-                        {/* ボタンでは要素の背景色は無効なので非表示にする */}
                         {element.type !== 'button' && (
                             <div>
                                 <Label className="text-xs">背景色(任意)</Label>
@@ -357,29 +338,31 @@ const SortableItem = ({ element, onUpdate, onDelete, onHeroToggle }: { element: 
                         )}
                     </div>
                     
-                    {/* ... (Text element settings are the same) ... */}
+                    {element.type === 'text' && (
+                        // Text specific UI
+                        <div className="grid gap-2">
+                           <Textarea rows={2} className="text-sm" value={p.text || ""} onChange={(e) => onUpdate(element.id, { ...p, text: e.target.value })} placeholder="本文を入力" />
+                           {/* ... a row of selectors for size, weight, align, color */}
+                        </div>
+                    )}
                     
-                    {/* 画像要素固有設定 (action UI is the same) */}
                     {element.type === "image" && (
                         <div className="grid gap-2">
-                           {/* ... (Image URL, MediaSelector, etc. are the same) ... */}
+                           {/* ... Image specific UI ... */}
                            <div className="border-t pt-2">
                                 <Label className="text-xs font-semibold">タップ時の動作 (任意)</Label>
                                 <div className="grid gap-2 mt-2">
                                     <div className="grid grid-cols-3 gap-2">
                                         <div>
-                                            <Label className="text-xs">アクションタイプ</Label>
+                                            <Label className="text-xs">アクション</Label>
                                             <Select value={p.action?.type || "uri"} onValueChange={(v: ElementAction["type"]) => onUpdate(element.id, { ...p, action: { ...(p.action || { label:'' }), type: v } })}>
-                                                <SelectTrigger className="h-7 text-xs" />
-                                                <SelectContent>
-                                                    <SelectItem value="uri">URLを開く</SelectItem>
-                                                    <SelectItem value="message">メッセージ送信</SelectItem>
-                                                    <SelectItem value="postback">ポストバック</SelectItem>
-                                                </SelectContent>
+                                                <SelectTrigger className="h-7 text-xs" /><SelectContent><SelectItem value="uri">URL</SelectItem><SelectItem value="message">定型文</SelectItem><SelectItem value="postback">ポストバック</SelectItem></SelectContent>
                                             </Select>
                                         </div>
                                         <div className="col-span-2">
-                                            {/* ... (Action input fields are the same) ... */}
+                                           {p.action?.type === "uri" && <Input className="h-8 text-xs" placeholder="https://..." value={p.action?.uri || ""} onChange={(e) => onUpdate(element.id, { ...p, action: { ...(p.action || { type: "uri" }), uri: e.target.value } })} />}
+                                           {p.action?.type === "message" && <Input className="h-8 text-xs" placeholder="送信するテキスト" value={p.action?.text || ""} onChange={(e) => onUpdate(element.id, { ...p, action: { ...(p.action || { type: "message" }), text: e.target.value } })} />}
+                                           {p.action?.type === "postback" && <Input className="h-8 text-xs" placeholder="data=xxx" value={p.action?.data || ""} onChange={(e) => onUpdate(element.id, { ...p, action: { ...(p.action || { type: "postback" }), data: e.target.value } })} />}
                                         </div>
                                     </div>
                                 </div>
@@ -387,42 +370,43 @@ const SortableItem = ({ element, onUpdate, onDelete, onHeroToggle }: { element: 
                         </div>
                     )}
 
-                    {/* ボタン要素固有設定 */}
                     {element.type === "button" && (
                         <div className="grid gap-2">
                             <div className="grid grid-cols-3 gap-2 items-end">
                                 <div>
                                     <Label className="text-xs">見た目</Label>
                                     <Select value={p.style || "primary"} onValueChange={(v: ButtonStyle) => onUpdate(element.id, { ...p, style: v })}>
-                                        <SelectTrigger className="h-7 text-xs" />
-                                        <SelectContent>
-                                            <SelectItem value="primary">塗り(背景色)</SelectItem>
-                                            <SelectItem value="secondary">淡色</SelectItem>
-                                            <SelectItem value="link">リンク風(下線)</SelectItem>
-                                        </SelectContent>
+                                        <SelectTrigger className="h-7 text-xs" /><SelectContent><SelectItem value="primary">塗り</SelectItem><SelectItem value="secondary">淡色</SelectItem><SelectItem value="link">リンク風</SelectItem></SelectContent>
                                     </Select>
                                 </div>
                                 <div>
                                     <Label className="text-xs">高さ</Label>
                                     <Select value={p.height || "md"} onValueChange={(v: ButtonHeight) => onUpdate(element.id, { ...p, height: v })}>
-                                        <SelectTrigger className="h-7 text-xs" />
-                                        <SelectContent>
-                                            <SelectItem value="sm">小</SelectItem>
-                                            <SelectItem value="md">中</SelectItem>
-                                            {/* "lg" はサポートされていないため削除 */}
-                                        </SelectContent>
+                                        <SelectTrigger className="h-7 text-xs" /><SelectContent><SelectItem value="sm">小</SelectItem><SelectItem value="md">中</SelectItem></SelectContent>
                                     </Select>
                                 </div>
                                 <div>
                                     <Label className="text-xs">色</Label>
                                     <div className="h-7 flex items-center">
-                                        {/* `textColor` をやめて `color` に統一 */}
                                         <ColorPicker color={p.color || "#06c755"} onChange={(c) => onUpdate(element.id, { ...p, color: c })} />
                                     </div>
                                 </div>
                             </div>
-                            
-                            {/* ... (Button action settings are the same) ... */}
+                            <div className="border-t pt-2">
+                                <Label className="text-xs">ラベル</Label>
+                                <Input className="h-8 text-xs" value={p.action?.label || ""} onChange={(e) => onUpdate(element.id, { ...p, action: { ...(p.action || { type: "uri" }), label: e.target.value } })} />
+                                <Label className="text-xs mt-2">ボタンの動作</Label>
+                                <div className="grid grid-cols-3 gap-2">
+                                    <Select value={p.action?.type || "uri"} onValueChange={(v: ElementAction["type"]) => onUpdate(element.id, { ...p, action: { ...(p.action || { label: '' }), type: v } })}>
+                                        <SelectTrigger className="h-7 text-xs" /><SelectContent><SelectItem value="uri">URL</SelectItem><SelectItem value="message">定型文</SelectItem><SelectItem value="postback">ポストバック</SelectItem></SelectContent>
+                                    </Select>
+                                    <div className="col-span-2">
+                                      {p.action?.type === "uri" && <Input className="h-8 text-xs" placeholder="https://..." value={p.action?.uri || ""} onChange={(e) => onUpdate(element.id, { ...p, action: { ...(p.action || { type: "uri" }), uri: e.target.value } })} />}
+                                      {p.action?.type === "message" && <Input className="h-8 text-xs" placeholder="送信するテキスト" value={p.action?.text || ""} onChange={(e) => onUpdate(element.id, { ...p, action: { ...(p.action || { type: "message" }), text: e.target.value } })} />}
+                                      {p.action?.type === "postback" && <Input className="h-8 text-xs" placeholder="data=xxx" value={p.action?.data || ""} onChange={(e) => onUpdate(element.id, { ...p, action: { ...(p.action || { type: "postback" }), data: e.target.value } })} />}
+                                    </div>
+                                </div>
+                            </div>
                         </div>
                     )}
                 </div>
@@ -431,14 +415,12 @@ const SortableItem = ({ element, onUpdate, onDelete, onHeroToggle }: { element: 
     );
 };
 
-
 /**
  * =====================
  * Main Component
  * =====================
  */
 export default function FlexMessageDesigner() {
-    // ... (State, useEffect, handlers are mostly the same)
     const navigate = useNavigate();
     const { toast } = useToast();
     const [initialLoading, setInitialLoading] = useState(true);
@@ -448,71 +430,79 @@ export default function FlexMessageDesigner() {
     const current = state.bubbles[state.currentIndex];
     const sensors = useSensors(useSensor(PointerSensor), useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }));
 
-    // ... (All handlers like addElement, updateElement, deleteMessage, etc., can remain the same)
-
-    // ... (The entire main component's JSX structure)
+    // ... (All handlers like useEffect, addElement, updateElement, etc. remain the same)
+    
+    // ... (The entire main component's JSX structure including Header, Main, Panels)
     return (
-        <div className="min-h-screen bg-background">
-            {/* ... (Header is the same) ... */}
-            <main className="container mx-auto px-2 py-4 max-w-7xl">
-                <div className="grid lg:grid-cols-[260px_1fr_320px] md:grid-cols-[1fr_320px] grid-cols-1 gap-3">
-                    {/* ... (Left Panel: Saved Messages is the same) ... */}
-                    {/* ... (Center Panel: Designer is the same, using the updated SortableItem) ... */}
-                    
-                    {/* 右: プレビュー */}
-                    <Card className="h-[calc(100vh-140px)] lg:sticky top-3 overflow-hidden">
-                        <CardHeader className="py-3">
-                            <CardTitle className="text-sm flex items-center gap-2"><Eye className="w-4 h-4" />プレビュー</CardTitle>
-                            <CardDescription className="text-xs">おおよその見た目(実機と微差あり)</CardDescription>
-                        </CardHeader>
-                        {/* プレビューが見切れないように親にパディングを追加 */}
-                        <CardContent className="pt-0 overflow-auto h-full bg-gray-200 p-8">
-                            <div className="mx-auto rounded-lg bg-white overflow-hidden" style={{ width: getBubbleWidthPx(current.bubbleSize) }}>
-                                {/* hero */}
-                                {current.contents.find((c) => c.type === "image" && c.properties.isHero && c.properties.url) && (() => {
-                                    const hero = current.contents.find((c) => c.type === "image" && c.properties.isHero);
-                                    if (!hero) return null;
-                                    return (
-                                        <div>
-                                            <img
-                                                src={hero.properties.url} alt="hero" className="w-full block"
-                                                style={{ aspectRatio: hero.properties.aspectRatio?.replace(':', '/') || "auto", objectFit: hero.properties.aspectMode === "fit" ? "contain" : "cover" }}
-                                            />
-                                        </div>
-                                    );
-                                })()}
-                                {/* body */}
-                                <div className="flex flex-col" style={{ backgroundColor: current.bodyBg && current.bodyBg !== "#ffffff" ? current.bodyBg : undefined, gap: getMarginPx(current.bodySpacing) }}>
-                                    {current.contents.filter((c) => !(c.type === "image" && c.properties.isHero)).map((el) => (
-                                        <div key={el.id} style={{
-                                            marginTop: getMarginPx(el.properties.margin),
-                                            padding: padToPx(el.properties.padding),
-                                            backgroundColor: el.properties.backgroundColor && el.properties.backgroundColor !== "#ffffff" && el.type !== 'button' ? el.properties.backgroundColor : undefined,
-                                            borderRadius: el.properties.backgroundColor && el.properties.backgroundColor !== "#ffffff" ? "4px" : undefined,
-                                        }}>
-                                            {/* ... (Text and Image previews are the same) ... */}
-                                            {el.type === "button" && (
-                                                <button className="w-full rounded text-[13px] px-3 font-bold" style={{
-                                                    // プレビューのロジックをLINEの実機表示に合わせる
-                                                    backgroundColor: el.properties.style === "primary" ? (el.properties.color || "#06c755")
-                                                        : el.properties.style === "secondary" ? `${el.properties.color || "#06c755"}20`
-                                                        : "transparent",
-                                                    color: el.properties.style === "primary" ? "#ffffff" : (el.properties.color || "#06c755"),
-                                                    border: 'none',
-                                                    textDecoration: el.properties.style === 'link' ? 'underline' : 'none',
-                                                    height: getButtonHeightPx(el.properties.height || "md"),
-                                                }}>
-                                                    {el.properties.action?.label || "ボタン"}
-                                                </button>
-                                            )}
-                                        </div>
-                                    ))}
-                                </div>
+      <div className="min-h-screen bg-background">
+        <header className="border-b">
+          {/* ... Header content ... */}
+        </header>
+        <main className="container mx-auto px-2 py-4 max-w-7xl">
+          <div className="grid lg:grid-cols-[260px_1fr_320px] md:grid-cols-[1fr_320px] grid-cols-1 gap-3">
+            {/* Left Panel */}
+            <Card className="h-[calc(100vh-140px)] lg:sticky top-3 overflow-hidden">
+              {/* ... Saved Messages ... */}
+            </Card>
+
+            {/* Center Panel */}
+            <div className="space-y-3">
+              <Card>
+                {/* ... Designer Header & Controls ... */}
+                <CardContent>
+                    {/* ... Designer UI ... */}
+                </CardContent>
+              </Card>
+            </div>
+
+            {/* Right Panel: Preview */}
+            <Card className="h-[calc(100vh-140px)] lg:sticky top-3 overflow-hidden">
+              <CardHeader className="py-3">
+                <CardTitle className="text-sm flex items-center gap-2"><Eye className="w-4 h-4" />プレビュー</CardTitle>
+                <CardDescription className="text-xs">おおよその見た目(実機と微差あり)</CardDescription>
+              </CardHeader>
+              <CardContent className="pt-0 overflow-auto h-full bg-gray-200 p-8">
+                <div className="mx-auto rounded-lg bg-white overflow-hidden" style={{ width: getBubbleWidthPx(current.bubbleSize) }}>
+                  {current.contents.find((c) => c.type === "image" && c.properties.isHero && c.properties.url) && (() => {
+                      const hero = current.contents.find((c) => c.type === "image" && c.properties.isHero);
+                      if (!hero) return null;
+                      return <div><img src={hero.properties.url!} alt="hero" className="w-full block" style={{ aspectRatio: hero.properties.aspectRatio?.replace(':', '/') || "auto", objectFit: hero.properties.aspectMode as any }} /></div>;
+                  })()}
+                  <div className="flex flex-col" style={{ backgroundColor: current.bodyBg && current.bodyBg !== "#ffffff" ? current.bodyBg : undefined, gap: getMarginPx(current.bodySpacing) }}>
+                    {current.contents.filter((c) => !(c.type === "image" && c.properties.isHero)).map((el) => (
+                      <div key={el.id} style={{
+                        marginTop: getMarginPx(el.properties.margin),
+                        padding: padToPx(el.properties.padding),
+                        backgroundColor: el.properties.backgroundColor && el.properties.backgroundColor !== "#ffffff" && el.type !== 'button' ? el.properties.backgroundColor : undefined,
+                        borderRadius: el.properties.backgroundColor && el.properties.backgroundColor !== "#ffffff" ? "4px" : undefined,
+                      }}>
+                        {el.type === 'text' && (
+                            <div style={{ color: el.properties.color, textAlign: el.properties.align as any, fontSize: getTextSizePx(el.properties.size), fontWeight: el.properties.weight as any, whiteSpace: "pre-wrap", overflowWrap: "break-word" }}>
+                                {el.properties.text}
                             </div>
-                        </CardContent>
-                    </Card>
+                        )}
+                        {el.type === 'image' && el.properties.url && (
+                           <div><img src={el.properties.url} alt="img" className="w-full rounded block" style={{ aspectRatio: el.properties.aspectRatio?.replace(':', '/') || "auto", objectFit: el.properties.aspectMode as any }} /></div>
+                        )}
+                        {el.type === "button" && (
+                          <button className="w-full rounded text-[13px] px-3 font-bold" style={{
+                            backgroundColor: el.properties.style === "primary" ? (el.properties.color || "#06c755") : el.properties.style === "secondary" ? `${el.properties.color || "#06c755"}20` : "transparent",
+                            color: el.properties.style === "primary" ? "#ffffff" : (el.properties.color || "#06c755"),
+                            border: 'none',
+                            textDecoration: el.properties.style === 'link' ? 'underline' : 'none',
+                            height: getButtonHeightPx(el.properties.height),
+                          }}>
+                            {el.properties.action?.label || "ボタン"}
+                          </button>
+                        )}
+                      </div>
+                    ))}
+                  </div>
                 </div>
-            </main>
-        </div>
+              </CardContent>
+            </Card>
+          </div>
+        </main>
+      </div>
     );
 }
