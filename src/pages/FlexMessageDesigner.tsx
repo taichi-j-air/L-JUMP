@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -74,14 +74,14 @@ interface ElementProps {
   aspectRatio?: AspectRatio;
   aspectMode?: AspectMode;
   isHero?: boolean;
-  action?: ElementAction;
 
   // button
   style?: ButtonStyle;
   height?: ButtonHeight;
   buttonColor?: string; // 背景色
   textColor?: string;   // 文字色
-  // action は上の共通ではなく各要素に付与する方針のため、buttonでも使用
+
+  // image / button 共通
   action?: ElementAction;
 }
 
@@ -96,7 +96,7 @@ interface BubbleDesign {
   altText: string;
   bubbleSize: BubbleSize;
   bodyBg?: string;
-  bodySpacing?: SpacingToken; // 要素間隔
+  bodySpacing?: SpacingToken;
   contents: FlexElement[];
 }
 
@@ -104,7 +104,7 @@ interface DesignerState {
   containerType: ContainerType;
   bubbles: BubbleDesign[];
   currentIndex: number;
-  loadedMessageId?: string; // 読み込んだメッセージのID
+  loadedMessageId?: string;
 }
 
 /**
@@ -158,25 +158,6 @@ const getButtonHeightPx = (height: ButtonHeight): string => {
   }
 };
 
-const getButtonPaddingForHeight = (height: ButtonHeight | undefined): string => {
-  // 擬似ボタン用の縦横パディング（配信で高さを近似）
-  switch (height) {
-    case "sm": return "6px";
-    case "lg": return "14px";
-    case "md":
-    default: return "10px";
-  }
-};
-
-const mapButtonHeightToLabelSize = (height: ButtonHeight | undefined): TextSize => {
-  switch (height) {
-    case "sm": return "sm";
-    case "lg": return "lg";
-    case "md":
-    default: return "md";
-  }
-};
-
 const getBubbleWidthPx = (size: BubbleSize): string => {
   switch (size) {
     case "micro": return "240px";
@@ -191,7 +172,7 @@ const defaultBubble = (label = "バブル 1"): BubbleDesign => ({
   altText: "通知: 新しいお知らせがあります",
   bubbleSize: "kilo",
   bodyBg: undefined,
-  bodySpacing: "none", // デフォルトを none
+  bodySpacing: "none",
   contents: [],
 });
 
@@ -242,6 +223,15 @@ const makeElement = (type: FlexElement["type"]): FlexElement => {
       padding: "none",
     },
   };
+};
+
+const heightToPadding = (h: ButtonHeight | undefined) => {
+  switch (h) {
+    case "sm": return "8px";
+    case "lg": return "16px";
+    case "md":
+    default: return "12px";
+  }
 };
 
 /**
@@ -299,48 +289,35 @@ function buildBubbleFromDesign(design: BubbleDesign) {
           ...(margin ? { margin } : {}),
         };
       } else if (el.type === "button") {
-        // ====== 重要ポイント：公式buttonを使わず擬似ボタンとして出力 ======
-        // style は視覚差を付けたい場合に使えるが、配信で色がズレないよう
-        // 背景は常に buttonColor、文字は textColor をそのまま反映させる
-        if (p.style === "link") {
-          // リンク風：テキスト単体＋下線＋アクション
-          node = {
-            type: "text",
-            text: p.action?.label || "ボタン",
-            align: "center",
-            weight: "bold",
-            decoration: "underline",
-            color: p.textColor || p.buttonColor || "#06c755",
-            size: mapButtonHeightToLabelSize(p.height),
-            ...(p.action ? { action: p.action } : {}),
-            ...(margin ? { margin } : {}),
-          };
-        } else {
-          // 塗りボタン（primary / secondary）
-          const paddingAll = getButtonPaddingForHeight(p.height);
-          node = {
-            type: "box",
-            layout: "vertical",
-            backgroundColor: p.buttonColor || "#06c755",
-            paddingAll,
-            // cornerRadius はpx指定も可だが互換性重視で省略（四角）
-            ...(p.action ? { action: p.action } : {}),
-            contents: [
-              {
-                type: "text",
-                text: p.action?.label || "ボタン",
-                align: "center",
-                weight: "bold",
-                color: p.textColor || "#ffffff",
-                size: mapButtonHeightToLabelSize(p.height),
-              },
-            ],
-            ...(margin ? { margin } : {}),
-          };
-        }
+        // === 擬似ボタン: box + text + action ===
+        const isLink = p.style === "link";
+        const isSecondary = p.style === "secondary";
+        const bgColor = isLink ? undefined : isSecondary ? "#ffffff" : (p.buttonColor || "#06c755");
+        const txtColor = isLink || isSecondary ? (p.buttonColor || "#06c755") : (p.textColor || "#ffffff");
+
+        node = {
+          type: "box",
+          layout: "vertical",
+          cornerRadius: "6px",
+          ...(bgColor ? { backgroundColor: bgColor } : {}),
+          action: p.action,
+          paddingAll: heightToPadding(p.height),
+          contents: [
+            {
+              type: "text",
+              text: p.action?.label || "ボタン",
+              align: "center",
+              weight: "bold",
+              color: txtColor,
+              size: p.size || "md",
+              ...(isLink ? { decoration: "underline" } : {}),
+            },
+          ],
+          ...(margin ? { margin } : {}),
+        };
       }
 
-      // padding 指定がある場合は wrapper box を被せる（※擬似ボタン自体のpaddingAllとは別）
+      // 内側の余白（padding）が指定されている場合は wrapper box を追加
       const pad = padToPx(p.padding);
       if (node && pad && pad !== "0px") {
         return {
@@ -365,7 +342,7 @@ function buildBubbleFromDesign(design: BubbleDesign) {
       spacing: design.bodySpacing || "none",
       contents: bodyContents,
       ...(design.bodyBg ? { backgroundColor: design.bodyBg } : {}),
-      paddingAll: "0px", // 全体の余白を除去
+      paddingAll: "0px",
     },
   };
 
@@ -377,22 +354,14 @@ function buildFlexMessage(state: DesignerState) {
 
   if (state.containerType === "bubble") {
     const bubble = buildBubbleFromDesign(state.bubbles[0]);
-    return {
-      type: "flex",
-      altText,
-      contents: bubble,
-    };
+    return { type: "flex", altText, contents: bubble };
   }
 
-  // carousel
   const bubbles = state.bubbles.map(buildBubbleFromDesign).filter(Boolean);
   return {
     type: "flex",
     altText,
-    contents: {
-      type: "carousel",
-      contents: bubbles,
-    },
+    contents: { type: "carousel", contents: bubbles },
   };
 }
 
@@ -471,9 +440,7 @@ const SortableItem = ({
                 <SelectTrigger className="h-7 text-xs" />
                 <SelectContent>
                   {(["none", "xs", "sm", "md", "lg", "xl", "xxl"] as MarginToken[]).map((t) => (
-                    <SelectItem key={t} value={t}>
-                      {t}
-                    </SelectItem>
+                    <SelectItem key={t} value={t}>{t}</SelectItem>
                   ))}
                 </SelectContent>
               </Select>
@@ -487,9 +454,7 @@ const SortableItem = ({
                 <SelectTrigger className="h-7 text-xs" />
                 <SelectContent>
                   {(["none", "xs", "sm", "md", "lg", "xl"] as PaddingToken[]).map((t) => (
-                    <SelectItem key={t} value={t}>
-                      {t}
-                    </SelectItem>
+                    <SelectItem key={t} value={t}>{t}</SelectItem>
                   ))}
                 </SelectContent>
               </Select>
@@ -525,9 +490,7 @@ const SortableItem = ({
                     <SelectTrigger className="h-7 text-xs" />
                     <SelectContent>
                       {(["xs", "sm", "md", "lg", "xl"] as TextSize[]).map((t) => (
-                        <SelectItem key={t} value={t}>
-                          {t}
-                        </SelectItem>
+                        <SelectItem key={t} value={t}>{t}</SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
@@ -565,7 +528,7 @@ const SortableItem = ({
                   </div>
                 </div>
               </div>
-              <p className="text-[11px] text-muted-foreground">※ 改行はそのまま表示。長文は自動折返し。</p>
+              <p className="text-[11px] text-muted-foreground">※ 改行はそのまま表示されます。長文は自動で折り返されます。</p>
             </div>
           )}
 
@@ -589,18 +552,16 @@ const SortableItem = ({
                           alt="thumb"
                           className="max-h-full max-w-full object-contain"
                           onError={(e) => {
-                            (e.currentTarget as HTMLImageElement).style.display = 'none';
-                            const errorDiv = (e.currentTarget.nextElementSibling as HTMLElement);
+                            e.currentTarget.style.display = 'none';
+                            const errorDiv = e.currentTarget.nextElementSibling as HTMLElement;
                             if (errorDiv) errorDiv.style.display = 'block';
                           }}
                         />
-                        <div className="text-xs text-muted-foreground" style={{ display: 'none' }}>
+                        <div className="text-xs text-muted-foreground" style={{display: 'none'}}>
                           画像エラー
                         </div>
                       </div>
-                      <div className="mt-1 text-[10px] text-muted-foreground truncate" title={p.url}>
-                        {p.url}
-                      </div>
+                      {/* URLのテキスト表示は削除（選択中のファイル表示を消す） */}
                     </div>
                   )}
                 </div>
@@ -619,9 +580,7 @@ const SortableItem = ({
                     <SelectTrigger className="h-7 text-xs" />
                     <SelectContent>
                       {(["xxs", "xs", "sm", "md", "lg", "xl", "xxl", "full"] as ImageSize[]).map((t) => (
-                        <SelectItem key={t} value={t}>
-                          {t}
-                        </SelectItem>
+                        <SelectItem key={t} value={t}>{t}</SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
@@ -635,9 +594,7 @@ const SortableItem = ({
                     <SelectTrigger className="h-7 text-xs" />
                     <SelectContent>
                       {(["1:1", "20:13", "16:9", "4:3"] as AspectRatio[]).map((t) => (
-                        <SelectItem key={t} value={t}>
-                          {t}
-                        </SelectItem>
+                        <SelectItem key={t} value={t}>{t}</SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
@@ -711,19 +668,13 @@ const SortableItem = ({
                     </div>
                   </div>
                   {p.action?.type === "uri" && (
-                    <div className="text-[10px] text-muted-foreground">
-                      ※ タップすると指定したURLをブラウザで開きます
-                    </div>
+                    <div className="text-[10px] text-muted-foreground">※ タップすると指定したURLをブラウザで開きます</div>
                   )}
                   {p.action?.type === "message" && (
-                    <div className="text-[10px] text-muted-foreground">
-                      ※ タップすると指定したテキストをユーザーから送信します
-                    </div>
+                    <div className="text-[10px] text-muted-foreground">※ タップすると指定したテキストをユーザーから送信します</div>
                   )}
                   {p.action?.type === "postback" && (
-                    <div className="text-[10px] text-muted-foreground">
-                      ※ タップするとWebhookにデータを送信します（開発者向け）
-                    </div>
+                    <div className="text-[10px] text-muted-foreground">※ タップするとWebhookにデータを送信します（開発者向け）</div>
                   )}
                 </div>
               </div>
@@ -841,19 +792,13 @@ const SortableItem = ({
                     </div>
                   </div>
                   {p.action?.type === "uri" && (
-                    <div className="text-[10px] text-muted-foreground">
-                      ※ タップすると指定したURLをブラウザで開きます
-                    </div>
+                    <div className="text-[10px] text-muted-foreground">※ タップすると指定したURLをブラウザで開きます</div>
                   )}
                   {p.action?.type === "message" && (
-                    <div className="text-[10px] text-muted-foreground">
-                      ※ タップすると指定したテキストをユーザーから送信します
-                    </div>
+                    <div className="text-[10px] text-muted-foreground">※ タップすると指定したテキストをユーザーから送信します</div>
                   )}
                   {p.action?.type === "postback" && (
-                    <div className="text-[10px] text-muted-foreground">
-                      ※ タップするとWebhookにデータを送信します（開発者向け）
-                    </div>
+                    <div className="text-[10px] text-muted-foreground">※ タップするとWebhookにデータを送信します（開発者向け）</div>
                   )}
                 </div>
               </div>
@@ -994,7 +939,6 @@ export default function FlexMessageDesigner() {
       const title = current?.name || "Flexメッセージ";
 
       if (!asNew && state.loadedMessageId) {
-        // 上書き保存
         const { error } = await supabase
           .from("flex_messages")
           .update({ name: title, content })
@@ -1002,7 +946,6 @@ export default function FlexMessageDesigner() {
         if (error) throw error;
         toast({ title: "上書き保存成功", description: `「${title}」を上書き保存しました` });
       } else {
-        // 新規保存
         const { data: newData, error } = await supabase
           .from("flex_messages")
           .insert({ user_id: user.id, name: title, content })
@@ -1014,7 +957,6 @@ export default function FlexMessageDesigner() {
         toast({ title: "新規保存成功", description: `「${title}」を新規保存しました` });
       }
 
-      // 最新を再読込
       const { data, error: fetchErr } = await supabase
         .from("flex_messages")
         .select("*")
@@ -1034,210 +976,29 @@ export default function FlexMessageDesigner() {
       const c = row.content?.contents;
       if (!c) throw new Error("不正なデータ形式");
 
-      // 擬似ボタン/旧ボタン/ラッパーbox を見分けるユーティリティ
-      const parseNodeToElements = (node: any, idx: number): FlexElement[] => {
-        const items: FlexElement[] = [];
-
-        // 1) 擬似ボタン（box + text 1個 + action）
-        if (
-          node?.type === "box" &&
-          Array.isArray(node.contents) &&
-          node.contents.length === 1 &&
-          node.action &&
-          node.contents[0]?.type === "text"
-        ) {
-          items.push({
-            id: `el-${idx}-btn`,
-            type: "button",
-            properties: {
-              style: "primary",
-              buttonColor: node.backgroundColor || "#06c755",
-              textColor: node.contents[0]?.color || "#ffffff",
-              height: "md", // paddingAllから厳密には取れないため既定値
-              action: node.action,
-              margin: node.margin || "none",
-              padding: "none",
-            },
-          });
-          return items;
+      const toPaddingToken = (px?: string): PaddingToken => {
+        switch (px) {
+          case "4px": return "xs";
+          case "8px": return "sm";
+          case "12px": return "md";
+          case "16px": return "lg";
+          case "20px": return "xl";
+          default: return "none";
         }
-
-        // 2) リンク風（text + underline + action）
-        if (node?.type === "text" && node.action && node.decoration === "underline") {
-          items.push({
-            id: `el-${idx}-link`,
-            type: "button",
-            properties: {
-              style: "link",
-              buttonColor: node.color || "#06c755",
-              textColor: node.color || "#06c755",
-              height: "md",
-              action: node.action,
-              margin: node.margin || "none",
-              padding: "none",
-            },
-          });
-          return items;
-        }
-
-        // 3) 1要素ラッパー(box + contents[0])（padding 用）
-        if (node.type === "box" && Array.isArray(node.contents) && node.contents.length === 1 && node.paddingAll) {
-          const inner = node.contents[0];
-          const padding: PaddingToken =
-            node.paddingAll === "4px" ? "xs" :
-            node.paddingAll === "8px" ? "sm" :
-            node.paddingAll === "12px" ? "md" :
-            node.paddingAll === "16px" ? "lg" :
-            node.paddingAll === "20px" ? "xl" : "none";
-
-          // 内側がtext
-          if (inner.type === "text") {
-            items.push({
-              id: `el-${idx}`,
-              type: "text",
-              properties: {
-                text: inner.text,
-                size: inner.size || "md",
-                weight: inner.weight || "normal",
-                color: inner.color || "#000000",
-                align: inner.align || "start",
-                margin: node.margin || "none",
-                padding,
-                backgroundColor: inner.backgroundColor,
-                wrap: true,
-              },
-            });
-            return items;
-          }
-          // 内側がimage
-          if (inner.type === "image") {
-            items.push({
-              id: `el-${idx}`,
-              type: "image",
-              properties: {
-                url: inner.url,
-                imgSize: inner.size || "full",
-                aspectRatio: inner.aspectRatio || "20:13",
-                aspectMode: inner.aspectMode || "cover",
-                action: inner.action,
-                margin: node.margin || "none",
-                padding,
-              },
-            });
-            return items;
-          }
-          // 内側が旧button（互換）
-          if (inner.type === "button") {
-            items.push({
-              id: `el-${idx}`,
-              type: "button",
-              properties: {
-                style: inner.style || "primary",
-                buttonColor: inner.color,
-                textColor: "#ffffff",
-                height: inner.height || "md",
-                action: inner.action,
-                margin: node.margin || "none",
-                padding,
-              },
-            });
-            return items;
-          }
-        }
-
-        // 4) 直下ノード（通常）
-        if (node.type === "text") {
-          items.push({
-            id: `el-${idx}`,
-            type: "text",
-            properties: {
-              text: node.text,
-              size: node.size || "md",
-              weight: node.weight || "normal",
-              color: node.color || "#000000",
-              align: node.align || "start",
-              margin: node.margin || "none",
-              padding: "none",
-              backgroundColor: node.backgroundColor,
-              wrap: true,
-            },
-          });
-        } else if (node.type === "image") {
-          items.push({
-            id: `el-${idx}`,
-            type: "image",
-            properties: {
-              url: node.url,
-              imgSize: node.size || "full",
-              aspectRatio: node.aspectRatio || "20:13",
-              aspectMode: node.aspectMode || "cover",
-              action: node.action,
-              margin: node.margin || "none",
-              padding: "none",
-            },
-          });
-        } else if (node.type === "button") {
-          // 旧仕様のbutton（保存互換）
-          items.push({
-            id: `el-${idx}`,
-            type: "button",
-            properties: {
-              style: node.style || "primary",
-              buttonColor: node.color,
-              textColor: "#ffffff",
-              height: node.height || "md",
-              action: node.action,
-              margin: node.margin || "none",
-              padding: "none",
-            },
-          });
-        }
-
-        return items;
       };
 
-      if (c.type === "carousel") {
-        const bubbles: BubbleDesign[] = (c.contents || []).map((b: any, idx: number) => {
-          const items: FlexElement[] = [];
-          // hero を image element として再構築
-          if (b.hero?.url) {
-            items.push({
-              id: `el-h-${idx}`,
-              type: "image",
-              properties: {
-                url: b.hero.url,
-                imgSize: b.hero.size || "full",
-                aspectRatio: b.hero.aspectRatio || "20:13",
-                aspectMode: b.hero.aspectMode || "cover",
-                isHero: true,
-                margin: "none",
-                padding: "none",
-                action: b.hero.action,
-              },
-            });
-          }
+      // 擬似ボタン(box+text+action)判定
+      const isPseudoButton = (node: any) =>
+        node?.type === "box" &&
+        !!node.action &&
+        Array.isArray(node.contents) &&
+        node.contents.length === 1 &&
+        node.contents[0]?.type === "text";
 
-          // body.contents
-          (b.body?.contents || []).forEach((node: any, i: number) => {
-            const parsed = parseNodeToElements(node, i);
-            items.push(...parsed);
-          });
-
-          return {
-            name: row.name,
-            altText: row.content?.altText || `${row.name}のお知らせ`,
-            bubbleSize: (b.size as BubbleSize) || "kilo",
-            bodyBg: b.body?.backgroundColor,
-            bodySpacing: (b.body?.spacing as SpacingToken) || "none",
-            contents: items,
-          } as BubbleDesign;
-        });
-
-        setState({ containerType: "carousel", bubbles, currentIndex: 0, loadedMessageId: row.id });
-      } else {
-        // bubble 単体
-        const b = c;
+      const restoreFromBubble = (b: any, name: string) => {
         const items: FlexElement[] = [];
+
+        // hero
         if (b.hero?.url) {
           items.push({
             id: `el-h-0`,
@@ -1254,23 +1015,155 @@ export default function FlexMessageDesigner() {
             },
           });
         }
+
         (b.body?.contents || []).forEach((node: any, i: number) => {
-          const parsed = parseNodeToElements(node, i);
-          items.push(...parsed);
+          // 1) 擬似ボタン
+          if (isPseudoButton(node)) {
+            const inner = node.contents[0];
+            const style: ButtonStyle =
+              !node.backgroundColor ? "link" :
+              node.backgroundColor === "#ffffff" ? "secondary" : "primary";
+
+            items.push({
+              id: `el-${i}`,
+              type: "button",
+              properties: {
+                style,
+                buttonColor: node.backgroundColor || "#06c755",
+                textColor: inner.color || "#ffffff",
+                height: "md", // paddingAll から厳密復元は難しいので一旦 md
+                action: node.action,
+                margin: node.margin || "none",
+                padding: "none",
+              },
+            });
+            return;
+          }
+
+          // 2) padding wrapper（擬似ボタンは除外）
+          if (!node.action && node.type === "box" && Array.isArray(node.contents) && node.contents.length === 1) {
+            const inner = node.contents[0];
+            const padding = toPaddingToken(node.paddingAll);
+
+            if (inner.type === "text") {
+              items.push({
+                id: `el-${i}`,
+                type: "text",
+                properties: {
+                  text: inner.text,
+                  size: inner.size || "md",
+                  weight: inner.weight || "normal",
+                  color: inner.color || "#000000",
+                  align: inner.align || "start",
+                  margin: inner.margin || "none",
+                  padding,
+                  backgroundColor: inner.backgroundColor,
+                  wrap: true,
+                },
+              });
+            } else if (inner.type === "image") {
+              items.push({
+                id: `el-${i}`,
+                type: "image",
+                properties: {
+                  url: inner.url,
+                  imgSize: inner.size || "full",
+                  aspectRatio: inner.aspectRatio || "20:13",
+                  aspectMode: inner.aspectMode || "cover",
+                  action: inner.action,
+                  margin: inner.margin || "none",
+                  padding,
+                },
+              });
+            } else if (inner.type === "button") {
+              // 旧: button コンポーネントで保存されていたケース（後方互換）
+              items.push({
+                id: `el-${i}`,
+                type: "button",
+                properties: {
+                  style: inner.style || "primary",
+                  buttonColor: inner.color,
+                  textColor: "#ffffff",
+                  height: inner.height || "md",
+                  action: inner.action,
+                  margin: inner.margin || "none",
+                  padding,
+                },
+              });
+            }
+            return;
+          }
+
+          // 3) 直下
+          if (node.type === "text") {
+            items.push({
+              id: `el-${i}`,
+              type: "text",
+              properties: {
+                text: node.text,
+                size: node.size || "md",
+                weight: node.weight || "normal",
+                color: node.color || "#000000",
+                align: node.align || "start",
+                margin: node.margin || "none",
+                padding: "none",
+                backgroundColor: node.backgroundColor,
+                wrap: true,
+              },
+            });
+          } else if (node.type === "image") {
+            items.push({
+              id: `el-${i}`,
+              type: "image",
+              properties: {
+                url: node.url,
+                imgSize: node.size || "full",
+                aspectRatio: node.aspectRatio || "20:13",
+                aspectMode: node.aspectMode || "cover",
+                action: node.action,
+                margin: node.margin || "none",
+                padding: "none",
+              },
+            });
+          } else if (node.type === "button") {
+            // 旧: 純正button（後方互換）
+            items.push({
+              id: `el-${i}`,
+              type: "button",
+              properties: {
+                style: node.style || "primary",
+                buttonColor: node.color,
+                textColor: "#ffffff",
+                height: node.height || "md",
+                action: node.action,
+                margin: node.margin || "none",
+                padding: "none",
+              },
+            });
+          }
         });
 
+        return {
+          name,
+          altText: row.content?.altText || `${name}のお知らせ`,
+          bubbleSize: (b.size as BubbleSize) || "kilo",
+          bodyBg: b.body?.backgroundColor,
+          bodySpacing: (b.body?.spacing as SpacingToken) || "none",
+          contents: items,
+        } as BubbleDesign;
+      };
+
+      if (c.type === "carousel") {
+        const bubbles: BubbleDesign[] = (c.contents || []).map((b: any, idx: number) =>
+          restoreFromBubble(b, row.name)
+        );
+        setState({ containerType: "carousel", bubbles, currentIndex: 0, loadedMessageId: row.id });
+      } else {
+        const b = c;
+        const bubble = restoreFromBubble(b, row.name);
         setState({
           containerType: "bubble",
-          bubbles: [
-            {
-              name: row.name,
-              altText: row.content?.altText || `${row.name}のお知らせ`,
-              bubbleSize: (b.size as BubbleSize) || "kilo",
-              bodyBg: b.body?.backgroundColor,
-              bodySpacing: (b.body?.spacing as SpacingToken) || "none",
-              contents: items,
-            },
-          ],
+          bubbles: [bubble],
           currentIndex: 0,
           loadedMessageId: row.id,
         });
@@ -1289,10 +1182,7 @@ export default function FlexMessageDesigner() {
       const { error } = await supabase.from("flex_messages").delete().eq("id", id);
       if (error) throw error;
       setMessages((prev) => prev.filter((m) => m.id !== id));
-      // 削除したメッセージが現在読み込んでいるメッセージの場合、リセット
-      if (state.loadedMessageId === id) {
-        newMessage();
-      }
+      if (state.loadedMessageId === id) newMessage();
       toast({ title: "削除", description: `「${name}」を削除しました` });
     } catch (e: any) {
       console.error(e);
@@ -1332,7 +1222,6 @@ export default function FlexMessageDesigner() {
         toast({ title: "認証エラー", description: "ログインしてください", variant: "destructive" });
         return;
       }
-
       const { error } = await supabase.functions.invoke("send-flex-message", {
         body: { flexMessage: messageContent, userId: user.id }
       });
@@ -1433,19 +1322,36 @@ export default function FlexMessageDesigner() {
                 </div>
               </CardHeader>
               <CardContent className="grid gap-3 text-sm">
-                {/* 上段: 基本情報 */}
+                {/* 基本情報 */}
                 <div className="grid grid-cols-3 gap-3">
                   <div>
                     <Label className="text-xs">メッセージ名</Label>
-                    <Input className="h-8 text-xs" value={current.name} onChange={(e) => setState((prev) => ({ ...prev, bubbles: prev.bubbles.map((b, i) => (i === prev.currentIndex ? { ...b, name: e.target.value } : b)) }))} placeholder="例) 新商品お知らせ" />
+                    <Input
+                      className="h-8 text-xs"
+                      value={current.name}
+                      onChange={(e) =>
+                        setState((prev) => ({
+                          ...prev,
+                          bubbles: prev.bubbles.map((b, i) => (i === prev.currentIndex ? { ...b, name: e.target.value } : b)),
+                        }))
+                      }
+                      placeholder="例) 新商品お知らせ"
+                    />
                   </div>
                   <div className="col-span-2">
-                    <Label className="text-xs">代替テキスト(通知文) <span className="text-[10px] text-muted-foreground">* 400文字まで / 端末の通知に使われます</span></Label>
+                    <Label className="text-xs">
+                      代替テキスト(通知文) <span className="text-[10px] text-muted-foreground">* 400文字まで / 端末の通知に使われます</span>
+                    </Label>
                     <Input
                       className="h-8 text-xs"
                       value={current.altText}
                       maxLength={400}
-                      onChange={(e) => setState((prev) => ({ ...prev, bubbles: prev.bubbles.map((b, i) => (i === prev.currentIndex ? { ...b, altText: e.target.value } : b)) }))}
+                      onChange={(e) =>
+                        setState((prev) => ({
+                          ...prev,
+                          bubbles: prev.bubbles.map((b, i) => (i === prev.currentIndex ? { ...b, altText: e.target.value } : b)),
+                        }))
+                      }
                       placeholder="例) クーポンを配布中！"
                     />
                   </div>
@@ -1524,67 +1430,65 @@ export default function FlexMessageDesigner() {
                 </div>
 
                 {state.containerType === "carousel" && (
-                  <>
-                    <div className="flex items-center justify-between">
-                      <div className="flex flex-wrap gap-1">
-                        {state.bubbles.map((b, i) => (
-                          <Button
-                            key={i}
-                            size="sm"
-                            variant={i === state.currentIndex ? "default" : "outline"}
-                            className="h-7 text-xs"
-                            onClick={() => setState((prev) => ({ ...prev, currentIndex: i }))}
-                          >
-                            <Layers className="w-3.5 h-3.5 mr-1" /> {i + 1}
-                          </Button>
-                        ))}
-                      </div>
-                      <div className="flex gap-2">
+                  <div className="flex items-center justify-between">
+                    <div className="flex flex-wrap gap-1">
+                      {state.bubbles.map((b, i) => (
                         <Button
+                          key={i}
                           size="sm"
-                          variant="outline"
-                          className="h-8 text-xs"
-                          onClick={() =>
-                            setState((prev) => ({
-                              ...prev,
-                              bubbles: [...prev.bubbles, defaultBubble(`バブル ${prev.bubbles.length + 1}`)].slice(0, 10),
-                              currentIndex: Math.min(prev.bubbles.length, 9),
-                            }))
-                          }
+                          variant={i === state.currentIndex ? "default" : "outline"}
+                          className="h-7 text-xs"
+                          onClick={() => setState((prev) => ({ ...prev, currentIndex: i }))}
                         >
-                          <Plus className="w-4 h-4 mr-1" /> 追加
+                          <Layers className="w-3.5 h-3.5 mr-1" /> {i + 1}
                         </Button>
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          className="h-8 text-xs"
-                          onClick={() =>
-                            setState((prev) => ({
-                              ...prev,
-                              bubbles: prev.bubbles.length < 10 ? [...prev.bubbles, JSON.parse(JSON.stringify(prev.bubbles[prev.currentIndex]))] : prev.bubbles,
-                              currentIndex: Math.min(prev.bubbles.length, 9),
-                            }))
-                          }
-                        >
-                          <Copy className="w-4 h-4 mr-1" /> 複製
-                        </Button>
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          className="h-8 text-xs text-destructive"
-                          onClick={() =>
-                            setState((prev) => ({
-                              ...prev,
-                              bubbles: prev.bubbles.length > 1 ? prev.bubbles.filter((_, i) => i !== prev.currentIndex) : prev.bubbles,
-                              currentIndex: 0,
-                            }))
-                          }
-                        >
-                          <Trash2 className="w-4 h-4 mr-1" /> 削除
-                        </Button>
-                      </div>
+                      ))}
                     </div>
-                  </>
+                    <div className="flex gap-2">
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="h-8 text-xs"
+                        onClick={() =>
+                          setState((prev) => ({
+                            ...prev,
+                            bubbles: [...prev.bubbles, defaultBubble(`バブル ${prev.bubbles.length + 1}`)].slice(0, 10),
+                            currentIndex: Math.min(prev.bubbles.length, 9),
+                          }))
+                        }
+                      >
+                        <Plus className="w-4 h-4 mr-1" /> 追加
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="h-8 text-xs"
+                        onClick={() =>
+                          setState((prev) => ({
+                            ...prev,
+                            bubbles: prev.bubbles.length < 10 ? [...prev.bubbles, JSON.parse(JSON.stringify(prev.bubbles[prev.currentIndex]))] : prev.bubbles,
+                            currentIndex: Math.min(prev.bubbles.length, 9),
+                          }))
+                        }
+                      >
+                        <Copy className="w-4 h-4 mr-1" /> 複製
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="h-8 text-xs text-destructive"
+                        onClick={() =>
+                          setState((prev) => ({
+                            ...prev,
+                            bubbles: prev.bubbles.length > 1 ? prev.bubbles.filter((_, i) => i !== prev.currentIndex) : prev.bubbles,
+                            currentIndex: 0,
+                          }))
+                        }
+                      >
+                        <Trash2 className="w-4 h-4 mr-1" /> 削除
+                      </Button>
+                    </div>
+                  </div>
                 )}
 
                 {/* 要素ツールバー */}
@@ -1685,7 +1589,6 @@ export default function FlexMessageDesigner() {
                           {el.properties.text || ""}
                         </div>
                       )}
-
                       {el.type === "image" && el.properties.url && (
                         <div>
                           <img
@@ -1697,37 +1600,34 @@ export default function FlexMessageDesigner() {
                               objectFit: el.properties.aspectMode === "fit" ? "contain" : "cover",
                             }}
                             onError={(e) => {
-                              (e.currentTarget as HTMLImageElement).src = "data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjAwIiBoZWlnaHQ9IjEwMCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48cmVjdCB3aWR0aD0iMTAwJSIgaGVpZ2h0PSIxMDAlIiBmaWxsPSIjZjFmMWYxIi8+PHRleHQgeD0iNTAlIiB5PSI1MCUiIGZvbnQtZmFtaWx5PSJBcmlhbCIgZm9udC1zaXplPSIxMiIgZmlsbD0iIzk5OTk5OSIgdGV4dC1hbmNob3I9Im1pZGRsZSIgZHk9Ii4zZW0iPkVycm9yPC90ZXh0Pjwvc3ZnPg==";
+                              e.currentTarget.src = "data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjAwIiBoZWlnaHQ9IjEwMCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48cmVjdCB3aWR0aD0iMTAwJSIgaGVpZ2h0PSIxMDAlIiBmaWxsPSIjZjFmMWYxIi8+PHRleHQgeD0iNTAlIiB5PSI1MCUiIGZvbnQtZmFtaWx5PSJBcmlhbCIgZm9udC1zaXplPSIxMiIgZmlsbD0iIzk5OTk5OSIgdGV4dC1hbmNob3I9Im1pZGRsZSIgZHk9Ii4zZW0iPkVycm9yPC90ZXh0Pjwvc3ZnPg==";
                             }}
                           />
                         </div>
                       )}
-
                       {el.type === "button" && (
-                        <>
-                          {el.properties.style === "link" ? (
-                            <button
-                              className="w-full bg-transparent text-[13px] px-3 font-bold underline"
-                              style={{
-                                color: el.properties.textColor || el.properties.buttonColor || "#06c755",
-                                height: getButtonHeightPx(el.properties.height || "md"),
-                              }}
-                            >
-                              {el.properties.action?.label || "ボタン"}
-                            </button>
-                          ) : (
-                            <button
-                              className="w-full rounded text-[13px] px-3 font-bold"
-                              style={{
-                                backgroundColor: el.properties.buttonColor || "#06c755",
-                                color: el.properties.textColor || "#ffffff",
-                                height: getButtonHeightPx(el.properties.height || "md"),
-                              }}
-                            >
-                              {el.properties.action?.label || "ボタン"}
-                            </button>
-                          )}
-                        </>
+                        <button
+                          className="w-full rounded text-[13px] px-3 font-bold"
+                          style={{
+                            backgroundColor:
+                              el.properties.style === "link"
+                                ? "transparent"
+                                : el.properties.style === "secondary"
+                                ? "#ffffff"
+                                : (el.properties.buttonColor || "#06c755"),
+                            color:
+                              el.properties.style === "link" || el.properties.style === "secondary"
+                                ? (el.properties.buttonColor || "#06c755")
+                                : (el.properties.textColor || "#ffffff"),
+                            border: el.properties.style === "link"
+                              ? `1px solid ${el.properties.buttonColor || "#06c755"}`
+                              : "none",
+                            textDecoration: el.properties.style === "link" ? "underline" : "none",
+                            height: getButtonHeightPx(el.properties.height || "md"),
+                          }}
+                        >
+                          {el.properties.action?.label || "ボタン"}
+                        </button>
                       )}
                     </div>
                   ))}
