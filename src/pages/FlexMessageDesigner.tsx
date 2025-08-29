@@ -1,11 +1,11 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { Select, SelectContent, SelectItem, SelectTrigger } from "@/components/ui/select";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
@@ -76,12 +76,11 @@ interface ElementProps {
   isHero?: boolean;
   action?: ElementAction;
 
-  // button（公式button使用）
+  // button
   style?: ButtonStyle;
   height?: ButtonHeight;
-  buttonColor?: string; // primary: 背景色 / secondary: 文字＆枠色 / link: 文字色
-  // textColor はプレビュー専用の見た目にしか使わないのでオプションで残す
-  textColor?: string;
+  buttonColor?: string; // ボタンの背景色
+  textColor?: string; // ボタンの文字色
 }
 
 interface FlexElement {
@@ -95,7 +94,7 @@ interface BubbleDesign {
   altText: string;
   bubbleSize: BubbleSize;
   bodyBg?: string;
-  bodySpacing?: SpacingToken;
+  bodySpacing?: SpacingToken; // 要素間隔
   contents: FlexElement[];
 }
 
@@ -103,7 +102,7 @@ interface DesignerState {
   containerType: ContainerType;
   bubbles: BubbleDesign[];
   currentIndex: number;
-  loadedMessageId?: string;
+  loadedMessageId?: string; // 読み込んだメッセージのID
 }
 
 /**
@@ -171,7 +170,7 @@ const defaultBubble = (label = "バブル 1"): BubbleDesign => ({
   altText: "通知: 新しいお知らせがあります",
   bubbleSize: "kilo",
   bodyBg: undefined,
-  bodySpacing: "none",
+  bodySpacing: "none", // デフォルトを none に変更
   contents: [],
 });
 
@@ -186,7 +185,7 @@ const makeElement = (type: FlexElement["type"]): FlexElement => {
         size: "md",
         weight: "normal",
         color: "#000000",
-        margin: "none",
+        margin: "none", // デフォルトを none に変更
         padding: "none",
         align: "start",
         wrap: true,
@@ -202,22 +201,23 @@ const makeElement = (type: FlexElement["type"]): FlexElement => {
         imgSize: "full",
         aspectRatio: "20:13",
         aspectMode: "cover",
-        margin: "none",
+        margin: "none", // デフォルトを none に変更
         padding: "none",
         isHero: false,
       },
     };
   }
+  // button
   return {
     id,
     type: "button",
     properties: {
       style: "primary",
       height: "md",
-      buttonColor: "#06c755", // 公式buttonの color に反映
-      textColor: "#ffffff",   // プレビュー用
+      buttonColor: "#06c755", // color を buttonColor に変更
+      textColor: "#ffffff", // 新しく textColor を追加
       action: { type: "uri", label: "開く", uri: "https://line.me/" },
-      margin: "none",
+      margin: "none", // デフォルトを none に変更
       padding: "none",
     },
   };
@@ -225,12 +225,12 @@ const makeElement = (type: FlexElement["type"]): FlexElement => {
 
 /**
  * =====================
- * JSON Builder（公式button）
+ * JSON Builder
  * =====================
  */
 
 function buildBubbleFromDesign(design: BubbleDesign) {
-  // hero（任意）
+  // 1) ヒーロー画像（任意）
   const heroCandidate = design.contents.find((c) => c.type === "image" && c.properties.isHero && c.properties.url);
   const hero = heroCandidate
     ? {
@@ -243,10 +243,10 @@ function buildBubbleFromDesign(design: BubbleDesign) {
       }
     : undefined;
 
-  // body.contents
+  // 2) body.contents
   const bodyContents = design.contents
     .filter((el) => !heroCandidate || el.id !== heroCandidate.id)
-    .map((el) => {
+    .map((el, index) => {
       const p = el.properties;
       const margin = p.margin && p.margin !== "none" ? p.margin : undefined;
 
@@ -278,18 +278,17 @@ function buildBubbleFromDesign(design: BubbleDesign) {
           ...(margin ? { margin } : {}),
         };
       } else if (el.type === "button") {
-        // 公式button：style/color/height/action をそのまま出力
         node = {
           type: "button",
           ...(p.style && { style: p.style }),
-          ...(p.buttonColor && { color: p.buttonColor }),
+          ...(p.buttonColor && { color: p.buttonColor }), // buttonColor を color として出力
           ...(p.height && { height: p.height }),
           ...(p.action ? { action: p.action } : {}),
           ...(margin ? { margin } : {}),
         };
       }
 
-      // padding 指定がある場合は wrapper
+      // padding 指定がある場合は wrapper box を被せる
       const pad = padToPx(p.padding);
       if (node && pad && pad !== "0px") {
         return {
@@ -299,23 +298,27 @@ function buildBubbleFromDesign(design: BubbleDesign) {
           contents: [node],
         };
       }
+
       return node;
     })
     .filter(Boolean);
 
-  return {
+  // 3) bubble JSON
+  const bubble: any = {
     type: "bubble",
     size: design.bubbleSize,
     ...(hero ? { hero } : {}),
     body: {
       type: "box",
       layout: "vertical",
-      spacing: design.bodySpacing || "none",
+      spacing: design.bodySpacing || "none", // デフォルトを none に変更
       contents: bodyContents,
       ...(design.bodyBg ? { backgroundColor: design.bodyBg } : {}),
-      paddingAll: "0px",
+      paddingAll: "0px", // 全体の余白を除去
     },
   };
+
+  return bubble;
 }
 
 function buildFlexMessage(state: DesignerState) {
@@ -323,14 +326,22 @@ function buildFlexMessage(state: DesignerState) {
 
   if (state.containerType === "bubble") {
     const bubble = buildBubbleFromDesign(state.bubbles[0]);
-    return { type: "flex", altText, contents: bubble };
+    return {
+      type: "flex",
+      altText,
+      contents: bubble,
+    };
   }
 
+  // carousel
   const bubbles = state.bubbles.map(buildBubbleFromDesign).filter(Boolean);
   return {
     type: "flex",
     altText,
-    contents: { type: "carousel", contents: bubbles },
+    contents: {
+      type: "carousel",
+      contents: bubbles,
+    },
   };
 }
 
@@ -352,8 +363,10 @@ const SortableItem = ({
   onHeroToggle?: (id: string, next: boolean) => void;
 }) => {
   const [collapsed, setCollapsed] = useState(true);
+
   const { attributes, listeners, setNodeRef, transform, transition } = useSortable({ id: element.id });
   const style = { transform: CSS.Transform.toString(transform), transition } as React.CSSProperties;
+
   const p = element.properties;
 
   return (
@@ -396,7 +409,7 @@ const SortableItem = ({
 
       {!collapsed && (
         <div className="mt-3 grid gap-3">
-          {/* 共通: 余白 */}
+          {/* 共通: 余白設定 */}
           <div className="grid grid-cols-3 gap-2">
             <div>
               <Label className="text-xs">外側の余白</Label>
@@ -407,7 +420,9 @@ const SortableItem = ({
                 <SelectTrigger className="h-7 text-xs" />
                 <SelectContent>
                   {(["none", "xs", "sm", "md", "lg", "xl", "xxl"] as MarginToken[]).map((t) => (
-                    <SelectItem key={t} value={t}>{t}</SelectItem>
+                    <SelectItem key={t} value={t}>
+                      {t}
+                    </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
@@ -421,7 +436,9 @@ const SortableItem = ({
                 <SelectTrigger className="h-7 text-xs" />
                 <SelectContent>
                   {(["none", "xs", "sm", "md", "lg", "xl"] as PaddingToken[]).map((t) => (
-                    <SelectItem key={t} value={t}>{t}</SelectItem>
+                    <SelectItem key={t} value={t}>
+                      {t}
+                    </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
@@ -437,7 +454,7 @@ const SortableItem = ({
             </div>
           </div>
 
-          {/* テキスト */}
+          {/* テキスト要素固有設定 */}
           {element.type === "text" && (
             <div className="grid gap-2">
               <div>
@@ -457,14 +474,19 @@ const SortableItem = ({
                     <SelectTrigger className="h-7 text-xs" />
                     <SelectContent>
                       {(["xs", "sm", "md", "lg", "xl"] as TextSize[]).map((t) => (
-                        <SelectItem key={t} value={t}>{t}</SelectItem>
+                        <SelectItem key={t} value={t}>
+                          {t}
+                        </SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
                 </div>
                 <div>
                   <Label className="text-xs">太さ</Label>
-                  <Select value={p.weight || "normal"} onValueChange={(v: FontWeight) => onUpdate(element.id, { ...p, weight: v })}>
+                  <Select
+                    value={p.weight || "normal"}
+                    onValueChange={(v: FontWeight) => onUpdate(element.id, { ...p, weight: v })}
+                  >
                     <SelectTrigger className="h-7 text-xs" />
                     <SelectContent>
                       <SelectItem value="normal">normal</SelectItem>
@@ -496,7 +518,7 @@ const SortableItem = ({
             </div>
           )}
 
-          {/* 画像 */}
+          {/* 画像要素固有設定 */}
           {element.type === "image" && (
             <div className="grid gap-2">
               <div className="grid grid-cols-3 gap-2 items-end">
@@ -516,23 +538,29 @@ const SortableItem = ({
                           alt="thumb"
                           className="max-h-full max-w-full object-contain"
                           onError={(e) => {
-                            (e.currentTarget as HTMLImageElement).style.display = 'none';
-                            const errorDiv = (e.currentTarget.nextElementSibling as HTMLElement);
+                            e.currentTarget.style.display = 'none';
+                            const errorDiv = e.currentTarget.nextElementSibling as HTMLElement;
                             if (errorDiv) errorDiv.style.display = 'block';
                           }}
                         />
-                        <div className="text-xs text-muted-foreground" style={{ display: 'none' }}>
+                        <div
+                          className="text-xs text-muted-foreground"
+                          style={{display: 'none'}}
+                        >
                           画像エラー
                         </div>
                       </div>
-                      {/* URL の文字列表示は出さない（選択されたファイル 表示を排除） */}
+                      <div className="mt-1 text-[10px] text-muted-foreground truncate" title={p.url}>
+                        {p.url}
+                      </div>
                     </div>
                   )}
                 </div>
                 <div>
                   <Label className="text-xs">メディア</Label>
                   <div className="h-8 flex items-center">
-                    <MediaSelector onSelect={(url) => onUpdate(element.id, { ...p, url })} selectedUrl={p.url} />
+                    <MediaSelector onSelect={(url) => onUpdate(element.id, { ...p, url })} />
+
                   </div>
                 </div>
               </div>
@@ -544,18 +572,25 @@ const SortableItem = ({
                     <SelectTrigger className="h-7 text-xs" />
                     <SelectContent>
                       {(["xxs", "xs", "sm", "md", "lg", "xl", "xxl", "full"] as ImageSize[]).map((t) => (
-                        <SelectItem key={t} value={t}>{t}</SelectItem>
+                        <SelectItem key={t} value={t}>
+                          {t}
+                        </SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
                 </div>
                 <div>
                   <Label className="text-xs">アスペクト比</Label>
-                  <Select value={p.aspectRatio || "20:13"} onValueChange={(v: AspectRatio) => onUpdate(element.id, { ...p, aspectRatio: v })}>
+                  <Select
+                    value={p.aspectRatio || "20:13"}
+                    onValueChange={(v: AspectRatio) => onUpdate(element.id, { ...p, aspectRatio: v })}
+                  >
                     <SelectTrigger className="h-7 text-xs" />
                     <SelectContent>
                       {(["1:1", "20:13", "16:9", "4:3"] as AspectRatio[]).map((t) => (
-                        <SelectItem key={t} value={t}>{t}</SelectItem>
+                        <SelectItem key={t} value={t}>
+                          {t}
+                        </SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
@@ -600,9 +635,7 @@ const SortableItem = ({
                             className="h-7 text-xs"
                             placeholder="https://..."
                             value={p.action?.uri || ""}
-                            onChange={(e) =>
-                              onUpdate(element.id, { ...p, action: { ...(p.action || { type: "uri" }), uri: e.target.value } })
-                            }
+                            onChange={(e) => onUpdate(element.id, { ...p, action: { ...(p.action || { type: "uri" }), uri: e.target.value } })}
                           />
                         </div>
                       )}
@@ -613,9 +646,7 @@ const SortableItem = ({
                             className="h-7 text-xs"
                             placeholder="送信するテキスト"
                             value={p.action?.text || ""}
-                            onChange={(e) =>
-                              onUpdate(element.id, { ...p, action: { ...(p.action || { type: "message" }), text: e.target.value } })
-                            }
+                            onChange={(e) => onUpdate(element.id, { ...p, action: { ...(p.action || { type: "message" }), text: e.target.value } })}
                           />
                         </div>
                       )}
@@ -626,22 +657,26 @@ const SortableItem = ({
                             className="h-7 text-xs"
                             placeholder="data=xxx"
                             value={p.action?.data || ""}
-                            onChange={(e) =>
-                              onUpdate(element.id, { ...p, action: { ...(p.action || { type: "postback" }), data: e.target.value } })
-                            }
+                            onChange={(e) => onUpdate(element.id, { ...p, action: { ...(p.action || { type: "postback" }), data: e.target.value } })}
                           />
                         </div>
                       )}
                     </div>
                   </div>
                   {p.action?.type === "uri" && (
-                    <div className="text-[10px] text-muted-foreground">※ タップすると指定したURLをブラウザで開きます</div>
+                    <div className="text-[10px] text-muted-foreground">
+                      ※ タップすると指定したURLをブラウザで開きます
+                    </div>
                   )}
                   {p.action?.type === "message" && (
-                    <div className="text-[10px] text-muted-foreground">※ タップすると指定したテキストをユーザーから送信します</div>
+                    <div className="text-[10px] text-muted-foreground">
+                      ※ タップすると指定したテキストをユーザーから送信します
+                    </div>
                   )}
                   {p.action?.type === "postback" && (
-                    <div className="text-[10px] text-muted-foreground">※ タップするとWebhookにデータを送信します（開発者向け）</div>
+                    <div className="text-[10px] text-muted-foreground">
+                      ※ タップするとWebhookにデータを送信します（開発者向け）
+                    </div>
                   )}
                 </div>
               </div>
@@ -652,7 +687,7 @@ const SortableItem = ({
             </div>
           )}
 
-          {/* ボタン（公式button設定） */}
+          {/* ボタン要素固有設定 */}
           {element.type === "button" && (
             <div className="grid gap-2">
               <div className="grid grid-cols-3 gap-2 items-end">
@@ -661,9 +696,9 @@ const SortableItem = ({
                   <Select value={p.style || "primary"} onValueChange={(v: ButtonStyle) => onUpdate(element.id, { ...p, style: v })}>
                     <SelectTrigger className="h-7 text-xs" />
                     <SelectContent>
-                      <SelectItem value="primary">塗り（背景色）</SelectItem>
-                      <SelectItem value="secondary">ボーダー</SelectItem>
-                      <SelectItem value="link">リンク</SelectItem>
+                      <SelectItem value="primary">塗り(背景色)</SelectItem>
+                      <SelectItem value="secondary">淡色</SelectItem>
+                      <SelectItem value="link">リンク風(下線)</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
@@ -682,38 +717,37 @@ const SortableItem = ({
 
               <div className="grid grid-cols-2 gap-2">
                 <div>
-                  <Label className="text-xs">
-                    {p.style === "primary" ? "背景色" : p.style === "secondary" ? "文字・枠色" : "文字色"}
-                  </Label>
+                  <Label className="text-xs">背景色</Label>
                   <div className="h-7 flex items-center">
-                    <ColorPicker
-                      color={p.buttonColor || "#06c755"}
-                      onChange={(c) => onUpdate(element.id, { ...p, buttonColor: c })}
-                    />
+                    <ColorPicker color={p.buttonColor || "#06c755"} onChange={(c) => onUpdate(element.id, { ...p, buttonColor: c })} />
                   </div>
                 </div>
                 <div>
-                  <Label className="text-xs">ラベル</Label>
-                  <Input
-                    className="h-7 text-xs"
-                    value={p.action?.label || ""}
-                    onChange={(e) => onUpdate(element.id, { ...p, action: { ...(p.action || { type: "uri" }), label: e.target.value } })}
-                    placeholder="ボタンに表示するテキスト"
-                  />
+                  <Label className="text-xs">文字色</Label>
+                  <div className="h-7 flex items-center">
+                    <ColorPicker color={p.textColor || "#ffffff"} onChange={(c) => onUpdate(element.id, { ...p, textColor: c })} />
+                  </div>
                 </div>
               </div>
 
               <div className="border-t pt-2">
                 <Label className="text-xs font-semibold">ボタンの動作</Label>
                 <div className="grid gap-2 mt-2">
+                  <div>
+                    <Label className="text-xs">ラベル</Label>
+                    <Input
+                      className="h-7 text-xs"
+                      value={p.action?.label || ""}
+                      onChange={(e) => onUpdate(element.id, { ...p, action: { ...(p.action || { type: "uri" }), label: e.target.value } })}
+                      placeholder="ボタンに表示するテキスト"
+                    />
+                  </div>
                   <div className="grid grid-cols-3 gap-2">
                     <div>
                       <Label className="text-xs">アクションタイプ</Label>
                       <Select
                         value={p.action?.type || "uri"}
-                        onValueChange={(v: ElementAction["type"]) =>
-                          onUpdate(element.id, { ...p, action: { ...(p.action || {}), type: v } })
-                        }
+                        onValueChange={(v: ElementAction["type"]) => onUpdate(element.id, { ...p, action: { ...(p.action || {}), type: v } })}
                       >
                         <SelectTrigger className="h-7 text-xs" />
                         <SelectContent>
@@ -731,9 +765,7 @@ const SortableItem = ({
                             className="h-7 text-xs"
                             placeholder="https://..."
                             value={p.action?.uri || ""}
-                            onChange={(e) =>
-                              onUpdate(element.id, { ...p, action: { ...(p.action || { type: "uri" }), uri: e.target.value } })
-                            }
+                            onChange={(e) => onUpdate(element.id, { ...p, action: { ...(p.action || { type: "uri" }), uri: e.target.value } })}
                           />
                         </div>
                       )}
@@ -744,9 +776,7 @@ const SortableItem = ({
                             className="h-7 text-xs"
                             placeholder="送信するテキスト"
                             value={p.action?.text || ""}
-                            onChange={(e) =>
-                              onUpdate(element.id, { ...p, action: { ...(p.action || { type: "message" }), text: e.target.value } })
-                            }
+                            onChange={(e) => onUpdate(element.id, { ...p, action: { ...(p.action || { type: "message" }), text: e.target.value } })}
                           />
                         </div>
                       )}
@@ -757,14 +787,27 @@ const SortableItem = ({
                             className="h-7 text-xs"
                             placeholder="data=xxx"
                             value={p.action?.data || ""}
-                            onChange={(e) =>
-                              onUpdate(element.id, { ...p, action: { ...(p.action || { type: "postback" }), data: e.target.value } })
-                            }
+                            onChange={(e) => onUpdate(element.id, { ...p, action: { ...(p.action || { type: "postback" }), data: e.target.value } })}
                           />
                         </div>
                       )}
                     </div>
                   </div>
+                  {p.action?.type === "uri" && (
+                    <div className="text-[10px] text-muted-foreground">
+                      ※ タップすると指定したURLをブラウザで開きます
+                    </div>
+                  )}
+                  {p.action?.type === "message" && (
+                    <div className="text-[10px] text-muted-foreground">
+                      ※ タップすると指定したテキストをユーザーから送信します
+                    </div>
+                  )}
+                  {p.action?.type === "postback" && (
+                    <div className="text-[10px] text-muted-foreground">
+                      ※ タップするとWebhookにデータを送信します（開発者向け）
+                    </div>
+                  )}
                 </div>
               </div>
             </div>
@@ -857,8 +900,9 @@ export default function FlexMessageDesigner() {
     setState((prev) => {
       const next = { ...prev };
       const contents = next.bubbles[next.currentIndex].contents;
-      // 全解除 → 指定のみON
+      // まず全解除
       const cleared = contents.map((el) => (el.type === "image" ? { ...el, properties: { ...el.properties, isHero: false } } : el));
+      // 指定IDのみ付与（ONのとき）
       next.bubbles[next.currentIndex].contents = cleared.map((el) =>
         el.id === id ? { ...el, properties: { ...el.properties, isHero: nextChecked } } : el
       );
@@ -903,6 +947,7 @@ export default function FlexMessageDesigner() {
       const title = current?.name || "Flexメッセージ";
 
       if (!asNew && state.loadedMessageId) {
+        // 上書き保存
         const { error } = await supabase
           .from("flex_messages")
           .update({ name: title, content })
@@ -910,6 +955,7 @@ export default function FlexMessageDesigner() {
         if (error) throw error;
         toast({ title: "上書き保存成功", description: `「${title}」を上書き保存しました` });
       } else {
+        // 新規保存
         const { data: newData, error } = await supabase
           .from("flex_messages")
           .insert({ user_id: user.id, name: title, content })
@@ -921,6 +967,7 @@ export default function FlexMessageDesigner() {
         toast({ title: "新規保存成功", description: `「${title}」を新規保存しました` });
       }
 
+      // 最新を再読込
       const { data, error: fetchErr } = await supabase
         .from("flex_messages")
         .select("*")
@@ -943,6 +990,7 @@ export default function FlexMessageDesigner() {
       if (c.type === "carousel") {
         const bubbles: BubbleDesign[] = (c.contents || []).map((b: any, idx: number) => {
           const items: FlexElement[] = [];
+          // hero を image element として再構築
           if (b.hero?.url) {
             items.push({
               id: `el-h-${idx}`,
@@ -960,16 +1008,12 @@ export default function FlexMessageDesigner() {
             });
           }
 
+          // body.contents
           (b.body?.contents || []).forEach((node: any, i: number) => {
             if (node.type === "box" && Array.isArray(node.contents) && node.contents.length === 1) {
+              // padding wrapper の復元
               const inner = node.contents[0];
-              const padding: PaddingToken =
-                inner && node.paddingAll === "4px" ? "xs" :
-                node.paddingAll === "8px" ? "sm" :
-                node.paddingAll === "12px" ? "md" :
-                node.paddingAll === "16px" ? "lg" :
-                node.paddingAll === "20px" ? "xl" : "none";
-
+              const padding: PaddingToken = node.paddingAll === "4px" ? "xs" : node.paddingAll === "8px" ? "sm" : node.paddingAll === "12px" ? "md" : node.paddingAll === "16px" ? "lg" : node.paddingAll === "20px" ? "xl" : "none";
               if (inner.type === "text") {
                 items.push({
                   id: `el-${idx}-${i}`,
@@ -981,7 +1025,7 @@ export default function FlexMessageDesigner() {
                     color: inner.color || "#000000",
                     align: inner.align || "start",
                     margin: inner.margin || "none",
-                    padding,
+                    padding: padding,
                     backgroundColor: inner.backgroundColor,
                     wrap: true,
                   },
@@ -1016,6 +1060,7 @@ export default function FlexMessageDesigner() {
                 });
               }
             } else {
+              // 直下
               if (node.type === "text") {
                 items.push({
                   id: `el-${idx}-${i}`,
@@ -1069,13 +1114,14 @@ export default function FlexMessageDesigner() {
             altText: row.content?.altText || `${row.name}のお知らせ`,
             bubbleSize: (b.size as BubbleSize) || "kilo",
             bodyBg: b.body?.backgroundColor,
-            bodySpacing: (b.body?.spacing as SpacingToken) || "none",
+            bodySpacing: b.body?.spacing as SpacingToken || "none",
             contents: items,
           } as BubbleDesign;
         });
 
         setState({ containerType: "carousel", bubbles, currentIndex: 0, loadedMessageId: row.id });
       } else {
+        // bubble 単体
         const b = c;
         const items: FlexElement[] = [];
         if (b.hero?.url) {
@@ -1097,13 +1143,7 @@ export default function FlexMessageDesigner() {
         (b.body?.contents || []).forEach((node: any, i: number) => {
           if (node.type === "box" && Array.isArray(node.contents) && node.contents.length === 1) {
             const inner = node.contents[0];
-            const padding: PaddingToken =
-              node.paddingAll === "4px" ? "xs" :
-              node.paddingAll === "8px" ? "sm" :
-              node.paddingAll === "12px" ? "md" :
-              node.paddingAll === "16px" ? "lg" :
-              node.paddingAll === "20px" ? "xl" : "none";
-
+            const padding: PaddingToken = node.paddingAll === "4px" ? "xs" : node.paddingAll === "8px" ? "sm" : node.paddingAll === "12px" ? "md" : node.paddingAll === "16px" ? "lg" : node.paddingAll === "20px" ? "xl" : "none";
             if (inner.type === "text") {
               items.push({ id: `el-${i}`, type: "text", properties: { text: inner.text, size: inner.size || "md", weight: inner.weight || "normal", color: inner.color || "#000000", align: inner.align || "start", margin: inner.margin || "none", padding, backgroundColor: inner.backgroundColor, wrap: true } });
             } else if (inner.type === "image") {
@@ -1126,7 +1166,7 @@ export default function FlexMessageDesigner() {
               altText: row.content?.altText || `${row.name}のお知らせ`,
               bubbleSize: (b.size as BubbleSize) || "kilo",
               bodyBg: b.body?.backgroundColor,
-              bodySpacing: (b.body?.spacing as SpacingToken) || "none",
+              bodySpacing: b.body?.spacing as SpacingToken || "none",
               contents: items,
             },
           ],
@@ -1148,6 +1188,7 @@ export default function FlexMessageDesigner() {
       const { error } = await supabase.from("flex_messages").delete().eq("id", id);
       if (error) throw error;
       setMessages((prev) => prev.filter((m) => m.id !== id));
+      // 削除したメッセージが現在読み込んでいるメッセージの場合、リセット
       if (state.loadedMessageId === id) {
         newMessage();
       }
@@ -1190,6 +1231,7 @@ export default function FlexMessageDesigner() {
         toast({ title: "認証エラー", description: "ログインしてください", variant: "destructive" });
         return;
       }
+
       const { error } = await supabase.functions.invoke("send-flex-message", {
         body: { flexMessage: messageContent, userId: user.id }
       });
@@ -1224,11 +1266,11 @@ export default function FlexMessageDesigner() {
 
       <main className="container mx-auto px-2 py-4 max-w-7xl">
         <div className="grid lg:grid-cols-[260px_1fr_320px] md:grid-cols-[1fr_320px] grid-cols-1 gap-3">
-          {/* 左: 保存済み（UI 調整） */}
+          {/* 左: 保存済み */}
           <Card className="h-[calc(100vh-140px)] lg:sticky top-3 overflow-hidden">
             <CardHeader className="py-3">
               <CardTitle className="text-sm">保存済みメッセージ</CardTitle>
-              <CardDescription className="text-xs">クリックで読込 / 下のボタンで配信</CardDescription>
+              <CardDescription className="text-xs">クリックで読込 / 右のボタンで配信</CardDescription>
             </CardHeader>
             <CardContent className="pt-0 overflow-auto h-full">
               {messages.length === 0 ? (
@@ -1237,30 +1279,25 @@ export default function FlexMessageDesigner() {
                 <div className="space-y-2">
                   {messages.map((m) => (
                     <div key={m.id} className={`border rounded-md p-2 ${state.loadedMessageId === m.id ? 'border-primary bg-primary/10' : ''}`}>
-                      <div
-                        className="cursor-pointer"
-                        onClick={() => loadMessage(m)}
-                      >
-                        <div className="text-[13px] font-medium break-words leading-snug">
-                          {m.name}
+                      <div className="flex items-center justify-between gap-2">
+                        <div className="min-w-0 flex-1">
+                          <div className="text-sm font-medium truncate" title={m.name}>{m.name}</div>
+                          <div className="text-[10px] text-muted-foreground">{new Date(m.created_at).toLocaleString("ja-JP")}</div>
+                          {state.loadedMessageId === m.id && (
+                            <div className="text-[10px] text-primary">現在編集中</div>
+                          )}
                         </div>
-                        <div className="text-[10px] text-muted-foreground mt-0.5">
-                          {new Date(m.created_at).toLocaleString("ja-JP")}
+                        <div className="flex gap-1">
+                          <Button size="sm" variant="outline" className="h-7 px-2 text-xs" onClick={() => loadMessage(m)}>
+                            読込
+                          </Button>
+                          <Button size="sm" variant="outline" className="h-7 px-2 text-xs" onClick={() => sendSavedMessage(m.content)}>
+                            配信
+                          </Button>
+                          <Button size="sm" variant="outline" className="h-7 px-2 text-xs text-destructive" onClick={() => deleteMessage(m.id, m.name)}>
+                            削除
+                          </Button>
                         </div>
-                        {state.loadedMessageId === m.id && (
-                          <div className="text-[10px] text-primary mt-0.5">現在編集中</div>
-                        )}
-                      </div>
-                      <div className="flex gap-1 mt-2">
-                        <Button size="sm" variant="outline" className="h-7 px-2 text-xs" onClick={() => loadMessage(m)}>
-                          読込
-                        </Button>
-                        <Button size="sm" variant="outline" className="h-7 px-2 text-xs" onClick={() => sendSavedMessage(m.content)}>
-                          配信
-                        </Button>
-                        <Button size="sm" variant="outline" className="h-7 px-2 text-xs text-destructive" onClick={() => deleteMessage(m.id, m.name)}>
-                          削除
-                        </Button>
                       </div>
                     </div>
                   ))}
@@ -1295,36 +1332,20 @@ export default function FlexMessageDesigner() {
                 </div>
               </CardHeader>
               <CardContent className="grid gap-3 text-sm">
-                {/* 基本情報 */}
+                {/* --- ここからが追記部分 --- */}
+                {/* 上段: 基本情報 */}
                 <div className="grid grid-cols-3 gap-3">
                   <div>
                     <Label className="text-xs">メッセージ名</Label>
-                    <Input
-                      className="h-8 text-xs"
-                      value={current.name}
-                      onChange={(e) =>
-                        setState((prev) => ({
-                          ...prev,
-                          bubbles: prev.bubbles.map((b, i) => (i === prev.currentIndex ? { ...b, name: e.target.value } : b)),
-                        }))
-                      }
-                      placeholder="例) 新商品お知らせ"
-                    />
+                    <Input className="h-8 text-xs" value={current.name} onChange={(e) => setState((prev) => ({ ...prev, bubbles: prev.bubbles.map((b, i) => (i === prev.currentIndex ? { ...b, name: e.target.value } : b)) }))} placeholder="例) 新商品お知らせ" />
                   </div>
                   <div className="col-span-2">
-                    <Label className="text-xs">
-                      代替テキスト(通知文) <span className="text-[10px] text-muted-foreground">* 400文字まで / 端末の通知に使われます</span>
-                    </Label>
+                    <Label className="text-xs">代替テキスト(通知文) <span className="text-[10px] text-muted-foreground">* 400文字まで / 端末の通知に使われます</span></Label>
                     <Input
                       className="h-8 text-xs"
                       value={current.altText}
                       maxLength={400}
-                      onChange={(e) =>
-                        setState((prev) => ({
-                          ...prev,
-                          bubbles: prev.bubbles.map((b, i) => (i === prev.currentIndex ? { ...b, altText: e.target.value } : b)),
-                        }))
-                      }
+                      onChange={(e) => setState((prev) => ({ ...prev, bubbles: prev.bubbles.map((b, i) => (i === prev.currentIndex ? { ...b, altText: e.target.value } : b)) }))}
                       placeholder="例) クーポンを配布中！"
                     />
                   </div>
@@ -1403,65 +1424,67 @@ export default function FlexMessageDesigner() {
                 </div>
 
                 {state.containerType === "carousel" && (
-                  <div className="flex items-center justify-between">
-                    <div className="flex flex-wrap gap-1">
-                      {state.bubbles.map((b, i) => (
+                  <>
+                    <div className="flex items-center justify-between">
+                      <div className="flex flex-wrap gap-1">
+                        {state.bubbles.map((b, i) => (
+                          <Button
+                            key={i}
+                            size="sm"
+                            variant={i === state.currentIndex ? "default" : "outline"}
+                            className="h-7 text-xs"
+                            onClick={() => setState((prev) => ({ ...prev, currentIndex: i }))}
+                          >
+                            <Layers className="w-3.5 h-3.5 mr-1" /> {i + 1}
+                          </Button>
+                        ))}
+                      </div>
+                      <div className="flex gap-2">
                         <Button
-                          key={i}
                           size="sm"
-                          variant={i === state.currentIndex ? "default" : "outline"}
-                          className="h-7 text-xs"
-                          onClick={() => setState((prev) => ({ ...prev, currentIndex: i }))}
+                          variant="outline"
+                          className="h-8 text-xs"
+                          onClick={() =>
+                            setState((prev) => ({
+                              ...prev,
+                              bubbles: [...prev.bubbles, defaultBubble(`バブル ${prev.bubbles.length + 1}`)].slice(0, 10),
+                              currentIndex: Math.min(prev.bubbles.length, 9),
+                            }))
+                          }
                         >
-                          <Layers className="w-3.5 h-3.5 mr-1" /> {i + 1}
+                          <Plus className="w-4 h-4 mr-1" /> 追加
                         </Button>
-                      ))}
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="h-8 text-xs"
+                          onClick={() =>
+                            setState((prev) => ({
+                              ...prev,
+                              bubbles: prev.bubbles.length < 10 ? [...prev.bubbles, JSON.parse(JSON.stringify(prev.bubbles[prev.currentIndex]))] : prev.bubbles,
+                              currentIndex: Math.min(prev.bubbles.length, 9),
+                            }))
+                          }
+                        >
+                          <Copy className="w-4 h-4 mr-1" /> 複製
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="h-8 text-xs text-destructive"
+                          onClick={() =>
+                            setState((prev) => ({
+                              ...prev,
+                              bubbles: prev.bubbles.length > 1 ? prev.bubbles.filter((_, i) => i !== prev.currentIndex) : prev.bubbles,
+                              currentIndex: 0,
+                            }))
+                          }
+                        >
+                          <Trash2 className="w-4 h-4 mr-1" /> 削除
+                        </Button>
+                      </div>
                     </div>
-                    <div className="flex gap-2">
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        className="h-8 text-xs"
-                        onClick={() =>
-                          setState((prev) => ({
-                            ...prev,
-                            bubbles: [...prev.bubbles, defaultBubble(`バブル ${prev.bubbles.length + 1}`)].slice(0, 10),
-                            currentIndex: Math.min(prev.bubbles.length, 9),
-                          }))
-                        }
-                      >
-                        <Plus className="w-4 h-4 mr-1" /> 追加
-                      </Button>
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        className="h-8 text-xs"
-                        onClick={() =>
-                          setState((prev) => ({
-                            ...prev,
-                            bubbles: prev.bubbles.length < 10 ? [...prev.bubbles, JSON.parse(JSON.stringify(prev.bubbles[prev.currentIndex]))] : prev.bubbles,
-                            currentIndex: Math.min(prev.bubbles.length, 9),
-                          }))
-                        }
-                      >
-                        <Copy className="w-4 h-4 mr-1" /> 複製
-                      </Button>
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        className="h-8 text-xs text-destructive"
-                        onClick={() =>
-                          setState((prev) => ({
-                            ...prev,
-                            bubbles: prev.bubbles.length > 1 ? prev.bubbles.filter((_, i) => i !== prev.currentIndex) : prev.bubbles,
-                            currentIndex: 0,
-                          }))
-                        }
-                      >
-                        <Trash2 className="w-4 h-4 mr-1" /> 削除
-                      </Button>
-                    </div>
-                  </div>
+                  </>
                 )}
 
                 {/* 要素ツールバー */}
@@ -1497,17 +1520,17 @@ export default function FlexMessageDesigner() {
             </Card>
           </div>
 
-          {/* 右: プレビュー（背景色 #8cabd8） */}
+          {/* 右: プレビュー */}
           <Card className="h-[calc(100vh-140px)] lg:sticky top-3 overflow-hidden">
             <CardHeader className="py-3">
               <CardTitle className="text-sm flex items-center gap-2"><Eye className="w-4 h-4" />プレビュー</CardTitle>
               <CardDescription className="text-xs">おおよその見た目(実機と微差あり)</CardDescription>
             </CardHeader>
-            <CardContent className="pt-0 overflow-auto h-full p-4" style={{ backgroundColor: "#8cabd8" }}>
+            <CardContent className="pt-0 overflow-auto h-full bg-gray-200 p-4">
               <div
                 className="mx-auto rounded-lg bg-white overflow-hidden"
                 style={{
-                  width: "100%",
+                width: "100%",
                   maxWidth: getBubbleWidthPx(current.bubbleSize),
                 }}
               >
@@ -1538,79 +1561,67 @@ export default function FlexMessageDesigner() {
                     gap: getMarginPx(current.bodySpacing),
                   }}
                 >
-                  {current.contents.filter((c) => !(c.type === "image" && c.properties.isHero)).map((el) => {
-                    const p = el.properties;
-                    return (
-                      <div
-                        key={el.id}
-                        style={{
-                          marginTop: getMarginPx(p.margin),
-                          padding: padToPx(p.padding),
-                          backgroundColor: p.backgroundColor && p.backgroundColor !== "#ffffff" ? p.backgroundColor : undefined,
-                          borderRadius: p.backgroundColor && p.backgroundColor !== "#ffffff" ? "4px" : undefined,
-                        }}
-                      >
-                        {el.type === "text" && (
-                          <div
+                  {current.contents.filter((c) => !(c.type === "image" && c.properties.isHero)).map((el) => (
+                    <div
+                      key={el.id}
+                      style={{
+                        marginTop: getMarginPx(el.properties.margin),
+                        padding: padToPx(el.properties.padding),
+                        backgroundColor: el.properties.backgroundColor && el.properties.backgroundColor !== "#ffffff" ? el.properties.backgroundColor : undefined,
+                        borderRadius: el.properties.backgroundColor && el.properties.backgroundColor !== "#ffffff" ? "4px" : undefined,
+                      }}
+                    >
+                      {el.type === "text" && (
+                        <div
+                          style={{
+                            color: el.properties.color || "#000",
+                            textAlign: (el.properties.align || "start") as any,
+                            fontSize: getTextSizePx(el.properties.size || "md"),
+                            fontWeight: el.properties.weight === "bold" ? "bold" : "normal",
+                            whiteSpace: "pre-wrap",
+                            overflowWrap: "break-word",
+                          }}
+                        >
+                          {el.properties.text || ""}
+                        </div>
+                      )}
+                      {el.type === "image" && el.properties.url && (
+                        <div>
+                          <img
+                            src={el.properties.url}
+                            alt="img"
+                            className="w-full rounded block"
                             style={{
-                              color: p.color || "#000",
-                              textAlign: (p.align || "start") as any,
-                              fontSize: getTextSizePx(p.size || "md"),
-                              fontWeight: p.weight === "bold" ? "bold" : "normal",
-                              whiteSpace: "pre-wrap",
-                              overflowWrap: "break-word",
+                              aspectRatio: el.properties.aspectRatio?.replace(':', '/') || "auto",
+                              objectFit: el.properties.aspectMode === "fit" ? "contain" : "cover",
                             }}
-                          >
-                            {p.text || ""}
-                          </div>
-                        )}
-
-                        {el.type === "image" && p.url && (
-                          <div>
-                            <img
-                              src={p.url}
-                              alt="img"
-                              className="w-full rounded block"
-                              style={{
-                                aspectRatio: p.aspectRatio?.replace(':', '/') || "auto",
-                                objectFit: p.aspectMode === "fit" ? "contain" : "cover",
-                              }}
-                              onError={(e) => {
-                                (e.currentTarget as HTMLImageElement).src =
-                                  "data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjAwIiBoZWlnaHQ9IjEwMCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48cmVjdCB3aWR0aD0iMTAwJSIgaGVpZ2h0PSIxMDAlIiBmaWxsPSIjZjFmMWYxIi8+PHRleHQgeD0iNTAlIiB5PSI1MCUiIGZvbnQtZmFtaWx5PSJBcmlhbCIgZm9udC1zaXplPSIxMiIgZmlsbD0iIzk5OTk5OSIgdGV4dC1hbmNob3I9Im1pZGRsZSIgZHk9Ii4zZW0iPkVycm9yPC90ZXh0Pjwvc3ZnPg==";
-                              }}
-                            />
-                          </div>
-                        )}
-
-                        {el.type === "button" && (
-                          <button
-                            className="w-full rounded text-[13px] px-3 font-bold"
-                            style={{
-                              // 公式buttonの見た目に寄せる
-                              backgroundColor:
-                                p.style === "primary" ? (p.buttonColor || "#06c755")
-                                  : p.style === "secondary" ? "transparent"
-                                  : "transparent",
-                              color:
-                                p.style === "primary" ? "#ffffff"
-                                  : p.style === "secondary" ? "#000000"
-                                  : (p.buttonColor || "#06c755"),
-                              border:
-                                p.style === "secondary" ? `1px solid ${p.buttonColor || "#06c755"}`
-                                  : p.style === "link" ? "none"
-                                  : "none",
-                              textDecoration:
-                                p.style === "link" ? "underline" : "none",
-                              height: getButtonHeightPx(p.height || "md"),
+                            onError={(e) => {
+                              e.currentTarget.src = "data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjAwIiBoZWlnaHQ9IjEwMCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48cmVjdCB3aWR0aD0iMTAwJSIgaGVpZ2h0PSIxMDAlIiBmaWxsPSIjZjFmMWYxIi8+PHRleHQgeD0iNTAlIiB5PSI1MCUiIGZvbnQtZmFtaWx5PSJBcmlhbCIgZm9udC1zaXplPSIxMiIgZmlsbD0iIzk5OTk5OSIgdGV4dC1hbmNob3I9Im1pZGRsZSIgZHk9Ii4zZW0iPkVycm9yPC90ZXh0Pjwvc3ZnPg==";
                             }}
-                          >
-                            {p.action?.label || "ボタン"}
-                          </button>
-                        )}
-                      </div>
-                    );
-                  })}
+                          />
+                        </div>
+                      )}
+                      {el.type === "button" && (
+                        <button
+                          className="w-full rounded text-[13px] px-3 font-bold"
+                          style={{
+                            backgroundColor: el.properties.style === "primary"
+                              ? (el.properties.buttonColor || "#06c755")
+                              : el.properties.style === "secondary"
+                              ? `${el.properties.buttonColor || "#06c755"}20`
+                              : "transparent",
+                            color: el.properties.textColor,
+                            border: el.properties.style === "link"
+                              ? `1px solid ${el.properties.buttonColor || "#06c755"}`
+                              : "none",
+                            height: getButtonHeightPx(el.properties.height || "md"),
+                          }}
+                        >
+                          {el.properties.action?.label || "ボタン"}
+                        </button>
+                      )}
+                    </div>
+                  ))}
                 </div>
               </div>
             </CardContent>
