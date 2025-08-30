@@ -196,170 +196,27 @@ const Auth = () => {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-background to-muted p-4">
+    <div className="min-h-screen flex items-center justify-center p-4">
       <Card className="w-full max-w-md">
         <CardHeader className="text-center">
+          <div className="flex justify-center mb-4">
+            <img src="/lovable-uploads/4d26a444-f601-4acc-8285-9d99146345e3.png" alt="L!JUMP" className="h-16" />
+          </div>
           <CardTitle className="text-2xl font-bold">FlexMaster</CardTitle>
           <CardDescription>
             LINE APIを活用したフレキシブルなチャットボット管理システム
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <Tabs defaultValue="signin" className="w-full">
-            <TabsList className="grid w-full grid-cols-3">
-              <TabsTrigger value="signin">ログイン</TabsTrigger>
-              <TabsTrigger value="signup">サインアップ</TabsTrigger>
-              <TabsTrigger value="reset">パスワードリセット</TabsTrigger>
-            </TabsList>
-            
-            <TabsContent value="signin">
-              <div className="space-y-4">
-                {/* Googleログインボタン */}
-                <Button 
-                  onClick={handleGoogleLogin}
-                  variant="outline" 
-                  className="w-full"
-                  disabled={googleLoading}
-                >
-                  {googleLoading ? "認証中..." : "Googleでログイン"}
-                </Button>
-                
-                <div className="flex items-center">
-                  <Separator className="flex-1" />
-                  <span className="px-2 text-muted-foreground text-sm">または</span>
-                  <Separator className="flex-1" />
-                </div>
-
-                <form onSubmit={handleSignIn} className="space-y-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="signin-email">メールアドレス</Label>
-                    <Input
-                      id="signin-email"
-                      type="email"
-                      value={email}
-                      onChange={(e) => setEmail(e.target.value)}
-                      required
-                      placeholder="your@email.com"
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="signin-password">パスワード</Label>
-                    <Input
-                      id="signin-password"
-                      type="password"
-                      value={password}
-                      onChange={(e) => setPassword(e.target.value)}
-                      required
-                      placeholder="••••••••"
-                    />
-                  </div>
-                  <Button type="submit" className="w-full" disabled={loading}>
-                    {loading ? "ログイン中..." : "ログイン"}
-                  </Button>
-                </form>
-              </div>
-            </TabsContent>
-            
-            <TabsContent value="signup">
-              <div className="space-y-4">
-                {/* Google登録ボタン */}
-                <Button 
-                  onClick={handleGoogleLogin}
-                  variant="outline" 
-                  className="w-full"
-                  disabled={googleLoading}
-                >
-                  {googleLoading ? "認証中..." : "Googleでアカウント作成"}
-                </Button>
-                
-                <div className="flex items-center">
-                  <Separator className="flex-1" />
-                  <span className="px-2 text-muted-foreground text-sm">または</span>
-                  <Separator className="flex-1" />
-                </div>
-
-                <form onSubmit={handleSignUp} className="space-y-4">
-                  <div className="grid grid-cols-2 gap-2">
-                    <div className="space-y-2">
-                      <Label htmlFor="signup-firstname">姓</Label>
-                      <Input
-                        id="signup-firstname"
-                        type="text"
-                        value={firstName}
-                        onChange={(e) => setFirstName(e.target.value)}
-                        placeholder="田中"
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="signup-lastname">名</Label>
-                      <Input
-                        id="signup-lastname"
-                        type="text"
-                        value={lastName}
-                        onChange={(e) => setLastName(e.target.value)}
-                        placeholder="太郎"
-                      />
-                    </div>
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="signup-phone">電話番号</Label>
-                    <Input
-                      id="signup-phone"
-                      type="tel"
-                      value={phoneNumber}
-                      onChange={(e) => setPhoneNumber(e.target.value)}
-                      placeholder="090-1234-5678"
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="signup-email">メールアドレス</Label>
-                    <Input
-                      id="signup-email"
-                      type="email"
-                      value={email}
-                      onChange={(e) => setEmail(e.target.value)}
-                      required
-                      placeholder="your@email.com"
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="signup-password">パスワード</Label>
-                    <Input
-                      id="signup-password"
-                      type="password"
-                      value={password}
-                      onChange={(e) => setPassword(e.target.value)}
-                      required
-                      placeholder="••••••••"
-                      minLength={6}
-                    />
-                  </div>
-                  <Button type="submit" className="w-full" disabled={loading}>
-                    {loading ? "アカウント作成中..." : "アカウント作成"}
-                  </Button>
-                </form>
-              </div>
-            </TabsContent>
-
-            <TabsContent value="reset">
-              <form onSubmit={handlePasswordReset} className="space-y-4">
-                <div className="space-y-2">
-                  <Label htmlFor="reset-email">メールアドレス</Label>
-                  <Input
-                    id="reset-email"
-                    type="email"
-                    value={resetEmail}
-                    onChange={(e) => setResetEmail(e.target.value)}
-                    required
-                    placeholder="your@email.com"
-                  />
-                </div>
-                <Button type="submit" className="w-full" disabled={resetLoading}>
-                  {resetLoading ? "送信中..." : "パスワードリセットメール送信"}
-                </Button>
-              </form>
-            </TabsContent>
-          </Tabs>
+          <div className="space-y-4">
+            <Button 
+              onClick={handleGoogleLogin}
+              className="w-full bg-[#06C755] hover:bg-[#05B84D] text-white border-0"
+              disabled={googleLoading}
+            >
+              {googleLoading ? "認証中..." : "Googleでログイン・アカウント作成"}
+            </Button>
+          </div>
 
           {error && (
             <Alert className="mt-4" variant="destructive">
