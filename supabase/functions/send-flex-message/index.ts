@@ -49,8 +49,8 @@ function sanitizeFlexMessage(obj: any): any {
       'borderWidth', 
       'borderColor',
       'padding',
-      'className',
-      'style'
+      'className'
+      // 'style' を削除 - ボタンの見た目設定に必要
     ]
     
     for (const [key, value] of Object.entries(obj)) {
