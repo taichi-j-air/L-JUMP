@@ -119,12 +119,10 @@ const Auth = () => {
     setMessage(null);
 
     try {
-      const redirectUrl = `${window.location.origin}/onboarding`;
-      
       const { error } = await supabase.auth.signInWithOAuth({
         provider: 'google',
         options: {
-          redirectTo: redirectUrl
+          redirectTo: `${window.location.origin}/`
         }
       });
 
