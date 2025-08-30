@@ -134,7 +134,8 @@ const Auth = () => {
         navigate("/onboarding");
       } else {
         console.log('✅ User fully set up, redirecting to dashboard');
-        navigate("/");
+        // Googleログインの場合も必ずオンボーディングを経由
+        navigate("/onboarding");
       }
     } catch (error: any) {
       console.error('❌ Error in handleSuccessfulAuth:', error);
@@ -335,10 +336,6 @@ const Auth = () => {
               className="h-16" 
             />
           </div>
-          <CardTitle className="text-2xl font-bold text-gray-800">FlexMaster</CardTitle>
-          <CardDescription className="text-gray-600">
-            LINE APIを活用したフレキシブルなチャットボット管理システム
-          </CardDescription>
         </CardHeader>
         
         <CardContent className="space-y-6">
@@ -346,7 +343,7 @@ const Auth = () => {
           <div className="space-y-4">
             <Button 
               onClick={handleGoogleLogin}
-              className="w-full bg-[#06C755] hover:bg-[#05B84D] text-white border-0 h-12 text-lg font-semibold transition-all duration-200 transform hover:scale-105"
+              className="w-full h-12 text-lg font-semibold"
               disabled={googleLoading}
             >
               {googleLoading ? (
@@ -355,7 +352,7 @@ const Auth = () => {
                   <span>Google認証中...</span>
                 </div>
               ) : (
-                "🚀 Googleでログイン・アカウント作成"
+                "Googleでログイン・アカウント作成"
               )}
             </Button>
           </div>
@@ -388,109 +385,6 @@ const Auth = () => {
             </div>
           )}
 
-          {/* 従来のメール認証フォーム（必要に応じて） */}
-          <Separator />
-          
-          <Tabs defaultValue="login" className="w-full">
-            <TabsList className="grid w-full grid-cols-2">
-              <TabsTrigger value="login">ログイン</TabsTrigger>
-              <TabsTrigger value="signup">新規登録</TabsTrigger>
-            </TabsList>
-            
-            <TabsContent value="login" className="space-y-4">
-              <form onSubmit={handleSignIn} className="space-y-4">
-                <div>
-                  <Label htmlFor="login-email">メールアドレス</Label>
-                  <Input
-                    id="login-email"
-                    type="email"
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    required
-                  />
-                </div>
-                <div>
-                  <Label htmlFor="login-password">パスワード</Label>
-                  <Input
-                    id="login-password"
-                    type="password"
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    required
-                  />
-                </div>
-                <Button 
-                  type="submit" 
-                  className="w-full" 
-                  disabled={loading}
-                >
-                  {loading ? "ログイン中..." : "ログイン"}
-                </Button>
-              </form>
-              
-              <div className="text-center">
-                <Button 
-                  variant="link" 
-                  onClick={() => {
-                    // パスワードリセットモーダルを開く処理
-                  }}
-                >
-                  パスワードを忘れた場合
-                </Button>
-              </div>
-            </TabsContent>
-            
-            <TabsContent value="signup" className="space-y-4">
-              <form onSubmit={handleSignUp} className="space-y-4">
-                <div>
-                  <Label htmlFor="signup-email">メールアドレス</Label>
-                  <Input
-                    id="signup-email"
-                    type="email"
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    required
-                  />
-                </div>
-                <div>
-                  <Label htmlFor="signup-password">パスワード</Label>
-                  <Input
-                    id="signup-password"
-                    type="password"
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    required
-                    minLength={6}
-                  />
-                </div>
-                <div className="grid grid-cols-2 gap-2">
-                  <div>
-                    <Label htmlFor="firstName">姓</Label>
-                    <Input
-                      id="firstName"
-                      value={firstName}
-                      onChange={(e) => setFirstName(e.target.value)}
-                    />
-                  </div>
-                  <div>
-                    <Label htmlFor="lastName">名</Label>
-                    <Input
-                      id="lastName"
-                      value={lastName}
-                      onChange={(e) => setLastName(e.target.value)}
-                    />
-                  </div>
-                </div>
-                <Button 
-                  type="submit" 
-                  className="w-full" 
-                  disabled={loading}
-                >
-                  {loading ? "作成中..." : "アカウント作成"}
-                </Button>
-              </form>
-            </TabsContent>
-          </Tabs>
         </CardContent>
       </Card>
     </div>
