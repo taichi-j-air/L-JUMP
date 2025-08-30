@@ -290,16 +290,17 @@ function buildBubbleFromDesign(design: BubbleDesign) {
           ...(margin ? { margin } : {}),
         };
       } else if (el.type === "button") {
-  console.log("Button element:", el.id, "style:", p.style, "color:", p.buttonColor);
+  const defaultColor = p.style === "link" ? "#0f83ff" : "#06c755";
   
   node = {
     type: "button",
     style: p.style || "primary",
-    color: p.buttonColor || (p.style === "link" ? "#0f83ff" : "#06c755"),
+    color: p.buttonColor || defaultColor, // 常にcolorを出力
     ...(p.height && p.height !== "md" ? { height: p.height } : {}),
     ...(p.action ? { action: p.action } : {}),
     ...(margin ? { margin } : {}),
   };
+}
   
   console.log("Generated button node:", JSON.stringify(node, null, 2));
 }
