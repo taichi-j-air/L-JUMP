@@ -255,82 +255,109 @@ function buildBubbleFromDesign(design: BubbleDesign) {
       }
     : undefined;
 
-  const bodyContents = design.contents
+  // ボタンとそれ以外の要素を分ける
+  const bodyElements: any[] = [];
+  const footerElements: any[] = [];
+
+  design.contents
     .filter((el) => !heroCandidate || el.id !== heroCandidate.id)
-    .map((el) => {
+    .forEach((el) => {
       const p = el.properties;
       const margin = p.margin && p.margin !== "none" ? p.margin : undefined;
 
       let node: any = null;
 
-if (el.type === "text") {
-  const text = (p.text || "").trim();
-  if (!text) return null;
-  node = {
-    type: "text",
-    text,
-    ...(p.size && { size: p.size }),
-    ...(p.weight && p.weight !== "normal" && { weight: p.weight }),
-    ...(p.color && { color: p.color }),
-    ...(p.align && p.align !== "start" && { align: p.align }),
-    wrap: true,
-    ...(p.backgroundColor ? { backgroundColor: p.backgroundColor } : {}),
-    ...(margin ? { margin } : {}),
-  };
-} else if (el.type === "image") {
-  const url = (p.url || "").trim();
-  if (!url) return null;
-  node = {
-    type: "image",
-    url,
-    ...(p.imgSize && { size: p.imgSize }),
-    ...(p.aspectRatio && { aspectRatio: p.aspectRatio }),
-    ...(p.aspectMode && { aspectMode: p.aspectMode }),
-    ...(p.action ? { action: p.action } : {}),
-    ...(margin ? { margin } : {}),
-  };
-} else if (el.type === "button") {
-  const defaultColor = p.style === "link" ? "#0f83ff" : "#06c755";
-  
-  node = {
-    type: "button",
-    style: p.style || "primary",
-    color: p.buttonColor || defaultColor,
-    ...(p.height && p.height !== "md" ? { height: p.height } : {}),
-    ...(p.action ? { action: p.action } : {}),
-    ...(margin ? { margin } : {}),
-  };
-  
-  // デバッグ用
-  console.log("Button style:", p.style, "Final node:", node);
-}
+      if (el.type === "text") {
+        const text = (p.text || "").trim();
+        if (!text) return;
+        node = {
+          type: "text",
+          text,
+          ...(p.size && { size: p.size }),
+          ...(p.weight && p.weight !== "normal" && { weight: p.weight }),
+          ...(p.color && { color: p.color }),
+          ...(p.align && p.align !== "start" && { align: p.align }),
+          wrap: true,
+          ...(p.backgroundColor ? { backgroundColor: p.backgroundColor } : {}),
+          ...(margin ? { margin } : {}),
+        };
+      } else if (el.type === "image") {
+        const url = (p.url || "").trim();
+        if (!url) return;
+        node = {
+          type: "image",
+          url,
+          ...(p.imgSize && { size: p.imgSize }),
+          ...(p.aspectRatio && { aspectRatio: p.aspectRatio }),
+          ...(p.aspectMode && { aspectMode: p.aspectMode }),
+          ...(p.action ? { action: p.action } : {}),
+          ...(margin ? { margin } : {}),
+        };
+      } else if (el.type === "button") {
+        const defaultColor = p.style === "link" ? "#0f83ff" : "#06c755";
+        
+        node = {
+          type: "button",
+          style: p.style || "primary",
+          color: p.buttonColor || defaultColor,
+          ...(p.height && p.height !== "md" ? { height: p.height } : {}),
+          ...(p.action ? { action: p.action } : {}),
+          ...(margin ? { margin } : {}),
+        };
+        
+        // デバッグ用
+        console.log("Button style:", p.style, "Final node:", node);
+      }
 
-const pad = padToPx(p.padding);
-if (node && pad && pad !== "0px") {
-  return {
-    type: "box",
-    layout: "vertical",
-    paddingAll: pad,
-    contents: [node],
-  };
-}
-return node;
-    })
-    .filter(Boolean);
+      if (!node) return;
 
-  return {
+      const pad = padToPx(p.padding);
+      if (pad && pad !== "0px") {
+        node = {
+          type: "box",
+          layout: "vertical",
+          paddingAll: pad,
+          contents: [node],
+        };
+      }
+
+      // ボタンかどうかで振り分け
+      if (el.type === "button") {
+        footerElements.push(node);
+      } else {
+        bodyElements.push(node);
+      }
+    });
+
+  const bubble: any = {
     type: "bubble",
     size: design.bubbleSize,
     ...(hero ? { hero } : {}),
-    body: {
+  };
+
+  // bodyに要素がある場合のみbodyを追加
+  if (bodyElements.length > 0) {
+    bubble.body = {
       type: "box",
       layout: "vertical",
       spacing: design.bodySpacing || "none",
-      contents: bodyContents,
+      contents: bodyElements,
       ...(design.bodyBg ? { backgroundColor: design.bodyBg } : {}),
       paddingAll: "0px",
-    },
-  };
+    };
+  }
+
+  // footerにボタンがある場合のみfooterを追加
+  if (footerElements.length > 0) {
+    bubble.footer = {
+      type: "box",
+      layout: "vertical",
+      spacing: "sm",
+      contents: footerElements,
+    };
+  }
+
+  return bubble;
 }
 
 function buildFlexMessage(state: DesignerState) {
