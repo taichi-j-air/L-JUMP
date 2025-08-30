@@ -792,12 +792,11 @@ export default function FlexMessageDesigner() {
       const title = current?.name || "Flexメッセージ";
 
       if (!asNew && state.loadedMessageId) {
-        const { error } = await supabase.from("flex_messages").update({ name: title, content }).eq("id", state.loadedMessageId);
+        const { error } = await supabase.from("flex_messages").update({ name: title, content: content as any }).eq("id", state.loadedMessageId);
         if (error) throw error;
         toast({ title: "上書き保存", description: `「${title}」を上書き保存しました` });
       } else {
-        const { data: newData, error } = await supabase.from("flex_messages").insert({ user_id: user.id, name: title, content }).select();
-        if (error) throw error;
+const { data: newData, error } = await supabase.from("flex_messages").insert({ user_id: user.id, name: title, content: content as any }).select();        if (error) throw error;
         if (newData && newData[0]) setState((prev) => ({ ...prev, loadedMessageId: newData[0].id }));
         toast({ title: "新規保存", description: `「${title}」を保存しました` });
       }
