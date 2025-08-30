@@ -263,58 +263,58 @@ function buildBubbleFromDesign(design: BubbleDesign) {
 
       let node: any = null;
 
-      if (el.type === "text") {
-        const text = (p.text || "").trim();
-        if (!text) return null;
-        node = {
-          type: "text",
-          text,
-          ...(p.size && { size: p.size }),
-          ...(p.weight && p.weight !== "normal" && { weight: p.weight }),
-          ...(p.color && { color: p.color }),
-          ...(p.align && p.align !== "start" && { align: p.align }),
-          wrap: true,
-          ...(p.backgroundColor ? { backgroundColor: p.backgroundColor } : {}),
-          ...(margin ? { margin } : {}),
-        };
-      } else if (el.type === "image") {
-        const url = (p.url || "").trim();
-        if (!url) return null;
-        node = {
-          type: "image",
-          url,
-          ...(p.imgSize && { size: p.imgSize }),
-          ...(p.aspectRatio && { aspectRatio: p.aspectRatio }),
-          ...(p.aspectMode && { aspectMode: p.aspectMode }),
-          ...(p.action ? { action: p.action } : {}),
-          ...(margin ? { margin } : {}),
-        };
-      } else if (el.type === "button") {
+if (el.type === "text") {
+  const text = (p.text || "").trim();
+  if (!text) return null;
+  node = {
+    type: "text",
+    text,
+    ...(p.size && { size: p.size }),
+    ...(p.weight && p.weight !== "normal" && { weight: p.weight }),
+    ...(p.color && { color: p.color }),
+    ...(p.align && p.align !== "start" && { align: p.align }),
+    wrap: true,
+    ...(p.backgroundColor ? { backgroundColor: p.backgroundColor } : {}),
+    ...(margin ? { margin } : {}),
+  };
+} else if (el.type === "image") {
+  const url = (p.url || "").trim();
+  if (!url) return null;
+  node = {
+    type: "image",
+    url,
+    ...(p.imgSize && { size: p.imgSize }),
+    ...(p.aspectRatio && { aspectRatio: p.aspectRatio }),
+    ...(p.aspectMode && { aspectMode: p.aspectMode }),
+    ...(p.action ? { action: p.action } : {}),
+    ...(margin ? { margin } : {}),
+  };
+} else if (el.type === "button") {
   const defaultColor = p.style === "link" ? "#0f83ff" : "#06c755";
   
   node = {
     type: "button",
     style: p.style || "primary",
-    color: p.buttonColor || defaultColor, // 常にcolorを出力
+    color: p.buttonColor || defaultColor,
     ...(p.height && p.height !== "md" ? { height: p.height } : {}),
     ...(p.action ? { action: p.action } : {}),
     ...(margin ? { margin } : {}),
   };
-}
   
-  console.log("Generated button node:", JSON.stringify(node, null, 2));
+  // デバッグ用
+  console.log("Button style:", p.style, "Final node:", node);
 }
 
-      const pad = padToPx(p.padding);
-      if (node && pad && pad !== "0px") {
-        return {
-          type: "box",
-          layout: "vertical",
-          paddingAll: pad,
-          contents: [node],
-        };
-      }
-      return node;
+const pad = padToPx(p.padding);
+if (node && pad && pad !== "0px") {
+  return {
+    type: "box",
+    layout: "vertical",
+    paddingAll: pad,
+    contents: [node],
+  };
+}
+return node;
     })
     .filter(Boolean);
 
