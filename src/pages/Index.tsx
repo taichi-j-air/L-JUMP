@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import LandingPage from "@/components/LandingPage";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -194,24 +195,7 @@ const Index = () => {
   }
 
   if (!user) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-background to-muted p-4">
-        <Card className="w-full max-w-md text-center">
-          <CardHeader>
-            <CardTitle className="text-3xl font-bold">FlexMaster</CardTitle>
-            <CardDescription className="text-lg">LINE APIを活用したフレキシブルなチャットボット管理システム</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <p className="text-muted-foreground">
-              LINE Bot APIの設定・管理から、チャットボットの動作制御まで、 すべてを一箇所で管理できる統合プラットフォームです。
-            </p>
-            <Button onClick={handleGoToAuth} className="w-full" size="lg">
-              ログイン / サインアップ
-            </Button>
-          </CardContent>
-        </Card>
-      </div>
-    );
+    return <LandingPage />;
   }
 
   return (

@@ -902,14 +902,18 @@ export type Database = {
       profiles: {
         Row: {
           add_friend_url: string | null
+          avatar_url: string | null
           created_at: string
           current_month: number | null
           current_year: number | null
           delivery_count: number | null
           delivery_limit: number | null
           display_name: string | null
+          first_name: string | null
           friends_count: number | null
+          google_id: string | null
           id: string
+          last_name: string | null
           liff_id: string | null
           liff_url: string | null
           line_api_status: string | null
@@ -922,6 +926,10 @@ export type Database = {
           line_user_id: string | null
           monthly_message_limit: number | null
           monthly_message_used: number | null
+          onboarding_completed: boolean | null
+          onboarding_step: number | null
+          phone_number: string | null
+          provider: string | null
           quota_updated_at: string | null
           total_payment_amount: number | null
           updated_at: string
@@ -932,14 +940,18 @@ export type Database = {
         }
         Insert: {
           add_friend_url?: string | null
+          avatar_url?: string | null
           created_at?: string
           current_month?: number | null
           current_year?: number | null
           delivery_count?: number | null
           delivery_limit?: number | null
           display_name?: string | null
+          first_name?: string | null
           friends_count?: number | null
+          google_id?: string | null
           id?: string
+          last_name?: string | null
           liff_id?: string | null
           liff_url?: string | null
           line_api_status?: string | null
@@ -952,6 +964,10 @@ export type Database = {
           line_user_id?: string | null
           monthly_message_limit?: number | null
           monthly_message_used?: number | null
+          onboarding_completed?: boolean | null
+          onboarding_step?: number | null
+          phone_number?: string | null
+          provider?: string | null
           quota_updated_at?: string | null
           total_payment_amount?: number | null
           updated_at?: string
@@ -962,14 +978,18 @@ export type Database = {
         }
         Update: {
           add_friend_url?: string | null
+          avatar_url?: string | null
           created_at?: string
           current_month?: number | null
           current_year?: number | null
           delivery_count?: number | null
           delivery_limit?: number | null
           display_name?: string | null
+          first_name?: string | null
           friends_count?: number | null
+          google_id?: string | null
           id?: string
+          last_name?: string | null
           liff_id?: string | null
           liff_url?: string | null
           line_api_status?: string | null
@@ -982,6 +1002,10 @@ export type Database = {
           line_user_id?: string | null
           monthly_message_limit?: number | null
           monthly_message_used?: number | null
+          onboarding_completed?: boolean | null
+          onboarding_step?: number | null
+          phone_number?: string | null
+          provider?: string | null
           quota_updated_at?: string | null
           total_payment_amount?: number | null
           updated_at?: string

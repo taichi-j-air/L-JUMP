@@ -56,6 +56,7 @@ import MemberSitesList from "./pages/MemberSitesList";
 import MemberSiteManagement from "./pages/MemberSiteManagement";
 import CheckoutSuccess from "./pages/CheckoutSuccess";
 import CheckoutCancel from "./pages/CheckoutCancel";
+import Onboarding from "./pages/Onboarding";
 
 const CMSFriendsPageBuilder = lazy(() => import('./pages/CMSFriendsPageBuilder'));
 const CMSPublicPageBuilder = lazy(() => import('./pages/CMSPublicPageBuilder'));
@@ -89,7 +90,8 @@ function AppContent() {
 
   const isAuthPage = window.location.pathname === '/auth' || 
                     window.location.pathname === '/verify' || 
-                    window.location.pathname === '/reset-password'
+                    window.location.pathname === '/reset-password' ||
+                    window.location.pathname === '/onboarding'
 
   const isInvitePage = window.location.pathname.startsWith('/invite')
   const isLoginPage = window.location.pathname === '/login'
@@ -116,6 +118,7 @@ function AppContent() {
               <Route path="/login" element={<LineLoginPage />} />
               <Route path="/login-success" element={<LoginSuccess />} />
               <Route path="/auth" element={<Auth />} />
+              <Route path="/onboarding" element={<Onboarding />} />
               <Route path="/verify" element={<EmailVerify />} />
               <Route path="/reset-password" element={<ResetPassword />} />
               <Route path="/form/:id" element={<PublicForm />} />
@@ -169,6 +172,7 @@ function AppContent() {
                   <Route path="/member-sites" element={<MemberSitesList />} />
                   <Route path="/member-sites/management" element={<MemberSiteManagement />} />
                   <Route path="/" element={<Index />} />
+                  <Route path="/onboarding" element={<Onboarding />} />
                   <Route path="/line-api-settings" element={<LineApiSettings />} />
                   <Route path="/line-login-settings" element={<LineLoginSettings />} />
                   <Route path="/webhook-settings" element={<WebhookSettings />} />

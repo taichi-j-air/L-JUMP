@@ -8,12 +8,17 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { supabase } from "@/integrations/supabase/client";
 import { User } from "@supabase/supabase-js";
+import { Separator } from "@/components/ui/separator";
 
 const Auth = () => {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [displayName, setDisplayName] = useState("");
+  const [firstName, setFirstName] = useState("");
+  const [lastName, setLastName] = useState("");
+  const [phoneNumber, setPhoneNumber] = useState("");
   const [loading, setLoading] = useState(false);
+  const [googleLoading, setGoogleLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [user, setUser] = useState<User | null>(null);
@@ -35,10 +40,27 @@ const Auth = () => {
 
     // Listen for auth changes
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      (event, session) => {
+      async (event, session) => {
         if (session?.user) {
           setUser(session.user);
-          navigate("/");
+          
+          // 新規登録またはGoogle初回ログインの場合はオンボーディングへ
+          if (event === 'SIGNED_IN') {
+            // プロファイル情報を取得してオンボーディング状況を確認
+            const { data: profile } = await supabase
+              .from('profiles')
+              .select('onboarding_completed, onboarding_step')
+              .eq('user_id', session.user.id)
+              .single();
+              
+            if (profile && !profile.onboarding_completed) {
+              navigate("/onboarding");
+            } else {
+              navigate("/");
+            }
+          } else {
+            navigate("/");
+          }
         } else {
           setUser(null);
         }
@@ -55,7 +77,7 @@ const Auth = () => {
     setMessage(null);
 
     try {
-      const redirectUrl = `${window.location.origin}/`;
+      const redirectUrl = `${window.location.origin}/onboarding`;
       
       const { data, error } = await supabase.auth.signUp({
         email,
@@ -63,7 +85,10 @@ const Auth = () => {
         options: {
           emailRedirectTo: redirectUrl,
           data: {
-            display_name: displayName
+            display_name: displayName || `${firstName} ${lastName}`.trim(),
+            first_name: firstName,
+            last_name: lastName,
+            phone_number: phoneNumber
           }
         }
       });
@@ -74,7 +99,8 @@ const Auth = () => {
       if (data.user && !data.session) {
         setMessage("確認メールを送信しました。メールをチェックしてアカウントを確認してください。");
       } else if (data.session) {
-        setMessage("アカウントが作成されました。自動的にログインします。");
+        setMessage("アカウントが作成されました。オンボーディングページに移動します。");
+        setTimeout(() => navigate("/onboarding"), 1500);
       }
     } catch (error: any) {
       if (error.message.includes("User already registered")) {
@@ -84,6 +110,33 @@ const Auth = () => {
       }
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleGoogleLogin = async () => {
+    setGoogleLoading(true);
+    setError(null);
+    setMessage(null);
+
+    try {
+      const redirectUrl = `${window.location.origin}/onboarding`;
+      
+      const { error } = await supabase.auth.signInWithOAuth({
+        provider: 'google',
+        options: {
+          redirectTo: redirectUrl,
+          queryParams: {
+            access_type: 'offline',
+            prompt: 'consent',
+          },
+          scopes: 'openid email profile'
+        }
+      });
+
+      if (error) throw error;
+    } catch (error: any) {
+      setError(error.message);
+      setGoogleLoading(false);
     }
   };
 
@@ -160,74 +213,132 @@ const Auth = () => {
             </TabsList>
             
             <TabsContent value="signin">
-              <form onSubmit={handleSignIn} className="space-y-4">
-                <div className="space-y-2">
-                  <Label htmlFor="signin-email">メールアドレス</Label>
-                  <Input
-                    id="signin-email"
-                    type="email"
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    required
-                    placeholder="your@email.com"
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="signin-password">パスワード</Label>
-                  <Input
-                    id="signin-password"
-                    type="password"
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    required
-                    placeholder="••••••••"
-                  />
-                </div>
-                <Button type="submit" className="w-full" disabled={loading}>
-                  {loading ? "ログイン中..." : "ログイン"}
+              <div className="space-y-4">
+                {/* Googleログインボタン */}
+                <Button 
+                  onClick={handleGoogleLogin}
+                  variant="outline" 
+                  className="w-full"
+                  disabled={googleLoading}
+                >
+                  {googleLoading ? "認証中..." : "Googleでログイン"}
                 </Button>
-              </form>
+                
+                <div className="flex items-center">
+                  <Separator className="flex-1" />
+                  <span className="px-2 text-muted-foreground text-sm">または</span>
+                  <Separator className="flex-1" />
+                </div>
+
+                <form onSubmit={handleSignIn} className="space-y-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="signin-email">メールアドレス</Label>
+                    <Input
+                      id="signin-email"
+                      type="email"
+                      value={email}
+                      onChange={(e) => setEmail(e.target.value)}
+                      required
+                      placeholder="your@email.com"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="signin-password">パスワード</Label>
+                    <Input
+                      id="signin-password"
+                      type="password"
+                      value={password}
+                      onChange={(e) => setPassword(e.target.value)}
+                      required
+                      placeholder="••••••••"
+                    />
+                  </div>
+                  <Button type="submit" className="w-full" disabled={loading}>
+                    {loading ? "ログイン中..." : "ログイン"}
+                  </Button>
+                </form>
+              </div>
             </TabsContent>
             
             <TabsContent value="signup">
-              <form onSubmit={handleSignUp} className="space-y-4">
-                <div className="space-y-2">
-                  <Label htmlFor="signup-name">表示名</Label>
-                  <Input
-                    id="signup-name"
-                    type="text"
-                    value={displayName}
-                    onChange={(e) => setDisplayName(e.target.value)}
-                    placeholder="あなたの名前"
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="signup-email">メールアドレス</Label>
-                  <Input
-                    id="signup-email"
-                    type="email"
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    required
-                    placeholder="your@email.com"
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="signup-password">パスワード</Label>
-                  <Input
-                    id="signup-password"
-                    type="password"
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    required
-                    placeholder="••••••••"
-                    minLength={6}
-                  />
-                </div>
-                <Button type="submit" className="w-full" disabled={loading}>
-                  {loading ? "アカウント作成中..." : "アカウント作成"}
+              <div className="space-y-4">
+                {/* Google登録ボタン */}
+                <Button 
+                  onClick={handleGoogleLogin}
+                  variant="outline" 
+                  className="w-full"
+                  disabled={googleLoading}
+                >
+                  {googleLoading ? "認証中..." : "Googleでアカウント作成"}
                 </Button>
-              </form>
+                
+                <div className="flex items-center">
+                  <Separator className="flex-1" />
+                  <span className="px-2 text-muted-foreground text-sm">または</span>
+                  <Separator className="flex-1" />
+                </div>
+
+                <form onSubmit={handleSignUp} className="space-y-4">
+                  <div className="grid grid-cols-2 gap-2">
+                    <div className="space-y-2">
+                      <Label htmlFor="signup-firstname">姓</Label>
+                      <Input
+                        id="signup-firstname"
+                        type="text"
+                        value={firstName}
+                        onChange={(e) => setFirstName(e.target.value)}
+                        placeholder="田中"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="signup-lastname">名</Label>
+                      <Input
+                        id="signup-lastname"
+                        type="text"
+                        value={lastName}
+                        onChange={(e) => setLastName(e.target.value)}
+                        placeholder="太郎"
+                      />
+                    </div>
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="signup-phone">電話番号</Label>
+                    <Input
+                      id="signup-phone"
+                      type="tel"
+                      value={phoneNumber}
+                      onChange={(e) => setPhoneNumber(e.target.value)}
+                      placeholder="090-1234-5678"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="signup-email">メールアドレス</Label>
+                    <Input
+                      id="signup-email"
+                      type="email"
+                      value={email}
+                      onChange={(e) => setEmail(e.target.value)}
+                      required
+                      placeholder="your@email.com"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="signup-password">パスワード</Label>
+                    <Input
+                      id="signup-password"
+                      type="password"
+                      value={password}
+                      onChange={(e) => setPassword(e.target.value)}
+                      required
+                      placeholder="••••••••"
+                      minLength={6}
+                    />
+                  </div>
+                  <Button type="submit" className="w-full" disabled={loading}>
+                    {loading ? "アカウント作成中..." : "アカウント作成"}
+                  </Button>
+                </form>
+              </div>
             </TabsContent>
 
             <TabsContent value="reset">
