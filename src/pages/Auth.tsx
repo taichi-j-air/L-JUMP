@@ -115,7 +115,7 @@ const Auth = () => {
       // プロファイル情報を取得してオンボーディング状況を確認
       const { data: profile, error: profileError } = await supabase
         .from('profiles')
-        .select('onboarding_completed, onboarding_step')
+        .select('onboarding_completed, onboarding_step, user_id, first_name, last_name')
         .eq('user_id', user.id)
         .single();
 
@@ -126,20 +126,38 @@ const Auth = () => {
           console.log('🚀 New user, redirecting to onboarding');
           navigate("/onboarding");
           return;
+        } else {
+          // その他のエラーも新規ユーザーとして扱う
+          console.log('🚀 Profile error, treating as new user');
+          navigate("/onboarding");
+          return;
         }
       }
 
-      if (profile && !profile.onboarding_completed) {
-        console.log('📝 Onboarding not completed, redirecting to onboarding');
-        navigate("/onboarding");
+      if (profile) {
+        console.log('📋 Profile found:', {
+          onboarding_completed: profile.onboarding_completed,
+          onboarding_step: profile.onboarding_step,
+          has_name: !!(profile.first_name && profile.last_name)
+        });
+
+        // オンボーディング完了済みかつ基本情報が設定されている場合のみダッシュボードへ
+        if (profile.onboarding_completed && profile.first_name && profile.last_name) {
+          console.log('✅ User fully set up, redirecting to dashboard');
+          navigate("/");
+        } else {
+          console.log('📝 Onboarding not completed, redirecting to onboarding');
+          navigate("/onboarding");
+        }
       } else {
-        console.log('✅ User fully set up, redirecting to dashboard');
-        // Googleログインの場合も必ずオンボーディングを経由
+        console.log('🚀 No profile data, redirecting to onboarding');
         navigate("/onboarding");
       }
     } catch (error: any) {
       console.error('❌ Error in handleSuccessfulAuth:', error);
       setError(`プロファイル確認エラー: ${error.message}`);
+      // エラー時も新規ユーザーとして扱う
+      navigate("/onboarding");
     }
   };
 
