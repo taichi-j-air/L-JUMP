@@ -1,71 +1,64 @@
 import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Progress } from "@/components/ui/progress";
-import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { supabase } from "@/integrations/supabase/client";
-import { CheckCircle, User, Settings, CreditCard, ArrowLeft, ArrowRight, ExternalLink, Play, Pause } from "lucide-react";
-import { useToast } from "@/hooks/use-toast";
+import { User } from "@supabase/supabase-js";
+import { toast } from "sonner";
+import { CheckCircle2, User as UserIcon, Settings, CreditCard, Play, Video } from "lucide-react";
 
-interface UserProfile {
-  user_id: string;
-  first_name?: string;
-  last_name?: string;
-  first_name_kana?: string;
-  last_name_kana?: string;
-  birth_date?: string;
-  is_business?: boolean;
-  phone_number?: string;
-  onboarding_step: number;
-  onboarding_completed: boolean;
-  provider?: string;
-  has_line_business?: boolean;
+interface BasicInfo {
+  firstName: string;
+  lastName: string;
+  displayName: string;
+  phoneNumber: string;
+  birthDate: string;
+  isBusiness: boolean;
 }
 
-const ONBOARDING_STEPS = [
-  { id: 1, title: "基本情報", description: "ユーザー情報を入力してください", icon: User },
-  { id: 2, title: "LINEアカウント", description: "LINEビジネスアカウントの確認", icon: Settings },
-  { id: 3, title: "LINE API設定", description: "LINE APIの設定を行います", icon: Settings },
-  { id: 4, title: "動画視聴", description: "使い方を動画で確認", icon: Play },
-  { id: 5, title: "プラン選択", description: "ご利用プランを選択してください", icon: CreditCard },
-];
+interface ApiSettings {
+  channelId: string;
+  channelSecret: string;
+  lineBotId: string;
+  channelAccessToken: string;
+}
 
 const Onboarding = () => {
+  const [user, setUser] = useState<User | null>(null);
   const [currentStep, setCurrentStep] = useState(1);
-  const [profile, setProfile] = useState<UserProfile | null>(null);
-  const [loading, setLoading] = useState(false);
-  const [firstName, setFirstName] = useState("");
-  const [lastName, setLastName] = useState("");
-  const [firstNameKana, setFirstNameKana] = useState("");
-  const [lastNameKana, setLastNameKana] = useState("");
-  const [birthDate, setBirthDate] = useState("");
-  const [isBusiness, setIsBusiness] = useState(false);
-  const [phoneNumber, setPhoneNumber] = useState("");
-  const [hasLineBusiness, setHasLineBusiness] = useState<boolean | null>(null);
-  const [videoWatched, setVideoWatched] = useState(false);
-  const [videoEnded, setVideoEnded] = useState(false);
+  const [hasLineAccount, setHasLineAccount] = useState<boolean | null>(null);
+  const [businessType, setBusinessType] = useState("");
+  const [showLineAccountDialog, setShowLineAccountDialog] = useState(false);
   const [selectedPlan, setSelectedPlan] = useState("");
-  const [error, setError] = useState<string | null>(null);
-  const [apiSettings, setApiSettings] = useState({
-    channel_access_token: "",
-    channel_secret: "",
-    channel_id: "",
-    line_bot_id: ""
+  const [basicInfo, setBasicInfo] = useState<BasicInfo>({
+    firstName: "",
+    lastName: "",
+    displayName: "",
+    phoneNumber: "",
+    birthDate: "",
+    isBusiness: false
   });
-  const [videoTab, setVideoTab] = useState("channel_id");
+  const [apiSettings, setApiSettings] = useState<ApiSettings>({
+    channelId: "",
+    channelSecret: "",
+    lineBotId: "",
+    channelAccessToken: ""
+  });
+  const [activeVideoTab, setActiveVideoTab] = useState("channel_id");
   const navigate = useNavigate();
-  const { toast } = useToast();
 
   useEffect(() => {
-    checkUserAndLoadProfile();
+    checkUserAndLoadData();
   }, []);
 
-  const checkUserAndLoadProfile = async () => {
+  const checkUserAndLoadData = async () => {
     try {
       const { data: { session } } = await supabase.auth.getSession();
       
@@ -74,595 +67,443 @@ const Onboarding = () => {
         return;
       }
 
-      // プロフィール情報を取得
-      const { data: profileData, error } = await supabase
+      setUser(session.user);
+
+      // 既存の設定を読み込み
+      const { data: profile } = await supabase
         .from('profiles')
         .select('*')
         .eq('user_id', session.user.id)
         .single();
 
-      if (error) throw error;
-
-      if (profileData) {
-        setProfile(profileData);
-        setCurrentStep(profileData.onboarding_step || 1);
-        setFirstName(profileData.first_name || "");
-        setLastName(profileData.last_name || "");
-        setFirstNameKana((profileData as any).first_name_kana || "");
-        setLastNameKana((profileData as any).last_name_kana || "");
-        setBirthDate((profileData as any).birth_date || "");
-        setIsBusiness((profileData as any).is_business || false);
-        setPhoneNumber(profileData.phone_number || "");
-        setHasLineBusiness((profileData as any).has_line_business);
-
-        // 既存のAPI設定を読み込み
-        setApiSettings({
-          channel_access_token: profileData.line_channel_access_token || "",
-          channel_secret: profileData.line_channel_secret || "",
-          channel_id: profileData.line_channel_id || "",
-          line_bot_id: profileData.line_bot_id || ""
+      if (profile) {
+        // 基本情報の設定
+        setBasicInfo({
+          firstName: profile.first_name || "",
+          lastName: profile.last_name || "",
+          displayName: profile.display_name || "",
+          phoneNumber: profile.phone_number || "",
+          birthDate: profile.birth_date || "",
+          isBusiness: profile.is_business || false
         });
 
-        // オンボーディング完了済みの場合はホームへ
-        if (profileData.onboarding_completed) {
-          navigate("/");
-        }
+        // API設定の自動表示
+        setApiSettings({
+          channelId: profile.line_channel_id || "",
+          channelSecret: profile.line_channel_secret || "",
+          lineBotId: profile.line_bot_id || "",
+          channelAccessToken: profile.line_channel_access_token || ""
+        });
+
+        setBusinessType(profile.is_business ? "company" : "individual");
       }
-    } catch (error: any) {
-      console.error("Profile loading error:", error);
-      setError("プロフィール情報の読み込みに失敗しました。");
+    } catch (error) {
+      console.error("Error loading data:", error);
+      toast.error("データの読み込みに失敗しました");
     }
   };
 
-  const updateProfile = async (updateData: Partial<UserProfile>) => {
-    try {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session?.user) throw new Error("認証が必要です");
+  const validateCurrentStep = () => {
+    switch (currentStep) {
+      case 1:
+        return basicInfo.firstName && basicInfo.lastName && basicInfo.displayName && 
+               basicInfo.phoneNumber && basicInfo.birthDate && businessType;
+      case 2:
+        return hasLineAccount !== null;
+      case 3:
+        return apiSettings.channelId && apiSettings.channelSecret && 
+               apiSettings.lineBotId && apiSettings.channelAccessToken;
+      case 4:
+        return selectedPlan;
+      default:
+        return true;
+    }
+  };
 
+  const handleNextStep = async () => {
+    if (!validateCurrentStep()) {
+      toast.error('すべての必須項目を入力してください');
+      return;
+    }
+
+    if (currentStep === 1) {
+      // Save basic info to database
       const { error } = await supabase
         .from('profiles')
-        .update(updateData)
-        .eq('user_id', session.user.id);
+        .update({
+          first_name: basicInfo.firstName,
+          last_name: basicInfo.lastName,
+          display_name: basicInfo.displayName,
+          phone_number: basicInfo.phoneNumber,
+          birth_date: basicInfo.birthDate || null,
+          is_business: basicInfo.isBusiness
+        })
+        .eq('user_id', user!.id);
 
-      if (error) throw error;
-
-      setProfile(prev => prev ? { ...prev, ...updateData } : null);
-    } catch (error: any) {
-      throw new Error(error.message);
-    }
-  };
-
-  const handleStep1Submit = async () => {
-    if (!firstName.trim() || !lastName.trim() || !firstNameKana.trim() || !lastNameKana.trim() || !birthDate) {
-      setError("必須項目をすべて入力してください。");
-      return;
-    }
-
-    setLoading(true);
-    setError(null);
-
-    try {
-      await updateProfile({
-        first_name: firstName.trim(),
-        last_name: lastName.trim(),
-        first_name_kana: firstNameKana.trim(),
-        last_name_kana: lastNameKana.trim(),
-        birth_date: birthDate,
-        is_business: isBusiness,
-        phone_number: phoneNumber.trim(),
-        display_name: `${firstName.trim()} ${lastName.trim()}`,
-        onboarding_step: 2,
-      } as any);
-
-      toast({
-        title: "基本情報を保存しました",
-        description: "次はLINEビジネスアカウントの確認です。",
-      });
-
-      setCurrentStep(2);
-    } catch (error: any) {
-      setError(error.message);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleStep2Submit = async () => {
-    if (hasLineBusiness === null) {
-      setError("LINEビジネスアカウントの有無を選択してください。");
-      return;
-    }
-
-    setLoading(true);
-    setError(null);
-
-    try {
-      await updateProfile({
-        has_line_business: hasLineBusiness,
-        onboarding_step: 3,
-      } as any);
-
-      toast({
-        title: "LINEアカウント情報を保存しました",
-        description: hasLineBusiness ? "LINE API設定に進みます。" : "LINE API設定をスキップします。",
-      });
-
-      setCurrentStep(3);
-    } catch (error: any) {
-      setError(error.message);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleStep3Submit = async () => {
-    if (hasLineBusiness && (!apiSettings.channel_access_token.trim() || !apiSettings.channel_secret.trim() || !apiSettings.channel_id.trim() || !apiSettings.line_bot_id.trim())) {
-      setError("すべてのAPI設定項目を入力してください。");
-      return;
-    }
-
-    setLoading(true);
-    setError(null);
-
-    try {
-      await updateProfile({
-        line_channel_access_token: apiSettings.channel_access_token.trim(),
-        line_channel_secret: apiSettings.channel_secret.trim(),
-        line_channel_id: apiSettings.channel_id.trim(),
-        line_bot_id: apiSettings.line_bot_id.trim(),
-        line_api_status: hasLineBusiness ? 'configured' : 'not_configured',
-        onboarding_step: 4,
-      } as any);
-
-      toast({
-        title: hasLineBusiness ? "LINE API設定を保存しました" : "設定をスキップしました",
-        description: "動画視聴に進みます。",
-      });
-
-      setCurrentStep(4);
-    } catch (error: any) {
-      setError(error.message);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleVideoComplete = async () => {
-    setLoading(true);
-    try {
-      await updateProfile({
-        onboarding_step: 5,
-      });
-
-      toast({
-        title: "動画視聴完了",
-        description: "プラン選択に進みます。",
-      });
-
-      setCurrentStep(5);
-    } catch (error: any) {
-      setError(error.message);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handlePlanSelection = async (plan: string) => {
-    setLoading(true);
-    try {
-      if (plan === 'free') {
-        await updateProfile({
-          onboarding_completed: true,
-          onboarding_step: 5,
-        });
-
-        toast({
-          title: "フリープランでスタート！",
-          description: "L!JUMPをお楽しみください。",
-        });
-
-        navigate("/");
-      } else {
-        // 有料プランの場合は決済画面へ
-        navigate(`/checkout?plan=${plan}`);
+      if (error) {
+        console.error('Error saving basic info:', error);
+        toast.error('基本情報の保存に失敗しました');
+        return;
       }
-    } catch (error: any) {
-      setError(error.message);
-    } finally {
-      setLoading(false);
+    }
+
+    if (currentStep === 2 && hasLineAccount === false) {
+      setShowLineAccountDialog(true);
+      return;
+    }
+
+    if (currentStep === 3) {
+      // Save API settings
+      const { error } = await supabase
+        .from('profiles')
+        .update({
+          line_channel_id: apiSettings.channelId,
+          line_channel_secret: apiSettings.channelSecret,
+          line_bot_id: apiSettings.lineBotId,
+          line_channel_access_token: apiSettings.channelAccessToken,
+          line_api_status: 'configured'
+        })
+        .eq('user_id', user!.id);
+
+      if (error) {
+        console.error('Error saving API settings:', error);
+        toast.error('API設定の保存に失敗しました');
+        return;
+      }
+    }
+
+    if (currentStep === 2 && hasLineAccount === true) {
+      setCurrentStep(3);
+    } else if (currentStep === 2 && hasLineAccount === false) {
+      setCurrentStep(4);
+    } else {
+      setCurrentStep(currentStep + 1);
     }
   };
 
-  const handleVideoEnd = () => {
-    setVideoEnded(true);
+  const handleLineAccountCreated = () => {
+    setShowLineAccountDialog(false);
+    setHasLineAccount(true);
+    setCurrentStep(3);
   };
 
-  const goBack = () => {
-    if (currentStep > 1) {
-      setCurrentStep(currentStep - 1);
+  const handleLineAccountNotCreated = () => {
+    setShowLineAccountDialog(false);
+    toast.error('LINE公式アカウントを作成しないとツールを利用できません');
+  };
+
+  const handleComplete = async () => {
+    try {
+      const { error } = await supabase
+        .from('profiles')
+        .update({
+          onboarding_completed: true
+        })
+        .eq('user_id', user!.id);
+
+      if (error) {
+        console.error('Error completing onboarding:', error);
+        toast.error('完了処理に失敗しました');
+        return;
+      }
+
+      toast.success('セットアップが完了しました！');
+      navigate("/");
+    } catch (error) {
+      console.error('Error completing onboarding:', error);
+      toast.error('完了処理に失敗しました');
     }
   };
 
-  const progressPercentage = (currentStep / ONBOARDING_STEPS.length) * 100;
+  if (!user) {
+    return <div>Loading...</div>;
+  }
+
+  const steps = [
+    { id: 1, title: "基本情報", icon: UserIcon },
+    { id: 2, title: "LINE アカウント", icon: Settings },
+    { id: 3, title: "LINE API設定", icon: Settings },
+    { id: 4, title: "使い方動画", icon: Video },
+    { id: 5, title: "プラン選択", icon: CreditCard }
+  ];
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-background to-muted">
-      <div className="container mx-auto px-4 py-8">
-        {/* Header */}
+    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 py-8">
+      <div className="container mx-auto px-4">
         <div className="text-center mb-8">
-          <div className="flex justify-center mb-4">
-            <img 
-              src="/lovable-uploads/4d26a444-f601-4acc-8285-9d99146345e3.png" 
-              alt="L!JUMP" 
-              className="h-16" 
-            />
-          </div>
-          <h1 className="text-3xl font-bold mb-2">L!JUMP セットアップ</h1>
-          <p className="text-muted-foreground">簡単5ステップでセットアップ完了</p>
-        </div>
-
-        {/* Progress */}
-        <div className="max-w-2xl mx-auto mb-8">
-          <Progress value={progressPercentage} className="mb-4" />
-          <div className="flex justify-between">
-            {ONBOARDING_STEPS.map((step) => {
-              const IconComponent = step.icon;
+          <h1 className="text-3xl font-bold mb-4">L!JUMP セットアップ</h1>
+          <div className="flex justify-center items-center gap-4 mb-6">
+            {steps.map((step, index) => {
+              const isActive = currentStep === step.id;
               const isCompleted = currentStep > step.id;
-              const isCurrent = currentStep === step.id;
-              
+              const Icon = step.icon;
+
               return (
-                <div key={step.id} className="flex flex-col items-center">
-                  <div className={`w-10 h-10 rounded-full flex items-center justify-center mb-2 ${
-                    isCompleted ? "bg-primary text-primary-foreground" :
-                    isCurrent ? "bg-primary/20 text-primary border-2 border-primary" :
-                    "bg-muted text-muted-foreground"
-                  }`}>
-                    {isCompleted ? <CheckCircle className="w-5 h-5" /> : <IconComponent className="w-5 h-5" />}
+                <React.Fragment key={step.id}>
+                  <div className="flex flex-col items-center">
+                    <div className={`w-12 h-12 rounded-full flex items-center justify-center ${
+                      isCompleted ? 'bg-green-500 text-white' :
+                      isActive ? 'bg-blue-500 text-white' :
+                      'bg-gray-200 text-gray-400'
+                    }`}>
+                      {isCompleted ? <CheckCircle2 className="w-6 h-6" /> : <Icon className="w-6 h-6" />}
+                    </div>
+                    <p className={`text-sm mt-2 ${isActive ? 'text-blue-600 font-medium' : 'text-gray-500'}`}>
+                      {step.title}
+                    </p>
                   </div>
-                  <span className={`text-sm font-medium ${isCurrent ? "text-primary" : "text-muted-foreground"}`}>
-                    {step.title}
-                  </span>
-                </div>
+                  {index < steps.length - 1 && (
+                    <div className={`w-8 h-0.5 ${currentStep > step.id ? 'bg-green-500' : 'bg-gray-300'}`} />
+                  )}
+                </React.Fragment>
               );
             })}
           </div>
         </div>
 
-        {/* Content */}
-        <div className={`mx-auto ${currentStep === 5 ? 'max-w-6xl' : 'max-w-lg'}`}>
+        <div className="max-w-3xl mx-auto">
           <Card>
             <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                {React.createElement(ONBOARDING_STEPS[currentStep - 1].icon, { className: "w-5 h-5" })}
-                {ONBOARDING_STEPS[currentStep - 1].title}
+              <CardTitle>
+                ステップ {currentStep}: {steps[currentStep - 1].title}
               </CardTitle>
               <CardDescription>
-                {ONBOARDING_STEPS[currentStep - 1].description}
+                {currentStep === 1 && "基本情報を入力してください"}
+                {currentStep === 2 && "LINE公式アカウントをお持ちですか？"}
+                {currentStep === 3 && "LINE APIの設定を行います"}
+                {currentStep === 4 && "使い方動画をご覧ください"}
+                {currentStep === 5 && "ご利用プランを選択してください"}
               </CardDescription>
             </CardHeader>
             <CardContent>
-              {error && (
-                <Alert variant="destructive" className="mb-4">
-                  <AlertDescription>{error}</AlertDescription>
-                </Alert>
-              )}
-
               {/* Step 1: 基本情報 */}
               {currentStep === 1 && (
                 <div className="space-y-4">
-                  {profile?.provider === 'google' && (
-                    <Alert className="mb-4">
-                      <AlertDescription>
-                        Googleアカウントから情報を取得しました。必要に応じて修正してください。
-                      </AlertDescription>
-                    </Alert>
-                  )}
-                  
                   <div className="grid grid-cols-2 gap-4">
                     <div className="space-y-2">
-                      <Label htmlFor="firstName">姓 *</Label>
+                      <Label htmlFor="firstName">名前（姓） <span className="text-red-500">*</span></Label>
                       <Input
                         id="firstName"
-                        value={firstName}
-                        onChange={(e) => setFirstName(e.target.value)}
-                        placeholder="田中"
+                        value={basicInfo.firstName}
+                        onChange={(e) => setBasicInfo(prev => ({ ...prev, firstName: e.target.value }))}
+                        placeholder="山田"
                         required
                       />
                     </div>
                     <div className="space-y-2">
-                      <Label htmlFor="lastName">名 *</Label>
+                      <Label htmlFor="lastName">名前（名） <span className="text-red-500">*</span></Label>
                       <Input
                         id="lastName"
-                        value={lastName}
-                        onChange={(e) => setLastName(e.target.value)}
+                        value={basicInfo.lastName}
+                        onChange={(e) => setBasicInfo(prev => ({ ...prev, lastName: e.target.value }))}
                         placeholder="太郎"
                         required
                       />
                     </div>
                   </div>
-
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="space-y-2">
-                      <Label htmlFor="firstNameKana">姓（フリガナ）*</Label>
-                      <Input
-                        id="firstNameKana"
-                        value={firstNameKana}
-                        onChange={(e) => setFirstNameKana(e.target.value)}
-                        placeholder="タナカ"
-                        required
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="lastNameKana">名（フリガナ）*</Label>
-                      <Input
-                        id="lastNameKana"
-                        value={lastNameKana}
-                        onChange={(e) => setLastNameKana(e.target.value)}
-                        placeholder="タロウ"
-                        required
-                      />
-                    </div>
-                  </div>
-
                   <div className="space-y-2">
-                    <Label htmlFor="birthDate">生年月日 *</Label>
+                    <Label htmlFor="displayName">表示名 <span className="text-red-500">*</span></Label>
                     <Input
-                      id="birthDate"
-                      type="date"
-                      value={birthDate}
-                      onChange={(e) => setBirthDate(e.target.value)}
+                      id="displayName"
+                      value={basicInfo.displayName}
+                      onChange={(e) => setBasicInfo(prev => ({ ...prev, displayName: e.target.value }))}
+                      placeholder="山田太郎"
                       required
                     />
                   </div>
-
-                  <div className="flex items-center space-x-2">
-                    <Checkbox 
-                      id="isBusiness" 
-                      checked={isBusiness}
-                      onCheckedChange={(checked) => setIsBusiness(checked as boolean)}
-                    />
-                    <Label htmlFor="isBusiness">法人でのご利用</Label>
-                  </div>
-                  
                   <div className="space-y-2">
-                    <Label htmlFor="phoneNumber">電話番号 *</Label>
+                    <Label htmlFor="phoneNumber">電話番号 <span className="text-red-500">*</span></Label>
                     <Input
                       id="phoneNumber"
-                      value={phoneNumber}
-                      onChange={(e) => setPhoneNumber(e.target.value)}
+                      value={basicInfo.phoneNumber}
+                      onChange={(e) => setBasicInfo(prev => ({ ...prev, phoneNumber: e.target.value }))}
                       placeholder="090-1234-5678"
                       required
                     />
-                    <p className="text-xs text-muted-foreground">※お電話をかけることはございません</p>
                   </div>
-
-                  <Button 
-                    onClick={handleStep1Submit} 
-                    className="w-full" 
-                    disabled={loading}
-                  >
-                    {loading ? "保存中..." : "保存して次へ"}
-                    <ArrowRight className="w-4 h-4 ml-2" />
-                  </Button>
+                  <div className="space-y-2">
+                    <Label htmlFor="birthDate">生年月日 <span className="text-red-500">*</span></Label>
+                    <Input
+                      id="birthDate"
+                      type="date"
+                      value={basicInfo.birthDate}
+                      onChange={(e) => setBasicInfo(prev => ({ ...prev, birthDate: e.target.value }))}
+                      required
+                    />
+                  </div>
+                  <div className="space-y-3">
+                    <Label>事業形態 <span className="text-red-500">*</span></Label>
+                    <Select value={businessType} onValueChange={setBusinessType}>
+                      <SelectTrigger>
+                        <SelectValue placeholder="事業形態を選択してください" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="individual">個人事業主</SelectItem>
+                        <SelectItem value="company">法人</SelectItem>
+                        <SelectItem value="other">その他</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
                 </div>
               )}
 
-              {/* Step 2: LINEビジネスアカウント確認 */}
+              {/* Step 2: LINE公式アカウント確認 */}
               {currentStep === 2 && (
-                <div className="space-y-4">
-                  <Alert>
-                    <AlertDescription>
-                      L!JUMPを使用するにはLINEビジネスアカウントが必要です。
-                    </AlertDescription>
-                  </Alert>
-
-                  <div className="space-y-4">
-                    <Label className="text-base font-medium">LINEビジネスアカウントをお持ちですか？</Label>
-                    <RadioGroup value={hasLineBusiness?.toString() || ""} onValueChange={(value) => setHasLineBusiness(value === "true")}>
-                      <div className="flex items-center space-x-2">
-                        <RadioGroupItem value="true" id="has-line" />
-                        <Label htmlFor="has-line">はい、持っています</Label>
-                      </div>
-                      <div className="flex items-center space-x-2">
-                        <RadioGroupItem value="false" id="no-line" />
-                        <Label htmlFor="no-line">いいえ、持っていません</Label>
-                      </div>
-                    </RadioGroup>
-
-                    {hasLineBusiness === false && (
-                      <div className="p-4 bg-muted rounded-lg">
-                        <h4 className="font-medium mb-2">LINEビジネスアカウント作成手順</h4>
-                        <p className="text-sm text-muted-foreground mb-3">
-                          以下のリンクからLINEビジネスアカウントを作成してください。作成後、この画面に戻って「次へ」をクリックしてください。
-                        </p>
-                        <Button 
-                          variant="outline" 
-                          size="sm"
-                          onClick={() => window.open('https://www.linebiz.com/jp/entry/', '_blank')}
-                        >
-                          LINEビジネスアカウント作成
-                          <ExternalLink className="w-4 h-4 ml-2" />
-                        </Button>
-                      </div>
-                    )}
-                  </div>
-
-                  <div className="grid grid-cols-2 gap-2">
-                    <Button variant="outline" onClick={goBack} disabled={loading}>
-                      <ArrowLeft className="w-4 h-4 mr-2" />
-                      戻る
-                    </Button>
-                    <Button onClick={handleStep2Submit} disabled={loading || hasLineBusiness === null}>
-                      {loading ? "保存中..." : "次のステップへ"}
-                      <ArrowRight className="w-4 h-4 ml-2" />
-                    </Button>
-                  </div>
+                <div className="space-y-6">
+                  <Label>LINE公式アカウントをお持ちですか？ <span className="text-red-500">*</span></Label>
+                  <RadioGroup 
+                    value={hasLineAccount?.toString()} 
+                    onValueChange={(value) => setHasLineAccount(value === 'true')}
+                  >
+                    <div className="flex items-center space-x-2">
+                      <RadioGroupItem value="true" id="has-line" />
+                      <Label htmlFor="has-line">はい、持っています</Label>
+                    </div>
+                    <div className="flex items-center space-x-2">
+                      <RadioGroupItem value="false" id="no-line" />
+                      <Label htmlFor="no-line">いいえ、持っていません</Label>
+                    </div>
+                  </RadioGroup>
                 </div>
               )}
 
               {/* Step 3: LINE API設定 */}
               {currentStep === 3 && (
                 <div className="space-y-6">
-                  <Alert>
-                    <AlertDescription>
-                      {hasLineBusiness ? "LINE APIの設定を行います。下記に入力して保存してください。" : "LINEビジネスアカウントをお持ちでない場合、この設定はスキップできます。"}
-                    </AlertDescription>
-                  </Alert>
-
-                  {hasLineBusiness && (
-                    <>
-                      {/* 動画タブ */}
-                      <div className="space-y-4">
-                        <div className="flex border-b">
-                          {[
-                            { key: "channel_id", label: "チャネルID" },
-                            { key: "channel_secret", label: "チャネルシークレット" },
-                            { key: "line_bot_id", label: "LINEボットID" },
-                            { key: "channel_access_token", label: "チャネルアクセストークン" }
-                          ].map((tab) => (
-                            <button
-                              key={tab.key}
-                              className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
-                                videoTab === tab.key
-                                  ? "border-primary text-primary"
-                                  : "border-transparent text-muted-foreground hover:text-foreground"
-                              }`}
-                              onClick={() => setVideoTab(tab.key)}
-                            >
-                              {tab.label}
-                            </button>
-                          ))}
+                  <div className="mb-6">
+                    <Tabs value={activeVideoTab} onValueChange={setActiveVideoTab} className="w-full">
+                      <TabsContent value="channel_id">
+                        <div className="aspect-video bg-muted rounded-lg flex items-center justify-center mb-4 w-full max-w-5xl mx-auto">
+                          <iframe
+                            width="1120"
+                            height="630"
+                            src="https://www.youtube.com/embed/dQw4w9WgXcQ"
+                            title="チャネルID取得動画"
+                            frameBorder="0"
+                            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                            allowFullScreen
+                            className="rounded-lg w-full h-full"
+                          />
                         </div>
-
-                        {/* 解説動画 */}
-                        <div className="w-full h-80 bg-muted rounded-lg flex items-center justify-center">
-                          <div className="text-center">
-                            <Play className="w-12 h-12 mx-auto mb-4 text-muted-foreground" />
-                            <p className="text-lg font-medium mb-2">{videoTab === "channel_id" ? "チャネルID" : videoTab === "channel_secret" ? "チャネルシークレット" : videoTab === "line_bot_id" ? "LINEボットID" : "チャネルアクセストークン"}の設定方法</p>
-                            <p className="text-sm text-muted-foreground">設定方法を動画で確認できます</p>
-                          </div>
+                      </TabsContent>
+                      <TabsContent value="channel_secret">
+                        <div className="aspect-video bg-muted rounded-lg flex items-center justify-center mb-4 w-full max-w-5xl mx-auto">
+                          <iframe
+                            width="1120"
+                            height="630"
+                            src="https://www.youtube.com/embed/dQw4w9WgXcQ"
+                            title="チャネルシークレット取得動画"
+                            frameBorder="0"
+                            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                            allowFullScreen
+                            className="rounded-lg w-full h-full"
+                          />
                         </div>
-                      </div>
-                    </>
-                  )}
+                      </TabsContent>
+                      <TabsContent value="line_bot_id">
+                        <div className="aspect-video bg-muted rounded-lg flex items-center justify-center mb-4 w-full max-w-5xl mx-auto">
+                          <iframe
+                            width="1120"
+                            height="630"
+                            src="https://www.youtube.com/embed/dQw4w9WgXcQ"
+                            title="LINEボットID取得動画"
+                            frameBorder="0"
+                            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                            allowFullScreen
+                            className="rounded-lg w-full h-full"
+                          />
+                        </div>
+                      </TabsContent>
+                      <TabsContent value="channel_access_token">
+                        <div className="aspect-video bg-muted rounded-lg flex items-center justify-center mb-4 w-full max-w-5xl mx-auto">
+                          <iframe
+                            width="1120"
+                            height="630"
+                            src="https://www.youtube.com/embed/dQw4w9WgXcQ"
+                            title="チャネルアクセストークン取得動画"
+                            frameBorder="0"
+                            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                            allowFullScreen
+                            className="rounded-lg w-full h-full"
+                          />
+                        </div>
+                      </TabsContent>
+                      <TabsList className="grid w-full grid-cols-4 bg-muted/30">
+                        <TabsTrigger value="channel_id" className="text-sm">チャネルID</TabsTrigger>
+                        <TabsTrigger value="channel_secret" className="text-sm">チャネルシークレット</TabsTrigger>
+                        <TabsTrigger value="line_bot_id" className="text-sm">LINEボットID</TabsTrigger>
+                        <TabsTrigger value="channel_access_token" className="text-sm">アクセストークン</TabsTrigger>
+                      </TabsList>
+                    </Tabs>
+                  </div>
 
-                  {hasLineBusiness && (
-                    <div className="space-y-4">
-                      <div className="space-y-2">
-                        <Label htmlFor="onboard-channel-token">チャネルアクセストークン（Channel Access Token）*</Label>
-                        <Input
-                          id="onboard-channel-token"
-                          type="password"
-                          value={apiSettings.channel_access_token}
-                          onChange={(e) => setApiSettings(prev => ({ ...prev, channel_access_token: e.target.value }))}
-                          placeholder="チャネルアクセストークンを入力"
-                          className="font-mono"
-                          required
-                        />
-                        <p className="text-xs text-muted-foreground">
-                          LINE Developers Console → Messaging API → Channel access tokenから取得
-                        </p>
-                      </div>
-
-                      <div className="space-y-2">
-                        <Label htmlFor="onboard-channel-secret">チャネルシークレット（Channel Secret）*</Label>
-                        <Input
-                          id="onboard-channel-secret"
-                          type="password"
-                          value={apiSettings.channel_secret}
-                          onChange={(e) => setApiSettings(prev => ({ ...prev, channel_secret: e.target.value }))}
-                          placeholder="チャネルシークレットを入力"
-                          className="font-mono"
-                          required
-                        />
-                        <p className="text-xs text-muted-foreground">
-                          LINE Developers Console → Basic settings → Channel secretから取得
-                        </p>
-                      </div>
-
-                      <div className="space-y-2">
-                        <Label htmlFor="onboard-channel-id">チャネルID（Channel ID）*</Label>
-                        <Input
-                          id="onboard-channel-id"
-                          value={apiSettings.channel_id}
-                          onChange={(e) => setApiSettings(prev => ({ ...prev, channel_id: e.target.value }))}
-                          placeholder="チャネルIDを入力（例: 1234567890）"
-                          className="font-mono"
-                          required
-                        />
-                        <p className="text-xs text-muted-foreground">
-                          LINE Developers Console → Basic settings → Channel IDから取得
-                        </p>
-                      </div>
-
-                      <div className="space-y-2">
-                        <Label htmlFor="onboard-line-bot-id">LINEボットID（LINE Bot ID）*</Label>
-                        <Input
-                          id="onboard-line-bot-id"
-                          value={apiSettings.line_bot_id}
-                          onChange={(e) => setApiSettings(prev => ({ ...prev, line_bot_id: e.target.value }))}
-                          placeholder="LINEボットIDを入力（例: @your-bot-id）"
-                          className="font-mono"
-                          required
-                        />
-                        <p className="text-xs text-muted-foreground">
-                          LINE Developers Console → Messaging API → LINE公式アカウントから取得
-                        </p>
-                      </div>
+                  <div className="grid gap-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="channelId">チャネルID（Channel ID）<span className="text-red-500">*</span></Label>
+                      <Input
+                        id="channelId"
+                        value={apiSettings.channelId}
+                        onChange={(e) => setApiSettings(prev => ({ ...prev, channelId: e.target.value }))}
+                        placeholder="1234567890"
+                        required
+                      />
                     </div>
-                  )}
-
-                  <div className="grid grid-cols-2 gap-2">
-                    <Button variant="outline" onClick={goBack} disabled={loading}>
-                      <ArrowLeft className="w-4 h-4 mr-2" />
-                      戻る
-                    </Button>
-                    <Button onClick={handleStep3Submit} disabled={loading}>
-                      {loading ? "保存中..." : hasLineBusiness ? "次のステップへ" : "スキップして次へ"}
-                      <ArrowRight className="w-4 h-4 ml-2" />
-                    </Button>
+                    <div className="space-y-2">
+                      <Label htmlFor="channelSecret">チャネルシークレット（Channel Secret）<span className="text-red-500">*</span></Label>
+                      <Input
+                        id="channelSecret"
+                        type="password"
+                        value={apiSettings.channelSecret}
+                        onChange={(e) => setApiSettings(prev => ({ ...prev, channelSecret: e.target.value }))}
+                        placeholder="xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+                        required
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="lineBotId">LINEボットID（LINE Bot ID）<span className="text-red-500">*</span></Label>
+                      <Input
+                        id="lineBotId"
+                        value={apiSettings.lineBotId}
+                        onChange={(e) => setApiSettings(prev => ({ ...prev, lineBotId: e.target.value }))}
+                        placeholder="@xxxxxxxxx"
+                        required
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="channelAccessToken">チャネルアクセストークン（Channel Access Token）<span className="text-red-500">*</span></Label>
+                      <Input
+                        id="channelAccessToken"
+                        type="password"
+                        value={apiSettings.channelAccessToken}
+                        onChange={(e) => setApiSettings(prev => ({ ...prev, channelAccessToken: e.target.value }))}
+                        placeholder="xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+                        required
+                      />
+                    </div>
                   </div>
                 </div>
               )}
 
-              {/* Step 4: 動画視聴 */}
+              {/* Step 4: 使い方動画 */}
               {currentStep === 4 && (
                 <div className="space-y-6">
-                  <Alert>
-                    <AlertDescription>
-                      L!JUMPの使い方を動画で確認してください。動画終了後に次のステップに進めます。
-                    </AlertDescription>
-                  </Alert>
-
-                  <div className="w-full h-[32rem] bg-muted rounded-lg flex items-center justify-center">
-                    <div className="text-center">
-                      <Play className="w-24 h-24 mx-auto mb-4 text-muted-foreground" />
-                      <p className="text-2xl font-medium mb-2">使い方動画</p>
-                      <p className="text-lg text-muted-foreground mb-4">L!JUMPの基本的な使い方を学びましょう</p>
-                      <Button 
-                        variant="outline" 
-                        size="lg" 
-                        className="mt-2"
-                        onClick={handleVideoEnd}
-                      >
-                        動画終了をシミュレート
-                      </Button>
+                  <div className="mb-6">
+                    <div className="aspect-video bg-muted rounded-lg flex items-center justify-center w-full max-w-5xl mx-auto">
+                      <iframe
+                        width="1120"
+                        height="630"
+                        src="https://www.youtube.com/embed/dQw4w9WgXcQ"
+                        title="使い方動画"
+                        frameBorder="0"
+                        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                        allowFullScreen
+                        className="rounded-lg w-full h-full"
+                      />
                     </div>
                   </div>
-
-                  <div className="grid grid-cols-2 gap-2">
-                    <Button variant="outline" onClick={goBack} disabled={loading}>
-                      <ArrowLeft className="w-4 h-4 mr-2" />
-                      戻る
-                    </Button>
-                    <Button 
-                      onClick={handleVideoComplete} 
-                      disabled={loading || !videoEnded}
-                      className={!videoEnded ? "opacity-50 cursor-not-allowed" : ""}
-                    >
-                      {loading ? "保存中..." : "次へ"}
-                      <ArrowRight className="w-4 h-4 ml-2" />
-                    </Button>
+                  <div className="text-center">
+                    <h3 className="text-lg font-semibold mb-2">L!JUMPの基本的な使い方</h3>
+                    <p className="text-muted-foreground">この動画でL!JUMPの基本機能をご確認ください。</p>
                   </div>
                 </div>
               )}
@@ -670,110 +511,133 @@ const Onboarding = () => {
               {/* Step 5: プラン選択 */}
               {currentStep === 5 && (
                 <div className="space-y-6">
-                  <Alert>
-                    <AlertDescription>
-                      ご利用プランを選択してください。フリープランでは月200通まで無料でご利用いただけます。
-                    </AlertDescription>
-                  </Alert>
-
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                    {/* フリープラン */}
-                    <div 
-                      className={`p-6 border-2 rounded-xl cursor-pointer transition-all hover:shadow-lg ${
-                        selectedPlan === 'free' ? 'border-primary bg-primary/5' : 'border-muted hover:border-primary/50'
-                      }`}
-                      onClick={() => setSelectedPlan('free')}
-                    >
-                      <div className="text-center">
-                        <h3 className="text-xl font-bold mb-2">フリープラン</h3>
-                        <div className="text-3xl font-bold mb-4">¥0<span className="text-sm font-normal">/月</span></div>
-                        <ul className="text-sm space-y-2 mb-6">
-                          <li>月200通まで無料</li>
-                          <li>基本機能利用可能</li>
-                          <li>シナリオ3個まで</li>
-                        </ul>
-                        <Button 
-                          variant={selectedPlan === 'free' ? 'default' : 'outline'}
-                          className="w-full"
-                        >
-                          選択する
-                        </Button>
-                      </div>
-                    </div>
-
-                    {/* ゴールドプラン（おすすめ）*/}
-                    <div 
-                      className={`p-6 border-2 rounded-xl cursor-pointer transition-all hover:shadow-lg relative ${
-                        selectedPlan === 'gold' ? 'border-primary bg-primary/5' : 'border-muted hover:border-primary/50'
-                      }`}
-                      onClick={() => setSelectedPlan('gold')}
-                    >
-                      <div className="absolute -top-3 left-1/2 transform -translate-x-1/2">
-                        <span className="bg-primary text-primary-foreground px-3 py-1 rounded-full text-sm font-semibold">
-                          おすすめ
-                        </span>
-                      </div>
-                      <div className="text-center">
-                        <h3 className="text-xl font-bold mb-2">ゴールドプラン</h3>
-                        <div className="text-3xl font-bold mb-4">¥9,800<span className="text-sm font-normal">/月</span></div>
-                        <ul className="text-sm space-y-2 mb-6">
-                          <li>無制限配信</li>
-                          <li>全機能利用可能</li>
-                          <li>優先サポート</li>
-                          <li>API利用可能</li>
-                        </ul>
-                        <Button 
-                          variant={selectedPlan === 'gold' ? 'default' : 'outline'}
-                          className="w-full"
-                        >
-                          選択する
-                        </Button>
-                      </div>
-                    </div>
-
-                    {/* シルバープラン */}
-                    <div 
-                      className={`p-6 border-2 rounded-xl cursor-pointer transition-all hover:shadow-lg ${
-                        selectedPlan === 'silver' ? 'border-primary bg-primary/5' : 'border-muted hover:border-primary/50'
-                      }`}
-                      onClick={() => setSelectedPlan('silver')}
-                    >
-                      <div className="text-center">
-                        <h3 className="text-xl font-bold mb-2">シルバープラン</h3>
-                        <div className="text-3xl font-bold mb-4">¥2,980<span className="text-sm font-normal">/月</span></div>
-                        <ul className="text-sm space-y-2 mb-6">
-                          <li>月1,000通まで</li>
-                          <li>基本機能利用可能</li>
-                          <li>シナリオ無制限</li>
-                          <li>メールサポート</li>
-                        </ul>
-                        <Button 
-                          variant={selectedPlan === 'silver' ? 'default' : 'outline'}
-                          className="w-full"
-                        >
-                          選択する
-                        </Button>
-                      </div>
+                  <div className="mb-6">
+                    <div className="aspect-video bg-muted rounded-lg flex items-center justify-center w-full max-w-5xl mx-auto">
+                      <iframe
+                        width="1120"
+                        height="630"
+                        src="https://www.youtube.com/embed/dQw4w9WgXcQ"
+                        title="プラン選択動画"
+                        frameBorder="0"
+                        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                        allowFullScreen
+                        className="rounded-lg w-full h-full"
+                      />
                     </div>
                   </div>
 
-                  <div className="grid grid-cols-2 gap-2 max-w-lg mx-auto">
-                    <Button variant="outline" onClick={goBack} disabled={loading}>
-                      <ArrowLeft className="w-4 h-4 mr-2" />
-                      戻る
-                    </Button>
-                    <Button 
-                      onClick={() => handlePlanSelection(selectedPlan)} 
-                      disabled={loading || !selectedPlan}
-                    >
-                      {loading ? "処理中..." : selectedPlan === 'free' ? "開始" : "決済へ"}
-                      <ArrowRight className="w-4 h-4 ml-2" />
-                    </Button>
+                  <div className="space-y-4">
+                    <Label>プランを選択してください <span className="text-red-500">*</span></Label>
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                      <Card className={`cursor-pointer transition-all hover:shadow-lg ${selectedPlan === 'free' ? 'ring-2 ring-primary' : ''}`}
+                            onClick={() => setSelectedPlan('free')}>
+                        <CardHeader className="text-center">
+                          <CardTitle className="text-lg">フリー</CardTitle>
+                          <div className="text-3xl font-bold">¥0</div>
+                          <p className="text-sm text-muted-foreground">月額</p>
+                        </CardHeader>
+                        <CardContent className="space-y-3">
+                          <div className="text-center">
+                            <p className="font-semibold">月200通まで</p>
+                            <p className="text-sm text-muted-foreground">基本機能</p>
+                          </div>
+                          <RadioGroup value={selectedPlan} onValueChange={setSelectedPlan}>
+                            <div className="flex items-center justify-center">
+                              <RadioGroupItem value="free" id="plan-free" />
+                            </div>
+                          </RadioGroup>
+                        </CardContent>
+                      </Card>
+
+                      <Card className={`cursor-pointer transition-all hover:shadow-lg relative ${selectedPlan === 'gold' ? 'ring-2 ring-primary' : ''}`}
+                            onClick={() => setSelectedPlan('gold')}>
+                        <div className="absolute -top-3 left-1/2 transform -translate-x-1/2">
+                          <span className="bg-primary text-primary-foreground px-3 py-1 rounded-full text-sm font-medium">おすすめ</span>
+                        </div>
+                        <CardHeader className="text-center">
+                          <CardTitle className="text-lg">ゴールド</CardTitle>
+                          <div className="text-3xl font-bold">¥9,800</div>
+                          <p className="text-sm text-muted-foreground">月額</p>
+                        </CardHeader>
+                        <CardContent className="space-y-3">
+                          <div className="text-center">
+                            <p className="font-semibold">無制限</p>
+                            <p className="text-sm text-muted-foreground">全機能利用可能</p>
+                          </div>
+                          <RadioGroup value={selectedPlan} onValueChange={setSelectedPlan}>
+                            <div className="flex items-center justify-center">
+                              <RadioGroupItem value="gold" id="plan-gold" />
+                            </div>
+                          </RadioGroup>
+                        </CardContent>
+                      </Card>
+
+                      <Card className={`cursor-pointer transition-all hover:shadow-lg ${selectedPlan === 'silver' ? 'ring-2 ring-primary' : ''}`}
+                            onClick={() => setSelectedPlan('silver')}>
+                        <CardHeader className="text-center">
+                          <CardTitle className="text-lg">シルバー</CardTitle>
+                          <div className="text-3xl font-bold">¥4,980</div>
+                          <p className="text-sm text-muted-foreground">月額</p>
+                        </CardHeader>
+                        <CardContent className="space-y-3">
+                          <div className="text-center">
+                            <p className="font-semibold">月1000通まで</p>
+                            <p className="text-sm text-muted-foreground">拡張機能</p>
+                          </div>
+                          <RadioGroup value={selectedPlan} onValueChange={setSelectedPlan}>
+                            <div className="flex items-center justify-center">
+                              <RadioGroupItem value="silver" id="plan-silver" />
+                            </div>
+                          </RadioGroup>
+                        </CardContent>
+                      </Card>
+                    </div>
                   </div>
                 </div>
               )}
             </CardContent>
           </Card>
+
+          <div className="mt-6 flex justify-between">
+            {currentStep > 1 && (
+              <Button variant="outline" onClick={() => setCurrentStep(currentStep - 1)}>
+                前のステップへ
+              </Button>
+            )}
+            <div className="ml-auto">
+              {currentStep < 5 ? (
+                <Button 
+                  onClick={handleNextStep} 
+                  disabled={!validateCurrentStep()}
+                >
+                  次のステップへ
+                </Button>
+              ) : (
+                <Button onClick={handleComplete} disabled={!validateCurrentStep()}>
+                  セットアップ完了
+                </Button>
+              )}
+            </div>
+          </div>
+
+          <AlertDialog open={showLineAccountDialog} onOpenChange={setShowLineAccountDialog}>
+            <AlertDialogContent>
+              <AlertDialogHeader>
+                <AlertDialogTitle>LINE公式アカウントの作成</AlertDialogTitle>
+                <AlertDialogDescription>
+                  LINE公式アカウントを作成しましたか？
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel onClick={handleLineAccountNotCreated}>
+                  いいえ
+                </AlertDialogCancel>
+                <AlertDialogAction onClick={handleLineAccountCreated}>
+                  はい、作成しました
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
         </div>
       </div>
     </div>

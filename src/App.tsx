@@ -48,6 +48,7 @@ import PlanManagement from "./pages/developer/PlanManagement";
 import UserManagement from "./pages/developer/UserManagement";
 import MaintenanceSettings from "./pages/developer/MaintenanceSettings";
 import MasterMode from "./pages/developer/MasterMode";
+import OnboardingVideoManagement from "./pages/developer/OnboardingVideoManagement";
 import ProductManagement from "./pages/ProductManagement";
 import ProductLandingPage from "./pages/ProductLandingPage";
 import PlanSettings from "./pages/PlanSettings";
@@ -222,6 +223,7 @@ function AppContent() {
                   <Route path="/developer/users" element={<UserManagement />} />
                   <Route path="/developer/user-management" element={<UserManagement />} />
                   <Route path="/developer/plan-management" element={<PlanManagement />} />
+                  <Route path="/developer/onboarding-video-management" element={<OnboardingVideoManagement />} />
                   <Route path="/stripe-settings" element={<StripeSettings />} />
                   <Route path="/payment-management" element={<PaymentManagement />} />
                   <Route path="/developer/maintenance" element={<MaintenanceSettings />} />
