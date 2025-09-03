@@ -903,6 +903,7 @@ export type Database = {
         Row: {
           add_friend_url: string | null
           avatar_url: string | null
+          birth_date: string | null
           created_at: string
           current_month: number | null
           current_year: number | null
@@ -910,10 +911,14 @@ export type Database = {
           delivery_limit: number | null
           display_name: string | null
           first_name: string | null
+          first_name_kana: string | null
           friends_count: number | null
           google_id: string | null
+          has_line_business: boolean | null
           id: string
+          is_business: boolean | null
           last_name: string | null
+          last_name_kana: string | null
           liff_id: string | null
           liff_url: string | null
           line_api_status: string | null
@@ -941,6 +946,7 @@ export type Database = {
         Insert: {
           add_friend_url?: string | null
           avatar_url?: string | null
+          birth_date?: string | null
           created_at?: string
           current_month?: number | null
           current_year?: number | null
@@ -948,10 +954,14 @@ export type Database = {
           delivery_limit?: number | null
           display_name?: string | null
           first_name?: string | null
+          first_name_kana?: string | null
           friends_count?: number | null
           google_id?: string | null
+          has_line_business?: boolean | null
           id?: string
+          is_business?: boolean | null
           last_name?: string | null
+          last_name_kana?: string | null
           liff_id?: string | null
           liff_url?: string | null
           line_api_status?: string | null
@@ -979,6 +989,7 @@ export type Database = {
         Update: {
           add_friend_url?: string | null
           avatar_url?: string | null
+          birth_date?: string | null
           created_at?: string
           current_month?: number | null
           current_year?: number | null
@@ -986,10 +997,14 @@ export type Database = {
           delivery_limit?: number | null
           display_name?: string | null
           first_name?: string | null
+          first_name_kana?: string | null
           friends_count?: number | null
           google_id?: string | null
+          has_line_business?: boolean | null
           id?: string
+          is_business?: boolean | null
           last_name?: string | null
+          last_name_kana?: string | null
           liff_id?: string | null
           liff_url?: string | null
           line_api_status?: string | null

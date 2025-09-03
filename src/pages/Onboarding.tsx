@@ -81,12 +81,12 @@ const Onboarding = () => {
         setCurrentStep(profileData.onboarding_step || 1);
         setFirstName(profileData.first_name || "");
         setLastName(profileData.last_name || "");
-        setFirstNameKana(profileData.first_name_kana || "");
-        setLastNameKana(profileData.last_name_kana || "");
-        setBirthDate(profileData.birth_date || "");
-        setIsBusiness(profileData.is_business || false);
+        setFirstNameKana((profileData as any).first_name_kana || "");
+        setLastNameKana((profileData as any).last_name_kana || "");
+        setBirthDate((profileData as any).birth_date || "");
+        setIsBusiness((profileData as any).is_business || false);
         setPhoneNumber(profileData.phone_number || "");
-        setHasLineBusiness(profileData.has_line_business);
+        setHasLineBusiness((profileData as any).has_line_business);
 
         // オンボーディング完了済みの場合はホームへ
         if (profileData.onboarding_completed) {
@@ -136,7 +136,7 @@ const Onboarding = () => {
         is_business: isBusiness,
         phone_number: phoneNumber.trim(),
         onboarding_step: 2,
-      });
+      } as any);
 
       toast({
         title: "基本情報を保存しました",
@@ -164,7 +164,7 @@ const Onboarding = () => {
       await updateProfile({
         has_line_business: hasLineBusiness,
         onboarding_step: 3,
-      });
+      } as any);
 
       toast({
         title: "LINEアカウント情報を保存しました",
