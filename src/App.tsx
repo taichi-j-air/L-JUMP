@@ -37,6 +37,7 @@ import LineLoginPage from "./pages/LineLoginPage";
 import LoginSuccess from "./pages/LoginSuccess";
 import { supabase } from "@/integrations/supabase/client";
 import { User } from "@supabase/supabase-js";
+import { useSecureAuth } from "./hooks/useSecureAuth";
 import FormsBuilder from "./pages/FormsBuilder";
 import PublicForm from "./pages/PublicForm";
 import LiffForm from "./pages/LiffForm";
@@ -64,28 +65,60 @@ const CMSFriendsPublicView = lazy(() => import('./pages/CMSFriendsPublicView'));
 const queryClient = new QueryClient();
 
 function AppContent() {
-  const [user, setUser] = useState<User | null>(null)
-  const [loading, setLoading] = useState(true)
+  const { user, loading, isValidSession } = useSecureAuth()
+  const [profile, setProfile] = useState<any>(null)
+  const [profileLoading, setProfileLoading] = useState(true)
 
   useEffect(() => {
-    // Get initial session
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setUser(session?.user ?? null)
-      setLoading(false)
-    })
+    if (user && isValidSession) {
+      // プロファイル情報を取得してオンボーディング状況を確認
+      const fetchProfile = async () => {
+        try {
+          const { data: profileData, error } = await supabase
+            .from('profiles')
+            .select('onboarding_completed, onboarding_step, first_name, last_name, user_id')
+            .eq('user_id', user.id)
+            .single();
 
-    // Listen for auth changes
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      (event, session) => {
-        setUser(session?.user ?? null)
-      }
-    )
+          if (error && error.code === 'PGRST116') {
+            // プロファイルが存在しない = 新規ユーザー
+            setProfile(null);
+          } else if (error) {
+            console.error('Profile fetch error:', error);
+            setProfile(null);
+          } else {
+            setProfile(profileData);
+          }
+        } catch (error) {
+          console.error('Profile fetch error:', error);
+          setProfile(null);
+        } finally {
+          setProfileLoading(false);
+        }
+      };
 
-    return () => subscription.unsubscribe()
-  }, [])
+      fetchProfile();
+    } else {
+      setProfileLoading(false);
+    }
+  }, [user, isValidSession])
 
-  if (loading) {
+  if (loading || profileLoading) {
     return <LoadingSpinner message="アプリケーション初期化中..." size="lg" className="min-h-screen" />
+  }
+
+  // 認証されているが、オンボーディングが未完了または基本情報が不足している場合
+  const needsOnboarding = user && isValidSession && (
+    !profile || 
+    !profile.onboarding_completed || 
+    !profile.first_name || 
+    !profile.last_name
+  );
+
+  // オンボーディングが必要で、現在オンボーディングページにいない場合は強制リダイレクト
+  if (needsOnboarding && window.location.pathname !== '/onboarding') {
+    window.location.href = '/onboarding';
+    return <LoadingSpinner message="オンボーディングページに移動中..." size="lg" className="min-h-screen" />
   }
 
   const isAuthPage = window.location.pathname === '/auth' || 
@@ -104,7 +137,7 @@ function AppContent() {
   const isLiffPage = window.location.pathname.startsWith('/liff')
 
   // Show pages without sidebar/header: auth, public forms, liff, checkout, product landing, cms public
-  if (isAuthPage || isPublicFormPage || isLiffPage || isProductLandingPage || isCheckoutPage || isCMSPublicPath || isCMSPreviewPath || (!user && !isInvitePage && !isLoginPage && !hasLineLoginSuccess)) {
+  if (isAuthPage || isPublicFormPage || isLiffPage || isProductLandingPage || isCheckoutPage || isCMSPublicPath || isCMSPreviewPath || (!user && !isInvitePage && !isLoginPage && !hasLineLoginSuccess) || needsOnboarding) {
     return (
       <ErrorBoundary>
         <div className="min-h-screen">
