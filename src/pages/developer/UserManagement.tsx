@@ -15,9 +15,14 @@ import { toast } from "sonner"
 interface UserData {
   user_id: string
   display_name: string
+  first_name?: string
+  last_name?: string
+  phone_number?: string
+  birth_date?: string
   user_role: string
   line_api_status: string
   line_bot_id: string | null
+  official_line_name?: string
   email: string
   created_at: string
   plan_type?: string
@@ -326,9 +331,14 @@ export default function UserManagement() {
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>ユーザー名</TableHead>
-                    <TableHead>LINE名</TableHead>
+                    <TableHead>Google名</TableHead>
+                    <TableHead>公式LINE ID</TableHead>
+                    <TableHead>公式LINE名</TableHead>
+                    <TableHead>本名</TableHead>
+                    <TableHead>ツール登録日時</TableHead>
                     <TableHead>メール</TableHead>
+                    <TableHead>電話番号</TableHead>
+                    <TableHead>生年月日</TableHead>
                     <TableHead>プラン</TableHead>
                     <TableHead>累計課金</TableHead>
                     <TableHead>ロール</TableHead>
@@ -338,21 +348,36 @@ export default function UserManagement() {
                 <TableBody>
                   {paginatedUsers.map((userData) => (
                     <TableRow key={userData.user_id}>
-                      <TableCell className="font-medium text-sm">
+                      <TableCell className="text-xs">
                         {userData.display_name || '未設定'}
                       </TableCell>
-                      <TableCell className="text-sm">
+                      <TableCell className="text-xs">
                         {userData.line_bot_id || '未設定'}
                       </TableCell>
                       <TableCell className="text-xs">
+                        {userData.official_line_name || '未取得'}
+                      </TableCell>
+                      <TableCell className="text-xs">
+                        {userData.first_name && userData.last_name ? `${userData.first_name} ${userData.last_name}` : '未設定'}
+                      </TableCell>
+                      <TableCell className="text-xs">
+                        {new Date(userData.created_at).toLocaleDateString('ja-JP')}
+                      </TableCell>
+                      <TableCell className="text-xs">
                         {userData.email}
+                      </TableCell>
+                      <TableCell className="text-xs">
+                        {userData.phone_number || '未設定'}
+                      </TableCell>
+                      <TableCell className="text-xs">
+                        {userData.birth_date || '未設定'}
                       </TableCell>
                       <TableCell>
                         <Badge variant={userData.plan_type === 'free' ? 'secondary' : 'default'} className="text-xs">
                           {userData.plan_type === 'free' ? 'フリー' : userData.plan_type}
                         </Badge>
                       </TableCell>
-                      <TableCell className="text-right text-sm">
+                      <TableCell className="text-right text-xs">
                         ¥{userData.total_revenue.toLocaleString()}
                       </TableCell>
                       <TableCell>

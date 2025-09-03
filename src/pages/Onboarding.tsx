@@ -135,6 +135,7 @@ const Onboarding = () => {
         birth_date: birthDate,
         is_business: isBusiness,
         phone_number: phoneNumber.trim(),
+        display_name: `${firstName.trim()} ${lastName.trim()}`,
         onboarding_step: 2,
       } as any);
 
@@ -301,7 +302,7 @@ const Onboarding = () => {
         </div>
 
         {/* Content */}
-        <div className="max-w-lg mx-auto">
+        <div className={`mx-auto ${currentStep === 5 ? 'max-w-6xl' : 'max-w-lg'}`}>
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
@@ -474,20 +475,63 @@ const Onboarding = () => {
 
               {/* Step 3: LINE API設定 */}
               {currentStep === 3 && (
-                <div className="space-y-4">
+                <div className="space-y-6">
                   <Alert>
                     <AlertDescription>
-                      LINE APIの設定を行います。設定方法の詳細はツール内のAPIページをご確認ください。
+                      LINE APIの設定を行います。下記に入力して保存してください。
                     </AlertDescription>
                   </Alert>
 
-                  <div className="p-4 bg-muted rounded-lg">
-                    <h4 className="font-medium mb-2">設定項目</h4>
-                    <ul className="text-sm text-muted-foreground space-y-1">
-                      <li>• チャンネルアクセストークン</li>
-                      <li>• チャンネルシークレット</li>
-                      <li>• LINE Bot ID</li>
-                    </ul>
+                  <div className="space-y-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="onboard-channel-token">Channel Access Token</Label>
+                      <Input
+                        id="onboard-channel-token"
+                        type="password"
+                        placeholder="Channel Access Tokenを入力"
+                        className="font-mono"
+                      />
+                      <p className="text-xs text-muted-foreground">
+                        LINE Developers Console → Messaging API → Channel access tokenから取得
+                      </p>
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label htmlFor="onboard-channel-secret">Channel Secret</Label>
+                      <Input
+                        id="onboard-channel-secret"
+                        type="password"
+                        placeholder="Channel Secretを入力"
+                        className="font-mono"
+                      />
+                      <p className="text-xs text-muted-foreground">
+                        LINE Developers Console → Basic settings → Channel secretから取得
+                      </p>
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label htmlFor="onboard-channel-id">チャネルID</Label>
+                      <Input
+                        id="onboard-channel-id"
+                        placeholder="チャネルIDを入力（例: 1234567890）"
+                        className="font-mono"
+                      />
+                      <p className="text-xs text-muted-foreground">
+                        LINE Developers Console → Basic settings → Channel IDから取得
+                      </p>
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label htmlFor="onboard-line-bot-id">LINE Bot ID</Label>
+                      <Input
+                        id="onboard-line-bot-id"
+                        placeholder="LINE Bot IDを入力（例: @your-bot-id）"
+                        className="font-mono"
+                      />
+                      <p className="text-xs text-muted-foreground">
+                        LINE Developers Console → Messaging API → LINE公式アカウントから取得
+                      </p>
+                    </div>
                   </div>
 
                   <div className="grid grid-cols-2 gap-2">
@@ -496,37 +540,30 @@ const Onboarding = () => {
                       戻る
                     </Button>
                     <Button onClick={handleStep3Skip} disabled={loading}>
-                      {loading ? "保存中..." : "後で設定"}
+                      {loading ? "保存中..." : "設定して次へ"}
                       <ArrowRight className="w-4 h-4 ml-2" />
                     </Button>
                   </div>
-                  
-                  <Button 
-                    onClick={() => navigate("/line-api-settings")} 
-                    variant="outline" 
-                    className="w-full"
-                  >
-                    今すぐLINE API設定
-                  </Button>
                 </div>
               )}
 
               {/* Step 4: 動画視聴 */}
               {currentStep === 4 && (
-                <div className="space-y-4">
+                <div className="space-y-6">
                   <Alert>
                     <AlertDescription>
                       L!JUMPの使い方を動画で確認してください。動画終了後に次のステップに進めます。
                     </AlertDescription>
                   </Alert>
 
-                  <div className="aspect-video bg-muted rounded-lg flex items-center justify-center">
+                  <div className="w-full h-96 bg-muted rounded-lg flex items-center justify-center">
                     <div className="text-center">
-                      <Play className="w-12 h-12 mx-auto mb-2 text-muted-foreground" />
-                      <p className="text-sm text-muted-foreground">使い方動画（仮）</p>
+                      <Play className="w-16 h-16 mx-auto mb-4 text-muted-foreground" />
+                      <p className="text-lg font-medium mb-2">使い方動画</p>
+                      <p className="text-sm text-muted-foreground mb-4">L!JUMPの基本的な使い方を学びましょう</p>
                       <Button 
                         variant="outline" 
-                        size="sm" 
+                        size="lg" 
                         className="mt-2"
                         onClick={handleVideoEnd}
                       >
@@ -554,55 +591,95 @@ const Onboarding = () => {
 
               {/* Step 5: プラン選択 */}
               {currentStep === 5 && (
-                <div className="space-y-4">
+                <div className="space-y-6">
                   <Alert>
                     <AlertDescription>
                       ご利用プランを選択してください。フリープランでは月200通まで無料でご利用いただけます。
                     </AlertDescription>
                   </Alert>
 
-                  <div className="space-y-3">
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                    {/* フリープラン */}
                     <div 
-                      className="p-4 border rounded-lg cursor-pointer hover:bg-muted/50 transition-colors"
+                      className={`p-6 border-2 rounded-xl cursor-pointer transition-all hover:shadow-lg ${
+                        selectedPlan === 'free' ? 'border-primary bg-primary/5' : 'border-muted hover:border-primary/50'
+                      }`}
                       onClick={() => setSelectedPlan('free')}
                     >
-                      <div className="flex items-center justify-between">
-                        <div>
-                          <h4 className="font-medium">フリープラン</h4>
-                          <p className="text-sm text-muted-foreground">月200通まで無料</p>
-                        </div>
-                        <div className="text-lg font-bold">¥0</div>
+                      <div className="text-center">
+                        <h3 className="text-xl font-bold mb-2">フリープラン</h3>
+                        <div className="text-3xl font-bold mb-4">¥0<span className="text-sm font-normal">/月</span></div>
+                        <ul className="text-sm space-y-2 mb-6">
+                          <li>月200通まで無料</li>
+                          <li>基本機能利用可能</li>
+                          <li>シナリオ3個まで</li>
+                        </ul>
+                        <Button 
+                          variant={selectedPlan === 'free' ? 'default' : 'outline'}
+                          className="w-full"
+                        >
+                          選択する
+                        </Button>
                       </div>
                     </div>
 
+                    {/* ゴールドプラン（おすすめ）*/}
                     <div 
-                      className="p-4 border rounded-lg cursor-pointer hover:bg-muted/50 transition-colors"
-                      onClick={() => setSelectedPlan('silver')}
-                    >
-                      <div className="flex items-center justify-between">
-                        <div>
-                          <h4 className="font-medium">シルバープラン</h4>
-                          <p className="text-sm text-muted-foreground">月1,000通まで</p>
-                        </div>
-                        <div className="text-lg font-bold">¥2,980<span className="text-sm font-normal">/月</span></div>
-                      </div>
-                    </div>
-
-                    <div 
-                      className="p-4 border rounded-lg cursor-pointer hover:bg-muted/50 transition-colors"
+                      className={`p-6 border-2 rounded-xl cursor-pointer transition-all hover:shadow-lg relative ${
+                        selectedPlan === 'gold' ? 'border-primary bg-primary/5' : 'border-muted hover:border-primary/50'
+                      }`}
                       onClick={() => setSelectedPlan('gold')}
                     >
-                      <div className="flex items-center justify-between">
-                        <div>
-                          <h4 className="font-medium">ゴールドプラン</h4>
-                          <p className="text-sm text-muted-foreground">無制限</p>
-                        </div>
-                        <div className="text-lg font-bold">¥9,800<span className="text-sm font-normal">/月</span></div>
+                      <div className="absolute -top-3 left-1/2 transform -translate-x-1/2">
+                        <span className="bg-primary text-primary-foreground px-3 py-1 rounded-full text-sm font-semibold">
+                          おすすめ
+                        </span>
+                      </div>
+                      <div className="text-center">
+                        <h3 className="text-xl font-bold mb-2">ゴールドプラン</h3>
+                        <div className="text-3xl font-bold mb-4">¥9,800<span className="text-sm font-normal">/月</span></div>
+                        <ul className="text-sm space-y-2 mb-6">
+                          <li>無制限配信</li>
+                          <li>全機能利用可能</li>
+                          <li>優先サポート</li>
+                          <li>API利用可能</li>
+                        </ul>
+                        <Button 
+                          variant={selectedPlan === 'gold' ? 'default' : 'outline'}
+                          className="w-full"
+                        >
+                          選択する
+                        </Button>
+                      </div>
+                    </div>
+
+                    {/* シルバープラン */}
+                    <div 
+                      className={`p-6 border-2 rounded-xl cursor-pointer transition-all hover:shadow-lg ${
+                        selectedPlan === 'silver' ? 'border-primary bg-primary/5' : 'border-muted hover:border-primary/50'
+                      }`}
+                      onClick={() => setSelectedPlan('silver')}
+                    >
+                      <div className="text-center">
+                        <h3 className="text-xl font-bold mb-2">シルバープラン</h3>
+                        <div className="text-3xl font-bold mb-4">¥2,980<span className="text-sm font-normal">/月</span></div>
+                        <ul className="text-sm space-y-2 mb-6">
+                          <li>月1,000通まで</li>
+                          <li>基本機能利用可能</li>
+                          <li>シナリオ無制限</li>
+                          <li>メールサポート</li>
+                        </ul>
+                        <Button 
+                          variant={selectedPlan === 'silver' ? 'default' : 'outline'}
+                          className="w-full"
+                        >
+                          選択する
+                        </Button>
                       </div>
                     </div>
                   </div>
 
-                  <div className="grid grid-cols-2 gap-2">
+                  <div className="grid grid-cols-2 gap-2 max-w-lg mx-auto">
                     <Button variant="outline" onClick={goBack} disabled={loading}>
                       <ArrowLeft className="w-4 h-4 mr-2" />
                       戻る

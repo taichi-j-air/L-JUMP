@@ -17,6 +17,13 @@ const ProfileManagement = () => {
   const [currentUser, setCurrentUser] = useState(null);
   const [profile, setProfile] = useState({
     display_name: "",
+    first_name: "",
+    last_name: "",
+    first_name_kana: "",
+    last_name_kana: "",
+    birth_date: "",
+    phone_number: "",
+    is_business: false,
     user_role: "user",
     line_api_status: "not_configured",
     webhook_url: "",
@@ -25,6 +32,7 @@ const ProfileManagement = () => {
     line_channel_id: "",
     line_bot_id: "",
     official_line_name: "",
+    created_at: "",
   });
   const [userEmail, setUserEmail] = useState("");
   const navigate = useNavigate();
@@ -113,6 +121,13 @@ const ProfileManagement = () => {
       if (profileData) {
         setProfile({
           display_name: profileData.display_name || "",
+          first_name: profileData.first_name || "",
+          last_name: profileData.last_name || "",
+          first_name_kana: profileData.first_name_kana || "",
+          last_name_kana: profileData.last_name_kana || "",
+          birth_date: profileData.birth_date || "",
+          phone_number: profileData.phone_number || "",
+          is_business: profileData.is_business || false,
           user_role: profileData.user_role || "user",
           line_api_status: profileData.line_api_status || "not_configured",
           webhook_url: profileData.webhook_url || "",
@@ -121,6 +136,7 @@ const ProfileManagement = () => {
           line_channel_id: profileData.line_channel_id || "",
           line_bot_id: profileData.line_bot_id || "",
           official_line_name: profileData.display_name || "",
+          created_at: profileData.created_at || "",
         });
       }
     } catch (error) {
@@ -260,6 +276,68 @@ const ProfileManagement = () => {
                   </p>
                 </div>
 
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="first_name">姓</Label>
+                    <Input
+                      id="first_name"
+                      value={profile.first_name}
+                      readOnly
+                      className="bg-muted"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="last_name">名</Label>
+                    <Input
+                      id="last_name"
+                      value={profile.last_name}
+                      readOnly
+                      className="bg-muted"
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="first_name_kana">姓（フリガナ）</Label>
+                    <Input
+                      id="first_name_kana"
+                      value={profile.first_name_kana}
+                      readOnly
+                      className="bg-muted"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="last_name_kana">名（フリガナ）</Label>
+                    <Input
+                      id="last_name_kana"
+                      value={profile.last_name_kana}
+                      readOnly
+                      className="bg-muted"
+                    />
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="birth_date">生年月日</Label>
+                  <Input
+                    id="birth_date"
+                    value={profile.birth_date}
+                    readOnly
+                    className="bg-muted"
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="phone_number">電話番号</Label>
+                  <Input
+                    id="phone_number"
+                    value={profile.phone_number}
+                    readOnly
+                    className="bg-muted"
+                  />
+                </div>
+
                 <div className="space-y-2">
                   <Label htmlFor="display_name">表示名</Label>
                   <Input
@@ -267,6 +345,15 @@ const ProfileManagement = () => {
                     value={profile.display_name}
                     onChange={(e) => setProfile(prev => ({ ...prev, display_name: e.target.value }))}
                     placeholder="表示名を入力してください"
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <Label>登録日時</Label>
+                  <Input
+                    value={profile.created_at ? new Date(profile.created_at).toLocaleString('ja-JP') : '未設定'}
+                    readOnly
+                    className="bg-muted"
                   />
                 </div>
 
