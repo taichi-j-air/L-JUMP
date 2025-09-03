@@ -51,6 +51,13 @@ const Onboarding = () => {
   const [videoEnded, setVideoEnded] = useState(false);
   const [selectedPlan, setSelectedPlan] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const [apiSettings, setApiSettings] = useState({
+    channel_access_token: "",
+    channel_secret: "",
+    channel_id: "",
+    line_bot_id: ""
+  });
+  const [videoTab, setVideoTab] = useState("channel_id");
   const navigate = useNavigate();
   const { toast } = useToast();
 
@@ -87,6 +94,14 @@ const Onboarding = () => {
         setIsBusiness((profileData as any).is_business || false);
         setPhoneNumber(profileData.phone_number || "");
         setHasLineBusiness((profileData as any).has_line_business);
+
+        // 既存のAPI設定を読み込み
+        setApiSettings({
+          channel_access_token: profileData.line_channel_access_token || "",
+          channel_secret: profileData.line_channel_secret || "",
+          channel_id: profileData.line_channel_id || "",
+          line_bot_id: profileData.line_bot_id || ""
+        });
 
         // オンボーディング完了済みの場合はホームへ
         if (profileData.onboarding_completed) {
@@ -172,7 +187,7 @@ const Onboarding = () => {
         description: hasLineBusiness ? "LINE API設定に進みます。" : "LINE API設定をスキップします。",
       });
 
-      setCurrentStep(hasLineBusiness ? 3 : 4);
+      setCurrentStep(3);
     } catch (error: any) {
       setError(error.message);
     } finally {
@@ -180,16 +195,28 @@ const Onboarding = () => {
     }
   };
 
-  const handleStep3Skip = async () => {
+  const handleStep3Submit = async () => {
+    if (hasLineBusiness && (!apiSettings.channel_access_token.trim() || !apiSettings.channel_secret.trim() || !apiSettings.channel_id.trim() || !apiSettings.line_bot_id.trim())) {
+      setError("すべてのAPI設定項目を入力してください。");
+      return;
+    }
+
     setLoading(true);
+    setError(null);
+
     try {
       await updateProfile({
+        line_channel_access_token: apiSettings.channel_access_token.trim(),
+        line_channel_secret: apiSettings.channel_secret.trim(),
+        line_channel_id: apiSettings.channel_id.trim(),
+        line_bot_id: apiSettings.line_bot_id.trim(),
+        line_api_status: hasLineBusiness ? 'configured' : 'not_configured',
         onboarding_step: 4,
-      });
+      } as any);
 
       toast({
-        title: "LINE API設定をスキップしました",
-        description: "後で設定画面から設定できます。",
+        title: hasLineBusiness ? "LINE API設定を保存しました" : "設定をスキップしました",
+        description: "動画視聴に進みます。",
       });
 
       setCurrentStep(4);
@@ -466,7 +493,7 @@ const Onboarding = () => {
                       戻る
                     </Button>
                     <Button onClick={handleStep2Submit} disabled={loading || hasLineBusiness === null}>
-                      {loading ? "保存中..." : "次へ"}
+                      {loading ? "保存中..." : "次のステップへ"}
                       <ArrowRight className="w-4 h-4 ml-2" />
                     </Button>
                   </div>
@@ -478,69 +505,120 @@ const Onboarding = () => {
                 <div className="space-y-6">
                   <Alert>
                     <AlertDescription>
-                      LINE APIの設定を行います。下記に入力して保存してください。
+                      {hasLineBusiness ? "LINE APIの設定を行います。下記に入力して保存してください。" : "LINEビジネスアカウントをお持ちでない場合、この設定はスキップできます。"}
                     </AlertDescription>
                   </Alert>
 
-                  <div className="space-y-4">
-                    <div className="space-y-2">
-                      <Label htmlFor="onboard-channel-token">Channel Access Token</Label>
-                      <Input
-                        id="onboard-channel-token"
-                        type="password"
-                        placeholder="Channel Access Tokenを入力"
-                        className="font-mono"
-                      />
-                      <p className="text-xs text-muted-foreground">
-                        LINE Developers Console → Messaging API → Channel access tokenから取得
-                      </p>
-                    </div>
+                  {hasLineBusiness && (
+                    <>
+                      {/* 動画タブ */}
+                      <div className="space-y-4">
+                        <div className="flex border-b">
+                          {[
+                            { key: "channel_id", label: "チャネルID" },
+                            { key: "channel_secret", label: "チャネルシークレット" },
+                            { key: "line_bot_id", label: "LINEボットID" },
+                            { key: "channel_access_token", label: "チャネルアクセストークン" }
+                          ].map((tab) => (
+                            <button
+                              key={tab.key}
+                              className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
+                                videoTab === tab.key
+                                  ? "border-primary text-primary"
+                                  : "border-transparent text-muted-foreground hover:text-foreground"
+                              }`}
+                              onClick={() => setVideoTab(tab.key)}
+                            >
+                              {tab.label}
+                            </button>
+                          ))}
+                        </div>
 
-                    <div className="space-y-2">
-                      <Label htmlFor="onboard-channel-secret">Channel Secret</Label>
-                      <Input
-                        id="onboard-channel-secret"
-                        type="password"
-                        placeholder="Channel Secretを入力"
-                        className="font-mono"
-                      />
-                      <p className="text-xs text-muted-foreground">
-                        LINE Developers Console → Basic settings → Channel secretから取得
-                      </p>
-                    </div>
+                        {/* 解説動画 */}
+                        <div className="w-full h-80 bg-muted rounded-lg flex items-center justify-center">
+                          <div className="text-center">
+                            <Play className="w-12 h-12 mx-auto mb-4 text-muted-foreground" />
+                            <p className="text-lg font-medium mb-2">{videoTab === "channel_id" ? "チャネルID" : videoTab === "channel_secret" ? "チャネルシークレット" : videoTab === "line_bot_id" ? "LINEボットID" : "チャネルアクセストークン"}の設定方法</p>
+                            <p className="text-sm text-muted-foreground">設定方法を動画で確認できます</p>
+                          </div>
+                        </div>
+                      </div>
+                    </>
+                  )}
 
-                    <div className="space-y-2">
-                      <Label htmlFor="onboard-channel-id">チャネルID</Label>
-                      <Input
-                        id="onboard-channel-id"
-                        placeholder="チャネルIDを入力（例: 1234567890）"
-                        className="font-mono"
-                      />
-                      <p className="text-xs text-muted-foreground">
-                        LINE Developers Console → Basic settings → Channel IDから取得
-                      </p>
-                    </div>
+                  {hasLineBusiness && (
+                    <div className="space-y-4">
+                      <div className="space-y-2">
+                        <Label htmlFor="onboard-channel-token">チャネルアクセストークン（Channel Access Token）*</Label>
+                        <Input
+                          id="onboard-channel-token"
+                          type="password"
+                          value={apiSettings.channel_access_token}
+                          onChange={(e) => setApiSettings(prev => ({ ...prev, channel_access_token: e.target.value }))}
+                          placeholder="チャネルアクセストークンを入力"
+                          className="font-mono"
+                          required
+                        />
+                        <p className="text-xs text-muted-foreground">
+                          LINE Developers Console → Messaging API → Channel access tokenから取得
+                        </p>
+                      </div>
 
-                    <div className="space-y-2">
-                      <Label htmlFor="onboard-line-bot-id">LINE Bot ID</Label>
-                      <Input
-                        id="onboard-line-bot-id"
-                        placeholder="LINE Bot IDを入力（例: @your-bot-id）"
-                        className="font-mono"
-                      />
-                      <p className="text-xs text-muted-foreground">
-                        LINE Developers Console → Messaging API → LINE公式アカウントから取得
-                      </p>
+                      <div className="space-y-2">
+                        <Label htmlFor="onboard-channel-secret">チャネルシークレット（Channel Secret）*</Label>
+                        <Input
+                          id="onboard-channel-secret"
+                          type="password"
+                          value={apiSettings.channel_secret}
+                          onChange={(e) => setApiSettings(prev => ({ ...prev, channel_secret: e.target.value }))}
+                          placeholder="チャネルシークレットを入力"
+                          className="font-mono"
+                          required
+                        />
+                        <p className="text-xs text-muted-foreground">
+                          LINE Developers Console → Basic settings → Channel secretから取得
+                        </p>
+                      </div>
+
+                      <div className="space-y-2">
+                        <Label htmlFor="onboard-channel-id">チャネルID（Channel ID）*</Label>
+                        <Input
+                          id="onboard-channel-id"
+                          value={apiSettings.channel_id}
+                          onChange={(e) => setApiSettings(prev => ({ ...prev, channel_id: e.target.value }))}
+                          placeholder="チャネルIDを入力（例: 1234567890）"
+                          className="font-mono"
+                          required
+                        />
+                        <p className="text-xs text-muted-foreground">
+                          LINE Developers Console → Basic settings → Channel IDから取得
+                        </p>
+                      </div>
+
+                      <div className="space-y-2">
+                        <Label htmlFor="onboard-line-bot-id">LINEボットID（LINE Bot ID）*</Label>
+                        <Input
+                          id="onboard-line-bot-id"
+                          value={apiSettings.line_bot_id}
+                          onChange={(e) => setApiSettings(prev => ({ ...prev, line_bot_id: e.target.value }))}
+                          placeholder="LINEボットIDを入力（例: @your-bot-id）"
+                          className="font-mono"
+                          required
+                        />
+                        <p className="text-xs text-muted-foreground">
+                          LINE Developers Console → Messaging API → LINE公式アカウントから取得
+                        </p>
+                      </div>
                     </div>
-                  </div>
+                  )}
 
                   <div className="grid grid-cols-2 gap-2">
                     <Button variant="outline" onClick={goBack} disabled={loading}>
                       <ArrowLeft className="w-4 h-4 mr-2" />
                       戻る
                     </Button>
-                    <Button onClick={handleStep3Skip} disabled={loading}>
-                      {loading ? "保存中..." : "設定して次へ"}
+                    <Button onClick={handleStep3Submit} disabled={loading}>
+                      {loading ? "保存中..." : hasLineBusiness ? "次のステップへ" : "スキップして次へ"}
                       <ArrowRight className="w-4 h-4 ml-2" />
                     </Button>
                   </div>
@@ -556,11 +634,11 @@ const Onboarding = () => {
                     </AlertDescription>
                   </Alert>
 
-                  <div className="w-full h-96 bg-muted rounded-lg flex items-center justify-center">
+                  <div className="w-full h-[32rem] bg-muted rounded-lg flex items-center justify-center">
                     <div className="text-center">
-                      <Play className="w-16 h-16 mx-auto mb-4 text-muted-foreground" />
-                      <p className="text-lg font-medium mb-2">使い方動画</p>
-                      <p className="text-sm text-muted-foreground mb-4">L!JUMPの基本的な使い方を学びましょう</p>
+                      <Play className="w-24 h-24 mx-auto mb-4 text-muted-foreground" />
+                      <p className="text-2xl font-medium mb-2">使い方動画</p>
+                      <p className="text-lg text-muted-foreground mb-4">L!JUMPの基本的な使い方を学びましょう</p>
                       <Button 
                         variant="outline" 
                         size="lg" 
