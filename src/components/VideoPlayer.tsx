@@ -203,12 +203,12 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
     if (!url) return '';
     
     // YouTubeのURLを埋め込み形式に変換
-    const youtubeRegex = /(?:youtube\.com\/watch\?v=|youtu\.be\/)([a-zA-Z0-9_-]{11})/;
+    const youtubeRegex = /(?:youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/embed\/)([a-zA-Z0-9_-]{11})/;
     const match = url.match(youtubeRegex);
     
     if (match) {
       const videoId = match[1];
-      return `https://www.youtube.com/embed/${videoId}?enablejsapi=1&origin=${window.location.origin}`;
+      return `https://www.youtube.com/embed/${videoId}?enablejsapi=1&origin=${encodeURIComponent(window.location.origin)}&rel=0&modestbranding=1`;
     }
     
     return url; // 既に埋め込み形式の場合はそのまま返す
@@ -243,27 +243,38 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
     <div className="space-y-4">
       <div className="relative">
         <div className="aspect-video bg-muted rounded-lg w-full max-w-5xl mx-auto">
-          <iframe
-            ref={iframeRef}
-            width="1120"
-            height="630"
-            src={getEmbedUrl(videoData.video_url)}
-            title={`${videoType} 動画`}
-            frameBorder="0"
-            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-            allowFullScreen
-            className="rounded-lg w-full h-full"
-            onLoad={() => {
-              // YouTube iframe API integration would go here for real video tracking
-              // For demo purposes, we'll simulate video play detection
-              const simulateVideoPlay = () => {
-                if (!disabled && !isCompleted) {
-                  handleVideoPlay();
-                }
-              };
-              setTimeout(simulateVideoPlay, 2000);
-            }}
-          />
+          {videoData.video_url ? (
+            <iframe
+              ref={iframeRef}
+              width="1120"
+              height="630"
+              src={getEmbedUrl(videoData.video_url)}
+              title={`${videoType} 動画`}
+              frameBorder="0"
+              allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+              allowFullScreen
+              className="rounded-lg w-full h-full"
+              sandbox="allow-scripts allow-same-origin allow-presentation"
+              onLoad={() => {
+                console.log('Video iframe loaded for:', videoType);
+                // YouTube iframe API integration would go here for real video tracking
+                // For demo purposes, we'll simulate video play detection
+                const simulateVideoPlay = () => {
+                  if (!disabled && !isCompleted) {
+                    handleVideoPlay();
+                  }
+                };
+                setTimeout(simulateVideoPlay, 2000);
+              }}
+              onError={(e) => {
+                console.error('Video iframe error:', e);
+              }}
+            />
+          ) : (
+            <div className="flex items-center justify-center h-full">
+              <p className="text-muted-foreground">動画URLが設定されていません</p>
+            </div>
+          )}
         </div>
         
         {disabled && !isCompleted && (
