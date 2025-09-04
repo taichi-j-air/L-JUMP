@@ -205,6 +205,8 @@ const Onboarding = () => {
 
   const handleComplete = async () => {
     try {
+      console.log('Starting onboarding completion...');
+      
       const { error } = await supabase
         .from('profiles')
         .update({
@@ -219,11 +221,20 @@ const Onboarding = () => {
         return;
       }
 
+      console.log('Onboarding completion saved to database');
       toast.success('セットアップが完了しました！');
-      // メインページ（Index）に直接移動
+      
+      // プロファイル情報を再読み込み
+      if ((window as any).reloadProfile) {
+        console.log('Reloading profile data...');
+        await (window as any).reloadProfile();
+      }
+      
+      // 少し待ってからメインページに移動
       setTimeout(() => {
+        console.log('Navigating to main page...');
         window.location.href = '/';
-      }, 1000);
+      }, 2000);
     } catch (error) {
       console.error('Error completing onboarding:', error);
       toast.error('完了処理に失敗しました');

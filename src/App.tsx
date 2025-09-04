@@ -79,15 +79,13 @@ function AppContent() {
             .from('profiles')
             .select('onboarding_completed, onboarding_step, first_name, last_name, user_id')
             .eq('user_id', user.id)
-            .single();
+            .maybeSingle(); // .single() から .maybeSingle() に変更
 
-          if (error && error.code === 'PGRST116') {
-            // プロファイルが存在しない = 新規ユーザー
-            setProfile(null);
-          } else if (error) {
+          if (error) {
             console.error('Profile fetch error:', error);
             setProfile(null);
           } else {
+            console.log('Profile loaded:', profileData); // デバッグログ追加
             setProfile(profileData);
           }
         } catch (error) {
@@ -104,20 +102,60 @@ function AppContent() {
     }
   }, [user, isValidSession])
 
+  // プロファイル再読み込み用関数をwindowオブジェクトに追加
+  useEffect(() => {
+    const reloadProfile = async () => {
+      if (user && isValidSession) {
+        setProfileLoading(true);
+        try {
+          const { data: profileData, error } = await supabase
+            .from('profiles')
+            .select('onboarding_completed, onboarding_step, first_name, last_name, user_id')
+            .eq('user_id', user.id)
+            .maybeSingle();
+
+          if (!error) {
+            console.log('Profile reloaded:', profileData);
+            setProfile(profileData);
+          }
+        } catch (error) {
+          console.error('Profile reload error:', error);
+        } finally {
+          setProfileLoading(false);
+        }
+      }
+    };
+
+    // グローバル関数として追加
+    (window as any).reloadProfile = reloadProfile;
+    
+    return () => {
+      delete (window as any).reloadProfile;
+    };
+  }, [user, isValidSession]);
+
   if (loading || profileLoading) {
     return <LoadingSpinner message="アプリケーション初期化中..." size="lg" className="min-h-screen" />
   }
 
+  console.log('Onboarding check:', { 
+    user: !!user, 
+    isValidSession, 
+    profile, 
+    needsOnboarding: !profile || profile.onboarding_completed !== true 
+  });
+
   // 認証されているが、オンボーディングが未完了または基本情報が不足している場合
   const needsOnboarding = user && isValidSession && (
     !profile || 
-    !profile.onboarding_completed || 
+    profile.onboarding_completed !== true || 
     !profile.first_name || 
     !profile.last_name
   );
 
   // オンボーディングが必要で、現在オンボーディングページにいない場合は強制リダイレクト
   if (needsOnboarding && window.location.pathname !== '/onboarding') {
+    console.log('Redirecting to onboarding:', { profile, needsOnboarding });
     window.location.href = '/onboarding';
     return <LoadingSpinner message="オンボーディングページに移動中..." size="lg" className="min-h-screen" />
   }
