@@ -17,6 +17,7 @@ interface SecurityContextType {
   validateContent: (content: string) => boolean;
   checkRateLimit: (key: string, max: number, window: number) => boolean;
   reportSecurityIssue: (issue: string, details?: any) => void;
+  clearSecurityHistory: () => void;
   securityStatus: {
     isSecure: boolean;
     threats: Array<{
@@ -120,6 +121,16 @@ export function SecurityProvider({ children }: SecurityProviderProps) {
     reportSuspiciousActivity(issue, details, 'medium');
   };
 
+  const clearSecurityHistory = () => {
+    setSecurityEvents([]);
+    // Clear localStorage events as well
+    try {
+      localStorage.removeItem('security_events');
+    } catch (error) {
+      console.warn('Failed to clear localStorage security events:', error);
+    }
+  };
+
   // Set up Enhanced Content Security Policy
   useEffect(() => {
     const meta = document.createElement('meta');
@@ -191,6 +202,7 @@ export function SecurityProvider({ children }: SecurityProviderProps) {
     validateContent,
     checkRateLimit,
     reportSecurityIssue,
+    clearSecurityHistory,
     securityStatus,
     validateAuthSecurity
   };

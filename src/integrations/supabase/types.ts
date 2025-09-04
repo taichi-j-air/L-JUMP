@@ -2052,6 +2052,10 @@ export type Database = {
         }
         Returns: boolean
       }
+      cleanup_old_security_events: {
+        Args: Record<PropertyKey, never>
+        Returns: undefined
+      }
       generate_invite_code: {
         Args: Record<PropertyKey, never>
         Returns: string
