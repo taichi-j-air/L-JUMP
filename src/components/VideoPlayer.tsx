@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Loader2 } from "lucide-react";
+import LVideoPlayer from "./LVideoPlayer";
 
 interface VideoPlayerProps {
   videoType: string;
@@ -225,118 +226,78 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
     return null;
   }
 
-  const showTimerDisplay = showTimer && (videoData.show_timer || disabled);
   const displayText = customText || videoData.custom_text;
+  const isYouTubeUrl = videoData.video_url && (
+    videoData.video_url.includes('youtube.com') || 
+    videoData.video_url.includes('youtu.be')
+  );
+  const isMP4Url = videoData.video_url && videoData.video_url.toLowerCase().endsWith('.mp4');
 
-  return (
-    <div className="space-y-4">
-      <div className="relative">
+  // YouTubeの場合は進捗管理なしで表示
+  if (isYouTubeUrl) {
+    return (
+      <div className="space-y-4">
         <div className="aspect-video bg-muted rounded-lg w-full max-w-5xl mx-auto">
-          {videoData.video_url ? (
-            <iframe
-              ref={iframeRef}
-              width="1120"
-              height="630"
-              src={getEmbedUrl(videoData.video_url)}
-              title={`${videoType} 動画`}
-              frameBorder="0"
-              allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
-              allowFullScreen
-              className="rounded-lg w-full h-full"
-              sandbox="allow-scripts allow-same-origin allow-presentation"
-              onLoad={() => {
-                console.log('Video iframe loaded for:', videoType);
-                // YouTube Player APIの設定でメッセージリスナーを追加
-                window.addEventListener('message', (event) => {
-                  if (event.origin !== 'https://www.youtube.com') return;
-                  
-                  const data = event.data;
-                  if (data && typeof data === 'string') {
-                    try {
-                      const parsed = JSON.parse(data);
-                      if (parsed.event === 'video-progress') {
-                        // YouTube動画の進捗を受信
-                        const currentTime = parsed.info?.currentTime || 0;
-                        if (currentTime > 0 && !isCompleted) {
-                          setWatchProgress(Math.floor(currentTime));
-                          if (!isPlaying) {
-                            setIsPlaying(true);
-                          }
-                        }
-                      } else if (parsed.event === 'video-play' && !isCompleted) {
-                        // YouTube動画の再生開始
-                        handleVideoPlay();
-                      } else if (parsed.event === 'video-pause') {
-                        // YouTube動画の一時停止
-                        handleVideoPause();
-                      }
-                    } catch (e) {
-                      // JSON解析エラーは無視
-                    }
-                  }
-                });
-              }}
-              onError={(e) => {
-                console.error('Video iframe error:', e);
-              }}
-            />
-          ) : (
-            <div className="flex items-center justify-center h-full">
-              <p className="text-muted-foreground">動画URLが設定されていません</p>
-            </div>
-          )}
+          <iframe
+            ref={iframeRef}
+            width="1120"
+            height="630"
+            src={getEmbedUrl(videoData.video_url)}
+            title={`${videoType} 動画`}
+            frameBorder="0"
+            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+            allowFullScreen
+            className="rounded-lg w-full h-full"
+            sandbox="allow-scripts allow-same-origin allow-presentation"
+          />
         </div>
         
-        {disabled && !isCompleted && (
-          <div className="absolute inset-0 bg-black/50 rounded-lg flex items-center justify-center">
-            <div className="text-center text-white">
-              <p className="text-lg font-semibold mb-2">動画視聴が必要です</p>
-              <p className="text-sm">この動画を最後まで視聴してください</p>
-            </div>
+        {displayText && (
+          <div className="text-center">
+            <p className="text-sm text-muted-foreground whitespace-pre-wrap">{displayText}</p>
           </div>
         )}
+        
+        <div className="text-center">
+          <p className="text-blue-600 font-semibold">YouTube動画（進捗管理なし）</p>
+        </div>
       </div>
+    );
+  }
 
+  // MP4ファイルの場合はL!VIDEOプレイヤーを使用
+  if (isMP4Url) {
+    return (
+      <div className="space-y-4">
+        <LVideoPlayer
+          videoUrl={videoData.video_url}
+          onProgress={(currentTime, duration) => {
+            setWatchProgress(Math.floor(currentTime));
+            saveWatchProgress(Math.floor(currentTime));
+          }}
+          onVideoComplete={handleCompletion}
+          requiredCompletionPercentage={requiredCompletionPercentage || videoData.completion_percentage}
+          customText={displayText}
+          showTimer={showTimer && videoData.show_timer}
+          autoPlay={false}
+        />
+      </div>
+    );
+  }
+
+  // サポートされていないファイル形式
+  return (
+    <div className="space-y-4">
+      <div className="aspect-video bg-muted rounded-lg w-full max-w-5xl mx-auto flex items-center justify-center">
+        <div className="text-center text-muted-foreground">
+          <p className="text-lg font-semibold mb-2">サポートされていない動画形式</p>
+          <p className="text-sm">YouTubeまたはMP4ファイルのみ対応しています</p>
+        </div>
+      </div>
+      
       {displayText && (
         <div className="text-center">
           <p className="text-sm text-muted-foreground whitespace-pre-wrap">{displayText}</p>
-        </div>
-      )}
-
-      {showTimerDisplay && !isCompleted && videoData && (
-        <div className="text-center">
-          <p className="text-sm font-medium">
-            次のステップボタンが表示されるまで残り {formatTime(timeRemaining)}
-          </p>
-          <div className="w-full bg-muted rounded-full h-2 mt-2">
-            <div 
-              className="bg-primary h-2 rounded-full transition-all duration-300"
-              style={{ 
-                width: `${Math.min(100, (watchProgress / (videoData.video_duration * (requiredCompletionPercentage || videoData.completion_percentage) / 100)) * 100)}%` 
-              }}
-            />
-          </div>
-        </div>
-      )}
-
-      {/* 動画再生コントロール - YouTubeプレイヤーが直接制御するため非表示 */}
-      {false && !isCompleted && videoData && (
-        <div className="text-center space-y-2">
-          {!isPlaying ? (
-            <Button onClick={handleVideoPlay} className="bg-red-600 hover:bg-red-700 text-white">
-              ▶ 動画視聴を開始
-            </Button>
-          ) : (
-            <Button onClick={handleVideoPause} variant="outline">
-              ⏸ 一時停止
-            </Button>
-          )}
-        </div>
-      )}
-
-      {isCompleted && (
-        <div className="text-center">
-          <p className="text-green-600 font-semibold">✓ 動画視聴完了</p>
         </div>
       )}
     </div>
