@@ -1258,6 +1258,33 @@ export type Database = {
           },
         ]
       }
+      secure_line_credentials: {
+        Row: {
+          created_at: string | null
+          credential_type: string
+          encrypted_value: string | null
+          id: string
+          updated_at: string | null
+          user_id: string
+        }
+        Insert: {
+          created_at?: string | null
+          credential_type: string
+          encrypted_value?: string | null
+          id?: string
+          updated_at?: string | null
+          user_id: string
+        }
+        Update: {
+          created_at?: string | null
+          credential_type?: string
+          encrypted_value?: string | null
+          id?: string
+          updated_at?: string | null
+          user_id?: string
+        }
+        Relationships: []
+      }
       security_audit_log: {
         Row: {
           action: string
@@ -1965,6 +1992,16 @@ export type Database = {
           user_role: string
         }[]
       }
+      get_user_line_credentials: {
+        Args: { p_user_id: string }
+        Returns: {
+          bot_id: string
+          channel_access_token: string
+          channel_id: string
+          channel_secret: string
+          liff_id: string
+        }[]
+      }
       get_user_profile_secure: {
         Args: { profile_user_id: string }
         Returns: {
@@ -1998,6 +2035,18 @@ export type Database = {
         }
         Returns: undefined
       }
+      log_security_event_enhanced: {
+        Args: {
+          p_action?: string
+          p_details?: Json
+          p_ip_address?: string
+          p_severity?: string
+          p_success?: boolean
+          p_user_agent?: string
+          p_user_id?: string
+        }
+        Returns: undefined
+      }
       lookup_friend_by_uid: {
         Args: { p_form_id: string; p_uid: string }
         Returns: {
@@ -2015,6 +2064,12 @@ export type Database = {
           p_timer_start_at?: string
         }
         Returns: Json
+      }
+      migrate_line_credentials_to_secure: {
+        Args: Record<PropertyKey, never>
+        Returns: {
+          migrated_users: number
+        }[]
       }
       register_friend_to_scenario: {
         Args: {
@@ -2054,6 +2109,10 @@ export type Database = {
       }
       validate_invite_code: {
         Args: { code: string }
+        Returns: boolean
+      }
+      validate_json_security: {
+        Args: { input_json: Json }
         Returns: boolean
       }
       validate_line_user_id: {
