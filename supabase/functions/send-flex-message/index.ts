@@ -114,22 +114,29 @@ serve(async (req) => {
 
     console.log("Supabase client created with service role");
 
-    // LINE 資格情報の取得
+    // LINE 資格情報の取得 - 直接テーブルクエリで試行
     console.log("Fetching LINE credentials for user:", userId);
-    const { data: cred, error: credErr } = await supabase.rpc("get_line_credentials_for_user", {
-      p_user_id: userId,
-    });
+    const { data: cred, error: credErr } = await supabase
+      .from("secure_line_credentials")
+      .select("credential_type, encrypted_value")
+      .eq("user_id", userId)
+      .in("credential_type", ["channel_access_token"]);
     
     if (credErr) {
-      console.error("LINE credentials RPC error:", credErr);
+      console.error("LINE credentials query error:", credErr);
       return new Response(JSON.stringify({ error: "LINE資格情報取得エラー", details: credErr.message }), {
         headers: { ...cors, "Content-Type": "application/json" },
         status: 400,
       });
     }
 
-    if (!cred?.channel_access_token) {
-      console.error("No channel access token found for user:", userId);
+    console.log("Raw credentials data:", cred);
+    
+    const accessTokenRecord = cred?.find(c => c.credential_type === "channel_access_token");
+    const channelAccessToken = accessTokenRecord?.encrypted_value;
+
+    if (!channelAccessToken) {
+      console.error("No channel access token found in credentials:", cred);
       return new Response(JSON.stringify({ error: "LINE Channel Access Tokenが設定されていません" }), {
         headers: { ...cors, "Content-Type": "application/json" },
         status: 400,
@@ -187,7 +194,7 @@ serve(async (req) => {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
-            Authorization: `Bearer ${cred.channel_access_token}`,
+            Authorization: `Bearer ${channelAccessToken}`,
           },
           body: JSON.stringify({ to: line_user_id, messages: [normalized] }),
         });
