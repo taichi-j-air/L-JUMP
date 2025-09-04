@@ -1,303 +1,180 @@
-import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.7.1'
+// deno deploy --import-map=import_map.json
+import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2.7.1";
 
 const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-}
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+};
 
-/** 深いコピー（友だちごとのUID置換で元JSONを壊さないため） */
+/* ---------- 汎用ユーティリティ ---------- */
 function deepClone<T>(obj: T): T {
-  return obj == null ? obj : JSON.parse(JSON.stringify(obj))
+  return obj == null ? obj : JSON.parse(JSON.stringify(obj));
 }
-
-/** 配列/オブジェクト/文字列を再帰でなめて [UID] を置換 */
 function deepReplaceUID(node: any, uid: string): any {
-  if (node == null) return node
-  if (Array.isArray(node)) return node.map((v) => deepReplaceUID(v, uid))
-  if (typeof node === 'object') {
-    const out: any = {}
-    for (const [k, v] of Object.entries(node)) out[k] = deepReplaceUID(v, uid)
-    return out
+  if (node == null) return node;
+  if (Array.isArray(node)) return node.map((v) => deepReplaceUID(v, uid));
+  if (typeof node === "object") {
+    const out: any = {};
+    for (const [k, v] of Object.entries(node)) out[k] = deepReplaceUID(v, uid);
+    return out;
   }
-  if (typeof node === 'string') return node.replace(/\[UID\]/g, uid)
-  return node
+  return typeof node === "string" ? node.replace(/\[UID]/g, uid) : node;
+}
+function addUidSafely(flex: any, uid: string | null) {
+  return uid ? deepReplaceUID(deepClone(flex), uid) : flex;
 }
 
-/** UID 置換（非破壊） */
-function addUidToFlexContentSafely(flexMessage: any, friendShortUid: string | null): any {
-  if (!friendShortUid || !flexMessage) return flexMessage
-  const cloned = deepClone(flexMessage)
-  return deepReplaceUID(cloned, friendShortUid)
-}
+/* ---------- LINE用サニタイズ ---------- */
+function sanitizeFlex(node: any): any {
+  if (node == null) return node;
+  if (Array.isArray(node)) return node.map(sanitizeFlex);
 
-/** LINEで無効なフィールドを除去 */
-function sanitizeFlexMessage(obj: any): any {
-  if (obj === null || obj === undefined) return obj
-  
-  if (Array.isArray(obj)) {
-    return obj.map(item => sanitizeFlexMessage(item))
-  }
-  
-  if (typeof obj === 'object') {
-    const sanitized: any = {}
-    
-    // LINEで無効なフィールドのリスト
-    const invalidFields = [
-      'backgroundColor', // textコンポーネントには無効
-      'borderRadius',
-      'borderWidth', 
-      'borderColor',
-      'padding',
-      'className'
-      // 'style' を削除 - ボタンの見た目設定に必要
-    ]
-    
-    for (const [key, value] of Object.entries(obj)) {
-      // 無効フィールドを除去
-      if (invalidFields.includes(key)) {
-        console.log(`[send-flex-message] Removing invalid field: ${key}`)
-        continue
+  if (typeof node === "object") {
+    const invalidByType: Record<string, Set<string>> = {
+      text: new Set(["backgroundColor", "borderRadius", "borderWidth", "borderColor", "padding"]),
+      image: new Set(["className"]),
+      box: new Set(["className"]),
+      button: new Set(["className"]),
+    };
+
+    const out: any = {};
+    const t = (node.type as string) ?? "";
+    for (const [k, v] of Object.entries(node)) {
+      if (invalidByType[t]?.has(k)) {
+        console.log(`[sanitizeFlex] remove ${k} from ${t}`);
+        continue;
       }
-      
-      sanitized[key] = sanitizeFlexMessage(value)
+      out[k] = sanitizeFlex(v);
     }
-    
-    return sanitized
+    return out;
   }
-  
-  return obj
+  return node;
 }
 
-/** Flex入力を必ず { type:'flex', altText, contents } に正規化 */
-function normalizeFlexMessage(input: any): { type: 'flex'; altText: string; contents: any } | null {
-  if (!input) return null
-
-  // 既に flex ラップ済み
-  if (input.type === 'flex' && input.contents) {
-    return {
-      type: 'flex',
-      altText: typeof input.altText === 'string' && input.altText.trim() ? input.altText : 'お知らせ',
-      contents: sanitizeFlexMessage(input.contents),
-    }
+/* ---------- Flex 正規化 ---------- */
+function normalizeFlex(input: any) {
+  if (!input) return null;
+  if (input.type === "flex" && input.contents) {
+    return { type: "flex", altText: input.altText?.trim() || "お知らせ", contents: sanitizeFlex(input.contents) };
   }
-
-  // ルートが bubble / carousel
-  if (input.type === 'bubble' || input.type === 'carousel') {
-    return { type: 'flex', altText: 'お知らせ', contents: sanitizeFlexMessage(input) }
+  if (["bubble", "carousel"].includes(input.type)) {
+    return { type: "flex", altText: "お知らせ", contents: sanitizeFlex(input) };
   }
-
-  // { contents: bubble|carousel, altText? } 形式
-  if (input.contents && (input.contents.type === 'bubble' || input.contents.type === 'carousel')) {
-    return {
-      type: 'flex',
-      altText: typeof input.altText === 'string' && input.altText.trim() ? input.altText : 'お知らせ',
-      contents: sanitizeFlexMessage(input.contents),
-    }
+  if (input.contents && ["bubble", "carousel"].includes(input.contents.type)) {
+    return { type: "flex", altText: input.altText?.trim() || "お知らせ", contents: sanitizeFlex(input.contents) };
   }
-
-  return null
+  return null;
 }
 
+/* ---------- メイン ---------- */
 serve(async (req) => {
-  console.log('[send-flex-message] Function called, method:', req.method);
-  console.log('[send-flex-message] Request headers:', Object.fromEntries(req.headers.entries()));
-  
-  // CORS preflight
-  if (req.method === 'OPTIONS') {
-    console.log('[send-flex-message] Returning CORS preflight response');
-    return new Response(null, { headers: corsHeaders })
-  }
+  if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
   try {
-    console.error('[send-flex-message] ===== STARTING REQUEST PROCESSING =====');
-    
-    // Authentication check
-    const authHeader = req.headers.get('Authorization')
-    if (!authHeader) {
-      console.error('[send-flex-message] ERROR: No authorization header found');
-      return new Response(
-        JSON.stringify({ error: '認証が必要です' }),
-        { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 401 }
-      )
-    }
-
-    console.error('[send-flex-message] About to parse request body');
-    let body;
-    try {
-      body = await req.json()
-      console.error('[send-flex-message] Successfully parsed request body');
-    } catch (parseError) {
-      console.error('[send-flex-message] CRITICAL ERROR: Failed to parse request body:', parseError);
-      return new Response(
-        JSON.stringify({ error: 'リクエストボディの解析に失敗しました', details: String(parseError) }),
-        { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 400 }
-      )
-    }
-    
-    const rawFlexMessage = body.flexMessage
-    const userId = body.userId as string
-
-    if (!userId) {
-      console.error('[send-flex-message] ERROR: No userId provided in request body');
-      return new Response(
-        JSON.stringify({ error: 'ユーザーIDが必要です' }),
-        { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 400 }
-      )
-    }
-
-    if (!rawFlexMessage) {
-      console.error('[send-flex-message] ERROR: No flexMessage provided in request body');
-      return new Response(
-        JSON.stringify({ error: 'Flexメッセージが必要です' }),
-        { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 400 }
-      )
-    }
-
-    console.error(`[send-flex-message] Processing flex message for user: ${userId}`);
-    console.error(`[send-flex-message] flexMessage type:`, typeof rawFlexMessage);
-    console.error(`[send-flex-message] flexMessage:`, JSON.stringify(rawFlexMessage));
-
-    // flexMessage が文字列（JSON文字列）で来るケースにも対応
-    let flexMessage = rawFlexMessage
-    if (typeof rawFlexMessage === 'string') {
-      try { flexMessage = JSON.parse(rawFlexMessage) } catch { /* 無視してそのまま */ }
-    }
-
-    // Supabase
-    console.error('[send-flex-message] Initializing Supabase client...');
-    const supabaseUrl = Deno.env.get('SUPABASE_URL')!
-    const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
-    console.error('[send-flex-message] SUPABASE_URL:', supabaseUrl);
-    console.error('[send-flex-message] Service key available:', !!supabaseServiceKey);
-    
-    const supabase = createClient(supabaseUrl, supabaseServiceKey)
-    console.error('[send-flex-message] Supabase client created successfully');
-
-    // Get secure LINE credentials
-    console.error('[send-flex-message] Fetching LINE credentials for user:', userId);
-    const { data: credentials, error: credError } = await supabase
-      .rpc('get_line_credentials_for_user', { p_user_id: userId });
-
-    console.error('[send-flex-message] Credentials fetch result:', { hasCredentials: !!credentials, error: credError });
-    
-    if (credError || !credentials?.channel_access_token) {
-      console.error('[send-flex-message] LINE credentials error:', credError);
-      console.error('[send-flex-message] Credentials data:', credentials);
-      return new Response(
-        JSON.stringify({ error: 'LINE APIアクセストークンが未設定か取得に失敗しました', details: credError }),
-        { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 400 }
-      )
-    }
-
-    // 送信対象（友だち）- Service Roleでの直接アクセス
-    console.error('[send-flex-message] Fetching friends list for user:', userId);
-    
-    let friends, friendsError;
-    try {
-      // Service Role keyでRLSを迂回して直接アクセス
-      const result = await supabase
-        .from('line_friends')
-        .select('line_user_id, short_uid')
-        .eq('user_id', userId);
-      
-      friends = result.data;
-      friendsError = result.error;
-      
-      // デバッグ用
-      console.error('[send-flex-message] Friends query result:', { 
-        friendsCount: friends?.length || 0, 
-        error: friendsError,
-        firstFriend: friends?.[0] 
+    /* ----- 認証 ----- */
+    if (!req.headers.get("Authorization"))
+      return new Response(JSON.stringify({ error: "認証が必要です" }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+        status: 401,
       });
-      
-    } catch (queryError) {
-      console.error('[send-flex-message] Query execution error:', queryError);
-      return new Response(
-        JSON.stringify({ error: 'データベースクエリでエラーが発生しました', details: String(queryError) }),
-        { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 500 }
-      )
+
+    /* ----- ボディ取得 ----- */
+    let body: any;
+    try {
+      body = await req.json();
+    } catch (e) {
+      return new Response(JSON.stringify({ error: "JSON解析失敗", details: e.message }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+        status: 400,
+      });
     }
 
-    if (friendsError) {
-      console.error('[send-flex-message] Friends list error:', friendsError);
-      return new Response(
-        JSON.stringify({ error: '友だちリストの取得に失敗しました', details: friendsError }),
-        { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 500 }
-      )
-    }
+    const { flexMessage: rawFlex, userId } = body;
+    if (!userId || !rawFlex)
+      return new Response(JSON.stringify({ error: "userId と flexMessage は必須です" }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+        status: 400,
+      });
 
-    if (!friends?.length) {
-      console.error('[send-flex-message] No friends found for user:', userId);
-      return new Response(
-        JSON.stringify({ error: '送信対象の友だちが見つかりません。まず友だちを追加してください。' }),
-        { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 400 }
-      )
-    }
-
-    const results: Array<{ lineUserId: string; success: boolean; error?: any }> = []
-
-    for (const friend of friends) {
+    /* ----- Flex解析 ----- */
+    let flex: any = rawFlex;
+    if (typeof rawFlex === "string") {
       try {
-        // 1) 友だちごとに UID を注入（非破壊）
-        const uidInjected = addUidToFlexContentSafely(flexMessage, friend.short_uid ?? null)
-
-        // 2) Flex を正規形にラップ（type/altText を保証）
-        const normalized = normalizeFlexMessage(uidInjected)
-        if (!normalized) {
-          results.push({ lineUserId: friend.line_user_id, success: false, error: 'Flexメッセージの形式が不正です' })
-          continue
-        }
-
-        const payload = {
-          to: friend.line_user_id,
-          messages: [normalized],
-        }
-
-        console.log(`[send-flex-message] Sending to ${friend.line_user_id}:`, JSON.stringify(payload));
-
-        const lineRes = await fetch('https://api.line.me/v2/bot/message/push', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${credentials.channel_access_token}`,
-          },
-          body: JSON.stringify(payload)
-        })
-
-        if (!lineRes.ok) {
-          let errBody: any = null
-          try { errBody = await lineRes.json() } catch { errBody = await lineRes.text() }
-          console.log(`[send-flex-message] LINE API error for ${friend.line_user_id}:`, lineRes.status, errBody);
-          results.push({ lineUserId: friend.line_user_id, success: false, error: errBody })
-        } else {
-          console.log(`[send-flex-message] Successfully sent to ${friend.line_user_id}`);
-          results.push({ lineUserId: friend.line_user_id, success: true })
-        }
-      } catch (e: any) {
-        results.push({ lineUserId: friend.line_user_id, success: false, error: e?.message || String(e) })
+        flex = JSON.parse(rawFlex);
+      } catch (e) {
+        return new Response(JSON.stringify({ error: "flexMessage JSONが不正です", details: e.message }), {
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+          status: 400,
+        });
       }
     }
 
-    const successCount = results.filter(r => r.success).length
-    const errorCount = results.length - successCount
+    /* ----- Supabase 初期化 ----- */
+    const supabase = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
 
-    return new Response(
-      JSON.stringify({
-        success: true,
-        message: `Flexメッセージ送信：成功 ${successCount} / 失敗 ${errorCount}`,
-        results,
-      }),
-      { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-    )
+    /* ----- 認証情報取得 ----- */
+    const { data: cred, error: credErr } = await supabase.rpc("get_line_credentials_for_user", { p_user_id: userId });
+    if (credErr || !cred?.channel_access_token)
+      return new Response(JSON.stringify({ error: "LINE資格情報エラー", details: credErr }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+        status: 400,
+      });
 
-  } catch (error: any) {
-    return new Response(
-      JSON.stringify({ 
-        error: '予期しないエラーが発生しました', 
-        details: error?.message || String(error) 
-      }),
-      { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 500 }
-    )
+    /* ----- 友だち一覧取得 ----- */
+    const { data: friends, error: fErr } = await supabase
+      .from("line_friends")
+      .select("line_user_id, short_uid")
+      .eq("user_id", userId);
+
+    if (fErr) throw fErr;
+    if (!friends?.length)
+      return new Response(JSON.stringify({ error: "友だちが見つかりません" }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+        status: 400,
+      });
+
+    /* ----- 配信ループ ----- */
+    const results: { lineUserId: string; success: boolean; error?: any }[] = [];
+    for (const { line_user_id, short_uid } of friends) {
+      const withUid = addUidSafely(flex, short_uid ?? null);
+      const normalized = normalizeFlex(withUid);
+
+      if (!normalized) {
+        results.push({ lineUserId: line_user_id, success: false, error: "Flex形式不正" });
+        continue;
+      }
+
+      const res = await fetch("https://api.line.me/v2/bot/message/push", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${cred.channel_access_token}`,
+        },
+        body: JSON.stringify({ to: line_user_id, messages: [normalized] }),
+      });
+
+      if (res.ok) {
+        results.push({ lineUserId: line_user_id, success: true });
+      } else {
+        let err;
+        try {
+          err = await res.json();
+        } catch {
+          err = await res.text();
+        }
+        results.push({ lineUserId: line_user_id, success: false, error: err });
+      }
+    }
+
+    const ok = results.filter((r) => r.success).length;
+    return new Response(JSON.stringify({ success: true, message: `送信 成功${ok} 失敗${results.length - ok}`, results }), {
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
+  } catch (e: any) {
+    return new Response(JSON.stringify({ error: "予期しないエラー", details: e.message }), {
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+      status: 500,
+    });
   }
-})
+});
