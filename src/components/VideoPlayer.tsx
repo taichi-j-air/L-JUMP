@@ -259,14 +259,8 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
               sandbox="allow-scripts allow-same-origin allow-presentation"
               onLoad={() => {
                 console.log('Video iframe loaded for:', videoType);
-                // YouTube iframe API integration would go here for real video tracking
-                // For demo purposes, we'll simulate video play detection
-                const simulateVideoPlay = () => {
-                  if (!disabled && !isCompleted) {
-                    handleVideoPlay();
-                  }
-                };
-                setTimeout(simulateVideoPlay, 2000);
+                // 実際の動画再生検知は手動で開始ボタンを押した時のみ
+                // 自動的に再生を開始しない
               }}
               onError={(e) => {
                 console.error('Video iframe error:', e);
@@ -308,6 +302,21 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
               }}
             />
           </div>
+        </div>
+      )}
+
+      {/* 動画再生コントロール */}
+      {!isCompleted && videoData && (
+        <div className="text-center space-y-2">
+          {!isPlaying ? (
+            <Button onClick={handleVideoPlay} className="bg-red-600 hover:bg-red-700 text-white">
+              ▶ 動画視聴を開始
+            </Button>
+          ) : (
+            <Button onClick={handleVideoPause} variant="outline">
+              ⏸ 一時停止
+            </Button>
+          )}
         </div>
       )}
 
