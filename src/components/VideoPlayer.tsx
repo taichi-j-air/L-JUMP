@@ -10,6 +10,7 @@ interface VideoPlayerProps {
   customText?: string;
   requiredCompletionPercentage?: number;
   disabled?: boolean;
+  videoViewingRequired?: boolean;
 }
 
 interface VideoData {
@@ -26,7 +27,8 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
   showTimer = true,
   customText,
   requiredCompletionPercentage = 100,
-  disabled = false
+  disabled = false,
+  videoViewingRequired = true
 }) => {
   const [videoData, setVideoData] = useState<VideoData | null>(null);
   const [watchProgress, setWatchProgress] = useState(0);
@@ -41,6 +43,14 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
     loadVideoData();
     loadWatchProgress();
   }, [videoType]);
+
+  // Auto-complete when video viewing is not required
+  useEffect(() => {
+    if (!videoViewingRequired && !isCompleted) {
+      setIsCompleted(true);
+      onVideoComplete?.();
+    }
+  }, [videoViewingRequired, isCompleted, onVideoComplete]);
 
   useEffect(() => {
     if (videoData && watchProgress > 0) {
@@ -172,10 +182,18 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
     );
   }
 
+  // Auto-complete when video data is not found
+  useEffect(() => {
+    if (!loading && !videoData && !isCompleted) {
+      setIsCompleted(true);
+      onVideoComplete?.();
+    }
+  }, [loading, videoData, isCompleted, onVideoComplete]);
+
   if (!videoData) {
     return (
       <div className="flex items-center justify-center w-full h-[630px] bg-muted rounded-lg">
-        <p className="text-muted-foreground">動画が見つかりません</p>
+        <p className="text-muted-foreground">動画が設定されていません</p>
       </div>
     );
   }

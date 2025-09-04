@@ -55,6 +55,7 @@ const Onboarding = () => {
   const [activeVideoTab, setActiveVideoTab] = useState("channel_id");
   const [videoCompleted, setVideoCompleted] = useState(false);
   const [showCreationGuide, setShowCreationGuide] = useState(false);
+  const [videoViewingRequired, setVideoViewingRequired] = useState(true);
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -117,7 +118,7 @@ const Onboarding = () => {
         return apiSettings.channelId && apiSettings.channelSecret && 
                apiSettings.lineBotId && apiSettings.channelAccessToken;
       case 4:
-        return videoCompleted;
+        return videoCompleted || !videoViewingRequired;
       case 5:
         return selectedPlan;
       default:
@@ -487,21 +488,35 @@ const Onboarding = () => {
               {/* Step 4: 使い方動画 */}
               {currentStep === 4 && (
                 <div className="space-y-6">
-                  <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 mb-6">
-                    <p className="text-yellow-800 font-medium">
-                      ⚠️ この動画は必ず視聴してください
-                    </p>
-                    <p className="text-yellow-700 text-sm mt-1">
-                      動画を最後まで視聴しないと次のステップに進むことができません。L!JUMPの基本機能をご確認ください。
-                    </p>
+                  <div className="flex items-center gap-4 mb-4">
+                    <Checkbox 
+                      id="videoViewingRequired" 
+                      checked={videoViewingRequired}
+                      onCheckedChange={(checked) => setVideoViewingRequired(checked === true)}
+                    />
+                    <Label htmlFor="videoViewingRequired" className="text-sm">
+                      動画視聴を必須にする
+                    </Label>
                   </div>
+
+                  {videoViewingRequired && (
+                    <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 mb-6">
+                      <p className="text-yellow-800 font-medium">
+                        ⚠️ この動画は必ず視聴してください
+                      </p>
+                      <p className="text-yellow-700 text-sm mt-1">
+                        動画を最後まで視聴しないと次のステップに進むことができません。L!JUMPの基本機能をご確認ください。
+                      </p>
+                    </div>
+                  )}
                   
                   <VideoPlayer 
                     videoType="step4" 
                     onVideoComplete={() => setVideoCompleted(true)}
-                    showTimer={true}
+                    showTimer={videoViewingRequired}
                     requiredCompletionPercentage={30}
                     disabled={false}
+                    videoViewingRequired={videoViewingRequired}
                   />
                 </div>
               )}
