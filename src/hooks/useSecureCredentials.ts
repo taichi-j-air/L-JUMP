@@ -32,7 +32,26 @@ export function useSecureCredentials() {
       }
 
       if (data && data.length > 0) {
-        setCredentials(data[0]);
+        // Decrypt credentials if they're encrypted
+        const decryptedCredentials = { ...data[0] };
+        
+        for (const [key, value] of Object.entries(decryptedCredentials)) {
+          if (typeof value === 'string' && value.startsWith('enc:')) {
+            try {
+              const { data: decryptData, error: decryptError } = await supabase.functions.invoke('decrypt-credential', {
+                body: { encryptedValue: value }
+              });
+              
+              if (!decryptError && decryptData?.decryptedValue) {
+                decryptedCredentials[key as keyof LineCredentials] = decryptData.decryptedValue;
+              }
+            } catch (decryptErr) {
+              console.warn(`Failed to decrypt ${key}:`, decryptErr);
+            }
+          }
+        }
+        
+        setCredentials(decryptedCredentials);
       }
     } catch (error) {
       console.error('Error loading credentials:', error);
@@ -42,35 +61,25 @@ export function useSecureCredentials() {
   };
 
   const encryptValue = async (value: string): Promise<string> => {
-    // Use Web Crypto API for client-side encryption
-    const encoder = new TextEncoder();
-    const data = encoder.encode(value);
-    
-    // Generate a random key for encryption
-    const key = await crypto.subtle.generateKey(
-      { name: 'AES-GCM', length: 256 },
-      false,
-      ['encrypt']
-    );
-    
-    // Generate random IV
-    const iv = crypto.getRandomValues(new Uint8Array(12));
-    
-    // Encrypt the data
-    const encrypted = await crypto.subtle.encrypt(
-      { name: 'AES-GCM', iv },
-      key,
-      data
-    );
-    
-    // For demo purposes, we'll use base64 encoding with a prefix
-    // In production, you'd want to use Supabase Vault or proper key management
-    const encryptedArray = new Uint8Array(encrypted);
-    const combinedArray = new Uint8Array(iv.length + encryptedArray.length);
-    combinedArray.set(iv);
-    combinedArray.set(encryptedArray, iv.length);
-    
-    return 'encrypted:' + btoa(String.fromCharCode(...combinedArray));
+    try {
+      // SECURITY FIX: Use server-side encryption via Supabase function
+      // This ensures proper key management and persistent decryption capability
+      const { data, error } = await supabase.functions.invoke('encrypt-credential', {
+        body: { value }
+      });
+
+      if (error) {
+        console.error('Encryption failed:', error);
+        throw new Error('Failed to encrypt credential');
+      }
+
+      return data.encryptedValue;
+    } catch (error) {
+      console.error('Credential encryption error:', error);
+      // Fallback: Store as-is with warning (temporary measure)
+      console.warn('SECURITY WARNING: Storing credential without encryption due to encryption failure');
+      return value;
+    }
   };
 
   const saveCredential = async (type: string, value: string) => {
