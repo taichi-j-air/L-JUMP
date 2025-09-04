@@ -207,7 +207,6 @@ const Onboarding = () => {
     try {
       console.log('Starting onboarding completion...');
       
-      // 明示的にオンボーディング完了をマーク
       const { data, error } = await supabase
         .from('profiles')
         .update({
@@ -220,14 +219,12 @@ const Onboarding = () => {
         .eq('user_id', user!.id)
         .select();
       
-      console.log('Update result:', { data, error });
-
       if (error) {
         console.error('Error completing onboarding:', error);
         toast.error('完了処理に失敗しました');
         return;
       }
-
+      
       console.log('Onboarding completion saved to database');
       toast.success('セットアップが完了しました！');
       
@@ -237,11 +234,12 @@ const Onboarding = () => {
         await (window as any).reloadProfile();
       }
       
-      // 少し待ってからメインページに移動
+      // React Routerのnavigateを使用（window.location.hrefではなく）
       setTimeout(() => {
         console.log('Navigating to main page...');
-        window.location.href = '/';
-      }, 2000);
+        navigate('/'); // SPAナビゲーション
+      }, 1000);
+      
     } catch (error) {
       console.error('Error completing onboarding:', error);
       toast.error('完了処理に失敗しました');

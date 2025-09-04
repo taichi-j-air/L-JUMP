@@ -117,6 +117,14 @@ function AppContent() {
           if (!error) {
             console.log('Profile reloaded:', profileData);
             setProfile(profileData);
+            
+            // オンボーディング完了後の自動リダイレクト処理を追加
+            if (profileData?.onboarding_completed && window.location.pathname === '/onboarding') {
+              setTimeout(() => {
+                console.log('Auto-redirecting after onboarding completion');
+                window.location.href = '/';
+              }, 500);
+            }
           }
         } catch (error) {
           console.error('Profile reload error:', error);
@@ -141,6 +149,11 @@ function AppContent() {
   // シンプルなオンボーディング判定：onboarding_completed が true でない場合はオンボーディングが必要
   const needsOnboarding = user && isValidSession && (!profile || profile.onboarding_completed !== true);
   
+  // オンボーディング完了直後の例外処理を追加
+  const isJustCompleted = profile?.onboarding_completed === true && 
+                         profile?.onboarding_step === 5 &&
+                         window.location.pathname === '/onboarding';
+  
   console.log('Onboarding check:', { 
     user: !!user, 
     isValidSession, 
@@ -150,11 +163,12 @@ function AppContent() {
       first_name: profile.first_name,
       last_name: profile.last_name
     } : null,
-    needsOnboarding
+    needsOnboarding,
+    isJustCompleted
   });
 
-  // オンボーディングが必要で、現在オンボーディングページにいない場合は強制リダイレクト
-  if (needsOnboarding && window.location.pathname !== '/onboarding') {
+  // 判定条件にisJustCompletedを追加
+  if (needsOnboarding && !isJustCompleted && window.location.pathname !== '/onboarding') {
     console.log('Redirecting to onboarding:', { profile, needsOnboarding });
     window.location.href = '/onboarding';
     return <LoadingSpinner message="オンボーディングページに移動中..." size="lg" className="min-h-screen" />
