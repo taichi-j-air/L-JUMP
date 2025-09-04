@@ -106,79 +106,134 @@ serve(async (req) => {
       }
     }
 
-    // ─ Supabase
+    // ─ Supabase (Service Role)
     const supabase = createClient(
       Deno.env.get("SUPABASE_URL")!,
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
     );
 
-    // LINE 資格情報
+    console.log("Supabase client created with service role");
+
+    // LINE 資格情報の取得
+    console.log("Fetching LINE credentials for user:", userId);
     const { data: cred, error: credErr } = await supabase.rpc("get_line_credentials_for_user", {
       p_user_id: userId,
     });
-    if (credErr || !cred?.channel_access_token)
-      return new Response(JSON.stringify({ error: "LINE資格情報エラー", details: credErr }), {
+    
+    if (credErr) {
+      console.error("LINE credentials RPC error:", credErr);
+      return new Response(JSON.stringify({ error: "LINE資格情報取得エラー", details: credErr.message }), {
         headers: { ...cors, "Content-Type": "application/json" },
         status: 400,
       });
+    }
 
-    // 友だち一覧
+    if (!cred?.channel_access_token) {
+      console.error("No channel access token found for user:", userId);
+      return new Response(JSON.stringify({ error: "LINE Channel Access Tokenが設定されていません" }), {
+        headers: { ...cors, "Content-Type": "application/json" },
+        status: 400,
+      });
+    }
+
+    console.log("LINE credentials fetched successfully");
+
+    // 友だち一覧の取得（Service Roleで直接クエリ）
+    console.log("Fetching friends list for user:", userId);
     const { data: friends, error: fErr } = await supabase
       .from("line_friends")
       .select("line_user_id, short_uid")
       .eq("user_id", userId);
-    if (fErr) throw fErr;
-    if (!friends?.length)
-      return new Response(JSON.stringify({ error: "友だちが見つかりません" }), {
+      
+    if (fErr) {
+      console.error("Friends fetch error:", fErr);
+      return new Response(JSON.stringify({ error: "友だち一覧取得エラー", details: fErr.message }), {
+        headers: { ...cors, "Content-Type": "application/json" },
+        status: 500,
+      });
+    }
+
+    if (!friends?.length) {
+      console.log("No friends found for user:", userId);
+      return new Response(JSON.stringify({ error: "配信対象の友だちが見つかりません。LINE友だちを追加してください。" }), {
         headers: { ...cors, "Content-Type": "application/json" },
         status: 400,
       });
+    }
 
-    // ─ Push loop
+    console.log(`Found ${friends.length} friends for user:`, userId);
+
+    // ─ Flexメッセージの配信処理
+    console.log("Starting flex message delivery to", friends.length, "friends");
     const results: { lineUserId: string; success: boolean; error?: any }[] = [];
+    
     for (const { line_user_id, short_uid } of friends) {
+      console.log(`Processing friend: ${line_user_id}, short_uid: ${short_uid}`);
+      
+      // UIDを置換してFlexメッセージを準備
       const withUid = short_uid ? replaceUid(clone(flex), short_uid) : flex;
       const normalized = normalize(withUid);
 
       if (!normalized) {
+        console.error(`Flex message normalization failed for ${line_user_id}`);
         results.push({ lineUserId: line_user_id, success: false, error: "Flex形式不正" });
         continue;
       }
 
-      const res = await fetch("https://api.line.me/v2/bot/message/push", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${cred.channel_access_token}`,
-        },
-        body: JSON.stringify({ to: line_user_id, messages: [normalized] }),
-      });
+      console.log(`Sending message to ${line_user_id}`);
+      
+      try {
+        const res = await fetch("https://api.line.me/v2/bot/message/push", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${cred.channel_access_token}`,
+          },
+          body: JSON.stringify({ to: line_user_id, messages: [normalized] }),
+        });
 
-      if (res.ok) {
-        results.push({ lineUserId: line_user_id, success: true });
-      } else {
-        const err = await (async () => {
+        if (res.ok) {
+          console.log(`Successfully sent message to ${line_user_id}`);
+          results.push({ lineUserId: line_user_id, success: true });
+        } else {
+          console.error(`Failed to send message to ${line_user_id}, status: ${res.status}`);
+          const errorText = await res.text();
+          let errorData;
           try {
-            return await res.json();
+            errorData = JSON.parse(errorText);
           } catch {
-            return await res.text();
+            errorData = errorText;
           }
-        })();
-        results.push({ lineUserId: line_user_id, success: false, error: err });
+          console.error(`LINE API error response:`, errorData);
+          results.push({ lineUserId: line_user_id, success: false, error: errorData });
+        }
+      } catch (fetchError) {
+        console.error(`Network error when sending to ${line_user_id}:`, fetchError);
+        results.push({ lineUserId: line_user_id, success: false, error: `Network error: ${fetchError.message}` });
       }
     }
 
     const ok = results.filter((r) => r.success).length;
+    const failed = results.length - ok;
+    
+    console.log(`Delivery completed: ${ok} success, ${failed} failed`);
+    
     return new Response(
       JSON.stringify({
         success: true,
-        message: `送信 成功${ok} 失敗${results.length - ok}`,
+        message: `送信 成功${ok} 失敗${failed}`,
         results,
+        summary: {
+          total: results.length,
+          successful: ok,
+          failed: failed
+        }
       }),
       { headers: { ...cors, "Content-Type": "application/json" } }
     );
   } catch (e: any) {
-    return new Response(JSON.stringify({ error: "予期しないエラー", details: e.message }), {
+    console.error("Unexpected error in send-flex-message:", e);
+    return new Response(JSON.stringify({ error: "予期しないエラー", details: e.message, stack: e.stack }), {
       headers: { ...cors, "Content-Type": "application/json" },
       status: 500,
     });
