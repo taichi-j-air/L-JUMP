@@ -403,39 +403,9 @@ const Onboarding = () => {
               {currentStep === 3 && (
                 <div className="space-y-6">
                   <div className="mb-6">
-                    <Tabs value={activeVideoTab} onValueChange={setActiveVideoTab} className="w-full">
-                      <TabsList className="grid w-full grid-cols-4 bg-muted/30">
-                        <TabsTrigger value="channel_id" className="text-sm">チャネルID</TabsTrigger>
-                        <TabsTrigger value="channel_secret" className="text-sm">チャネルシークレット</TabsTrigger>
-                        <TabsTrigger value="line_bot_id" className="text-sm">LINEボットID</TabsTrigger>
-                        <TabsTrigger value="channel_access_token" className="text-sm">アクセストークン</TabsTrigger>
-                      </TabsList>
-                       <TabsContent value="channel_id">
-                         <VideoPlayer 
-                           videoType="channel_id"
-                           showTimer={false}
-                           requiredCompletionPercentage={0}
-                         />
-                       </TabsContent>
-                      <TabsContent value="channel_secret">
-                        <VideoPlayer 
-                          videoType="channel_secret"
-                          showTimer={false}
-                        />
-                      </TabsContent>
-                      <TabsContent value="line_bot_id">
-                        <VideoPlayer 
-                          videoType="line_bot_id"
-                          showTimer={false}
-                        />
-                      </TabsContent>
-                      <TabsContent value="channel_access_token">
-                        <VideoPlayer 
-                          videoType="channel_access_token"
-                          showTimer={false}
-                        />
-                      </TabsContent>
-                    </Tabs>
+                    <div className="text-center p-8 bg-muted rounded-lg">
+                      <p className="text-muted-foreground">API設定のための動画は現在準備中です</p>
+                    </div>
                   </div>
 
                   <div className="grid gap-4">
