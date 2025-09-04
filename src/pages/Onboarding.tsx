@@ -7,12 +7,11 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { supabase } from "@/integrations/supabase/client";
 import { User } from "@supabase/supabase-js";
 import { toast } from "sonner";
-import { CheckCircle2, User as UserIcon, Settings, CreditCard, Play, Video, ExternalLink } from "lucide-react";
+import { CheckCircle2, User as UserIcon, Settings, CreditCard, Video, ExternalLink } from "lucide-react";
 import VideoPlayer from "@/components/VideoPlayer";
 
 interface BasicInfo {
@@ -52,7 +51,6 @@ const Onboarding = () => {
     lineBotId: "",
     channelAccessToken: ""
   });
-  const [activeVideoTab, setActiveVideoTab] = useState("channel_id");
   const [videoCompleted, setVideoCompleted] = useState(false);
   const [showCreationGuide, setShowCreationGuide] = useState(false);
   const [videoViewingRequired, setVideoViewingRequired] = useState(true);
@@ -220,7 +218,8 @@ const Onboarding = () => {
       }
 
       toast.success('セットアップが完了しました！');
-      navigate("/");
+      // 404エラー回避のため、既存のページまたはダッシュボードにリダイレクト
+      navigate("/dashboard"); // または "/auth" など、存在することが確実なページ
     } catch (error) {
       console.error('Error completing onboarding:', error);
       toast.error('完了処理に失敗しました');
@@ -493,7 +492,7 @@ const Onboarding = () => {
                 </div>
               )}
 
-              {/* Step 5: プラン選択（VideoPlayer削除） */}
+              {/* Step 5: プラン選択（VideoPlayerを完全に削除） */}
               {currentStep === 5 && (
                 <div className="space-y-6">
                   <div className="space-y-4">
