@@ -50,7 +50,7 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
       setIsCompleted(true);
       onVideoComplete?.();
     }
-  }, [videoViewingRequired, isCompleted, onVideoComplete]);
+  }, [videoViewingRequired, isCompleted]);
 
   useEffect(() => {
     if (videoData && watchProgress > 0) {
@@ -188,7 +188,7 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
       setIsCompleted(true);
       onVideoComplete?.();
     }
-  }, [loading, videoData, isCompleted, onVideoComplete]);
+  }, [loading, videoData, isCompleted]);
 
   if (!videoData) {
     return (
