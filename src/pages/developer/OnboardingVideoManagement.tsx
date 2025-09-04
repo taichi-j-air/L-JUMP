@@ -185,10 +185,15 @@ const OnboardingVideoManagement = () => {
             </h1>
             <p className="text-muted-foreground">オンボーディングで表示される動画を管理できます。</p>
           </div>
-          <Button variant="outline" onClick={() => navigate("/developer/master-mode")}>
-            <ArrowLeft className="w-4 h-4 mr-2" />
-            戻る
-          </Button>
+          <div className="flex gap-2">
+            <Button variant="outline" onClick={() => navigate("/developer/video-progress-settings")}>
+              動画進捗設定
+            </Button>
+            <Button variant="outline" onClick={() => navigate("/developer/master-mode")}>
+              <ArrowLeft className="w-4 h-4 mr-2" />
+              戻る
+            </Button>
+          </div>
         </div>
 
         <div className="space-y-6">

@@ -1,4 +1,5 @@
 import { LogOut, Plus, Users, Settings } from "lucide-react"
+import logoImage from "@/assets/logo.png"
 import { Button } from "./ui/button"
 import { Badge } from "./ui/badge"
 import { Tabs, TabsList, TabsTrigger } from "./ui/tabs"
@@ -135,7 +136,7 @@ export function AppHeader({ user }: AppHeaderProps) {
   return (
     <header className="fixed top-0 left-0 right-0 z-50 bg-background border-b h-14 flex items-center px-4 gap-4">
       <div className="flex items-center gap-2">
-        <h1 className="text-xl font-bold text-primary">L!JUMP</h1>
+        <img src={logoImage} alt="L!JUMP" className="h-8 w-auto" />
       </div>
 
       <div className="flex-1 flex items-center gap-4">
