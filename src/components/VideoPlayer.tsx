@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Loader2 } from "lucide-react";
@@ -36,45 +36,73 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
   const [timeRemaining, setTimeRemaining] = useState(0);
   const [isPlaying, setIsPlaying] = useState(false);
   const [loading, setLoading] = useState(true);
+  
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
   const iframeRef = useRef<HTMLIFrameElement | null>(null);
+  const completionHandledRef = useRef(false);
 
+  // コールバックをメモ化して安定化
+  const handleCompletion = useCallback(() => {
+    if (!completionHandledRef.current && !isCompleted) {
+      completionHandledRef.current = true;
+      setIsCompleted(true);
+      stopTimer();
+      onVideoComplete?.();
+    }
+  }, [onVideoComplete, isCompleted]);
+
+  // 初期データ読み込み
   useEffect(() => {
     loadVideoData();
     loadWatchProgress();
   }, [videoType]);
 
-  // Auto-complete when video viewing is not required
+  // 動画視聴が不要な場合の自動完了（無限ループ修正）
   useEffect(() => {
     console.log('VideoPlayer: videoViewingRequired changed', { videoViewingRequired, isCompleted });
-    if (!videoViewingRequired && !isCompleted) {
+    if (!videoViewingRequired && !isCompleted && !completionHandledRef.current) {
       console.log('VideoPlayer: auto-completing because video viewing not required');
-      setIsCompleted(true);
-      if (onVideoComplete) {
-        setTimeout(() => onVideoComplete(), 0);
-      }
+      handleCompletion();
     }
-  }, [videoViewingRequired, isCompleted]);
+  }, [videoViewingRequired, handleCompletion]); // isCompletedを依存配列から除外
 
+  // 進捗による完了判定（無限ループ修正）
   useEffect(() => {
     console.log('VideoPlayer: watch progress changed', { watchProgress, videoData, isCompleted });
-    if (videoData && watchProgress > 0) {
+    if (videoData && watchProgress > 0 && !isCompleted && !completionHandledRef.current) {
       const completionPercentage = (watchProgress / videoData.video_duration) * 100;
       const requiredPercentage = requiredCompletionPercentage || videoData.completion_percentage;
       
-      if (completionPercentage >= requiredPercentage && !isCompleted) {
+      if (completionPercentage >= requiredPercentage) {
         console.log('VideoPlayer: completing due to watch progress', { completionPercentage, requiredPercentage });
-        setIsCompleted(true);
-        if (onVideoComplete) {
-          setTimeout(() => onVideoComplete(), 0);
-        }
-        stopTimer();
+        handleCompletion();
+        return;
       }
       
+      // 残り時間の計算
       const remaining = Math.max(0, Math.ceil((videoData.video_duration * requiredPercentage / 100) - watchProgress));
       setTimeRemaining(remaining);
     }
-  }, [watchProgress, videoData, requiredCompletionPercentage, isCompleted]);
+  }, [watchProgress, videoData, requiredCompletionPercentage, handleCompletion]); // isCompletedを依存配列から除外
+
+  // 動画データが存在しない場合の自動完了（無限ループ修正）
+  useEffect(() => {
+    console.log('VideoPlayer: video data check', { loading, videoData, isCompleted });
+    if (!loading && !videoData && !isCompleted && !completionHandledRef.current) {
+      console.log('VideoPlayer: auto-completing because no video data');
+      handleCompletion();
+    }
+  }, [loading, videoData, handleCompletion]); // isCompletedを依存配列から除外
+
+  // クリーンアップ
+  useEffect(() => {
+    return () => {
+      if (intervalRef.current) {
+        clearInterval(intervalRef.current);
+        intervalRef.current = null;
+      }
+    };
+  }, []);
 
   const loadVideoData = async () => {
     try {
@@ -107,7 +135,10 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
 
       if (data) {
         setWatchProgress(data.watch_time);
-        setIsCompleted(data.is_completed);
+        if (data.is_completed) {
+          setIsCompleted(true);
+          completionHandledRef.current = true;
+        }
       }
     } catch (error) {
       console.error('Error loading watch progress:', error);
@@ -138,7 +169,7 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
   };
 
   const startTimer = () => {
-    if (intervalRef.current) return;
+    if (intervalRef.current || isCompleted) return;
     
     setIsPlaying(true);
     intervalRef.current = setInterval(() => {
@@ -159,7 +190,7 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
   };
 
   const handleVideoPlay = () => {
-    if (!disabled) {
+    if (!disabled && !isCompleted) {
       startTimer();
     }
   };
@@ -174,14 +205,6 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
     return `${minutes}分${remainingSeconds}秒`;
   };
 
-  useEffect(() => {
-    return () => {
-      if (intervalRef.current) {
-        clearInterval(intervalRef.current);
-      }
-    };
-  }, []);
-
   if (loading) {
     return (
       <div className="flex items-center justify-center w-full h-[630px] bg-muted rounded-lg">
@@ -189,18 +212,6 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
       </div>
     );
   }
-
-  // Auto-complete when video data is not found
-  useEffect(() => {
-    console.log('VideoPlayer: video data check', { loading, videoData, isCompleted });
-    if (!loading && !videoData && !isCompleted) {
-      console.log('VideoPlayer: auto-completing because no video data');
-      setIsCompleted(true);
-      if (onVideoComplete) {
-        setTimeout(() => onVideoComplete(), 0);
-      }
-    }
-  }, [loading, videoData, isCompleted]);
 
   if (!videoData) {
     return (
@@ -231,7 +242,7 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
               // YouTube iframe API integration would go here for real video tracking
               // For demo purposes, we'll simulate video play detection
               const simulateVideoPlay = () => {
-                if (!disabled) {
+                if (!disabled && !isCompleted) {
                   handleVideoPlay();
                 }
               };
@@ -256,7 +267,7 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
         </div>
       )}
 
-      {showTimerDisplay && !isCompleted && (
+      {showTimerDisplay && !isCompleted && videoData && (
         <div className="text-center">
           <p className="text-sm font-medium">
             次のステップボタンが表示されるまで残り {formatTime(timeRemaining)}
@@ -265,7 +276,7 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
             <div 
               className="bg-primary h-2 rounded-full transition-all duration-300"
               style={{ 
-                width: `${videoData ? Math.min(100, (watchProgress / (videoData.video_duration * (requiredCompletionPercentage || videoData.completion_percentage) / 100)) * 100) : 0}%` 
+                width: `${Math.min(100, (watchProgress / (videoData.video_duration * (requiredCompletionPercentage || videoData.completion_percentage) / 100)) * 100)}%` 
               }}
             />
           </div>
@@ -277,7 +288,6 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
           <p className="text-green-600 font-semibold">✓ 動画視聴完了</p>
         </div>
       )}
-
     </div>
   );
 };
