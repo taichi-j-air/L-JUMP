@@ -289,21 +289,28 @@ async function saveIncomingMessage(userId: string, messageText: string, supabase
 
 async function sendReplyMessage(replyToken: string, text: string, supabase: any) {
   try {
-    // Get a LINE channel access token from any configured profile
-    // This is a simplified approach - in production you'd want to match
-    // the webhook destination to the correct profile
+    // Get secure LINE credentials from any configured profile
     const { data: profiles, error } = await supabase
       .from('profiles')
-      .select('line_channel_access_token')
+      .select('user_id')
       .not('line_channel_access_token', 'is', null)
       .limit(1)
 
     if (error || !profiles || profiles.length === 0) {
-      console.error('No LINE access token found:', error)
+      console.error('No profile found for LINE credentials:', error)
       return
     }
 
-    const accessToken = profiles[0].line_channel_access_token
+    // Get secure credentials
+    const { data: credentials, error: credError } = await supabase
+      .rpc('get_line_credentials_for_user', { p_user_id: profiles[0].user_id });
+
+    if (credError || !credentials?.channel_access_token) {
+      console.error('No LINE access token found:', credError)
+      return
+    }
+
+    const accessToken = credentials.channel_access_token
 
     const replyData = {
       replyToken: replyToken,

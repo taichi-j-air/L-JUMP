@@ -223,6 +223,33 @@ export type Database = {
           },
         ]
       }
+      credential_migration_log: {
+        Row: {
+          created_at: string | null
+          details: Json | null
+          id: string
+          migration_type: string
+          status: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string | null
+          details?: Json | null
+          id?: string
+          migration_type: string
+          status: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string | null
+          details?: Json | null
+          id?: string
+          migration_type?: string
+          status?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       flex_messages: {
         Row: {
           content: Json
@@ -2088,6 +2115,10 @@ export type Database = {
           migrated_users: number
         }[]
       }
+      migrate_user_credentials_to_secure: {
+        Args: { p_user_id: string }
+        Returns: Json
+      }
       register_friend_to_scenario: {
         Args: {
           p_display_name?: string
@@ -2119,6 +2150,10 @@ export type Database = {
       validate_and_sanitize_display_name: {
         Args: { name: string }
         Returns: string
+      }
+      validate_and_sanitize_json_input: {
+        Args: { input_json: Json }
+        Returns: Json
       }
       validate_display_name: {
         Args: { name: string }
