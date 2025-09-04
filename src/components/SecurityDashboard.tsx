@@ -1,28 +1,28 @@
 /**
- * Security Monitoring Dashboard Component
+ * Security monitoring dashboard component
  */
-import React, { useEffect, useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { Shield, AlertTriangle, Clock, Activity, Eye, EyeOff } from 'lucide-react';
 import { useSecurityContext } from './SecurityProvider';
+import { Shield, AlertTriangle, Eye, Activity, Trash2 } from 'lucide-react';
+import { format } from 'date-fns';
 
 interface SecurityEvent {
   id: string;
   event_type: string;
   table_name?: string;
-  details: any; // Using any to handle Json type from Supabase
+  details: any;
   created_at: string;
   user_id?: string;
 }
 
 export function SecurityDashboard() {
-  const [events, setEvents] = useState<SecurityEvent[]>([]);
+  const [securityEvents, setSecurityEvents] = useState<SecurityEvent[]>([]);
   const [loading, setLoading] = useState(true);
-  const [showDetails, setShowDetails] = useState(false);
   const { securityStatus, clearSecurityHistory } = useSecurityContext();
 
   useEffect(() => {
@@ -42,7 +42,7 @@ export function SecurityDashboard() {
         return;
       }
 
-      setEvents(data || []);
+      setSecurityEvents(data || []);
     } catch (error) {
       console.error('Error loading security events:', error);
     } finally {
@@ -50,35 +50,46 @@ export function SecurityDashboard() {
     }
   };
 
-  const getSeverityColor = (eventType: string): 'destructive' | 'secondary' | 'outline' | 'default' => {
-    if (eventType.includes('malicious') || eventType.includes('blocked')) return 'destructive';
-    if (eventType.includes('suspicious') || eventType.includes('rate_limit')) return 'secondary';
-    if (eventType.includes('credential') || eventType.includes('access')) return 'outline';
-    return 'default';
-  };
-
-  const getSeverityIcon = (eventType: string) => {
+  const getSeverityBadge = (eventType: string) => {
     if (eventType.includes('malicious') || eventType.includes('blocked')) {
-      return <AlertTriangle className="h-4 w-4 text-destructive" />;
+      return <Badge variant="destructive">Critical</Badge>;
     }
-    if (eventType.includes('credential')) {
-      return <Shield className="h-4 w-4 text-blue-500" />;
+    if (eventType.includes('suspicious') || eventType.includes('failed')) {
+      return <Badge variant="secondary">Warning</Badge>;
     }
-    return <Activity className="h-4 w-4 text-muted-foreground" />;
+    return <Badge variant="outline">Info</Badge>;
   };
 
-  const eventCounts = events.reduce((acc, event) => {
-    acc[event.event_type] = (acc[event.event_type] || 0) + 1;
-    return acc;
-  }, {} as Record<string, number>);
+  const getEventIcon = (eventType: string) => {
+    if (eventType.includes('access')) return <Eye className="h-4 w-4" />;
+    if (eventType.includes('credential')) return <Shield className="h-4 w-4" />;
+    if (eventType.includes('malicious') || eventType.includes('blocked')) return <AlertTriangle className="h-4 w-4" />;
+    return <Activity className="h-4 w-4" />;
+  };
+
+  const formatEventDetails = (details: any) => {
+    if (!details) return 'No details available';
+    
+    const formatted = Object.entries(details)
+      .filter(([key, value]) => value !== null && value !== undefined)
+      .map(([key, value]) => `${key}: ${value}`)
+      .join(', ');
+    
+    return formatted || 'No details available';
+  };
+
+  const handleClearHistory = async () => {
+    if (confirm('Are you sure you want to clear the security event history?')) {
+      clearSecurityHistory();
+      await loadSecurityEvents();
+    }
+  };
 
   if (loading) {
     return (
       <Card>
-        <CardContent className="pt-6">
-          <div className="flex items-center justify-center">
-            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
-          </div>
+        <CardContent className="flex items-center justify-center py-6">
+          <div className="text-muted-foreground">Loading security events...</div>
         </CardContent>
       </Card>
     );
@@ -93,28 +104,29 @@ export function SecurityDashboard() {
             <Shield className="h-5 w-5" />
             Security Status
           </CardTitle>
+          <CardDescription>
+            Current security monitoring status and recent threats
+          </CardDescription>
         </CardHeader>
         <CardContent>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <div className="flex items-center gap-2">
-              <Badge variant={securityStatus.isSecure ? 'default' : 'destructive'}>
-                {securityStatus.isSecure ? 'Secure' : 'Issues Detected'}
-              </Badge>
-              <span className="text-sm text-muted-foreground">Overall Status</span>
+            <div className="text-center">
+              <div className={`text-2xl font-bold ${securityStatus.isSecure ? 'text-green-600' : 'text-red-600'}`}>
+                {securityStatus.isSecure ? 'Secure' : 'Alert'}
+              </div>
+              <div className="text-sm text-muted-foreground">System Status</div>
             </div>
-            
-            <div className="flex items-center gap-2">
-              <Badge variant="outline">
+            <div className="text-center">
+              <div className="text-2xl font-bold text-orange-600">
                 {securityStatus.threats.length}
-              </Badge>
-              <span className="text-sm text-muted-foreground">Active Threats</span>
+              </div>
+              <div className="text-sm text-muted-foreground">Active Threats</div>
             </div>
-            
-            <div className="flex items-center gap-2">
-              <Badge variant={securityStatus.rateLimit.blocked ? 'destructive' : 'default'}>
-                {securityStatus.rateLimit.blocked ? 'Rate Limited' : 'Normal'}
-              </Badge>
-              <span className="text-sm text-muted-foreground">Rate Limiting</span>
+            <div className="text-center">
+              <div className={`text-2xl font-bold ${securityStatus.rateLimit.blocked ? 'text-red-600' : 'text-green-600'}`}>
+                {securityStatus.rateLimit.blocked ? 'Blocked' : 'Normal'}
+              </div>
+              <div className="text-sm text-muted-foreground">Rate Limiting</div>
             </div>
           </div>
 
@@ -122,94 +134,68 @@ export function SecurityDashboard() {
             <Alert className="mt-4">
               <AlertTriangle className="h-4 w-4" />
               <AlertDescription>
-                {securityStatus.threats.length} security threat(s) detected. Recent threats include:{' '}
-                {securityStatus.threats.slice(0, 2).map(t => t.type).join(', ')}
+                {securityStatus.threats.length} security threat(s) detected. Review the events below.
               </AlertDescription>
             </Alert>
           )}
         </CardContent>
       </Card>
 
-      {/* Event Summary */}
+      {/* Security Events Log */}
       <Card>
-        <CardHeader>
-          <CardTitle>Security Event Summary</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-            {Object.entries(eventCounts).slice(0, 8).map(([type, count]) => (
-              <div key={type} className="text-center">
-                <div className="text-2xl font-bold text-primary">{count}</div>
-                <div className="text-xs text-muted-foreground truncate" title={type}>
-                  {type.replace(/_/g, ' ')}
-                </div>
-              </div>
-            ))}
+        <CardHeader className="flex flex-row items-center justify-between">
+          <div>
+            <CardTitle>Security Events</CardTitle>
+            <CardDescription>
+              Recent security events and monitoring data
+            </CardDescription>
           </div>
-        </CardContent>
-      </Card>
-
-      {/* Recent Events */}
-      <Card>
-        <CardHeader>
-          <div className="flex items-center justify-between">
-            <CardTitle>Recent Security Events</CardTitle>
-            <div className="flex gap-2">
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setShowDetails(!showDetails)}
-              >
-                {showDetails ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                {showDetails ? 'Hide Details' : 'Show Details'}
-              </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => {
-                  clearSecurityHistory();
-                  loadSecurityEvents();
-                }}
-              >
-                Clear History
-              </Button>
-            </div>
+          <div className="flex gap-2">
+            <Button variant="outline" size="sm" onClick={loadSecurityEvents}>
+              Refresh
+            </Button>
+            <Button 
+              variant="outline" 
+              size="sm" 
+              onClick={handleClearHistory}
+              className="text-destructive"
+            >
+              <Trash2 className="h-4 w-4 mr-2" />
+              Clear History
+            </Button>
           </div>
         </CardHeader>
         <CardContent>
-          {events.length === 0 ? (
-            <div className="text-center py-8 text-muted-foreground">
+          {securityEvents.length === 0 ? (
+            <div className="text-center py-6 text-muted-foreground">
               No security events recorded
             </div>
           ) : (
             <div className="space-y-3">
-              {events.slice(0, 20).map((event) => (
-                <div key={event.id} className="flex items-start gap-3 p-3 border rounded-lg">
+              {securityEvents.map((event) => (
+                <div
+                  key={event.id}
+                  className="flex items-start gap-3 p-3 border rounded-lg hover:bg-muted/50"
+                >
                   <div className="mt-0.5">
-                    {getSeverityIcon(event.event_type)}
+                    {getEventIcon(event.event_type)}
                   </div>
-                  
                   <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <Badge variant={getSeverityColor(event.event_type)}>
-                        {event.event_type.replace(/_/g, ' ')}
-                      </Badge>
+                    <div className="flex items-center gap-2 mb-1">
+                      <span className="font-medium">{event.event_type.replace(/_/g, ' ')}</span>
+                      {getSeverityBadge(event.event_type)}
                       {event.table_name && (
                         <Badge variant="outline" className="text-xs">
                           {event.table_name}
                         </Badge>
                       )}
-                      <div className="flex items-center gap-1 text-xs text-muted-foreground">
-                        <Clock className="h-3 w-3" />
-                        {new Date(event.created_at).toLocaleString()}
-                      </div>
                     </div>
-                    
-                    {showDetails && event.details && (
-                      <div className="mt-2 text-xs bg-muted p-2 rounded font-mono">
-                        {JSON.stringify(event.details, null, 2)}
-                      </div>
-                    )}
+                    <div className="text-sm text-muted-foreground mb-1">
+                      {formatEventDetails(event.details)}
+                    </div>
+                    <div className="text-xs text-muted-foreground">
+                      {format(new Date(event.created_at), 'yyyy-MM-dd HH:mm:ss')}
+                    </div>
                   </div>
                 </div>
               ))}
