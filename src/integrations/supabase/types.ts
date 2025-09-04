@@ -1094,6 +1094,36 @@ export type Database = {
         }
         Relationships: []
       }
+      rate_limit_log: {
+        Row: {
+          action_type: string
+          attempts: number
+          blocked_until: string | null
+          created_at: string
+          id: string
+          identifier: string
+          window_start: string
+        }
+        Insert: {
+          action_type?: string
+          attempts?: number
+          blocked_until?: string | null
+          created_at?: string
+          id?: string
+          identifier: string
+          window_start?: string
+        }
+        Update: {
+          action_type?: string
+          attempts?: number
+          blocked_until?: string | null
+          created_at?: string
+          id?: string
+          identifier?: string
+          window_start?: string
+        }
+        Relationships: []
+      }
       scenario_friend_logs: {
         Row: {
           added_at: string
@@ -1343,6 +1373,42 @@ export type Database = {
           id?: string
           ip_address?: string | null
           success?: boolean
+          user_agent?: string | null
+          user_id?: string | null
+        }
+        Relationships: []
+      }
+      security_events_log: {
+        Row: {
+          created_at: string
+          details: Json | null
+          event_type: string
+          id: string
+          ip_address: string | null
+          record_id: string | null
+          table_name: string | null
+          user_agent: string | null
+          user_id: string | null
+        }
+        Insert: {
+          created_at?: string
+          details?: Json | null
+          event_type: string
+          id?: string
+          ip_address?: string | null
+          record_id?: string | null
+          table_name?: string | null
+          user_agent?: string | null
+          user_id?: string | null
+        }
+        Update: {
+          created_at?: string
+          details?: Json | null
+          event_type?: string
+          id?: string
+          ip_address?: string | null
+          record_id?: string | null
+          table_name?: string | null
           user_agent?: string | null
           user_id?: string | null
         }
@@ -2080,15 +2146,24 @@ export type Database = {
         Returns: undefined
       }
       log_security_event_enhanced: {
-        Args: {
-          p_action?: string
-          p_details?: Json
-          p_ip_address?: string
-          p_severity?: string
-          p_success?: boolean
-          p_user_agent?: string
-          p_user_id?: string
-        }
+        Args:
+          | {
+              p_action?: string
+              p_details?: Json
+              p_ip_address?: string
+              p_severity?: string
+              p_success?: boolean
+              p_user_agent?: string
+              p_user_id?: string
+            }
+          | {
+              p_details?: Json
+              p_event_type: string
+              p_ip_address?: string
+              p_record_id?: string
+              p_table_name?: string
+              p_user_agent?: string
+            }
         Returns: undefined
       }
       lookup_friend_by_uid: {
