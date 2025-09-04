@@ -57,17 +57,17 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
     loadWatchProgress();
   }, [videoType]);
 
-  // 動画視聴が不要な場合の自動完了を無効化（ユーザーが実際に視聴する必要がある）
+  // 動画設定がない場合の処理
   useEffect(() => {
-    console.log('VideoPlayer: videoViewingRequired changed', { videoViewingRequired, isCompleted });
-    // 動画視聴が不要でも自動完了させない - ユーザーが実際に視聴する必要がある
-    // if (!videoViewingRequired && !isCompleted && !completionHandledRef.current) {
-    //   console.log('VideoPlayer: auto-completing because video viewing not required');
-    //   handleCompletion();
-    // }
-  }, [videoViewingRequired, handleCompletion]);
+    console.log('VideoPlayer: video data check', { loading, videoData, isCompleted });
+    // 動画データがない場合は自動的に完了状態にする
+    if (!loading && !videoData && !isCompleted && !completionHandledRef.current) {
+      console.log('VideoPlayer: auto-completing because no video data');
+      handleCompletion();
+    }
+  }, [loading, videoData, handleCompletion, isCompleted]);
 
-  // 進捗による完了判定（無限ループ修正）
+  // 進捗による完了判定
   useEffect(() => {
     console.log('VideoPlayer: watch progress changed', { watchProgress, videoData, isCompleted });
     if (videoData && watchProgress > 0 && !isCompleted && !completionHandledRef.current) {
@@ -84,17 +84,7 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
       const remaining = Math.max(0, Math.ceil((videoData.video_duration * requiredPercentage / 100) - watchProgress));
       setTimeRemaining(remaining);
     }
-  }, [watchProgress, videoData, requiredCompletionPercentage, handleCompletion]); // isCompletedを依存配列から除外
-
-  // 動画データが存在しない場合は表示のみ行う（自動完了させない）
-  useEffect(() => {
-    console.log('VideoPlayer: video data check', { loading, videoData, isCompleted });
-    // 動画データがない場合でも自動完了させない
-    // if (!loading && !videoData && !isCompleted && !completionHandledRef.current) {
-    //   console.log('VideoPlayer: auto-completing because no video data');
-    //   handleCompletion();
-    // }
-  }, [loading, videoData, handleCompletion]);
+  }, [watchProgress, videoData, requiredCompletionPercentage, handleCompletion, isCompleted]);
 
   // クリーンアップ
   useEffect(() => {
@@ -210,7 +200,7 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
     
     if (match) {
       const videoId = match[1];
-      return `https://www.youtube.com/embed/${videoId}?enablejsapi=1&origin=${encodeURIComponent(window.location.origin)}&rel=0&modestbranding=1`;
+      return `https://www.youtube.com/embed/${videoId}?enablejsapi=1&origin=${encodeURIComponent(window.location.origin)}&rel=0&modestbranding=1&autoplay=0&controls=1`;
     }
     
     return url; // 既に埋め込み形式の場合はそのまま返す
@@ -231,11 +221,8 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
   }
 
   if (!videoData) {
-    return (
-      <div className="flex items-center justify-center w-full h-[630px] bg-muted rounded-lg">
-        <p className="text-muted-foreground">動画が設定されていません</p>
-      </div>
-    );
+    // 動画データがない場合は何も表示しない（コンポーネントの呼び出し元で制御）
+    return null;
   }
 
   const showTimerDisplay = showTimer && (videoData.show_timer || disabled);
@@ -259,8 +246,35 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
               sandbox="allow-scripts allow-same-origin allow-presentation"
               onLoad={() => {
                 console.log('Video iframe loaded for:', videoType);
-                // 実際の動画再生検知は手動で開始ボタンを押した時のみ
-                // 自動的に再生を開始しない
+                // YouTube Player APIの設定でメッセージリスナーを追加
+                window.addEventListener('message', (event) => {
+                  if (event.origin !== 'https://www.youtube.com') return;
+                  
+                  const data = event.data;
+                  if (data && typeof data === 'string') {
+                    try {
+                      const parsed = JSON.parse(data);
+                      if (parsed.event === 'video-progress') {
+                        // YouTube動画の進捗を受信
+                        const currentTime = parsed.info?.currentTime || 0;
+                        if (currentTime > 0 && !isCompleted) {
+                          setWatchProgress(Math.floor(currentTime));
+                          if (!isPlaying) {
+                            setIsPlaying(true);
+                          }
+                        }
+                      } else if (parsed.event === 'video-play' && !isCompleted) {
+                        // YouTube動画の再生開始
+                        handleVideoPlay();
+                      } else if (parsed.event === 'video-pause') {
+                        // YouTube動画の一時停止
+                        handleVideoPause();
+                      }
+                    } catch (e) {
+                      // JSON解析エラーは無視
+                    }
+                  }
+                });
               }}
               onError={(e) => {
                 console.error('Video iframe error:', e);
@@ -305,8 +319,8 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
         </div>
       )}
 
-      {/* 動画再生コントロール */}
-      {!isCompleted && videoData && (
+      {/* 動画再生コントロール - YouTubeプレイヤーが直接制御するため非表示 */}
+      {false && !isCompleted && videoData && (
         <div className="text-center space-y-2">
           {!isPlaying ? (
             <Button onClick={handleVideoPlay} className="bg-red-600 hover:bg-red-700 text-white">
