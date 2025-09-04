@@ -36,14 +36,11 @@ serve(async (req) => {
       return new Response('認証エラー', { status: 401, headers: corsHeaders });
     }
 
-    // ユーザーのLINE設定を取得
-    const { data: profile, error: profileError } = await supabase
-      .from('profiles')
-      .select('line_channel_access_token')
-      .eq('user_id', user.id)
-      .single();
+    // Get secure LINE credentials
+    const { data: credentials, error: credError } = await supabase
+      .rpc('get_line_credentials_for_user', { p_user_id: user.id });
 
-    if (profileError || !profile?.line_channel_access_token) {
+    if (credError || !credentials?.channel_access_token) {
       return new Response('LINE API設定が見つかりません', { status: 400, headers: corsHeaders });
     }
 
@@ -51,7 +48,7 @@ serve(async (req) => {
     const lineResponse = await fetch('https://api.line.me/v2/bot/followers/ids', {
       method: 'GET',
       headers: {
-        'Authorization': `Bearer ${profile.line_channel_access_token}`,
+        'Authorization': `Bearer ${credentials.channel_access_token}`,
         'Content-Type': 'application/json',
       },
     });
@@ -70,7 +67,7 @@ serve(async (req) => {
       try {
         const profileResponse = await fetch(`https://api.line.me/v2/bot/profile/${userId}`, {
           headers: {
-            'Authorization': `Bearer ${profile.line_channel_access_token}`,
+            'Authorization': `Bearer ${credentials.channel_access_token}`,
           },
         });
 

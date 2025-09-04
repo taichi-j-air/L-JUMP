@@ -536,12 +536,17 @@ async function deliverStepMessages(supabase: any, stepTracking: any) {
     }
     
     const lineUserId = friendInfo.line_user_id
-    const accessToken = friendInfo.profiles.line_channel_access_token
     
-    if (!accessToken) {
-      console.error('LINE アクセストークンが見つかりません')
+    // Get secure LINE credentials
+    const { data: credentials, error: credError } = await supabase
+      .rpc('get_line_credentials_for_user', { p_user_id: friendInfo.user_id });
+    
+    if (credError || !credentials?.channel_access_token) {
+      console.error('LINE アクセストークンが見つかりません:', credError)
       return
     }
+    
+    const accessToken = credentials.channel_access_token
     
     // Send each message
     for (const message of sortedMessages) {

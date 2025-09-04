@@ -125,14 +125,11 @@ serve(async (req) => {
     const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
     const supabase = createClient(supabaseUrl, supabaseServiceKey)
 
-    // プロファイル（LINEチャネルアクセストークン）
-    const { data: profile, error: profileError } = await supabase
-      .from('profiles')
-      .select('line_channel_access_token')
-      .eq('user_id', userId)
-      .single()
+    // Get secure LINE credentials
+    const { data: credentials, error: credError } = await supabase
+      .rpc('get_line_credentials_for_user', { p_user_id: userId });
 
-    if (profileError || !profile?.line_channel_access_token) {
+    if (credError || !credentials?.channel_access_token) {
       return new Response(
         JSON.stringify({ error: 'LINE APIアクセストークンが未設定か取得に失敗しました' }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 400 }
@@ -184,7 +181,7 @@ serve(async (req) => {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
-            'Authorization': `Bearer ${profile.line_channel_access_token}`,
+            'Authorization': `Bearer ${credentials.channel_access_token}`,
           },
           body: JSON.stringify(payload)
         })

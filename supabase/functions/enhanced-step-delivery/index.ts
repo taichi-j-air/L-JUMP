@@ -105,13 +105,16 @@ async function processReadySteps(supabase: any) {
         .eq('step_id', tracking.step_id)
         .order('message_order');
 
-      // Send messages via LINE
-      const accessToken = tracking.step_scenarios.profiles.line_channel_access_token;
+      // Get secure LINE credentials
+      const { data: credentials, error: credError } = await supabase
+        .rpc('get_line_credentials_for_user', { p_user_id: tracking.step_scenarios.user_id });
       
-      if (!accessToken) {
-        console.warn(`No access token for scenario ${tracking.step_scenarios.name}`);
+      if (credError || !credentials?.channel_access_token) {
+        console.warn(`No access token for scenario ${tracking.step_scenarios.name}:`, credError);
         continue;
       }
+      
+      const accessToken = credentials.channel_access_token;
 
       // Get friend's short_uid for UID parameter
       const { data: friendData } = await supabase
