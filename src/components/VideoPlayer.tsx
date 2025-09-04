@@ -110,10 +110,10 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
         .from('onboarding_videos')
         .select('*')
         .eq('video_type', videoType)
-        .single();
+        .maybeSingle(); // .single() から .maybeSingle() に変更（406エラー修正）
 
       if (error) throw error;
-      setVideoData(data);
+      setVideoData(data); // dataがnullでもエラーにならない
     } catch (error) {
       console.error('Error loading video data:', error);
     } finally {
@@ -131,7 +131,7 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
         .select('*')
         .eq('user_id', session.session.user.id)
         .eq('video_type', videoType)
-        .single();
+        .maybeSingle(); // .single() から .maybeSingle() に変更（406エラー修正）
 
       if (data) {
         setWatchProgress(data.watch_time);
