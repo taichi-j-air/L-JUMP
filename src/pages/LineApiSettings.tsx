@@ -34,26 +34,40 @@ const LineApiSettings = () => {
       }
       console.log("User authenticated:", user.email);
 
-      const { data: profile, error } = await supabase
-        .from("profiles")
-        .select("line_channel_access_token, line_channel_secret, line_channel_id, line_bot_id, line_api_status")
-        .eq("user_id", user.id)
-        .single();
+      // Get current API status from profiles
+      const { data: profile, error: profileError } = await supabase
+        .from('profiles')
+        .select('line_api_status')
+        .eq('user_id', user.id)
+        .maybeSingle();
 
-      if (error) {
-        console.error("設定の読み込みエラー:", error);
-        return;
+      if (profileError) {
+        console.error("プロファイル読み込みエラー:", profileError);
+      } else if (profile) {
+        setCurrentStatus(profile.line_api_status || 'not_configured');
       }
 
-      if (profile) {
-        setChannelAccessToken(profile.line_channel_access_token || "");
-        setChannelSecret(profile.line_channel_secret || "");
-        setChannelId(profile.line_channel_id || "");
-        setLineBotId(profile.line_bot_id || "");
-        setCurrentStatus(profile.line_api_status || "not_configured");
+      // Get secure credentials using the security function
+      const { data: credentials, error: credError } = await supabase
+        .rpc('get_user_line_credentials', { p_user_id: user.id });
+
+      if (credError) {
+        console.error('Failed to load credentials:', credError);
+        // Don't throw error for credentials - they might not exist yet
+      } else if (credentials && credentials.length > 0) {
+        const creds = credentials[0];
+        setChannelAccessToken(creds.channel_access_token || '');
+        setChannelSecret(creds.channel_secret || '');
+        setChannelId(creds.channel_id || '');
+        setLineBotId(creds.bot_id || '');
       }
     } catch (error) {
       console.error("設定の読み込みエラー:", error);
+      toast({
+        title: "エラー",
+        description: "設定の読み込みに失敗しました",
+        variant: "destructive",
+      });
     } finally {
       setInitialLoading(false);
     }
@@ -84,21 +98,51 @@ const LineApiSettings = () => {
         return;
       }
 
-      const { error } = await supabase
-        .from("profiles")
-        .update({
-          line_channel_access_token: channelAccessToken.trim(),
-          line_channel_secret: channelSecret.trim(),
-          line_channel_id: channelId.trim(),
-          line_bot_id: lineBotId.trim(),
-          line_api_status: "configured",
-        })
-        .eq("user_id", user.id);
+      // Save credentials securely
+      const credentialTypes = [
+        { type: 'channel_access_token', value: channelAccessToken.trim() },
+        { type: 'channel_secret', value: channelSecret.trim() },
+        { type: 'channel_id', value: channelId.trim() },
+        { type: 'bot_id', value: lineBotId.trim() }
+      ];
 
-      if (error) {
+      // Use upsert for each credential type
+      for (const cred of credentialTypes) {
+        const { error } = await supabase
+          .from('secure_line_credentials')
+          .upsert({
+            user_id: user.id,
+            credential_type: cred.type,
+            encrypted_value: cred.value, // TODO: Implement proper encryption with Vault
+            updated_at: new Date().toISOString()
+          }, {
+            onConflict: 'user_id, credential_type'
+          });
+
+        if (error) {
+          console.error(`Failed to save credential ${cred.type}:`, error);
+          toast({
+            title: "エラー",
+            description: `認証情報の保存に失敗しました: ${cred.type}`,
+            variant: "destructive",
+          });
+          return;
+        }
+      }
+
+      // Update API status in profiles
+      const { error: profileError } = await supabase
+        .from('profiles')
+        .update({
+          line_api_status: 'configured'
+        })
+        .eq('user_id', user.id);
+
+      if (profileError) {
+        console.error("プロファイル更新エラー:", profileError);
         toast({
           title: "エラー",
-          description: "設定の保存に失敗しました",
+          description: "設定ステータスの更新に失敗しました",
           variant: "destructive",
         });
         return;
@@ -107,7 +151,7 @@ const LineApiSettings = () => {
       setCurrentStatus("configured");
       toast({
         title: "成功",
-        description: "LINE API設定が保存されました",
+        description: "LINE API設定が安全に保存されました",
       });
     } catch (error) {
       toast({

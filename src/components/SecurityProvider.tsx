@@ -6,6 +6,7 @@ import { sanitizeTextInput, validateContentSecurityPolicy, rateLimit } from '@/l
 
 interface SecurityContextType {
   sanitizeInput: (input: string) => string;
+  sanitizeRichInput: (input: string) => string;
   validateContent: (content: string) => boolean;
   checkRateLimit: (key: string, max: number, window: number) => boolean;
   reportSecurityIssue: (issue: string, details?: any) => void;
@@ -30,6 +31,20 @@ export function SecurityProvider({ children }: SecurityProviderProps) {
 
   const sanitizeInput = (input: string): string => {
     return sanitizeTextInput(input);
+  };
+
+  const sanitizeRichInput = (input: string): string => {
+    // Enhanced sanitization for rich content
+    if (!input) return '';
+    
+    return input
+      .replace(/<script[^>]*>.*?<\/script>/gis, '') // Remove script tags
+      .replace(/<iframe[^>]*>.*?<\/iframe>/gis, '') // Remove iframe tags
+      .replace(/on\w+\s*=\s*["'][^"']*["']/gi, '') // Remove event handlers
+      .replace(/javascript:\s*[^"'\s]*/gi, '') // Remove javascript: URLs
+      .replace(/vbscript:\s*[^"'\s]*/gi, '') // Remove vbscript: URLs
+      .replace(/data:\s*(?!image\/)[^"'\s]*/gi, '') // Remove non-image data: URLs
+      .trim();
   };
 
   const validateContent = (content: string): boolean => {
@@ -91,6 +106,7 @@ export function SecurityProvider({ children }: SecurityProviderProps) {
 
   const contextValue: SecurityContextType = {
     sanitizeInput,
+    sanitizeRichInput,
     validateContent,
     checkRateLimit,
     reportSecurityIssue

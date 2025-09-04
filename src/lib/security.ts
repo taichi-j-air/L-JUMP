@@ -17,7 +17,24 @@ export function sanitizeTextInput(input: string | null | undefined): string {
     .replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, '') // Remove control characters
     .replace(/[\u200B-\u200D\uFEFF]/g, '') // Remove zero-width characters
     .trim()
-    .substring(0, 1000); // Reasonable length limit
+    .substring(0, 10000); // Increased length limit for legitimate use cases
+}
+
+/**
+ * Enhanced XSS prevention for rich content
+ */
+export function sanitizeRichContent(content: string | null | undefined): string {
+  if (!content) return '';
+  
+  // Allow safe HTML tags but remove dangerous attributes and scripts
+  return content
+    .replace(/<script[^>]*>.*?<\/script>/gis, '') // Remove script tags
+    .replace(/<iframe[^>]*>.*?<\/iframe>/gis, '') // Remove iframe tags
+    .replace(/on\w+\s*=\s*["'][^"']*["']/gi, '') // Remove event handlers
+    .replace(/javascript:\s*[^"'\s]*/gi, '') // Remove javascript: URLs
+    .replace(/vbscript:\s*[^"'\s]*/gi, '') // Remove vbscript: URLs
+    .replace(/data:\s*(?!image\/)[^"'\s]*/gi, '') // Remove non-image data: URLs
+    .trim();
 }
 
 /**
