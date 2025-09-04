@@ -164,7 +164,34 @@ const Onboarding = () => {
     }
 
     if (currentStep === 3) {
-      // Save API settings
+      // Save API settings to both secure table and profiles for backward compatibility
+      const credentialUpdates = [
+        { type: 'channel_access_token', value: apiSettings.channelAccessToken },
+        { type: 'channel_secret', value: apiSettings.channelSecret },
+        { type: 'channel_id', value: apiSettings.channelId },
+        { type: 'bot_id', value: apiSettings.lineBotId }
+      ];
+
+      for (const credential of credentialUpdates) {
+        if (credential.value) {
+          const { error: credError } = await supabase
+            .from('secure_line_credentials')
+            .upsert({
+              user_id: user!.id,
+              credential_type: credential.type,
+              encrypted_value: credential.value,
+              updated_at: new Date().toISOString()
+            }, {
+              onConflict: 'user_id, credential_type'
+            });
+
+          if (credError) {
+            console.error('Failed to save credential:', credError);
+          }
+        }
+      }
+
+      // Also update profiles table for LINE Channel settings UI
       const { error } = await supabase
         .from('profiles')
         .update({
@@ -452,11 +479,12 @@ const Onboarding = () => {
               {/* Step 3: LINE API設定 */}
               {currentStep === 3 && (
                 <div className="space-y-6">
-                  <div className="mb-6">
-                    <div className="text-center p-8 bg-muted rounded-lg">
-                      <p className="text-muted-foreground">API設定のための動画は現在準備中です</p>
-                    </div>
-                  </div>
+                  <VideoPlayer 
+                    videoType="step3" 
+                    onVideoComplete={handleVideoComplete}
+                    videoViewingRequired={true}
+                    requiredCompletionPercentage={80}
+                  />
                   <div className="grid gap-4">
                     <div className="space-y-2">
                       <Label htmlFor="channelId">チャネルID（Channel ID）<span className="text-red-500">*</span></Label>
@@ -517,12 +545,10 @@ const Onboarding = () => {
                   </div>
                   
                   <VideoPlayer 
-                    videoType="usage_tutorial" 
+                    videoType="step4" 
                     onVideoComplete={handleVideoComplete}
-                    showTimer={true}
-                    requiredCompletionPercentage={30}
-                    disabled={false}
-                    videoViewingRequired={false}
+                    videoViewingRequired={true}
+                    requiredCompletionPercentage={90}
                   />
                 </div>
               )}

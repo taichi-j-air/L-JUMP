@@ -57,14 +57,15 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
     loadWatchProgress();
   }, [videoType]);
 
-  // 動画視聴が不要な場合の自動完了（無限ループ修正）
+  // 動画視聴が不要な場合の自動完了を無効化（ユーザーが実際に視聴する必要がある）
   useEffect(() => {
     console.log('VideoPlayer: videoViewingRequired changed', { videoViewingRequired, isCompleted });
-    if (!videoViewingRequired && !isCompleted && !completionHandledRef.current) {
-      console.log('VideoPlayer: auto-completing because video viewing not required');
-      handleCompletion();
-    }
-  }, [videoViewingRequired, handleCompletion]); // isCompletedを依存配列から除外
+    // 動画視聴が不要でも自動完了させない - ユーザーが実際に視聴する必要がある
+    // if (!videoViewingRequired && !isCompleted && !completionHandledRef.current) {
+    //   console.log('VideoPlayer: auto-completing because video viewing not required');
+    //   handleCompletion();
+    // }
+  }, [videoViewingRequired, handleCompletion]);
 
   // 進捗による完了判定（無限ループ修正）
   useEffect(() => {
@@ -85,14 +86,15 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
     }
   }, [watchProgress, videoData, requiredCompletionPercentage, handleCompletion]); // isCompletedを依存配列から除外
 
-  // 動画データが存在しない場合の自動完了（無限ループ修正）
+  // 動画データが存在しない場合は表示のみ行う（自動完了させない）
   useEffect(() => {
     console.log('VideoPlayer: video data check', { loading, videoData, isCompleted });
-    if (!loading && !videoData && !isCompleted && !completionHandledRef.current) {
-      console.log('VideoPlayer: auto-completing because no video data');
-      handleCompletion();
-    }
-  }, [loading, videoData, handleCompletion]); // isCompletedを依存配列から除外
+    // 動画データがない場合でも自動完了させない
+    // if (!loading && !videoData && !isCompleted && !completionHandledRef.current) {
+    //   console.log('VideoPlayer: auto-completing because no video data');
+    //   handleCompletion();
+    // }
+  }, [loading, videoData, handleCompletion]);
 
   // クリーンアップ
   useEffect(() => {
