@@ -100,12 +100,18 @@ function normalizeFlexMessage(input: any): { type: 'flex'; altText: string; cont
 }
 
 serve(async (req) => {
+  console.log('[send-flex-message] Function called, method:', req.method);
+  console.log('[send-flex-message] Request headers:', Object.fromEntries(req.headers.entries()));
+  
   // CORS preflight
   if (req.method === 'OPTIONS') {
+    console.log('[send-flex-message] Returning CORS preflight response');
     return new Response(null, { headers: corsHeaders })
   }
 
   try {
+    console.log('[send-flex-message] Starting request processing');
+    
     // Authentication check
     const authHeader = req.headers.get('Authorization')
     if (!authHeader) {
@@ -116,7 +122,19 @@ serve(async (req) => {
       )
     }
 
-    const body = await req.json()
+    console.log('[send-flex-message] About to parse request body');
+    let body;
+    try {
+      body = await req.json()
+      console.log('[send-flex-message] Successfully parsed request body');
+    } catch (parseError) {
+      console.log('[send-flex-message] Failed to parse request body:', parseError);
+      return new Response(
+        JSON.stringify({ error: 'リクエストボディの解析に失敗しました' }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 400 }
+      )
+    }
+    
     const rawFlexMessage = body.flexMessage
     const userId = body.userId as string
 
