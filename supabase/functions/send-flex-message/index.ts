@@ -165,35 +165,50 @@ serve(async (req) => {
     }
 
     // Supabase
+    console.error('[send-flex-message] Initializing Supabase client...');
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!
     const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
+    console.error('[send-flex-message] SUPABASE_URL:', supabaseUrl);
+    console.error('[send-flex-message] Service key available:', !!supabaseServiceKey);
+    
     const supabase = createClient(supabaseUrl, supabaseServiceKey)
+    console.error('[send-flex-message] Supabase client created successfully');
 
     // Get secure LINE credentials
+    console.error('[send-flex-message] Fetching LINE credentials for user:', userId);
     const { data: credentials, error: credError } = await supabase
       .rpc('get_line_credentials_for_user', { p_user_id: userId });
 
+    console.error('[send-flex-message] Credentials fetch result:', { hasCredentials: !!credentials, error: credError });
+    
     if (credError || !credentials?.channel_access_token) {
+      console.error('[send-flex-message] LINE credentials error:', credError);
+      console.error('[send-flex-message] Credentials data:', credentials);
       return new Response(
-        JSON.stringify({ error: 'LINE APIアクセストークンが未設定か取得に失敗しました' }),
+        JSON.stringify({ error: 'LINE APIアクセストークンが未設定か取得に失敗しました', details: credError }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 400 }
       )
     }
 
     // 送信対象（友だち）
+    console.error('[send-flex-message] Fetching friends list for user:', userId);
     const { data: friends, error: friendsError } = await supabase
       .from('line_friends')
       .select('line_user_id, short_uid')
       .eq('user_id', userId)
 
+    console.error('[send-flex-message] Friends fetch result:', { friendsCount: friends?.length, error: friendsError });
+
     if (friendsError) {
+      console.error('[send-flex-message] Friends list error:', friendsError);
       return new Response(
-        JSON.stringify({ error: '友だちリストの取得に失敗しました' }),
+        JSON.stringify({ error: '友だちリストの取得に失敗しました', details: friendsError }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 500 }
       )
     }
 
     if (!friends?.length) {
+      console.error('[send-flex-message] No friends found for user:', userId);
       return new Response(
         JSON.stringify({ error: '送信対象の友だちが見つかりません' }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 400 }
