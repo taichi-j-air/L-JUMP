@@ -98,8 +98,30 @@ const OnboardingVideoManagement = () => {
 
   const loadVideoSettings = async () => {
     try {
-      // 実際の実装では、video_settingsテーブルからデータを取得
-      // 今回はローカルステートで管理
+      const { data: existingVideos, error } = await supabase
+        .from('onboarding_videos')
+        .select('*')
+        .order('created_at', { ascending: true });
+
+      if (error) {
+        console.error('Error loading videos:', error);
+        return;
+      }
+
+      // 既存のデータがある場合は更新
+      if (existingVideos && existingVideos.length > 0) {
+        setVideos(prev => prev.map(video => {
+          const existing = existingVideos.find(v => v.video_type === video.id);
+          if (existing) {
+            return {
+              ...video,
+              url: existing.video_url || '',
+              embed_code: existing.custom_text || ''
+            };
+          }
+          return video;
+        }));
+      }
     } catch (error) {
       console.error("Error loading video settings:", error);
     }
@@ -114,8 +136,29 @@ const OnboardingVideoManagement = () => {
   const handleSave = async () => {
     setLoading(true);
     try {
-      // 実際の実装では、video_settingsテーブルに保存
-      // 今回は成功メッセージのみ
+      // 各動画設定をデータベースに保存
+      for (const video of videos) {
+        if (!video.url.trim()) continue; // 空のURLはスキップ
+
+        const { error } = await supabase
+          .from('onboarding_videos')
+          .upsert({
+            video_type: video.id,
+            video_url: video.url,
+            custom_text: video.embed_code,
+            video_duration: null, // 必要に応じて設定
+            completion_percentage: 100,
+            show_timer: true
+          }, {
+            onConflict: 'video_type'
+          });
+
+        if (error) {
+          console.error(`Error saving video ${video.id}:`, error);
+          throw error;
+        }
+      }
+      
       toast.success("動画設定を保存しました");
     } catch (error) {
       console.error("Error saving video settings:", error);

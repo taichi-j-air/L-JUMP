@@ -147,8 +147,8 @@ function AppContent() {
     return <LoadingSpinner message="アプリケーション初期化中..." size="lg" className="min-h-screen" />
   }
 
-  // シンプルなオンボーディング判定：onboarding_completed が true でない場合はオンボーディングが必要
-  const needsOnboarding = user && isValidSession && (!profile || profile.onboarding_completed !== true);
+  // シンプルなオンボーディング判定：認証済みかつプロファイルが存在しオンボーディング未完了の場合
+  const needsOnboarding = user && isValidSession && profile && profile.onboarding_completed !== true;
   
   // オンボーディング完了直後の例外処理を追加
   const isJustCompleted = profile?.onboarding_completed === true && 
