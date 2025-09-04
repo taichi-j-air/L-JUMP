@@ -138,20 +138,20 @@ function AppContent() {
     return <LoadingSpinner message="アプリケーション初期化中..." size="lg" className="min-h-screen" />
   }
 
+  // シンプルなオンボーディング判定：onboarding_completed が true でない場合はオンボーディングが必要
+  const needsOnboarding = user && isValidSession && (!profile || profile.onboarding_completed !== true);
+  
   console.log('Onboarding check:', { 
     user: !!user, 
     isValidSession, 
-    profile, 
-    needsOnboarding: !profile || profile.onboarding_completed !== true 
+    profile: profile ? {
+      onboarding_completed: profile.onboarding_completed,
+      onboarding_step: profile.onboarding_step,
+      first_name: profile.first_name,
+      last_name: profile.last_name
+    } : null,
+    needsOnboarding
   });
-
-  // 認証されているが、オンボーディングが未完了または基本情報が不足している場合
-  const needsOnboarding = user && isValidSession && (
-    !profile || 
-    profile.onboarding_completed !== true || 
-    !profile.first_name || 
-    !profile.last_name
-  );
 
   // オンボーディングが必要で、現在オンボーディングページにいない場合は強制リダイレクト
   if (needsOnboarding && window.location.pathname !== '/onboarding') {

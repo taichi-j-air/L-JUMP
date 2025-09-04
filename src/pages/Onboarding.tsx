@@ -207,13 +207,20 @@ const Onboarding = () => {
     try {
       console.log('Starting onboarding completion...');
       
-      const { error } = await supabase
+      // 明示的にオンボーディング完了をマーク
+      const { data, error } = await supabase
         .from('profiles')
         .update({
           onboarding_completed: true,
-          onboarding_step: 5 // 最終ステップを記録
+          onboarding_step: 5,
+          first_name: basicInfo.firstName,
+          last_name: basicInfo.lastName,
+          updated_at: new Date().toISOString()
         })
-        .eq('user_id', user!.id);
+        .eq('user_id', user!.id)
+        .select();
+      
+      console.log('Update result:', { data, error });
 
       if (error) {
         console.error('Error completing onboarding:', error);
