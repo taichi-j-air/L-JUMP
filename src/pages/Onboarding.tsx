@@ -13,6 +13,7 @@ import { User } from "@supabase/supabase-js";
 import { toast } from "sonner";
 import { CheckCircle2, User as UserIcon, Settings, CreditCard, Video, ExternalLink } from "lucide-react";
 import VideoPlayer from "@/components/VideoPlayer";
+import { PlanSelection } from "@/components/PlanSelection";
 
 interface BasicInfo {
   firstName: string;
@@ -219,7 +220,7 @@ const Onboarding = () => {
 
       toast.success('セットアップが完了しました！');
       // 404エラー回避のため、既存のページまたはダッシュボードにリダイレクト
-      navigate("/dashboard"); // または "/auth" など、存在することが確実なページ
+      navigate("/"); // メインページ（Index）に移動
     } catch (error) {
       console.error('Error completing onboarding:', error);
       toast.error('完了処理に失敗しました');
@@ -492,76 +493,13 @@ const Onboarding = () => {
                 </div>
               )}
 
-              {/* Step 5: プラン選択（VideoPlayerを完全に削除） */}
+              {/* Step 5: プラン選択 */}
               {currentStep === 5 && (
                 <div className="space-y-6">
-                  <div className="space-y-4">
-                    <Label>プランを選択してください <span className="text-red-500">*</span></Label>
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                      <Card className={`cursor-pointer transition-all hover:shadow-lg ${selectedPlan === 'free' ? 'ring-2 ring-primary' : ''}`}
-                            onClick={() => setSelectedPlan('free')}>
-                        <CardHeader className="text-center">
-                          <CardTitle className="text-lg">フリー</CardTitle>
-                          <div className="text-3xl font-bold">¥0</div>
-                          <p className="text-sm text-muted-foreground">月額</p>
-                        </CardHeader>
-                        <CardContent className="space-y-3">
-                          <div className="text-center">
-                            <p className="font-semibold">月200通まで</p>
-                            <p className="text-sm text-muted-foreground">基本機能</p>
-                          </div>
-                          <RadioGroup value={selectedPlan} onValueChange={setSelectedPlan}>
-                            <div className="flex items-center justify-center">
-                              <RadioGroupItem value="free" id="plan-free" />
-                            </div>
-                          </RadioGroup>
-                        </CardContent>
-                      </Card>
-
-                      <Card className={`cursor-pointer transition-all hover:shadow-lg relative ${selectedPlan === 'gold' ? 'ring-2 ring-primary' : ''}`}
-                            onClick={() => setSelectedPlan('gold')}>
-                        <div className="absolute -top-3 left-1/2 transform -translate-x-1/2">
-                          <span className="bg-primary text-primary-foreground px-3 py-1 rounded-full text-sm font-medium">おすすめ</span>
-                        </div>
-                        <CardHeader className="text-center">
-                          <CardTitle className="text-lg">ゴールド</CardTitle>
-                          <div className="text-3xl font-bold">¥9,800</div>
-                          <p className="text-sm text-muted-foreground">月額</p>
-                        </CardHeader>
-                        <CardContent className="space-y-3">
-                          <div className="text-center">
-                            <p className="font-semibold">無制限</p>
-                            <p className="text-sm text-muted-foreground">全機能利用可能</p>
-                          </div>
-                          <RadioGroup value={selectedPlan} onValueChange={setSelectedPlan}>
-                            <div className="flex items-center justify-center">
-                              <RadioGroupItem value="gold" id="plan-gold" />
-                            </div>
-                          </RadioGroup>
-                        </CardContent>
-                      </Card>
-
-                      <Card className={`cursor-pointer transition-all hover:shadow-lg ${selectedPlan === 'silver' ? 'ring-2 ring-primary' : ''}`}
-                            onClick={() => setSelectedPlan('silver')}>
-                        <CardHeader className="text-center">
-                          <CardTitle className="text-lg">シルバー</CardTitle>
-                          <div className="text-3xl font-bold">¥4,980</div>
-                          <p className="text-sm text-muted-foreground">月額</p>
-                        </CardHeader>
-                        <CardContent className="space-y-3">
-                          <div className="text-center">
-                            <p className="font-semibold">月1000通まで</p>
-                            <p className="text-sm text-muted-foreground">拡張機能</p>
-                          </div>
-                          <RadioGroup value={selectedPlan} onValueChange={setSelectedPlan}>
-                            <div className="flex items-center justify-center">
-                              <RadioGroupItem value="silver" id="plan-silver" />
-                            </div>
-                          </RadioGroup>
-                        </CardContent>
-                      </Card>
-                    </div>
-                  </div>
+                  <PlanSelection 
+                    selectedPlan={selectedPlan}
+                    onPlanSelect={setSelectedPlan}
+                  />
                 </div>
               )}
             </CardContent>
