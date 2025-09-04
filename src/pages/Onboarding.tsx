@@ -262,7 +262,21 @@ const Onboarding = () => {
     <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 py-8">
       <div className="container mx-auto px-4">
         <div className="text-center mb-8">
-          <h1 className="text-3xl font-bold mb-4">L!JUMP セットアップ</h1>
+          <div className="flex items-center justify-center gap-3 mb-4">
+            <img 
+              src="/lovable-uploads/ab6aefa7-fa54-4f4a-b5ef-03333852664c.png" 
+              alt="L!JUMP" 
+              className="h-10 w-auto"
+              onError={(e) => {
+                const target = e.target as HTMLImageElement;
+                target.style.display = 'none';
+                if (target.nextElementSibling) {
+                  target.nextElementSibling.classList.remove('hidden');
+                }
+              }}
+            />
+            <h1 className="text-3xl font-bold hidden">L!JUMP セットアップ</h1>
+          </div>
           <div className="flex justify-center items-center gap-4 mb-6">
             {steps.map((step, index) => {
               const isActive = currentStep === step.id;
@@ -309,6 +323,19 @@ const Onboarding = () => {
               {/* Step 1: 基本情報 */}
               {currentStep === 1 && (
                 <div className="space-y-4">
+                  {/* Google Account Change Button */}
+                  <div className="flex justify-end mb-4">
+                    <Button 
+                      variant="outline" 
+                      onClick={async () => {
+                        await supabase.auth.signOut();
+                        navigate('/auth');
+                      }}
+                      className="text-sm"
+                    >
+                      Googleアカウントを変更
+                    </Button>
+                  </div>
                   <div className="grid grid-cols-2 gap-4">
                     <div className="space-y-2">
                       <Label htmlFor="firstName">名前（姓） <span className="text-red-500">*</span></Label>
@@ -495,7 +522,7 @@ const Onboarding = () => {
                     showTimer={true}
                     requiredCompletionPercentage={30}
                     disabled={false}
-                    videoViewingRequired={true}
+                    videoViewingRequired={false}
                   />
                 </div>
               )}
