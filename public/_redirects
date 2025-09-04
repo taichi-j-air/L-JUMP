@@ -1,5 +1,19 @@
-/assets/*  /assets/:splat  200
-/*.css     /:splat        200
-/*.js      /:splat        200
-/*.mjs     /:splat        200
-/*         /index.html    200
+# Static asset files - highest priority
+/assets/css/*  /assets/css/:splat  200
+/assets/js/*   /assets/js/:splat   200
+/assets/images/* /assets/images/:splat 200
+/assets/*      /assets/:splat      200
+
+# File extensions - fallback for direct access
+*.css          /:splat             200
+*.js           /:splat             200
+*.mjs          /:splat             200
+*.ico          /:splat             200
+*.png          /:splat             200
+*.jpg          /:splat             200
+*.jpeg         /:splat             200
+*.svg          /:splat             200
+*.gif          /:splat             200
+
+# SPA fallback - lowest priority
+/*             /index.html         200

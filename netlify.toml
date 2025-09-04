@@ -2,15 +2,48 @@
   publish = "dist"
   command = "npm run build"
 
+[build.environment]
+  NODE_VERSION = "18"
+
+# High priority redirects for assets
+[[redirects]]
+  from = "/assets/css/*"
+  to = "/assets/css/:splat"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "/assets/js/*"
+  to = "/assets/js/:splat"
+  status = 200
+  force = true
+
 [[redirects]]
   from = "/assets/*"
   to = "/assets/:splat"
   status = 200
+  force = true
 
-[[redirects]]  
+# SPA fallback - lowest priority
+[[redirects]]
   from = "/*"
   to = "/index.html"
   status = 200
 
-[build.environment]
-  NODE_VERSION = "18"
+# Headers for asset optimization
+[[headers]]
+  for = "/assets/css/*"
+  [headers.values]
+    Content-Type = "text/css"
+    Cache-Control = "public, max-age=31536000, immutable"
+
+[[headers]]
+  for = "/assets/js/*"
+  [headers.values]
+    Content-Type = "application/javascript"
+    Cache-Control = "public, max-age=31536000, immutable"
+
+[[headers]]
+  for = "/assets/*"
+  [headers.values]
+    Cache-Control = "public, max-age=31536000, immutable"
