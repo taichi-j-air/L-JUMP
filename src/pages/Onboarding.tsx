@@ -208,7 +208,8 @@ const Onboarding = () => {
       const { error } = await supabase
         .from('profiles')
         .update({
-          onboarding_completed: true
+          onboarding_completed: true,
+          onboarding_step: 5 // 最終ステップを記録
         })
         .eq('user_id', user!.id);
 
@@ -219,8 +220,10 @@ const Onboarding = () => {
       }
 
       toast.success('セットアップが完了しました！');
-      // 404エラー回避のため、既存のページまたはダッシュボードにリダイレクト
-      navigate("/"); // メインページ（Index）に移動
+      // メインページ（Index）に直接移動
+      setTimeout(() => {
+        window.location.href = '/';
+      }, 1000);
     } catch (error) {
       console.error('Error completing onboarding:', error);
       toast.error('完了処理に失敗しました');

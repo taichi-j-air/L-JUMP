@@ -199,6 +199,21 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
     stopTimer();
   };
 
+  const getEmbedUrl = (url: string): string => {
+    if (!url) return '';
+    
+    // YouTubeのURLを埋め込み形式に変換
+    const youtubeRegex = /(?:youtube\.com\/watch\?v=|youtu\.be\/)([a-zA-Z0-9_-]{11})/;
+    const match = url.match(youtubeRegex);
+    
+    if (match) {
+      const videoId = match[1];
+      return `https://www.youtube.com/embed/${videoId}?enablejsapi=1&origin=${window.location.origin}`;
+    }
+    
+    return url; // 既に埋め込み形式の場合はそのまま返す
+  };
+
   const formatTime = (seconds: number): string => {
     const minutes = Math.floor(seconds / 60);
     const remainingSeconds = seconds % 60;
@@ -232,7 +247,7 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
             ref={iframeRef}
             width="1120"
             height="630"
-            src={videoData.video_url}
+            src={getEmbedUrl(videoData.video_url)}
             title={`${videoType} 動画`}
             frameBorder="0"
             allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
