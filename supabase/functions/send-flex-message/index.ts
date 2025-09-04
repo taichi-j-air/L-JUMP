@@ -192,10 +192,24 @@ serve(async (req) => {
 
     // 送信対象（友だち）
     console.error('[send-flex-message] Fetching friends list for user:', userId);
-    const { data: friends, error: friendsError } = await supabase
-      .from('line_friends')
-      .select('line_user_id, short_uid')
-      .eq('user_id', userId)
+    
+    let friends, friendsError;
+    try {
+      const result = await supabase
+        .from('line_friends')
+        .select('line_user_id, short_uid')
+        .eq('user_id', userId);
+      
+      friends = result.data;
+      friendsError = result.error;
+      console.error('[send-flex-message] Raw query result:', { data: friends, error: friendsError });
+    } catch (queryError) {
+      console.error('[send-flex-message] Query execution error:', queryError);
+      return new Response(
+        JSON.stringify({ error: 'データベースクエリでエラーが発生しました', details: String(queryError) }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 500 }
+      )
+    }
 
     console.error('[send-flex-message] Friends fetch result:', { friendsCount: friends?.length, error: friendsError });
 
