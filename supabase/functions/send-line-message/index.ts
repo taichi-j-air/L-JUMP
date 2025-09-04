@@ -52,19 +52,18 @@ serve(async (req) => {
       })
     }
 
-    const supabase = createClient(supabaseUrl, supabaseServiceKey, {
-      global: {
-        headers: {
-          Authorization: authHeader,
-        },
-      },
-    })
+    const supabase = createClient(supabaseUrl, supabaseServiceKey)
 
-    // Get user session
-    const { data: { user }, error: authError } = await supabase.auth.getUser()
-    if (authError || !user) {
-      console.error('Authentication error:', authError)
-      return new Response('Unauthorized', { 
+    // Parse JWT token to get user ID
+    let userId: string
+    try {
+      const token = authHeader.replace('Bearer ', '')
+      const payload = JSON.parse(atob(token.split('.')[1]))
+      userId = payload.sub
+      console.log('User ID from token:', userId)
+    } catch (error) {
+      console.error('Invalid token:', error)
+      return new Response('Invalid token', { 
         status: 401, 
         headers: corsHeaders 
       })
@@ -72,7 +71,7 @@ serve(async (req) => {
 
     // Get user's LINE credentials securely
     const { data: credentials, error: credError } = await supabase
-      .rpc('get_line_credentials_for_user', { p_user_id: user.id })
+      .rpc('get_line_credentials_for_user', { p_user_id: userId })
       .single()
 
     if (credError || !credentials?.channel_access_token) {
@@ -87,7 +86,7 @@ serve(async (req) => {
     const { data: profile, error: profileError } = await supabase
       .from('profiles')
       .select('delivery_count, monthly_message_used')
-      .eq('user_id', user.id)
+      .eq('user_id', userId)
       .single()
 
     if (profileError) {
@@ -107,12 +106,12 @@ serve(async (req) => {
       })
     }
 
-    // Get friend's short_uid for UID parameter
+    // Get friend's short_uid for UID parameter - 重要：同じユーザーIDでフィルタ
     const { data: friendData } = await supabase
       .from('line_friends')
       .select('short_uid')
       .eq('line_user_id', to)
-      .eq('user_id', user.id)
+      .eq('user_id', userId)
       .single()
 
     // UIDパラメーター付与処理
@@ -183,7 +182,7 @@ serve(async (req) => {
         delivery_count: (profile.delivery_count || 0) + 1,
         monthly_message_used: (profile.monthly_message_used || 0) + 1
       })
-      .eq('user_id', user.id)
+      .eq('user_id', userId)
 
     if (updateError) {
       console.error('Error updating delivery count:', updateError)
