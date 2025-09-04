@@ -110,27 +110,27 @@ serve(async (req) => {
   }
 
   try {
-    console.log('[send-flex-message] Starting request processing');
+    console.error('[send-flex-message] ===== STARTING REQUEST PROCESSING =====');
     
     // Authentication check
     const authHeader = req.headers.get('Authorization')
     if (!authHeader) {
-      console.log('[send-flex-message] No authorization header')
+      console.error('[send-flex-message] ERROR: No authorization header found');
       return new Response(
         JSON.stringify({ error: '認証が必要です' }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 401 }
       )
     }
 
-    console.log('[send-flex-message] About to parse request body');
+    console.error('[send-flex-message] About to parse request body');
     let body;
     try {
       body = await req.json()
-      console.log('[send-flex-message] Successfully parsed request body');
+      console.error('[send-flex-message] Successfully parsed request body');
     } catch (parseError) {
-      console.log('[send-flex-message] Failed to parse request body:', parseError);
+      console.error('[send-flex-message] CRITICAL ERROR: Failed to parse request body:', parseError);
       return new Response(
-        JSON.stringify({ error: 'リクエストボディの解析に失敗しました' }),
+        JSON.stringify({ error: 'リクエストボディの解析に失敗しました', details: String(parseError) }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 400 }
       )
     }
@@ -139,7 +139,7 @@ serve(async (req) => {
     const userId = body.userId as string
 
     if (!userId) {
-      console.log('[send-flex-message] No userId provided')
+      console.error('[send-flex-message] ERROR: No userId provided in request body');
       return new Response(
         JSON.stringify({ error: 'ユーザーIDが必要です' }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 400 }
@@ -147,16 +147,16 @@ serve(async (req) => {
     }
 
     if (!rawFlexMessage) {
-      console.log('[send-flex-message] No flexMessage provided')
+      console.error('[send-flex-message] ERROR: No flexMessage provided in request body');
       return new Response(
         JSON.stringify({ error: 'Flexメッセージが必要です' }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 400 }
       )
     }
 
-    console.log(`[send-flex-message] Processing flex message for user: ${userId}`);
-    console.log(`[send-flex-message] flexMessage type:`, typeof rawFlexMessage);
-    console.log(`[send-flex-message] flexMessage:`, JSON.stringify(rawFlexMessage));
+    console.error(`[send-flex-message] Processing flex message for user: ${userId}`);
+    console.error(`[send-flex-message] flexMessage type:`, typeof rawFlexMessage);
+    console.error(`[send-flex-message] flexMessage:`, JSON.stringify(rawFlexMessage));
 
     // flexMessage が文字列（JSON文字列）で来るケースにも対応
     let flexMessage = rawFlexMessage
