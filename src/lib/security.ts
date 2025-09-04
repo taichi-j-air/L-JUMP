@@ -90,11 +90,12 @@ export function validateUrl(url: string | null | undefined): boolean {
 }
 
 /**
- * Enhanced rate limiting helper with better security
+ * Enhanced rate limiting helper with better security and persistence
  */
 class SimpleRateLimit {
-  private attempts: Map<string, { count: number; resetTime: number; blocked: boolean }> = new Map();
+  private attempts: Map<string, { count: number; resetTime: number; blocked: boolean; blockedUntil?: number }> = new Map();
   private readonly MAX_STORAGE_SIZE = 10000; // Prevent memory exhaustion
+  private readonly PROGRESSIVE_BACKOFF = [1000, 5000, 15000, 60000, 300000]; // Progressive timeouts in ms
   
   isAllowed(key: string, maxAttempts: number, windowMs: number): boolean {
     const now = Date.now();
@@ -106,13 +107,26 @@ class SimpleRateLimit {
     
     const record = this.attempts.get(key);
     
+    // Check if still blocked from progressive backoff
+    if (record?.blockedUntil && now < record.blockedUntil) {
+      return false;
+    }
+    
     if (!record || now > record.resetTime) {
       this.attempts.set(key, { count: 1, resetTime: now + windowMs, blocked: false });
       return true;
     }
     
     if (record.blocked || record.count >= maxAttempts) {
+      // Apply progressive backoff
+      const backoffIndex = Math.min(record.count - maxAttempts, this.PROGRESSIVE_BACKOFF.length - 1);
+      const backoffTime = this.PROGRESSIVE_BACKOFF[backoffIndex] || 300000; // Default 5 minutes
+      
       record.blocked = true;
+      record.blockedUntil = now + backoffTime;
+      
+      // Log security event for potential attacks
+      this.logSecurityEvent(key, record.count, backoffTime);
       return false;
     }
     
@@ -122,17 +136,61 @@ class SimpleRateLimit {
   
   private cleanup(now: number): void {
     for (const [key, record] of this.attempts.entries()) {
-      if (now > record.resetTime) {
+      if (now > record.resetTime && (!record.blockedUntil || now > record.blockedUntil)) {
         this.attempts.delete(key);
       }
     }
   }
   
-  block(key: string): void {
+  private logSecurityEvent(key: string, attempts: number, backoffTime: number): void {
+    // Log to console for now, could be extended to send to monitoring service
+    console.warn(`Rate limit exceeded for ${key}: ${attempts} attempts, blocked for ${backoffTime}ms`);
+    
+    // Store in localStorage for client-side monitoring (optional)
+    try {
+      const events = JSON.parse(localStorage.getItem('security_events') || '[]');
+      events.push({
+        type: 'rate_limit_exceeded',
+        key,
+        attempts,
+        timestamp: Date.now(),
+        backoffTime
+      });
+      
+      // Keep only last 100 events
+      if (events.length > 100) {
+        events.splice(0, events.length - 100);
+      }
+      
+      localStorage.setItem('security_events', JSON.stringify(events));
+    } catch (error) {
+      // Ignore localStorage errors
+    }
+  }
+  
+  block(key: string, duration: number = 300000): void {
+    const now = Date.now();
+    const record = this.attempts.get(key) || { count: 0, resetTime: now, blocked: false };
+    record.blocked = true;
+    record.blockedUntil = now + duration;
+    this.attempts.set(key, record);
+  }
+  
+  unblock(key: string): void {
     const record = this.attempts.get(key);
     if (record) {
-      record.blocked = true;
+      record.blocked = false;
+      record.blockedUntil = undefined;
     }
+  }
+  
+  getStatus(key: string): { blocked: boolean; attempts: number; blockedUntil?: number } {
+    const record = this.attempts.get(key);
+    return {
+      blocked: record?.blocked || false,
+      attempts: record?.count || 0,
+      blockedUntil: record?.blockedUntil
+    };
   }
 }
 
@@ -179,5 +237,139 @@ export function validateAuthToken(token: string | null | undefined): boolean {
     return true;
   } catch {
     return false;
+  }
+}
+
+/**
+ * Advanced input validation with context-aware sanitization
+ */
+export function validateAndSanitizeInput(
+  input: string | null | undefined,
+  context: 'html' | 'text' | 'url' | 'email' | 'phone' = 'text',
+  maxLength: number = 1000
+): { isValid: boolean; sanitized: string; errors: string[] } {
+  const errors: string[] = [];
+  
+  if (!input) {
+    return { isValid: false, sanitized: '', errors: ['Input is required'] };
+  }
+  
+  let sanitized = input.trim();
+  
+  // Context-specific validation and sanitization
+  switch (context) {
+    case 'html':
+      sanitized = sanitizeRichContent(sanitized);
+      if (!validateContentSecurityPolicy(sanitized)) {
+        errors.push('Content contains dangerous patterns');
+      }
+      break;
+      
+    case 'url':
+      if (!validateUrl(sanitized)) {
+        errors.push('Invalid URL format');
+      }
+      break;
+      
+    case 'email':
+      if (!validateEmail(sanitized)) {
+        errors.push('Invalid email format');
+      }
+      break;
+      
+    case 'phone':
+      // Basic phone number validation
+      sanitized = sanitized.replace(/[^0-9+\-\s()]/g, '');
+      if (sanitized.length < 10 || sanitized.length > 20) {
+        errors.push('Invalid phone number format');
+      }
+      break;
+      
+    default:
+      sanitized = sanitizeTextInput(sanitized);
+  }
+  
+  // Length validation
+  if (sanitized.length > maxLength) {
+    errors.push(`Input exceeds maximum length of ${maxLength} characters`);
+    sanitized = sanitized.substring(0, maxLength);
+  }
+  
+  return {
+    isValid: errors.length === 0,
+    sanitized,
+    errors
+  };
+}
+
+/**
+ * Security event logger for client-side monitoring
+ */
+export function logSecurityEvent(
+  eventType: string,
+  details: Record<string, any> = {},
+  severity: 'low' | 'medium' | 'high' | 'critical' = 'medium'
+): void {
+  const event = {
+    type: eventType,
+    details,
+    severity,
+    timestamp: Date.now(),
+    url: window.location.href,
+    userAgent: navigator.userAgent
+  };
+  
+  // Log to console with appropriate level
+  const logLevel = severity === 'critical' || severity === 'high' ? 'error' : 'warn';
+  console[logLevel](`Security Event [${severity.toUpperCase()}]:`, event);
+  
+  // Store in localStorage for monitoring
+  try {
+    const events = JSON.parse(localStorage.getItem('security_events') || '[]');
+    events.push(event);
+    
+    // Keep only last 50 events to prevent storage bloat
+    if (events.length > 50) {
+      events.splice(0, events.length - 50);
+    }
+    
+    localStorage.setItem('security_events', JSON.stringify(events));
+  } catch (error) {
+    console.warn('Failed to store security event:', error);
+  }
+  
+  // For critical events, consider sending to monitoring service
+  if (severity === 'critical') {
+    // This could be extended to send to external monitoring
+    console.error('CRITICAL SECURITY EVENT:', event);
+  }
+}
+
+/**
+ * Get security event history for monitoring dashboard
+ */
+export function getSecurityEvents(): Array<{
+  type: string;
+  details: Record<string, any>;
+  severity: string;
+  timestamp: number;
+  url: string;
+  userAgent: string;
+}> {
+  try {
+    return JSON.parse(localStorage.getItem('security_events') || '[]');
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * Clear security event history
+ */
+export function clearSecurityEvents(): void {
+  try {
+    localStorage.removeItem('security_events');
+  } catch (error) {
+    console.warn('Failed to clear security events:', error);
   }
 }

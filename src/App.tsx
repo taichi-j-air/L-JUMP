@@ -38,6 +38,7 @@ import LoginSuccess from "./pages/LoginSuccess";
 import { supabase } from "@/integrations/supabase/client";
 import { User } from "@supabase/supabase-js";
 import { useSecureAuth } from "./hooks/useSecureAuth";
+import { SecurityProvider } from "./components/SecurityProvider";
 import FormsBuilder from "./pages/FormsBuilder";
 import PublicForm from "./pages/PublicForm";
 import LiffForm from "./pages/LiffForm";
@@ -311,11 +312,13 @@ function AppContent() {
 const App = () => (
   <QueryClientProvider client={queryClient}>
     <TooltipProvider>
-      <Toaster />
-      <Sonner />
-      <BrowserRouter>
-        <AppContent />
-      </BrowserRouter>
+      <SecurityProvider>
+        <Toaster />
+        <Sonner />
+        <BrowserRouter>
+          <AppContent />
+        </BrowserRouter>
+      </SecurityProvider>
     </TooltipProvider>
   </QueryClientProvider>
 );
