@@ -404,6 +404,12 @@ const Onboarding = () => {
                 <div className="space-y-6">
                   <div className="mb-6">
                     <Tabs value={activeVideoTab} onValueChange={setActiveVideoTab} className="w-full">
+                      <TabsList className="grid w-full grid-cols-4 bg-muted/30">
+                        <TabsTrigger value="channel_id" className="text-sm">チャネルID</TabsTrigger>
+                        <TabsTrigger value="channel_secret" className="text-sm">チャネルシークレット</TabsTrigger>
+                        <TabsTrigger value="line_bot_id" className="text-sm">LINEボットID</TabsTrigger>
+                        <TabsTrigger value="channel_access_token" className="text-sm">アクセストークン</TabsTrigger>
+                      </TabsList>
                        <TabsContent value="channel_id">
                          <VideoPlayer 
                            videoType="channel_id"
@@ -429,12 +435,6 @@ const Onboarding = () => {
                           showTimer={false}
                         />
                       </TabsContent>
-                      <TabsList className="grid w-full grid-cols-4 bg-muted/30">
-                        <TabsTrigger value="channel_id" className="text-sm">チャネルID</TabsTrigger>
-                        <TabsTrigger value="channel_secret" className="text-sm">チャネルシークレット</TabsTrigger>
-                        <TabsTrigger value="line_bot_id" className="text-sm">LINEボットID</TabsTrigger>
-                        <TabsTrigger value="channel_access_token" className="text-sm">アクセストークン</TabsTrigger>
-                      </TabsList>
                     </Tabs>
                   </div>
 
