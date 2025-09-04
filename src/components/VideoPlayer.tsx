@@ -46,27 +46,35 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
 
   // Auto-complete when video viewing is not required
   useEffect(() => {
+    console.log('VideoPlayer: videoViewingRequired changed', { videoViewingRequired, isCompleted });
     if (!videoViewingRequired && !isCompleted) {
+      console.log('VideoPlayer: auto-completing because video viewing not required');
       setIsCompleted(true);
-      onVideoComplete?.();
+      if (onVideoComplete) {
+        setTimeout(() => onVideoComplete(), 0);
+      }
     }
   }, [videoViewingRequired, isCompleted]);
 
   useEffect(() => {
+    console.log('VideoPlayer: watch progress changed', { watchProgress, videoData, isCompleted });
     if (videoData && watchProgress > 0) {
       const completionPercentage = (watchProgress / videoData.video_duration) * 100;
       const requiredPercentage = requiredCompletionPercentage || videoData.completion_percentage;
       
-      if (completionPercentage >= requiredPercentage) {
+      if (completionPercentage >= requiredPercentage && !isCompleted) {
+        console.log('VideoPlayer: completing due to watch progress', { completionPercentage, requiredPercentage });
         setIsCompleted(true);
-        onVideoComplete?.();
+        if (onVideoComplete) {
+          setTimeout(() => onVideoComplete(), 0);
+        }
         stopTimer();
       }
       
       const remaining = Math.max(0, Math.ceil((videoData.video_duration * requiredPercentage / 100) - watchProgress));
       setTimeRemaining(remaining);
     }
-  }, [watchProgress, videoData, requiredCompletionPercentage]);
+  }, [watchProgress, videoData, requiredCompletionPercentage, isCompleted]);
 
   const loadVideoData = async () => {
     try {
@@ -184,9 +192,13 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
 
   // Auto-complete when video data is not found
   useEffect(() => {
+    console.log('VideoPlayer: video data check', { loading, videoData, isCompleted });
     if (!loading && !videoData && !isCompleted) {
+      console.log('VideoPlayer: auto-completing because no video data');
       setIsCompleted(true);
-      onVideoComplete?.();
+      if (onVideoComplete) {
+        setTimeout(() => onVideoComplete(), 0);
+      }
     }
   }, [loading, videoData, isCompleted]);
 
