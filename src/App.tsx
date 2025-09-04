@@ -4,7 +4,7 @@ import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BrowserRouter, Routes, Route } from "react-router-dom";
+import { BrowserRouter, Routes, Route, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { AppSidebar } from "./components/AppSidebar";
 import { AppHeader } from "./components/AppHeader";
@@ -69,6 +69,7 @@ function AppContent() {
   const { user, loading, isValidSession } = useSecureAuth()
   const [profile, setProfile] = useState<any>(null)
   const [profileLoading, setProfileLoading] = useState(true)
+  const navigate = useNavigate()
 
   useEffect(() => {
     if (user && isValidSession) {
@@ -122,7 +123,7 @@ function AppContent() {
             if (profileData?.onboarding_completed && window.location.pathname === '/onboarding') {
               setTimeout(() => {
                 console.log('Auto-redirecting after onboarding completion');
-                window.location.href = '/';
+                navigate('/');
               }, 500);
             }
           }
@@ -190,7 +191,7 @@ function AppContent() {
   const isLiffPage = window.location.pathname.startsWith('/liff')
 
   // Show pages without sidebar/header: auth, public forms, liff, checkout, product landing, cms public
-  if (isAuthPage || isPublicFormPage || isLiffPage || isProductLandingPage || isCheckoutPage || isCMSPublicPath || isCMSPreviewPath || (!user && !isInvitePage && !isLoginPage && !hasLineLoginSuccess) || needsOnboarding) {
+  if (isAuthPage || isPublicFormPage || isLiffPage || isProductLandingPage || isCheckoutPage || isCMSPublicPath || isCMSPreviewPath || (!user && !isInvitePage && !isLoginPage && !hasLineLoginSuccess)) {
     return (
       <ErrorBoundary>
         <div className="min-h-screen">
