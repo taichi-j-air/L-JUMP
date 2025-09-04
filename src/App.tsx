@@ -145,7 +145,11 @@ function AppContent() {
   }, [user, isValidSession]);
 
   if (loading || profileLoading) {
-    return <LoadingSpinner message="アプリケーション初期化中..." size="lg" className="min-h-screen" />
+    return (
+      <ErrorBoundary>
+        <LoadingSpinner message="アプリケーション初期化中..." size="lg" className="min-h-screen" />
+      </ErrorBoundary>
+    )
   }
 
   // シンプルなオンボーディング判定：認証済みかつプロファイルが存在しオンボーディング未完了の場合

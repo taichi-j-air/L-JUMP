@@ -140,18 +140,39 @@ const OnboardingVideoManagement = () => {
       for (const video of videos) {
         if (!video.url.trim()) continue; // 空のURLはスキップ
 
-        const { error } = await supabase
+        // 既存のレコードを確認
+        const { data: existingRecord } = await supabase
           .from('onboarding_videos')
-          .upsert({
-            video_type: video.id,
-            video_url: video.url,
-            custom_text: video.embed_code,
-            video_duration: null, // 必要に応じて設定
-            completion_percentage: 100,
-            show_timer: true
-          }, {
-            onConflict: 'video_type'
-          });
+          .select('id')
+          .eq('video_type', video.id)
+          .single();
+
+        let error;
+        if (existingRecord) {
+          // 更新
+          const updateResult = await supabase
+            .from('onboarding_videos')
+            .update({
+              video_url: video.url,
+              custom_text: video.embed_code,
+              updated_at: new Date().toISOString()
+            })
+            .eq('video_type', video.id);
+          error = updateResult.error;
+        } else {
+          // 新規作成
+          const insertResult = await supabase
+            .from('onboarding_videos')
+            .insert({
+              video_type: video.id,
+              video_url: video.url,
+              custom_text: video.embed_code,
+              video_duration: null,
+              completion_percentage: 100,
+              show_timer: true
+            });
+          error = insertResult.error;
+        }
 
         if (error) {
           console.error(`Error saving video ${video.id}:`, error);

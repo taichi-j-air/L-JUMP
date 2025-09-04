@@ -1,5 +1,5 @@
 import { LogOut, Plus, Users, Settings } from "lucide-react"
-import logoImage from "@/assets/logo.png"
+// Logo is now loaded from uploads
 import { Button } from "./ui/button"
 import { Badge } from "./ui/badge"
 import { Tabs, TabsList, TabsTrigger } from "./ui/tabs"
@@ -136,7 +136,20 @@ export function AppHeader({ user }: AppHeaderProps) {
   return (
     <header className="fixed top-0 left-0 right-0 z-50 bg-background border-b h-14 flex items-center px-4 gap-4">
       <div className="flex items-center gap-2">
-        <img src={logoImage} alt="L!JUMP" className="h-8 w-auto" />
+        <img 
+          src="/lovable-uploads/ab6aefa7-fa54-4f4a-b5ef-03333852664c.png" 
+          alt="L!JUMP" 
+          className="h-8 w-auto"
+          onError={(e) => {
+            // Fallback to text if image fails to load
+            const target = e.target as HTMLImageElement;
+            target.style.display = 'none';
+            if (target.nextElementSibling) {
+              target.nextElementSibling.classList.remove('hidden');
+            }
+          }}
+        />
+        <span className="text-xl font-semibold hidden">L!JUMP</span>
       </div>
 
       <div className="flex-1 flex items-center gap-4">
