@@ -177,7 +177,11 @@ function AppContent() {
   if (needsOnboarding && !isJustCompleted && window.location.pathname !== '/onboarding') {
     console.log('Redirecting to onboarding:', { profile, needsOnboarding });
     window.location.href = '/onboarding';
-    return <LoadingSpinner message="オンボーディングページに移動中..." size="lg" className="min-h-screen" />
+    return (
+      <ErrorBoundary>
+        <LoadingSpinner message="オンボーディングページに移動中..." size="lg" className="min-h-screen" />
+      </ErrorBoundary>
+    )
   }
 
   const isAuthPage = window.location.pathname === '/auth' || 

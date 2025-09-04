@@ -71,13 +71,19 @@ const VideoProgressSettings = () => {
       }
 
       if (existingConfigs && existingConfigs.length > 0) {
-        setConfigs(existingConfigs.map(config => ({
-          id: config.id,
-          video_type: config.video_type,
-          completion_percentage: config.completion_percentage || 100,
-          show_timer: config.show_timer ?? true,
-          video_duration: config.video_duration || undefined
-        })));
+                // ステップ4動画設定と使い方動画設定の重複を除去（usage_tutorialのみ残す）
+                const filteredConfigs = existingConfigs.filter(config => {
+                  if (config.video_type === 'step4') return false; // step4は除外
+                  return true;
+                });
+                
+                setConfigs(filteredConfigs.map(config => ({
+                  id: config.id,
+                  video_type: config.video_type,
+                  completion_percentage: config.completion_percentage || 100,
+                  show_timer: config.show_timer ?? true,
+                  video_duration: config.video_duration || undefined
+                })));
       }
     } catch (error) {
       console.error("Error loading video configs:", error);
