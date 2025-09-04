@@ -106,9 +106,35 @@ serve(async (req) => {
   }
 
   try {
+    // Authentication check
+    const authHeader = req.headers.get('Authorization')
+    if (!authHeader) {
+      console.log('[send-flex-message] No authorization header')
+      return new Response(
+        JSON.stringify({ error: '認証が必要です' }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 401 }
+      )
+    }
+
     const body = await req.json()
     const rawFlexMessage = body.flexMessage
     const userId = body.userId as string
+
+    if (!userId) {
+      console.log('[send-flex-message] No userId provided')
+      return new Response(
+        JSON.stringify({ error: 'ユーザーIDが必要です' }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 400 }
+      )
+    }
+
+    if (!rawFlexMessage) {
+      console.log('[send-flex-message] No flexMessage provided')
+      return new Response(
+        JSON.stringify({ error: 'Flexメッセージが必要です' }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 400 }
+      )
+    }
 
     console.log(`[send-flex-message] Processing flex message for user: ${userId}`);
     console.log(`[send-flex-message] flexMessage type:`, typeof rawFlexMessage);
