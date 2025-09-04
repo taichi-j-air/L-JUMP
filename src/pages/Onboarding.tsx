@@ -12,7 +12,8 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { supabase } from "@/integrations/supabase/client";
 import { User } from "@supabase/supabase-js";
 import { toast } from "sonner";
-import { CheckCircle2, User as UserIcon, Settings, CreditCard, Play, Video } from "lucide-react";
+import { CheckCircle2, User as UserIcon, Settings, CreditCard, Play, Video, ExternalLink } from "lucide-react";
+import VideoPlayer from "@/components/VideoPlayer";
 
 interface BasicInfo {
   firstName: string;
@@ -52,6 +53,8 @@ const Onboarding = () => {
     channelAccessToken: ""
   });
   const [activeVideoTab, setActiveVideoTab] = useState("channel_id");
+  const [videoCompleted, setVideoCompleted] = useState(false);
+  const [showCreationGuide, setShowCreationGuide] = useState(false);
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -114,6 +117,8 @@ const Onboarding = () => {
         return apiSettings.channelId && apiSettings.channelSecret && 
                apiSettings.lineBotId && apiSettings.channelAccessToken;
       case 4:
+        return videoCompleted;
+      case 5:
         return selectedPlan;
       default:
         return true;
@@ -175,7 +180,7 @@ const Onboarding = () => {
     if (currentStep === 2 && hasLineAccount === true) {
       setCurrentStep(3);
     } else if (currentStep === 2 && hasLineAccount === false) {
-      setCurrentStep(4);
+      setCurrentStep(3); // Always go to API settings after LINE account check
     } else {
       setCurrentStep(currentStep + 1);
     }
@@ -353,7 +358,10 @@ const Onboarding = () => {
                   <Label>LINE公式アカウントをお持ちですか？ <span className="text-red-500">*</span></Label>
                   <RadioGroup 
                     value={hasLineAccount?.toString()} 
-                    onValueChange={(value) => setHasLineAccount(value === 'true')}
+                    onValueChange={(value) => {
+                      setHasLineAccount(value === 'true');
+                      setShowCreationGuide(value === 'false');
+                    }}
                   >
                     <div className="flex items-center space-x-2">
                       <RadioGroupItem value="true" id="has-line" />
@@ -364,6 +372,29 @@ const Onboarding = () => {
                       <Label htmlFor="no-line">いいえ、持っていません</Label>
                     </div>
                   </RadioGroup>
+
+                  {showCreationGuide && (
+                    <div className="mt-6 p-6 bg-blue-50 rounded-lg border border-blue-200">
+                      <h3 className="text-lg font-semibold mb-4 text-blue-900">LINE公式アカウントの作成手順</h3>
+                      <div className="space-y-3 text-sm text-blue-800">
+                        <p>1. 以下のリンクからLINE for Business にアクセス</p>
+                        <div className="flex items-center gap-2">
+                          <Button 
+                            variant="outline" 
+                            size="sm" 
+                            onClick={() => window.open('https://entry.line.biz/start/jp/', '_blank')}
+                            className="border-blue-300 text-blue-700 hover:bg-blue-100"
+                          >
+                            <ExternalLink className="w-4 h-4 mr-2" />
+                            LINE for Business
+                          </Button>
+                        </div>
+                        <p>2. 「アカウントの開設」をクリック</p>
+                        <p>3. LINE公式アカウントの情報を入力</p>
+                        <p>4. アカウント作成完了後、APIキー等の取得を行ってください</p>
+                      </div>
+                    </div>
+                  )}
                 </div>
               )}
 
@@ -373,60 +404,28 @@ const Onboarding = () => {
                   <div className="mb-6">
                     <Tabs value={activeVideoTab} onValueChange={setActiveVideoTab} className="w-full">
                       <TabsContent value="channel_id">
-                        <div className="aspect-video bg-muted rounded-lg flex items-center justify-center mb-4 w-full max-w-5xl mx-auto">
-                          <iframe
-                            width="1120"
-                            height="630"
-                            src="https://www.youtube.com/embed/dQw4w9WgXcQ"
-                            title="チャネルID取得動画"
-                            frameBorder="0"
-                            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                            allowFullScreen
-                            className="rounded-lg w-full h-full"
-                          />
-                        </div>
+                        <VideoPlayer 
+                          videoType="channel_id"
+                          showTimer={false}
+                        />
                       </TabsContent>
                       <TabsContent value="channel_secret">
-                        <div className="aspect-video bg-muted rounded-lg flex items-center justify-center mb-4 w-full max-w-5xl mx-auto">
-                          <iframe
-                            width="1120"
-                            height="630"
-                            src="https://www.youtube.com/embed/dQw4w9WgXcQ"
-                            title="チャネルシークレット取得動画"
-                            frameBorder="0"
-                            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                            allowFullScreen
-                            className="rounded-lg w-full h-full"
-                          />
-                        </div>
+                        <VideoPlayer 
+                          videoType="channel_secret"
+                          showTimer={false}
+                        />
                       </TabsContent>
                       <TabsContent value="line_bot_id">
-                        <div className="aspect-video bg-muted rounded-lg flex items-center justify-center mb-4 w-full max-w-5xl mx-auto">
-                          <iframe
-                            width="1120"
-                            height="630"
-                            src="https://www.youtube.com/embed/dQw4w9WgXcQ"
-                            title="LINEボットID取得動画"
-                            frameBorder="0"
-                            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                            allowFullScreen
-                            className="rounded-lg w-full h-full"
-                          />
-                        </div>
+                        <VideoPlayer 
+                          videoType="line_bot_id"
+                          showTimer={false}
+                        />
                       </TabsContent>
                       <TabsContent value="channel_access_token">
-                        <div className="aspect-video bg-muted rounded-lg flex items-center justify-center mb-4 w-full max-w-5xl mx-auto">
-                          <iframe
-                            width="1120"
-                            height="630"
-                            src="https://www.youtube.com/embed/dQw4w9WgXcQ"
-                            title="チャネルアクセストークン取得動画"
-                            frameBorder="0"
-                            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                            allowFullScreen
-                            className="rounded-lg w-full h-full"
-                          />
-                        </div>
+                        <VideoPlayer 
+                          videoType="channel_access_token"
+                          showTimer={false}
+                        />
                       </TabsContent>
                       <TabsList className="grid w-full grid-cols-4 bg-muted/30">
                         <TabsTrigger value="channel_id" className="text-sm">チャネルID</TabsTrigger>
@@ -487,24 +486,17 @@ const Onboarding = () => {
               {/* Step 4: 使い方動画 */}
               {currentStep === 4 && (
                 <div className="space-y-6">
-                  <div className="mb-6">
-                    <div className="aspect-video bg-muted rounded-lg flex items-center justify-center w-full max-w-5xl mx-auto">
-                      <iframe
-                        width="1120"
-                        height="630"
-                        src="https://www.youtube.com/embed/dQw4w9WgXcQ"
-                        title="使い方動画"
-                        frameBorder="0"
-                        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                        allowFullScreen
-                        className="rounded-lg w-full h-full"
-                      />
-                    </div>
+                  <div className="text-center mb-4">
+                    <h3 className="text-lg font-semibold mb-2 text-red-600">この動画は必ず視聴してください</h3>
+                    <p className="text-muted-foreground">L!JUMPの基本機能をご確認ください。</p>
                   </div>
-                  <div className="text-center">
-                    <h3 className="text-lg font-semibold mb-2">L!JUMPの基本的な使い方</h3>
-                    <p className="text-muted-foreground">この動画でL!JUMPの基本機能をご確認ください。</p>
-                  </div>
+                  <VideoPlayer 
+                    videoType="step4_video"
+                    onVideoComplete={() => setVideoCompleted(true)}
+                    showTimer={true}
+                    disabled={true}
+                    requiredCompletionPercentage={100}
+                  />
                 </div>
               )}
 
@@ -512,18 +504,10 @@ const Onboarding = () => {
               {currentStep === 5 && (
                 <div className="space-y-6">
                   <div className="mb-6">
-                    <div className="aspect-video bg-muted rounded-lg flex items-center justify-center w-full max-w-5xl mx-auto">
-                      <iframe
-                        width="1120"
-                        height="630"
-                        src="https://www.youtube.com/embed/dQw4w9WgXcQ"
-                        title="プラン選択動画"
-                        frameBorder="0"
-                        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                        allowFullScreen
-                        className="rounded-lg w-full h-full"
-                      />
-                    </div>
+                    <VideoPlayer 
+                      videoType="plan_selection_video"
+                      showTimer={false}
+                    />
                   </div>
 
                   <div className="space-y-4">

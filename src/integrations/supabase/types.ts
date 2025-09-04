@@ -652,6 +652,42 @@ export type Database = {
         }
         Relationships: []
       }
+      onboarding_videos: {
+        Row: {
+          completion_percentage: number | null
+          created_at: string
+          custom_text: string | null
+          id: string
+          show_timer: boolean | null
+          updated_at: string
+          video_duration: number | null
+          video_type: string
+          video_url: string
+        }
+        Insert: {
+          completion_percentage?: number | null
+          created_at?: string
+          custom_text?: string | null
+          id?: string
+          show_timer?: boolean | null
+          updated_at?: string
+          video_duration?: number | null
+          video_type: string
+          video_url: string
+        }
+        Update: {
+          completion_percentage?: number | null
+          created_at?: string
+          custom_text?: string | null
+          id?: string
+          show_timer?: boolean | null
+          updated_at?: string
+          video_duration?: number | null
+          video_type?: string
+          video_url?: string
+        }
+        Relationships: []
+      }
       orders: {
         Row: {
           amount: number | null
@@ -1773,6 +1809,39 @@ export type Database = {
           stripe_subscription_id?: string | null
           updated_at?: string
           user_id?: string
+        }
+        Relationships: []
+      }
+      video_watch_progress: {
+        Row: {
+          completion_percentage: number | null
+          created_at: string
+          id: string
+          is_completed: boolean | null
+          updated_at: string
+          user_id: string
+          video_type: string
+          watch_time: number | null
+        }
+        Insert: {
+          completion_percentage?: number | null
+          created_at?: string
+          id?: string
+          is_completed?: boolean | null
+          updated_at?: string
+          user_id: string
+          video_type: string
+          watch_time?: number | null
+        }
+        Update: {
+          completion_percentage?: number | null
+          created_at?: string
+          id?: string
+          is_completed?: boolean | null
+          updated_at?: string
+          user_id?: string
+          video_type?: string
+          watch_time?: number | null
         }
         Relationships: []
       }
