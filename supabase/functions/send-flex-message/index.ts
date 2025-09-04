@@ -190,11 +190,12 @@ serve(async (req) => {
       )
     }
 
-    // 送信対象（友だち）
+    // 送信対象（友だち）- Service Roleでの直接アクセス
     console.error('[send-flex-message] Fetching friends list for user:', userId);
     
     let friends, friendsError;
     try {
+      // Service Role keyでRLSを迂回して直接アクセス
       const result = await supabase
         .from('line_friends')
         .select('line_user_id, short_uid')
@@ -202,7 +203,14 @@ serve(async (req) => {
       
       friends = result.data;
       friendsError = result.error;
-      console.error('[send-flex-message] Raw query result:', { data: friends, error: friendsError });
+      
+      // デバッグ用
+      console.error('[send-flex-message] Friends query result:', { 
+        friendsCount: friends?.length || 0, 
+        error: friendsError,
+        firstFriend: friends?.[0] 
+      });
+      
     } catch (queryError) {
       console.error('[send-flex-message] Query execution error:', queryError);
       return new Response(
@@ -210,8 +218,6 @@ serve(async (req) => {
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 500 }
       )
     }
-
-    console.error('[send-flex-message] Friends fetch result:', { friendsCount: friends?.length, error: friendsError });
 
     if (friendsError) {
       console.error('[send-flex-message] Friends list error:', friendsError);
@@ -224,7 +230,7 @@ serve(async (req) => {
     if (!friends?.length) {
       console.error('[send-flex-message] No friends found for user:', userId);
       return new Response(
-        JSON.stringify({ error: '送信対象の友だちが見つかりません' }),
+        JSON.stringify({ error: '送信対象の友だちが見つかりません。まず友だちを追加してください。' }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 400 }
       )
     }
