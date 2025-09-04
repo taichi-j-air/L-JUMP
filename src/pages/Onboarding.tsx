@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -56,7 +56,13 @@ const Onboarding = () => {
   const [videoCompleted, setVideoCompleted] = useState(false);
   const [showCreationGuide, setShowCreationGuide] = useState(false);
   const [videoViewingRequired, setVideoViewingRequired] = useState(true);
+
   const navigate = useNavigate();
+
+  // VideoPlayerのonVideoCompleteコールバックをメモ化
+  const handleVideoComplete = useCallback(() => {
+    setVideoCompleted(true);
+  }, []);
 
   useEffect(() => {
     checkUserAndLoadData();
@@ -243,7 +249,6 @@ const Onboarding = () => {
               const isActive = currentStep === step.id;
               const isCompleted = currentStep > step.id;
               const Icon = step.icon;
-
               return (
                 <React.Fragment key={step.id}>
                   <div className="flex flex-col items-center">
@@ -373,7 +378,6 @@ const Onboarding = () => {
                       <Label htmlFor="no-line">いいえ、持っていません</Label>
                     </div>
                   </RadioGroup>
-
                   {showCreationGuide && (
                     <div className="mt-6 p-6 bg-white rounded-lg border border-gray-200 shadow-sm">
                       <h3 className="text-lg font-semibold mb-4 text-gray-900">LINE公式アカウントの作成手順</h3>
@@ -407,7 +411,6 @@ const Onboarding = () => {
                       <p className="text-muted-foreground">API設定のための動画は現在準備中です</p>
                     </div>
                   </div>
-
                   <div className="grid gap-4">
                     <div className="space-y-2">
                       <Label htmlFor="channelId">チャネルID（Channel ID）<span className="text-red-500">*</span></Label>
@@ -468,7 +471,6 @@ const Onboarding = () => {
                       動画視聴を必須にする
                     </Label>
                   </div>
-
                   {videoViewingRequired && (
                     <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 mb-6">
                       <p className="text-yellow-800 font-medium">
@@ -482,7 +484,7 @@ const Onboarding = () => {
                   
                   <VideoPlayer 
                     videoType="step4" 
-                    onVideoComplete={() => setVideoCompleted(true)}
+                    onVideoComplete={handleVideoComplete}
                     showTimer={videoViewingRequired}
                     requiredCompletionPercentage={30}
                     disabled={false}
@@ -491,16 +493,9 @@ const Onboarding = () => {
                 </div>
               )}
 
-              {/* Step 5: プラン選択 */}
+              {/* Step 5: プラン選択（VideoPlayer削除） */}
               {currentStep === 5 && (
                 <div className="space-y-6">
-                  <div className="mb-6">
-                    <VideoPlayer 
-                      videoType="plan_selection_video"
-                      showTimer={false}
-                    />
-                  </div>
-
                   <div className="space-y-4">
                     <Label>プランを選択してください <span className="text-red-500">*</span></Label>
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
