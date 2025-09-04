@@ -248,27 +248,6 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
         </div>
       )}
 
-      {/* Debug controls for testing */}
-      {!disabled && (
-        <div className="flex gap-2 justify-center">
-          <Button 
-            variant="outline" 
-            size="sm" 
-            onClick={handleVideoPlay}
-            disabled={isPlaying}
-          >
-            再生開始
-          </Button>
-          <Button 
-            variant="outline" 
-            size="sm" 
-            onClick={handleVideoPause}
-            disabled={!isPlaying}
-          >
-            一時停止
-          </Button>
-        </div>
-      )}
     </div>
   );
 };

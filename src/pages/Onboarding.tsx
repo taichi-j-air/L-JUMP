@@ -374,16 +374,16 @@ const Onboarding = () => {
                   </RadioGroup>
 
                   {showCreationGuide && (
-                    <div className="mt-6 p-6 bg-blue-50 rounded-lg border border-blue-200">
-                      <h3 className="text-lg font-semibold mb-4 text-blue-900">LINE公式アカウントの作成手順</h3>
-                      <div className="space-y-3 text-sm text-blue-800">
+                    <div className="mt-6 p-6 bg-white rounded-lg border border-gray-200 shadow-sm">
+                      <h3 className="text-lg font-semibold mb-4 text-gray-900">LINE公式アカウントの作成手順</h3>
+                      <div className="space-y-3 text-sm text-gray-700">
                         <p>1. 以下のリンクからLINE for Business にアクセス</p>
                         <div className="flex items-center gap-2">
                           <Button 
                             variant="outline" 
                             size="sm" 
                             onClick={() => window.open('https://entry.line.biz/start/jp/', '_blank')}
-                            className="border-blue-300 text-blue-700 hover:bg-blue-100"
+                            className="border-green-300 text-green-700 hover:bg-green-50 bg-green-600 text-white hover:bg-green-700"
                           >
                             <ExternalLink className="w-4 h-4 mr-2" />
                             LINE for Business
@@ -403,12 +403,13 @@ const Onboarding = () => {
                 <div className="space-y-6">
                   <div className="mb-6">
                     <Tabs value={activeVideoTab} onValueChange={setActiveVideoTab} className="w-full">
-                      <TabsContent value="channel_id">
-                        <VideoPlayer 
-                          videoType="channel_id"
-                          showTimer={false}
-                        />
-                      </TabsContent>
+                       <TabsContent value="channel_id">
+                         <VideoPlayer 
+                           videoType="channel_id"
+                           showTimer={false}
+                           requiredCompletionPercentage={0}
+                         />
+                       </TabsContent>
                       <TabsContent value="channel_secret">
                         <VideoPlayer 
                           videoType="channel_secret"
@@ -486,16 +487,21 @@ const Onboarding = () => {
               {/* Step 4: 使い方動画 */}
               {currentStep === 4 && (
                 <div className="space-y-6">
-                  <div className="text-center mb-4">
-                    <h3 className="text-lg font-semibold mb-2 text-red-600">この動画は必ず視聴してください</h3>
-                    <p className="text-muted-foreground">L!JUMPの基本機能をご確認ください。</p>
+                  <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 mb-6">
+                    <p className="text-yellow-800 font-medium">
+                      ⚠️ この動画は必ず視聴してください
+                    </p>
+                    <p className="text-yellow-700 text-sm mt-1">
+                      動画を最後まで視聴しないと次のステップに進むことができません。L!JUMPの基本機能をご確認ください。
+                    </p>
                   </div>
+                  
                   <VideoPlayer 
-                    videoType="step4_video"
+                    videoType="step4" 
                     onVideoComplete={() => setVideoCompleted(true)}
                     showTimer={true}
-                    disabled={true}
-                    requiredCompletionPercentage={100}
+                    requiredCompletionPercentage={30}
+                    disabled={false}
                   />
                 </div>
               )}
