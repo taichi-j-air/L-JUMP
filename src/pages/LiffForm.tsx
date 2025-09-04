@@ -11,6 +11,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { toast } from "sonner";
 import { useLiff } from "@/hooks/useLiff";
 import { Loader2, Smartphone, User } from "lucide-react";
+import DOMPurify from 'dompurify';
 
 interface PublicFormRow {
   id: string;
@@ -358,9 +359,9 @@ export default function LiffForm() {
               <div className="text-4xl">✅</div>
               <div className="text-foreground" 
                    dangerouslySetInnerHTML={{ 
-                     __html: form.success_message && form.success_message.trim() 
+                     __html: DOMPurify.sanitize(form.success_message && form.success_message.trim() 
                        ? form.success_message 
-                       : '送信ありがとうございました。' 
+                       : '送信ありがとうございました。')
                    }} 
               />
               {isInClient && (

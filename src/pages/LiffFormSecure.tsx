@@ -10,6 +10,7 @@ import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Checkbox } from "@/components/ui/checkbox";
 import { toast } from "sonner";
 import { useLiff } from "@/hooks/useLiff";
+import DOMPurify from 'dompurify';
 
 interface PublicFormRow {
   id: string;
@@ -279,9 +280,9 @@ export default function LiffFormSecure() {
             <div className="py-8 text-center space-y-4">
               <div className="text-muted-foreground" 
                    dangerouslySetInnerHTML={{ 
-                     __html: form.success_message && form.success_message.trim() 
+                     __html: DOMPurify.sanitize(form.success_message && form.success_message.trim() 
                        ? form.success_message 
-                       : '送信ありがとうございました。' 
+                       : '送信ありがとうございました。')
                    }} 
               />
               <p className="text-sm text-muted-foreground">

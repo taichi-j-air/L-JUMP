@@ -292,10 +292,10 @@ export default function CMSFriendsPublicView() {
                 );
               }
             }
-            return <div key={idx} className="mt-4 first:mt-0" dangerouslySetInnerHTML={{ __html: html }} />;
+            return <div key={idx} className="mt-4 first:mt-0" dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(html) }} />;
           })
         ) : (
-          <div dangerouslySetInnerHTML={{ __html: sanitized }} />
+          <div dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(sanitized) }} />
         )}
       </article>
     </div>

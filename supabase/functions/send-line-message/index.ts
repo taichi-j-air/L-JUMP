@@ -70,16 +70,29 @@ serve(async (req) => {
       })
     }
 
-    // Get user's LINE access token and delivery count
+    // Get user's LINE credentials securely
+    const { data: credentials, error: credError } = await supabase
+      .rpc('get_line_credentials_for_user', { p_user_id: user.id })
+      .single()
+
+    if (credError || !credentials?.channel_access_token) {
+      console.error('No LINE credentials found:', credError)
+      return new Response('LINE API not configured', { 
+        status: 400, 
+        headers: corsHeaders 
+      })
+    }
+
+    // Get user profile for delivery counting
     const { data: profile, error: profileError } = await supabase
       .from('profiles')
-      .select('line_channel_access_token, delivery_count, monthly_message_used')
+      .select('delivery_count, monthly_message_used')
       .eq('user_id', user.id)
       .single()
 
-    if (profileError || !profile?.line_channel_access_token) {
-      console.error('No LINE access token found:', profileError)
-      return new Response('LINE API not configured', { 
+    if (profileError) {
+      console.error('Error fetching user profile:', profileError)
+      return new Response('User profile error', { 
         status: 400, 
         headers: corsHeaders 
       })
@@ -147,7 +160,7 @@ serve(async (req) => {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${profile.line_channel_access_token}`
+        'Authorization': `Bearer ${credentials.channel_access_token}`
       },
       body: JSON.stringify(lineApiData)
     })

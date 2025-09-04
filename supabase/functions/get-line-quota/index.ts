@@ -52,15 +52,30 @@ serve(async (req) => {
 
     const supabase = createClient(supabaseUrl, supabaseServiceKey)
 
-    // Get LINE access token from profiles table using channelId
-    const { data: profile, error: profileError } = await supabase
+    // Get user by channel ID first
+    const { data: userProfile, error: userError } = await supabase
       .from('profiles')
-      .select('line_channel_access_token')
+      .select('user_id')
       .eq('line_channel_id', channelId)
       .single()
 
-    if (profileError || !profile?.line_channel_access_token) {
-      console.error('No LINE access token found for channelId:', channelId, profileError)
+    if (userError || !userProfile?.user_id) {
+      console.error('No user found for channelId:', channelId, userError)
+      return new Response(JSON.stringify({ 
+        error: 'User not found for this channel' 
+      }), { 
+        status: 200, 
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+      })
+    }
+
+    // Get secure LINE credentials
+    const { data: credentials, error: credError } = await supabase
+      .rpc('get_line_credentials_for_user', { p_user_id: userProfile.user_id })
+      .single()
+
+    if (credError || !credentials?.channel_access_token) {
+      console.error('No LINE credentials found for userId:', userProfile.user_id, credError)
       return new Response(JSON.stringify({ 
         error: 'LINE API not configured for this channel' 
       }), { 
@@ -70,7 +85,7 @@ serve(async (req) => {
     }
 
     const headers = {
-      'Authorization': `Bearer ${profile.line_channel_access_token}`,
+      'Authorization': `Bearer ${credentials.channel_access_token}`,
       'Content-Type': 'application/json'
     }
 

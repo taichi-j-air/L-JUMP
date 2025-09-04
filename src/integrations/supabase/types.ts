@@ -1266,6 +1266,7 @@ export type Database = {
           id: string
           updated_at: string | null
           user_id: string
+          vault_secret_id: string | null
         }
         Insert: {
           created_at?: string | null
@@ -1274,6 +1275,7 @@ export type Database = {
           id?: string
           updated_at?: string | null
           user_id: string
+          vault_secret_id?: string | null
         }
         Update: {
           created_at?: string | null
@@ -1282,6 +1284,7 @@ export type Database = {
           id?: string
           updated_at?: string | null
           user_id?: string
+          vault_secret_id?: string | null
         }
         Relationships: []
       }
@@ -1962,6 +1965,20 @@ export type Database = {
       }
       generate_short_uid: {
         Args: Record<PropertyKey, never>
+        Returns: string
+      }
+      get_line_credentials_for_user: {
+        Args: { p_user_id: string }
+        Returns: {
+          bot_id: string
+          channel_access_token: string
+          channel_id: string
+          channel_secret: string
+          liff_id: string
+        }[]
+      }
+      get_line_credentials_secure: {
+        Args: { p_credential_type: string; p_user_id: string }
         Returns: string
       }
       get_public_form_meta: {
