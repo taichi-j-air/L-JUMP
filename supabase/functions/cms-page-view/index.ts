@@ -72,40 +72,82 @@ serve(async (req) => {
         );
       }
 
-      // UIDフォーマット検証（6文字の英数字であることを確認）
-      if (!/^[A-Z0-9]{6}$/i.test(uid)) {
-        console.log("Invalid UID format:", uid);
+      // UIDフォーマット検証（厳密な6文字の英数字チェック）
+      const uidTrimmed = uid.trim();
+      if (!/^[A-Z0-9]{6}$/i.test(uidTrimmed)) {
+        console.log("STRICT: Invalid UID format:", { original: uid, trimmed: uidTrimmed });
+        
+        const { data: profile } = await supabase
+          .from("profiles")
+          .select("display_name, line_user_id, add_friend_url")
+          .eq("user_id", page.user_id)
+          .maybeSingle();
+
+        const friendInfo = {
+          account_name: profile?.display_name || null,
+          line_id: profile?.line_user_id || null,
+          add_friend_url: profile?.add_friend_url || null,
+          message: "無効なアクセスコード形式です。正しいリンクからアクセスしてください。"
+        };
+
         return new Response(
           JSON.stringify({ 
-            error: "Invalid access code format.",
             require_friend: true,
-            friend_info: { message: "Invalid access code format." }
+            friend_info: friendInfo
           }),
           { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
         );
       }
 
-      // 友達認証の実行 - より厳密なチェック
-      const uidUpper = uid.toUpperCase().trim();
-      console.log("STRICT Friend authentication check:", { uid, uidUpper, user_id: page.user_id });
+      // プレースホルダー値のチェック（フォーム認証と同じロジック）
+      const uidUpper = uidTrimmed.toUpperCase();
+      if (uidUpper === '[UID]' || uidUpper === 'UID' || uidUpper === '') {
+        console.log("STRICT: Placeholder UID detected:", { uid: uidUpper });
+        
+        const { data: profile } = await supabase
+          .from("profiles")
+          .select("display_name, line_user_id, add_friend_url")
+          .eq("user_id", page.user_id)
+          .maybeSingle();
 
-      // line_friendsテーブルで直接検索（より厳密な条件）
+        const friendInfo = {
+          account_name: profile?.display_name || null,
+          line_id: profile?.line_user_id || null,
+          add_friend_url: profile?.add_friend_url || null,
+          message: "このページはLINE友だち限定です。正しいリンクから開いてください。"
+        };
+
+        return new Response(
+          JSON.stringify({ require_friend: true, friend_info: friendInfo }),
+          { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+
+      console.log("STRICT Friend authentication check:", { uid: uidTrimmed, uidUpper, user_id: page.user_id });
+
+      // フォーム認証と同じロジック：厳密な友達検索
       const { data: friendData, error: friendErr } = await supabase
         .from("line_friends")
         .select("id, line_user_id, display_name")
         .eq("user_id", page.user_id)
-        .eq("short_uid_ci", uidUpper)  // 大文字小文字を区別しないフィールドを使用
-        .single(); // .single()を使用してより厳密に
+        .eq("short_uid_ci", uidUpper)
+        .maybeSingle(); // .single()から.maybeSingle()に変更してエラーハンドリングを改善
 
-      console.log("Friend query result:", { friendData, friendErr });
+      console.log("STRICT Friend query result:", { 
+        friendData, 
+        friendErr, 
+        query_params: { user_id: page.user_id, short_uid_ci: uidUpper }
+      });
 
-      if (friendErr || !friendData) {
+      // フォーム認証と同じ厳格な判定：友達が見つからない場合は即座に拒否
+      if (!friendData) {
         console.log("STRICT: Friend not found - ACCESS DENIED:", { 
           friendErr, 
           uid: uidUpper, 
           user_id: page.user_id,
           errorCode: friendErr?.code,
-          errorMessage: friendErr?.message 
+          errorMessage: friendErr?.message,
+          message: "No valid friend found for this UID"
         });
         
         const { data: profile } = await supabase
@@ -118,7 +160,7 @@ serve(async (req) => {
           account_name: profile?.display_name || null,
           line_id: profile?.line_user_id || null,
           add_friend_url: profile?.add_friend_url || null,
-          message: "Access denied. Please check your access link or contact the administrator."
+          message: "このページはLINE友だち限定です。正しいリンクから開いてください。"
         };
 
         return new Response(
@@ -138,49 +180,63 @@ serve(async (req) => {
         .eq("page_share_code", shareCode)
         .maybeSingle();
 
-      // 強化された期限切れチェック（hide_page設定の場合）
-      if (page.timer_enabled && page.expire_action === 'hide_page') {
+      // 強化された期限切れチェック（hide_page設定を含むすべての期限切れケース）
+      if (page.timer_enabled) {
         const now = new Date();
         let isExpired = false;
+        let expirationReason = '';
         
-        console.log("🔍 STRICT expiration check:", { 
+        console.log("🔍 ENHANCED expiration check:", { 
           timer_mode: page.timer_mode,
           timer_deadline: page.timer_deadline,
           timer_duration_seconds: page.timer_duration_seconds,
+          expire_action: page.expire_action,
           access_data_exists: !!accessData,
           timer_start_at: accessData?.timer_start_at
         });
         
         // 絶対期限モード
         if (page.timer_mode === 'absolute' && page.timer_deadline) {
-          isExpired = now > new Date(page.timer_deadline);
+          const deadline = new Date(page.timer_deadline);
+          isExpired = now > deadline;
+          if (isExpired) expirationReason = `absolute deadline passed (${deadline.toISOString()})`;
           console.log("⏰ Absolute expiration check:", { 
             deadline: page.timer_deadline, 
             now: now.toISOString(), 
-            isExpired 
+            isExpired,
+            reason: expirationReason 
           });
         }
         
         // アクセス時間ベースの期限チェック
         else if ((page.timer_mode === 'per_access' || page.timer_mode === 'step_delivery') && 
-                 page.timer_duration_seconds && accessData?.timer_start_at) {
-          const startTime = new Date(accessData.timer_start_at);
-          const expirationTime = new Date(startTime.getTime() + (page.timer_duration_seconds * 1000));
-          isExpired = now > expirationTime;
-          console.log("⏱️ Duration-based expiration check:", { 
-            start_time: startTime.toISOString(),
-            duration_seconds: page.timer_duration_seconds,
-            expiration_time: expirationTime.toISOString(),
-            now: now.toISOString(),
-            isExpired 
-          });
+                 page.timer_duration_seconds) {
+          if (accessData?.timer_start_at) {
+            const startTime = new Date(accessData.timer_start_at);
+            const expirationTime = new Date(startTime.getTime() + (page.timer_duration_seconds * 1000));
+            isExpired = now > expirationTime;
+            if (isExpired) expirationReason = `duration exceeded (started: ${startTime.toISOString()}, expired: ${expirationTime.toISOString()})`;
+            console.log("⏱️ Duration-based expiration check:", { 
+              start_time: startTime.toISOString(),
+              duration_seconds: page.timer_duration_seconds,
+              expiration_time: expirationTime.toISOString(),
+              now: now.toISOString(),
+              isExpired,
+              reason: expirationReason
+            });
+          } else {
+            console.log("⚠️ Timer enabled but no timer_start_at found - will be set later");
+          }
         }
         
-        if (isExpired) {
+        // 期限切れの場合、hide_page設定に関係なく確実にブロック
+        if (isExpired && (page.expire_action === 'hide_page' || page.expire_action === 'hide')) {
           console.log("🚫 PAGE EXPIRED - BLOCKING ACCESS:", { 
             friend_id: friend.id, 
             shareCode,
-            timer_mode: page.timer_mode
+            timer_mode: page.timer_mode,
+            expire_action: page.expire_action,
+            reason: expirationReason
           });
           
           // アクセス制御レコードを無効化
@@ -210,7 +266,7 @@ serve(async (req) => {
               require_friend: true, 
               friend_info: friendInfo 
             }),
-            { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+            { status: 410, headers: { ...corsHeaders, "Content-Type": "application/json" } }
           );
         }
       }

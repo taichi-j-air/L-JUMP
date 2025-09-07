@@ -291,7 +291,11 @@ export default function FormEmbedComponent({ formId, uid, className }: FormEmbed
         <CardContent className="p-6">
           <div className="text-center">
             <h3 className="text-lg font-semibold mb-2">送信完了</h3>
-            <p>{formData.success_message}</p>
+            <div 
+              dangerouslySetInnerHTML={{ 
+                __html: formData.success_message || "フォームを送信しました。ありがとうございました。" 
+              }} 
+            />
           </div>
         </CardContent>
       </Card>
