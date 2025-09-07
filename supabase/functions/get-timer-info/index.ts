@@ -1,0 +1,235 @@
+import { corsHeaders } from '../_shared/cors.ts';
+
+interface TimerInfoRequest {
+  pageShareCode: string;
+  uid?: string;
+}
+
+interface TimerResponse {
+  success: boolean;
+  timer_start_at?: string;
+  timer_end_at?: string;
+  access_enabled?: boolean;
+  expired?: boolean;
+  error?: string;
+}
+
+Deno.serve(async (req) => {
+  // Handle CORS preflight requests
+  if (req.method === 'OPTIONS') {
+    return new Response(null, { headers: corsHeaders });
+  }
+
+  try {
+    const { pageShareCode, uid }: TimerInfoRequest = await req.json();
+
+    if (!pageShareCode) {
+      return new Response(JSON.stringify({ 
+        success: false, 
+        error: 'Page share code is required' 
+      }), {
+        status: 400,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+      });
+    }
+
+    // Create Supabase client
+    const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
+    const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+    
+    const supabase = createClient(supabaseUrl, supabaseServiceKey);
+
+    let timerInfo: TimerResponse = { success: false };
+
+    if (uid) {
+      // UIDが提供された場合、friend_page_accessから情報を取得
+      const { data: friendAccess, error: friendError } = await supabase
+        .from('friend_page_access')
+        .select('*')
+        .eq('page_share_code', pageShareCode)
+        .single();
+
+      if (friendError || !friendAccess) {
+        console.log('Friend access not found, creating new record');
+        
+        // 友達情報を取得
+        const { data: friend, error: friendLookupError } = await supabase
+          .from('line_friends')
+          .select('id, user_id')
+          .eq('short_uid_ci', uid.toUpperCase())
+          .single();
+
+        if (friendLookupError || !friend) {
+          return new Response(JSON.stringify({ 
+            success: false, 
+            error: 'Friend not found for provided UID' 
+          }), {
+            status: 404,
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+          });
+        }
+
+        // 新しいアクセス記録を作成
+        const { data: newAccess, error: insertError } = await supabase
+          .from('friend_page_access')
+          .insert({
+            user_id: friend.user_id,
+            friend_id: friend.id,
+            page_share_code: pageShareCode,
+            access_enabled: true,
+            timer_start_at: new Date().toISOString(),
+            first_access_at: new Date().toISOString(),
+            access_source: 'direct'
+          })
+          .select()
+          .single();
+
+        if (insertError) {
+          console.error('Failed to create access record:', insertError);
+          return new Response(JSON.stringify({ 
+            success: false, 
+            error: 'Failed to create access record' 
+          }), {
+            status: 500,
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+          });
+        }
+
+        timerInfo = {
+          success: true,
+          timer_start_at: newAccess.timer_start_at,
+          timer_end_at: newAccess.timer_end_at,
+          access_enabled: newAccess.access_enabled,
+          expired: false
+        };
+      } else {
+        // 既存のアクセス記録がある場合
+        const now = new Date();
+        let expired = false;
+
+        // first_access_atが未設定の場合は設定
+        if (!friendAccess.first_access_at) {
+          await supabase
+            .from('friend_page_access')
+            .update({ 
+              first_access_at: now.toISOString(),
+              timer_start_at: friendAccess.timer_start_at || now.toISOString()
+            })
+            .eq('id', friendAccess.id);
+        }
+
+        // timer_start_atが未設定の場合は設定
+        if (!friendAccess.timer_start_at) {
+          await supabase
+            .from('friend_page_access')
+            .update({ timer_start_at: now.toISOString() })
+            .eq('id', friendAccess.id);
+          
+          friendAccess.timer_start_at = now.toISOString();
+        }
+
+        // 期限切れチェック
+        if (friendAccess.timer_end_at) {
+          expired = new Date(friendAccess.timer_end_at) <= now;
+        }
+
+        timerInfo = {
+          success: true,
+          timer_start_at: friendAccess.timer_start_at,
+          timer_end_at: friendAccess.timer_end_at,
+          access_enabled: friendAccess.access_enabled && !expired,
+          expired
+        };
+      }
+    } else {
+      // UIDが提供されていない場合は一般的なタイマー情報のみ
+      timerInfo = {
+        success: true,
+        timer_start_at: new Date().toISOString(),
+        access_enabled: false,
+        expired: false
+      };
+    }
+
+    return new Response(JSON.stringify(timerInfo), {
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+    });
+
+  } catch (error) {
+    console.error('Error in get-timer-info function:', error);
+    return new Response(JSON.stringify({ 
+      success: false, 
+      error: 'Internal server error' 
+    }), {
+      status: 500,
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+    });
+  }
+});
+
+// Shared CORS headers
+function createClient(supabaseUrl: string, supabaseKey: string) {
+  return {
+    from: (table: string) => ({
+      select: (columns = '*') => ({
+        eq: (column: string, value: any) => ({
+          single: async () => {
+            const response = await fetch(`${supabaseUrl}/rest/v1/${table}?select=${columns}&${column}=eq.${encodeURIComponent(value)}`, {
+              headers: {
+                'Authorization': `Bearer ${supabaseKey}`,
+                'apikey': supabaseKey,
+                'Content-Type': 'application/json'
+              }
+            });
+            const data = await response.json();
+            if (!response.ok) {
+              return { data: null, error: data };
+            }
+            return { data: data[0] || null, error: null };
+          }
+        })
+      }),
+      insert: (values: any) => ({
+        select: (columns = '*') => ({
+          single: async () => {
+            const response = await fetch(`${supabaseUrl}/rest/v1/${table}`, {
+              method: 'POST',
+              headers: {
+                'Authorization': `Bearer ${supabaseKey}`,
+                'apikey': supabaseKey,
+                'Content-Type': 'application/json',
+                'Prefer': 'return=representation'
+              },
+              body: JSON.stringify(values)
+            });
+            const data = await response.json();
+            if (!response.ok) {
+              return { data: null, error: data };
+            }
+            return { data: data[0] || null, error: null };
+          }
+        })
+      }),
+      update: (values: any) => ({
+        eq: (column: string, value: any) => ({
+          async: async () => {
+            const response = await fetch(`${supabaseUrl}/rest/v1/${table}?${column}=eq.${encodeURIComponent(value)}`, {
+              method: 'PATCH',
+              headers: {
+                'Authorization': `Bearer ${supabaseKey}`,
+                'apikey': supabaseKey,
+                'Content-Type': 'application/json'
+              },
+              body: JSON.stringify(values)
+            });
+            if (!response.ok) {
+              const error = await response.json();
+              return { error };
+            }
+            return { error: null };
+          }
+        })
+      })
+    })
+  };
+}
