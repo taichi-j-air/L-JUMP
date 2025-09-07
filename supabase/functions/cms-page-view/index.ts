@@ -57,9 +57,44 @@ serve(async (req) => {
 
     console.log("Page found:", { id: page.id, user_id: page.user_id, visibility: page.visibility });
 
-    // 厳格な友達認証（全ページで必須）
+    // プレビューモードのチェック
+    const url = new URL(req.url);
+    const isPreviewMode = url.pathname.includes('/preview/');
+    if (isPreviewMode) {
+      console.log("Preview mode detected - skipping authentication");
+      // プレビューモードではページデータをそのまま返す
+      return new Response(JSON.stringify({
+        success: true,
+        data: {
+          id: page.id,
+          title: page.title,
+          content: page.content,
+          content_blocks: page.content_blocks,
+          timer_enabled: page.timer_enabled,
+          timer_mode: page.timer_mode,
+          timer_deadline: page.timer_deadline,
+          timer_duration_seconds: page.timer_duration_seconds,
+          timer_text: page.timer_text,
+          timer_display_mode: page.timer_display_mode,
+          timer_bg_color: page.timer_bg_color,
+          timer_text_color: page.timer_text_color,
+          timer_style: page.timer_style,
+          expire_action: page.expire_action,
+          show_milliseconds: page.show_milliseconds,
+          timer_day_label: page.timer_day_label,
+          timer_hour_label: page.timer_hour_label,
+          timer_minute_label: page.timer_minute_label,
+          timer_second_label: page.timer_second_label,
+        }
+      }), {
+        status: 200,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    // 公開ページは認証をスキップ（friends_onlyのみ認証必須）
     let friend = null;
-    if (true) { // 全てのLINE友達限定WEBページで認証必須
+    if (page.visibility === "friends_only") {
       if (!uid) {
         console.log("No UID provided for LINE friend-limited page - STRICT AUTHENTICATION REQUIRED");
         const { data: profile } = await supabase
@@ -81,9 +116,22 @@ serve(async (req) => {
         );
       }
 
-      // UIDフォーマット検証（厳密な6文字の英数字チェック）
-      const uidTrimmed = uid.trim();
-      if (!/^[A-Z0-9]{6}$/i.test(uidTrimmed)) {
+      // 無効なUID形式の詳細チェック  
+      const originalUid = uid;
+      const trimmedUid = uid.trim();
+      
+      if (!trimmedUid || trimmedUid === '[UID]' || trimmedUid === 'UID') {
+        console.log("STRICT: Invalid UID format:", { original: originalUid, trimmed: trimmedUid });
+        return new Response(JSON.stringify({
+          access_denied: true,
+          reason: "not_friend"
+        }), {
+          status: 200,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      const uidUpper = trimmedUid.toUpperCase();
         console.log("STRICT: Invalid UID format:", { original: uid, trimmed: uidTrimmed });
         
         const { data: profile } = await supabase
@@ -108,78 +156,35 @@ serve(async (req) => {
         );
       }
 
-      // プレースホルダー値のチェック（フォーム認証と同じロジック）
-      const uidUpper = uidTrimmed.toUpperCase();
-      if (uidUpper === '[UID]' || uidUpper === 'UID' || uidUpper === '') {
-        console.log("STRICT: Placeholder UID detected:", { uid: uidUpper });
-        
-        const { data: profile } = await supabase
-          .from("profiles")
-          .select("display_name, line_user_id, add_friend_url")
-          .eq("user_id", page.user_id)
-          .maybeSingle();
+      console.log("STRICT Friend authentication check:", { uid: trimmedUid, uidUpper, user_id: page.user_id });
 
-        const friendInfo = {
-          account_name: profile?.display_name || null,
-          line_id: profile?.line_user_id || null,
-          add_friend_url: profile?.add_friend_url || null,
-          message: "このページはLINE友だち限定です。正しいリンクから開いてください。"
-        };
-
-        return new Response(
-          JSON.stringify({ require_friend: true, friend_info: friendInfo }),
-          { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-        );
-      }
-
-      console.log("STRICT Friend authentication check:", { uid: uidTrimmed, uidUpper, user_id: page.user_id });
-
-      // フォーム認証と同じロジック：厳密な友達検索
+      // 友達テーブルから検索（大文字小文字を区別しない検索）
       const { data: friendData, error: friendErr } = await supabase
         .from("line_friends")
         .select("id, line_user_id, display_name")
         .eq("user_id", page.user_id)
-        .eq("short_uid_ci", uidUpper)
-        .maybeSingle(); // .single()から.maybeSingle()に変更してエラーハンドリングを改善
+        .ilike("short_uid_ci", uidUpper)
+        .maybeSingle();
 
-      console.log("STRICT Friend query result:", { 
-        friendData, 
-        friendErr, 
+      console.log("STRICT Friend query result:", {
+        friendData,
+        friendErr,
         query_params: { user_id: page.user_id, short_uid_ci: uidUpper }
       });
 
-      // フォーム認証と同じ厳格な判定：友達が見つからない場合は即座に拒否
-      if (!friendData) {
-        console.log("STRICT: Friend not found - ACCESS DENIED:", { 
-          friendErr, 
-          uid: uidUpper, 
-          user_id: page.user_id,
-          errorCode: friendErr?.code,
-          errorMessage: friendErr?.message,
-          message: "No valid friend found for this UID"
+      if (friendErr || !friendData) {
+        console.log("STRICT: Friend not found in database");
+        return new Response(JSON.stringify({
+          access_denied: true,
+          reason: "not_friend"
+        }), {
+          status: 200,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
-        
-        const { data: profile } = await supabase
-          .from("profiles")
-          .select("display_name, line_user_id, add_friend_url")
-          .eq("user_id", page.user_id)
-          .maybeSingle();
-
-        const friendInfo = {
-          account_name: profile?.display_name || null,
-          line_id: profile?.line_user_id || null,
-          add_friend_url: profile?.add_friend_url || null,
-          message: "このページはLINE友だち限定です。正しいリンクから開いてください。"
-        };
-
-        return new Response(
-          JSON.stringify({ require_friend: true, friend_info: friendInfo }),
-          { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-        );
       }
 
-      friend = { id: friendData.id, line_user_id: friendData.line_user_id };
-      console.log("STRICT: Friend authentication successful:", friend);
+      friend = friendData;
+      console.log("STRICT: Friend authentication successful:", { id: friend.id, line_user_id: friend.line_user_id });
 
       // 友達別のページアクセス制御をチェック
       const { data: accessData } = await supabase
@@ -247,60 +252,28 @@ serve(async (req) => {
             expire_action: page.expire_action,
             reason: expirationReason
           });
-          
-          // アクセス制御レコードを無効化
-          if (accessData) {
-            await supabase
-              .from("friend_page_access")
-              .update({ access_enabled: false, updated_at: now.toISOString() })
-              .eq("id", accessData.id);
-          }
-          
-          const { data: profile } = await supabase
-            .from("profiles")
-            .select("display_name, line_user_id, add_friend_url")
-            .eq("user_id", page.user_id)
-            .maybeSingle();
 
-          const friendInfo = {
-            account_name: profile?.display_name || null,
-            line_id: profile?.line_user_id || null,
-            add_friend_url: profile?.add_friend_url || null,
-            message: "このページの閲覧期限が終了しました。"
-          };
-
-          return new Response(
-            JSON.stringify({ 
-              error: "Page expired",
-              require_friend: true, 
-              friend_info: friendInfo 
-            }),
-            { status: 410, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-          );
+          // 期限切れによるアクセス拒否
+          return new Response(JSON.stringify({
+            access_denied: true,
+            reason: "expired"
+          }), {
+            status: 200,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
         }
       }
 
       // アクセス制御レコードが存在し、access_enabledがfalseの場合
       if (accessData && !accessData.access_enabled) {
         console.log("Access manually disabled for friend:", { friend_id: friend.id, shareCode });
-        
-        const { data: profile } = await supabase
-          .from("profiles")
-          .select("display_name, line_user_id, add_friend_url")
-          .eq("user_id", page.user_id)
-          .maybeSingle();
-
-        const friendInfo = {
-          account_name: profile?.display_name || null,
-          line_id: profile?.line_user_id || null,
-          add_friend_url: profile?.add_friend_url || null,
-          message: "このページへのアクセス権限がありません。"
-        };
-
-        return new Response(
-          JSON.stringify({ require_friend: true, friend_info: friendInfo }),
-          { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-        );
+        return new Response(JSON.stringify({
+          access_denied: true,
+          reason: "disabled"
+        }), {
+          status: 200,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
       }
 
       // 修正されたタイマー初期設定とアクセス管理

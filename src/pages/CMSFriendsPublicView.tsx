@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useParams, useSearchParams } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import DOMPurify from "dompurify";
-import { Card, CardContent } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { TimerPreview } from "@/components/TimerPreview";
@@ -165,6 +165,12 @@ export default function CMSFriendsPublicView() {
         setError("not_published");
         return;
       }
+
+      if (res.access_denied) {
+        console.log("🚫 Access denied:", res.reason);
+        setError("access_denied");
+        return;
+      }
       
       if (res.require_passcode) {
         console.log("🔑 Passcode required");
@@ -214,34 +220,63 @@ export default function CMSFriendsPublicView() {
   // 非公開ページ専用表示
   if (error === "not_published") {
     return (
-      <div className="container mx-auto max-w-3xl p-4">
-        <Card>
-          <CardContent className="p-8 text-center space-y-4">
-            <div className="text-6xl">🔒</div>
-            <h1 className="text-2xl font-bold text-muted-foreground">非公開ページ</h1>
-            <p className="text-muted-foreground">
-              このページは現在非公開に設定されています。<br />
-              管理者にお問い合わせください。
-            </p>
-          </CardContent>
-        </Card>
+      <div className="min-h-screen bg-background flex flex-col">
+        <div className="flex-1 flex items-center justify-center px-4">
+          <Card className="w-full max-w-md">
+            <CardHeader className="text-center">
+              <CardTitle className="text-muted-foreground">非公開ページ</CardTitle>
+            </CardHeader>
+            <CardContent className="text-center space-y-4">
+              <div className="text-4xl mb-4">🔒</div>
+              <p className="text-muted-foreground">
+                このページは現在非公開に設定されています
+              </p>
+            </CardContent>
+          </Card>
+        </div>
         
-        <Card className="mt-4 bg-gradient-to-r from-blue-500 to-blue-600 text-white">
-          <CardContent className="p-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <h3 className="text-lg font-bold">L!JUMP</h3>
-                <p className="text-sm opacity-90">次世代LINEマーケティングツール</p>
-              </div>
-              <Button 
-                variant="secondary"
-                onClick={() => window.open('https://ljump.com', '_blank')}
-              >
-                詳細を見る
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
+        {/* LJUMP Banner */}
+        <div className="bg-primary text-primary-foreground p-4 text-center">
+          <div className="flex items-center justify-center space-x-2">
+            <span className="font-bold text-lg">L!JUMP</span>
+            <span className="text-sm opacity-90">で作成されました</span>
+          </div>
+          <p className="text-xs opacity-75 mt-1">
+            LINE公式アカウント運用プラットフォーム
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  if (error === "access_denied") {
+    return (
+      <div className="min-h-screen bg-background flex flex-col">
+        <div className="flex-1 flex items-center justify-center px-4">
+          <Card className="w-full max-w-md">
+            <CardHeader className="text-center">
+              <CardTitle className="text-muted-foreground">LINE友だち限定WEBページ</CardTitle>
+            </CardHeader>
+            <CardContent className="text-center space-y-4">
+              <div className="text-4xl mb-4">🔒</div>
+              <p className="text-muted-foreground">
+                このページはLINE友だち限定です。<br />
+                正しいリンクから開いてください。
+              </p>
+            </CardContent>
+          </Card>
+        </div>
+        
+        {/* LJUMP Banner */}
+        <div className="bg-primary text-primary-foreground p-4 text-center">
+          <div className="flex items-center justify-center space-x-2">
+            <span className="font-bold text-lg">L!JUMP</span>
+            <span className="text-sm opacity-90">で作成されました</span>
+          </div>
+          <p className="text-xs opacity-75 mt-1">
+            LINE公式アカウント運用プラットフォーム
+          </p>
+        </div>
       </div>
     );
   }
