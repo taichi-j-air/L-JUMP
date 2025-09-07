@@ -94,6 +94,13 @@ export default function CMSFriendsPublicView() {
           throw new Error("プレビュー対象のページが見つかりません。");
         }
 
+        // Check if page is published
+        if (!page.is_published) {
+          setError("not_published");
+          setLoading(false);
+          return;
+        }
+
         // プレビューでもパスコードチェック
         if (page.require_passcode && page.passcode) {
           const urlParams = new URLSearchParams(window.location.search);
@@ -195,6 +202,42 @@ export default function CMSFriendsPublicView() {
   }, [shareCode, pageId, uid]); // 依存配列を修正
 
   if (loading) return <div className="container mx-auto p-6">読み込み中…</div>;
+  
+  // 非公開ページ専用表示
+  if (error === "not_published") {
+    return (
+      <div className="container mx-auto max-w-3xl p-4">
+        <Card>
+          <CardContent className="p-8 text-center space-y-4">
+            <div className="text-6xl">🔒</div>
+            <h1 className="text-2xl font-bold text-muted-foreground">非公開ページ</h1>
+            <p className="text-muted-foreground">
+              このページは現在非公開に設定されています。<br />
+              管理者にお問い合わせください。
+            </p>
+          </CardContent>
+        </Card>
+        
+        <Card className="mt-4 bg-gradient-to-r from-blue-500 to-blue-600 text-white">
+          <CardContent className="p-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <h3 className="text-lg font-bold">L!JUMP</h3>
+                <p className="text-sm opacity-90">次世代LINEマーケティングツール</p>
+              </div>
+              <Button 
+                variant="secondary"
+                onClick={() => window.open('https://ljump.com', '_blank')}
+              >
+                詳細を見る
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+  
   if (error) return <div className="container mx-auto p-6 text-destructive">{error}</div>;
 
   // 【修正】パスコード入力画面の表示ロジックを優先
