@@ -580,7 +580,6 @@ serve(async (req) => {
         }
       }
     }
-    }
 
     // ページ内容を返却
     const payload = {
