@@ -138,9 +138,86 @@ serve(async (req) => {
         .eq("page_share_code", shareCode)
         .maybeSingle();
 
+      // 強化された期限切れチェック（hide_page設定の場合）
+      if (page.timer_enabled && page.expire_action === 'hide_page') {
+        const now = new Date();
+        let isExpired = false;
+        
+        console.log("🔍 STRICT expiration check:", { 
+          timer_mode: page.timer_mode,
+          timer_deadline: page.timer_deadline,
+          timer_duration_seconds: page.timer_duration_seconds,
+          access_data_exists: !!accessData,
+          timer_start_at: accessData?.timer_start_at
+        });
+        
+        // 絶対期限モード
+        if (page.timer_mode === 'absolute' && page.timer_deadline) {
+          isExpired = now > new Date(page.timer_deadline);
+          console.log("⏰ Absolute expiration check:", { 
+            deadline: page.timer_deadline, 
+            now: now.toISOString(), 
+            isExpired 
+          });
+        }
+        
+        // アクセス時間ベースの期限チェック
+        else if ((page.timer_mode === 'per_access' || page.timer_mode === 'step_delivery') && 
+                 page.timer_duration_seconds && accessData?.timer_start_at) {
+          const startTime = new Date(accessData.timer_start_at);
+          const expirationTime = new Date(startTime.getTime() + (page.timer_duration_seconds * 1000));
+          isExpired = now > expirationTime;
+          console.log("⏱️ Duration-based expiration check:", { 
+            start_time: startTime.toISOString(),
+            duration_seconds: page.timer_duration_seconds,
+            expiration_time: expirationTime.toISOString(),
+            now: now.toISOString(),
+            isExpired 
+          });
+        }
+        
+        if (isExpired) {
+          console.log("🚫 PAGE EXPIRED - BLOCKING ACCESS:", { 
+            friend_id: friend.id, 
+            shareCode,
+            timer_mode: page.timer_mode
+          });
+          
+          // アクセス制御レコードを無効化
+          if (accessData) {
+            await supabase
+              .from("friend_page_access")
+              .update({ access_enabled: false, updated_at: now.toISOString() })
+              .eq("id", accessData.id);
+          }
+          
+          const { data: profile } = await supabase
+            .from("profiles")
+            .select("display_name, line_user_id, add_friend_url")
+            .eq("user_id", page.user_id)
+            .maybeSingle();
+
+          const friendInfo = {
+            account_name: profile?.display_name || null,
+            line_id: profile?.line_user_id || null,
+            add_friend_url: profile?.add_friend_url || null,
+            message: "このページの閲覧期限が終了しました。"
+          };
+
+          return new Response(
+            JSON.stringify({ 
+              error: "Page expired",
+              require_friend: true, 
+              friend_info: friendInfo 
+            }),
+            { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          );
+        }
+      }
+
       // アクセス制御レコードが存在し、access_enabledがfalseの場合
       if (accessData && !accessData.access_enabled) {
-        console.log("Access disabled for friend:", { friend_id: friend.id, shareCode });
+        console.log("Access manually disabled for friend:", { friend_id: friend.id, shareCode });
         
         const { data: profile } = await supabase
           .from("profiles")
@@ -152,12 +229,12 @@ serve(async (req) => {
           account_name: profile?.display_name || null,
           line_id: profile?.line_user_id || null,
           add_friend_url: profile?.add_friend_url || null,
-          message: "このページの閲覧期限が終了しました。"
+          message: "このページへのアクセス権限がありません。"
         };
 
         return new Response(
           JSON.stringify({ require_friend: true, friend_info: friendInfo }),
-          { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } }
         );
       }
 

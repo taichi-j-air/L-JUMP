@@ -54,7 +54,8 @@ export default function CMSFriendsPublicView() {
   const [requirePass, setRequirePass] = useState(false);
   const [friendInfo, setFriendInfo] = useState<FriendInfo | null>(null);
 
-  const isPreview = !!pageId;
+  // 正確なプレビューモード判定：URLパスに基づく
+  const isPreview = window.location.pathname.includes('/preview/') && !!pageId;
 
   useEffect(() => {
     document.title = data?.title ? `${data.title} | ページ` : "ページ";
@@ -71,9 +72,18 @@ export default function CMSFriendsPublicView() {
       setFriendInfo(null);
       setRequirePass(false);
 
-      // 【修正】プレビュー機能のロジックを全面的に修正
+      console.log("🔍 Page access attempt:", { 
+        isPreview, 
+        shareCode, 
+        uid, 
+        pathname: window.location.pathname,
+        hasPageId: !!pageId
+      });
+
+      // プレビューモードでも基本的な認証が必要
       if (isPreview) {
-        // プレビューモード：作成者として直接ページデータを取得
+        console.log("📋 Preview mode - loading page directly with basic checks");
+        
         const { data: page, error: pageError } = await supabase
           .from("cms_pages")
           .select("*")
@@ -84,7 +94,7 @@ export default function CMSFriendsPublicView() {
           throw new Error("プレビュー対象のページが見つかりません。");
         }
 
-        // Check passcode for preview if required
+        // プレビューでもパスコードチェック
         if (page.require_passcode && page.passcode) {
           const urlParams = new URLSearchParams(window.location.search);
           const urlPasscode = urlParams.get('passcode');
@@ -98,27 +108,79 @@ export default function CMSFriendsPublicView() {
           }
         }
 
+        // プレビューでも期限切れチェック
+        if (page.timer_enabled && page.expire_action === 'hide_page') {
+          const now = new Date();
+          let isExpired = false;
+
+          if (page.timer_mode === 'absolute' && page.timer_deadline) {
+            isExpired = now > new Date(page.timer_deadline);
+          }
+
+          if (isExpired) {
+            console.log("⏰ Preview page expired:", { 
+              timer_deadline: page.timer_deadline,
+              current_time: now 
+            });
+            throw new Error("このページの表示期限が過ぎています。");
+          }
+        }
+
         setData(page as PagePayload);
         return;
       }
 
-      // 通常の公開ページ表示
+      // 通常の公開ページ表示 - Edge Functionを必ず使用
       if (!shareCode) {
         setError("共有コードがありません");
         return;
       }
 
+      console.log("🌐 Public page - using Edge Function for strict authentication");
+
       const { data: res, error: fnErr } = await supabase.functions.invoke("cms-page-view", {
         body: { shareCode, uid, passcode: withPasscode },
       });
       
+      console.log("📡 Edge Function response:", { res, fnErr });
+      
       if (fnErr) throw new Error(fnErr.message || "エッジ関数でエラーが発生しました");
       if (!res) throw new Error("レスポンスがありません");
       
-      if (res.error) throw new Error(res.error);
-      if (res.require_passcode) return setRequirePass(true);
-      if (res.require_friend) return setFriendInfo(res.friend_info || null);
+      if (res.error) {
+        console.log("🚫 Edge Function returned error:", res.error);
+        throw new Error(res.error);
+      }
+      if (res.require_passcode) {
+        console.log("🔑 Passcode required");
+        return setRequirePass(true);
+      }
+      if (res.require_friend) {
+        console.log("👥 Friend authentication required:", res.friend_info);
+        return setFriendInfo(res.friend_info || null);
+      }
 
+      // フロントエンドでの追加期限チェック
+      if (res.timer_enabled && res.expire_action === 'hide_page') {
+        const now = new Date();
+        let isExpired = false;
+
+        if (res.timer_mode === 'absolute' && res.timer_deadline) {
+          isExpired = now > new Date(res.timer_deadline);
+          console.log("🔍 Frontend expiration check (absolute):", { 
+            deadline: res.timer_deadline, 
+            now: now.toISOString(), 
+            isExpired 
+          });
+        }
+
+        if (isExpired) {
+          console.log("🚫 Frontend detected expired page");
+          throw new Error("このページの表示期限が過ぎています。");
+        }
+      }
+
+      console.log("✅ Page loaded successfully:", res.title || res.tag_label);
       setData(res as PagePayload);
 
     } catch (e: any) {
