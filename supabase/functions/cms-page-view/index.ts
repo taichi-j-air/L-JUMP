@@ -49,19 +49,19 @@ serve(async (req) => {
     // Check if page is published
     if (!page.is_published) {
       console.log("Page is not published:", { shareCode, is_published: page.is_published });
-      return new Response(JSON.stringify({ error: "page not found" }), {
-        status: 404,
+      return new Response(JSON.stringify({ not_published: true }), {
+        status: 200,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
     console.log("Page found:", { id: page.id, user_id: page.user_id, visibility: page.visibility });
 
-    // 厳格な友達認証（friends_onlyの場合）
+    // 厳格な友達認証（全ページで必須）
     let friend = null;
-    if (page.visibility === "friends_only") {
+    if (true) { // 全てのLINE友達限定WEBページで認証必須
       if (!uid) {
-        console.log("No UID provided for friends_only page - STRICT AUTHENTICATION REQUIRED");
+        console.log("No UID provided for LINE friend-limited page - STRICT AUTHENTICATION REQUIRED");
         const { data: profile } = await supabase
           .from("profiles")
           .select("display_name, line_user_id, add_friend_url")

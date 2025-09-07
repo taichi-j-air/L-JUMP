@@ -158,6 +158,14 @@ export default function CMSFriendsPublicView() {
         console.log("🚫 Edge Function returned error:", res.error);
         throw new Error(res.error);
       }
+      
+      // 非公開ページチェック
+      if (res.not_published) {
+        console.log("📝 Page is not published");
+        setError("not_published");
+        return;
+      }
+      
       if (res.require_passcode) {
         console.log("🔑 Passcode required");
         return setRequirePass(true);
