@@ -6,6 +6,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { TimerPreview } from "@/components/TimerPreview";
+import FormEmbedComponent from "@/components/FormEmbedComponent";
 import { X } from "lucide-react";
 
 interface PagePayload {
@@ -257,6 +258,28 @@ export default function CMSFriendsPublicView() {
         {Array.isArray(data.content_blocks) && data.content_blocks.length > 0 ? (
           data.content_blocks.map((block, idx) => {
             const html = DOMPurify.sanitize(block || "");
+            
+            // FormEmbed component detection and rendering
+            if (html.includes('<FormEmbed') && html.includes('formId=')) {
+              const formIdMatch = html.match(/formId="([^"]+)"/);
+              const uidMatch = html.match(/uid="([^"]+)"/);
+              
+              if (formIdMatch) {
+                const formId = formIdMatch[1];
+                const embedUid = uidMatch && uidMatch[1] === '[UID]' ? uid : (uidMatch ? uidMatch[1] : '');
+                
+                return (
+                  <div key={idx} className="mt-4 first:mt-0">
+                    <FormEmbedComponent 
+                      formId={formId} 
+                      uid={embedUid}
+                      className="my-6"
+                    />
+                  </div>
+                );
+              }
+            }
+            
             // フォーム埋め込み（新しい形式）の処理
             if (html.includes('class="form-embed-container"') && html.includes('data-form-id=')) {
               const formIdMatch = html.match(/data-form-id="([^"]+)"/);
@@ -264,11 +287,10 @@ export default function CMSFriendsPublicView() {
                 const formId = formIdMatch[1];
                 return (
                   <div key={idx} className="mt-4 first:mt-0">
-                    <iframe 
-                      src={`${window.location.origin}/form/${formId}${uid ? `?uid=${uid}` : ''}`}
-                      className="w-full min-h-[400px] border rounded"
-                      title="埋め込みフォーム"
-                      style={{ background: 'white' }}
+                    <FormEmbedComponent 
+                      formId={formId} 
+                      uid={uid}
+                      className="my-6"
                     />
                   </div>
                 );
@@ -282,20 +304,20 @@ export default function CMSFriendsPublicView() {
                 const formId = formIdMatch[1];
                 return (
                   <div key={idx} className="mt-4 first:mt-0">
-                    <iframe 
-                      src={`${window.location.origin}/form/${formId}${uid ? `?uid=${uid}` : ''}`}
-                      className="w-full min-h-[400px] border rounded"
-                      title="埋め込みフォーム"
-                      style={{ background: 'white' }}
+                    <FormEmbedComponent 
+                      formId={formId} 
+                      uid={uid}
+                      className="my-6"
                     />
                   </div>
                 );
               }
             }
+            
             return <div key={idx} className="mt-4 first:mt-0" dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(html) }} />;
           })
         ) : (
-          <div dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(sanitized) }} />
+          <div dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(data.content || '') }} />
         )}
       </article>
     </div>

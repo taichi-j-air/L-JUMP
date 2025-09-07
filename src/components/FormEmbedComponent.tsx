@@ -65,7 +65,16 @@ export default function FormEmbedComponent({ formId, uid, className }: FormEmbed
           return;
         }
 
-        setFormData(data);
+        // Parse fields from Json to FormField[] with proper type conversion
+        const parsedFields = Array.isArray(data.fields) ? 
+          (data.fields as unknown as FormField[]) : 
+          [];
+        const formDataTyped: FormData = {
+          ...data,
+          fields: parsedFields
+        };
+
+        setFormData(formDataTyped);
       } catch (err) {
         console.error('Error:', err);
         setError('フォームの読み込みに失敗しました');

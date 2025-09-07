@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { supabase } from "@/integrations/supabase/client";
 
 export type TimerMode = "absolute" | "per_access" | "step_delivery";
 export type TimerStyle = "solid" | "glass" | "outline";
@@ -11,8 +12,8 @@ interface TimerPreviewProps {
   styleVariant?: TimerStyle;
   bgColor?: string; // hex
   textColor?: string; // hex
-  shareCode?: string; // for per_access local storage keying
-  uid?: string; // for per_access local storage keying
+  shareCode?: string; // for server sync
+  uid?: string; // for server sync
   className?: string;
   dayLabel?: string;
   hourLabel?: string;
@@ -89,7 +90,40 @@ export const TimerPreview = ({
   stepId,
 }: TimerPreviewProps) => {
   const [remainingMs, setRemainingMs] = useState<number>(0);
+  const [serverSyncedStart, setServerSyncedStart] = useState<Date | null>(null);
+  const [serverSyncExpired, setServerSyncExpired] = useState<boolean>(false);
   const intervalRef = useRef<number | null>(null);
+
+  // サーバーサイドタイマー同期
+  useEffect(() => {
+    const fetchTimerInfo = async () => {
+      if (shareCode && (mode === 'per_access' || mode === 'step_delivery') && !preview) {
+        try {
+          const { data, error } = await supabase.functions.invoke('get-timer-info', {
+            body: { pageShareCode: shareCode, uid }
+          });
+
+          if (error) {
+            console.error('Failed to fetch timer info:', error);
+            return;
+          }
+
+          if (data.success && data.timer_start_at) {
+            setServerSyncedStart(new Date(data.timer_start_at));
+            setServerSyncExpired(data.expired || false);
+            console.log('Server synced timer:', {
+              timer_start_at: data.timer_start_at,
+              expired: data.expired
+            });
+          }
+        } catch (error) {
+          console.error('Error fetching timer info:', error);
+        }
+      }
+    };
+
+    fetchTimerInfo();
+  }, [shareCode, uid, mode, preview]);
 
   const targetTime = useMemo(() => {
     if (mode === "absolute" && deadline) {
@@ -108,8 +142,19 @@ export const TimerPreview = ({
         return Date.now() + durationSeconds * 1000;
       }
       
+      // サーバー同期されたスタート時間を優先使用
+      if (serverSyncedStart) {
+        const serverTarget = serverSyncedStart.getTime() + durationSeconds * 1000;
+        console.log('Using server synced time:', {
+          serverStart: serverSyncedStart.toISOString(),
+          duration: durationSeconds,
+          target: new Date(serverTarget).toISOString()
+        });
+        return serverTarget;
+      }
+      
       if (mode === "step_delivery" && scenarioId && stepId && uid && shareCode) {
-        // ステップ配信モード: friend_page_accessテーブルからtimer_start_atを取得
+        // ステップ配信モード: ローカルストレージフォールバック
         const key = `step_delivery_timer:${shareCode}:${uid}:${scenarioId}:${stepId}`;
         
         try {
@@ -130,7 +175,7 @@ export const TimerPreview = ({
           return Date.now() + durationSeconds * 1000;
         }
       } else {
-        // per-access mode
+        // per-access mode: ローカルストレージフォールバック
         const key = `cms_page_first_access:${shareCode || "preview"}:${uid || "anon"}`;
         
         try {
@@ -155,7 +200,7 @@ export const TimerPreview = ({
     }
     
     return Date.now();
-  }, [mode, deadline, durationSeconds, shareCode, uid, preview, scenarioId, stepId]);
+  }, [mode, deadline, durationSeconds, shareCode, uid, preview, scenarioId, stepId, serverSyncedStart]);
 
   useEffect(() => {
     // 既存のインターバルをクリア
@@ -230,8 +275,8 @@ export const TimerPreview = ({
     borderColor: styleVariant === "outline" ? textColor : undefined,
   };
 
-  // タイマーが0になった場合の表示
-  const isExpired = remainingMs <= 0 && (mode === "absolute" || ((mode === "per_access" || mode === "step_delivery") && !preview));
+  // タイマーが0になった場合の表示（サーバー同期の期限切れ情報も考慮）
+  const isExpired = remainingMs <= 0 && (mode === "absolute" || ((mode === "per_access" || mode === "step_delivery") && !preview)) || serverSyncExpired;
 
   // デバッグ情報を開発環境でのみ表示
   if (process.env.NODE_ENV === 'development') {
@@ -241,6 +286,8 @@ export const TimerPreview = ({
       targetTime,
       remainingMs,
       currentTime: Date.now(),
+      serverSyncedStart,
+      serverSyncExpired,
       days: Math.floor(remainingMs / 1000 / 86400),
       hours: Math.floor((remainingMs / 1000 % 86400) / 3600),
       minutes: Math.floor((remainingMs / 1000 % 3600) / 60),

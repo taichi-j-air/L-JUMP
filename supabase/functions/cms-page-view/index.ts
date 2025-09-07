@@ -1,10 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
-};
+import { corsHeaders } from '../_shared/cors.ts';
 
 serve(async (req) => {
   if (req.method === "OPTIONS") {
@@ -52,11 +48,11 @@ serve(async (req) => {
 
     console.log("Page found:", { id: page.id, user_id: page.user_id, visibility: page.visibility });
 
-    // 友達認証（friends_onlyの場合）
+    // 厳格な友達認証（friends_onlyの場合）
     let friend = null;
     if (page.visibility === "friends_only") {
       if (!uid) {
-        console.log("No UID provided for friends_only page");
+        console.log("No UID provided for friends_only page - STRICT AUTHENTICATION REQUIRED");
         const { data: profile } = await supabase
           .from("profiles")
           .select("display_name, line_user_id, add_friend_url")
@@ -67,30 +63,50 @@ serve(async (req) => {
           account_name: profile?.display_name || null,
           line_id: profile?.line_user_id || null,
           add_friend_url: profile?.add_friend_url || null,
+          message: "Authentication required. Please access through the correct link."
         };
 
         return new Response(
           JSON.stringify({ require_friend: true, friend_info: friendInfo }),
-          { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
         );
       }
 
-      // 友達認証の実行
-      const uidUpper = uid.toUpperCase().trim();
-      console.log("Friend authentication check:", { uid, uidUpper, user_id: page.user_id });
+      // UIDフォーマット検証（6文字の英数字であることを確認）
+      if (!/^[A-Z0-9]{6}$/i.test(uid)) {
+        console.log("Invalid UID format:", uid);
+        return new Response(
+          JSON.stringify({ 
+            error: "Invalid access code format.",
+            require_friend: true,
+            friend_info: { message: "Invalid access code format." }
+          }),
+          { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
 
-      // line_friendsテーブルで直接検索
+      // 友達認証の実行 - より厳密なチェック
+      const uidUpper = uid.toUpperCase().trim();
+      console.log("STRICT Friend authentication check:", { uid, uidUpper, user_id: page.user_id });
+
+      // line_friendsテーブルで直接検索（より厳密な条件）
       const { data: friendData, error: friendErr } = await supabase
         .from("line_friends")
-        .select("id, line_user_id")
+        .select("id, line_user_id, display_name")
         .eq("user_id", page.user_id)
         .eq("short_uid_ci", uidUpper)  // 大文字小文字を区別しないフィールドを使用
-        .maybeSingle();
+        .single(); // .single()を使用してより厳密に
 
       console.log("Friend query result:", { friendData, friendErr });
 
       if (friendErr || !friendData) {
-        console.log("Friend not found:", { friendErr, uid: uidUpper, user_id: page.user_id });
+        console.log("STRICT: Friend not found - ACCESS DENIED:", { 
+          friendErr, 
+          uid: uidUpper, 
+          user_id: page.user_id,
+          errorCode: friendErr?.code,
+          errorMessage: friendErr?.message 
+        });
         
         const { data: profile } = await supabase
           .from("profiles")
@@ -102,16 +118,17 @@ serve(async (req) => {
           account_name: profile?.display_name || null,
           line_id: profile?.line_user_id || null,
           add_friend_url: profile?.add_friend_url || null,
+          message: "Access denied. Please check your access link or contact the administrator."
         };
 
         return new Response(
           JSON.stringify({ require_friend: true, friend_info: friendInfo }),
-          { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } }
         );
       }
 
       friend = { id: friendData.id, line_user_id: friendData.line_user_id };
-      console.log("Friend authentication successful:", friend);
+      console.log("STRICT: Friend authentication successful:", friend);
 
       // 友達別のページアクセス制御をチェック
       const { data: accessData } = await supabase
@@ -144,21 +161,36 @@ serve(async (req) => {
         );
       }
 
-      // タイマー初期設定
+      // 修正されたタイマー初期設定とアクセス管理
       if (page.timer_enabled) {
+        console.log("Timer enabled - managing access control");
+        
+        // 既存のアクセス制御をチェック
+        const { data: accessData } = await supabase
+          .from("friend_page_access")
+          .select("*")
+          .eq("friend_id", friend.id)
+          .eq("page_share_code", shareCode)
+          .maybeSingle();
+
+        let currentAccessData = accessData;
+
         if (!accessData) {
           // 新規アクセス制御レコードを作成
+          const now = new Date().toISOString();
           const insertData: any = {
             user_id: page.user_id,
             friend_id: friend.id,
             page_share_code: shareCode,
             access_enabled: true,
-            access_source: 'page_view'
+            access_source: 'page_view',
+            first_access_at: now
           };
 
+          // タイマー開始時刻の設定
           if (page.timer_mode === 'per_access') {
-            insertData.first_access_at = new Date().toISOString();
-            insertData.timer_start_at = new Date().toISOString();
+            insertData.timer_start_at = now;
+            console.log("Setting timer_start_at for per_access mode:", now);
           } else if (page.timer_mode === 'step_delivery' && page.timer_scenario_id && page.timer_step_id) {
             // ステップ配信時刻を取得
             const { data: deliveryData } = await supabase
@@ -174,41 +206,125 @@ serve(async (req) => {
               insertData.timer_start_at = deliveryData.delivered_at;
               insertData.scenario_id = page.timer_scenario_id;
               insertData.step_id = page.timer_step_id;
+              console.log("Setting timer_start_at for step_delivery mode:", deliveryData.delivered_at);
+            } else {
+              // フォールバック: ステップ配信データがない場合は現在時刻
+              insertData.timer_start_at = now;
+              console.warn("Step delivery data not found, using current time as fallback");
             }
+          } else {
+            // デフォルトフォールバック
+            insertData.timer_start_at = now;
           }
 
-          await supabase
+          const { data: newAccessData, error: insertError } = await supabase
             .from("friend_page_access")
-            .insert(insertData);
+            .insert(insertData)
+            .select()
+            .single();
+
+          if (insertError) {
+            console.error("Failed to create access record:", insertError);
+          } else {
+            currentAccessData = newAccessData;
+            console.log("Created new access record:", newAccessData);
+          }
         } else {
-          // 既存レコードの更新
+          // 既存レコードの更新 - timer_start_atが未設定の場合
           const updateData: any = {};
           
-          if (page.timer_mode === 'per_access' && !accessData.first_access_at) {
-            updateData.first_access_at = new Date().toISOString();
-            updateData.timer_start_at = new Date().toISOString();
-          } else if (page.timer_mode === 'step_delivery' && !accessData.timer_start_at) {
-            const { data: deliveryData } = await supabase
-              .from("step_delivery_tracking")
-              .select("delivered_at")
-              .eq("friend_id", friend.id)
-              .eq("scenario_id", page.timer_scenario_id)
-              .eq("step_id", page.timer_step_id)
-              .eq("status", "delivered")
-              .maybeSingle();
+          if (!accessData.timer_start_at) {
+            const now = new Date().toISOString();
+            
+            if (page.timer_mode === 'per_access') {
+              updateData.timer_start_at = accessData.first_access_at || now;
+              updateData.first_access_at = accessData.first_access_at || now;
+            } else if (page.timer_mode === 'step_delivery' && page.timer_scenario_id && page.timer_step_id) {
+              const { data: deliveryData } = await supabase
+                .from("step_delivery_tracking")
+                .select("delivered_at")
+                .eq("friend_id", friend.id)
+                .eq("scenario_id", page.timer_scenario_id)
+                .eq("step_id", page.timer_step_id)
+                .eq("status", "delivered")
+                .maybeSingle();
 
-            if (deliveryData?.delivered_at) {
-              updateData.timer_start_at = deliveryData.delivered_at;
-              updateData.scenario_id = page.timer_scenario_id;
-              updateData.step_id = page.timer_step_id;
+              if (deliveryData?.delivered_at) {
+                updateData.timer_start_at = deliveryData.delivered_at;
+                updateData.scenario_id = page.timer_scenario_id;
+                updateData.step_id = page.timer_step_id;
+              } else {
+                updateData.timer_start_at = now;
+              }
+            } else {
+              updateData.timer_start_at = now;
             }
+
+            console.log("Updating timer_start_at for existing record:", updateData);
+          }
+
+          if (!accessData.first_access_at) {
+            updateData.first_access_at = new Date().toISOString();
           }
 
           if (Object.keys(updateData).length > 0) {
-            await supabase
+            const { data: updatedData, error: updateError } = await supabase
               .from("friend_page_access")
               .update(updateData)
-              .eq("id", accessData.id);
+              .eq("id", accessData.id)
+              .select()
+              .single();
+
+            if (updateError) {
+              console.error("Failed to update access record:", updateError);
+            } else {
+              currentAccessData = updatedData;
+              console.log("Updated access record:", updatedData);
+            }
+          }
+        }
+
+        // 期限切れチェック（現在のアクセスデータを使用）
+        if (currentAccessData && currentAccessData.timer_start_at && page.timer_duration_seconds) {
+          const startTime = new Date(currentAccessData.timer_start_at);
+          const expiryTime = new Date(startTime.getTime() + page.timer_duration_seconds * 1000);
+          const now = new Date();
+          const isExpired = now > expiryTime;
+
+          console.log("Timer expiry check:", {
+            timer_start_at: currentAccessData.timer_start_at,
+            expiryTime: expiryTime.toISOString(),
+            now: now.toISOString(),
+            isExpired,
+            expire_action: page.expire_action
+          });
+
+          if (isExpired && page.expire_action === 'hide') {
+            // アクセスを無効化
+            await supabase
+              .from("friend_page_access")
+              .update({ access_enabled: false, updated_at: new Date().toISOString() })
+              .eq("id", currentAccessData.id);
+
+            console.log("TIMER EXPIRED - ACCESS DISABLED");
+            
+            const { data: profile } = await supabase
+              .from("profiles")
+              .select("display_name, line_user_id, add_friend_url")
+              .eq("user_id", page.user_id)
+              .maybeSingle();
+
+            const friendInfo = {
+              account_name: profile?.display_name || null,
+              line_id: profile?.line_user_id || null,
+              add_friend_url: profile?.add_friend_url || null,
+              message: "このページの閲覧期限が終了しました。"
+            };
+
+            return new Response(
+              JSON.stringify({ require_friend: true, friend_info: friendInfo }),
+              { status: 410, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+            );
           }
         }
       }
@@ -290,37 +406,44 @@ serve(async (req) => {
         }
       }
 
-      // タイマー切れ後の非表示処理
+      // 期限切れ後の非表示処理をより厳密にチェック
       if (page.timer_enabled && page.expire_action === 'hide') {
-        const { data: accessData } = await supabase
+        const { data: finalAccessData } = await supabase
           .from("friend_page_access")
           .select("*")
           .eq("friend_id", friend.id)
           .eq("page_share_code", shareCode)
           .maybeSingle();
 
-        // タイマー切れチェック
+        // 最終的な期限切れチェック
         let isExpired = false;
         if (page.timer_mode === 'absolute' && page.timer_deadline) {
           isExpired = new Date() > new Date(page.timer_deadline);
-        } else if ((page.timer_mode === 'per_access' || page.timer_mode === 'step_delivery') && accessData) {
-          const startTime = accessData.timer_start_at || accessData.first_access_at;
+        } else if ((page.timer_mode === 'per_access' || page.timer_mode === 'step_delivery') && finalAccessData) {
+          const startTime = finalAccessData.timer_start_at;
           if (startTime && page.timer_duration_seconds) {
             const endTime = new Date(new Date(startTime).getTime() + page.timer_duration_seconds * 1000);
             isExpired = new Date() > endTime;
+            
+            console.log("Final expiry check:", {
+              startTime,
+              endTime: endTime.toISOString(),
+              now: new Date().toISOString(),
+              isExpired
+            });
           }
         }
 
-        // タイマー切れでアクセス無効化
-        if (isExpired) {
-          if (accessData && accessData.access_enabled) {
+        // アクセス無効化をより確実に
+        if (isExpired || (finalAccessData && !finalAccessData.access_enabled)) {
+          if (finalAccessData && finalAccessData.access_enabled) {
             await supabase
               .from("friend_page_access")
               .update({ access_enabled: false, updated_at: new Date().toISOString() })
-              .eq("id", accessData.id);
+              .eq("id", finalAccessData.id);
           }
 
-          console.log("Timer expired - access disabled");
+          console.log("FINAL CHECK: Timer expired or access disabled");
           
           const { data: profile } = await supabase
             .from("profiles")
@@ -337,7 +460,7 @@ serve(async (req) => {
 
           return new Response(
             JSON.stringify({ require_friend: true, friend_info: friendInfo }),
-            { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+            { status: 410, headers: { ...corsHeaders, "Content-Type": "application/json" } }
           );
         }
       }

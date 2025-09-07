@@ -32,13 +32,8 @@ export const FormEmbedSelector = ({ onInsert, onClose }: FormEmbedSelectorProps)
     const selectedForm = forms.find(f => f.id === selectedFormId);
     if (!selectedForm) return;
 
-    // フォーム埋め込み用のHTML（特殊なdata属性付き）
-    const formHtml = `<div class="form-embed-container" data-form-id="${selectedFormId}" data-form-type="embedded">
-      <div class="form-embed-placeholder">
-        <h3>${selectedForm.name}</h3>
-        <p>${selectedForm.description || 'フォームが埋め込まれます'}</p>
-      </div>
-    </div>`;
+    // Use React component syntax for better integration
+    const formHtml = `<FormEmbed formId="${selectedFormId}" uid="[UID]" />`;
 
     onInsert(formHtml);
     onClose();
