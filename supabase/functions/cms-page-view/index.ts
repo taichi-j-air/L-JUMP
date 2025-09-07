@@ -609,7 +609,7 @@ serve(async (req) => {
     return new Response(JSON.stringify(payload), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
-
+  
   } catch (err) {
     console.error("cms-page-view error", err);
     return new Response(JSON.stringify({ error: "Internal server error" }), {
