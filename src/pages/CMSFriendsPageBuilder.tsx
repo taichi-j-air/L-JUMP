@@ -479,21 +479,21 @@ export default function CMSFriendsPageBuilder() {
 
                   <div className="space-y-2">
                     <Label className="flex items-center justify-between">
-                      公開設定
+                      ページ表示
                       <Switch 
-                        checked={selected?.visibility === "public"} 
+                        checked={selected?.is_published ?? true} 
                         onCheckedChange={async (checked) => {
                           if (!selected) return;
                           try {
                             const { data, error } = await supabase
                               .from('cms_pages')
-                              .update({ visibility: checked ? "public" : "friends_only" })
+                              .update({ is_published: checked })
                               .eq('id', selected.id)
                               .select('*')
                               .maybeSingle();
                             if (error) throw error;
                             setPages(prev => prev.map(p => p.id === selected.id ? data : p));
-                            toast.success(checked ? "ページを公開しました" : "ページを非公開にしました");
+                            toast.success(checked ? "ページを表示しました" : "ページを非表示にしました");
                           } catch (e: any) {
                             console.error(e);
                             toast.error("更新に失敗しました");
@@ -502,7 +502,7 @@ export default function CMSFriendsPageBuilder() {
                       />
                     </Label>
                     <p className="text-xs text-muted-foreground">
-                      {selected?.visibility === "public" ? "このページは公開されています" : "このページは友達限定です"}
+                      {selected?.is_published ? "このページはLINE友達に表示されています" : "このページは非表示です（誰もアクセス不可）"}
                     </p>
                   </div>
 

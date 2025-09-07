@@ -105,6 +105,7 @@ export type Database = {
           id: string
           internal_name: string | null
           internal_timer: boolean
+          is_published: boolean
           passcode: string | null
           require_passcode: boolean
           share_code: string
@@ -142,6 +143,7 @@ export type Database = {
           id?: string
           internal_name?: string | null
           internal_timer?: boolean
+          is_published?: boolean
           passcode?: string | null
           require_passcode?: boolean
           share_code?: string
@@ -179,6 +181,7 @@ export type Database = {
           id?: string
           internal_name?: string | null
           internal_timer?: boolean
+          is_published?: boolean
           passcode?: string | null
           require_passcode?: boolean
           share_code?: string

@@ -33,13 +33,22 @@ serve(async (req) => {
         "show_milliseconds, timer_style, timer_bg_color, timer_text_color, " +
         "internal_timer, timer_text, timer_day_label, timer_hour_label, " +
         "timer_minute_label, timer_second_label, expire_action, " +
-        "timer_scenario_id, timer_step_id"
+        "timer_scenario_id, timer_step_id, is_published"
       )
       .eq("share_code", shareCode)
       .single();
 
     if (pageErr || !page) {
       console.log("Page not found:", { shareCode, pageErr });
+      return new Response(JSON.stringify({ error: "page not found" }), {
+        status: 404,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    // Check if page is published
+    if (!page.is_published) {
+      console.log("Page is not published:", { shareCode, is_published: page.is_published });
       return new Response(JSON.stringify({ error: "page not found" }), {
         status: 404,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
