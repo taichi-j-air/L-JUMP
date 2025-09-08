@@ -222,7 +222,7 @@ export default function CMSFriendsPublicView() {
     return (
       <div className="min-h-screen bg-background flex flex-col">
         <div className="flex-1 flex items-center justify-center px-4">
-          <div className="w-full max-w-md p-6 rounded-lg" style={{ backgroundColor: '#999999' }}>
+          <div className="w-full max-w-md bg-muted-foreground/20 p-6 rounded-lg">
             <div className="text-center space-y-4">
               <h3 className="text-2xl font-semibold leading-none tracking-tight text-white">非公開ページ</h3>
               <p className="text-white">
@@ -246,7 +246,7 @@ export default function CMSFriendsPublicView() {
     return (
       <div className="min-h-screen bg-background flex flex-col">
         <div className="flex-1 flex items-center justify-center px-4">
-          <div className="w-full max-w-md p-6 rounded-lg" style={{ backgroundColor: '#999999' }}>
+          <div className="w-full max-w-md bg-muted-foreground/20 p-6 rounded-lg">
             <div className="text-center space-y-4">
               <h3 className="text-2xl font-semibold leading-none tracking-tight text-white">LINE友だち限定WEBページ</h3>
               <p className="text-white">
