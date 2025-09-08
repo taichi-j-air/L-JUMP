@@ -198,6 +198,13 @@ export default function CMSFriendsPageBuilder() {
 
   const handleAddPage = async () => {
     try {
+      console.log("🔄 Adding new page...");
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) {
+        toast.error("認証が必要です");
+        return;
+      }
+
       const payload = {
         title: "新しいページ",
         slug: `page-${Date.now()}`,
@@ -210,15 +217,25 @@ export default function CMSFriendsPageBuilder() {
         timer_enabled: false,
         timer_mode: "absolute",
         expire_action: "keep_public",
+        user_id: user.id,  // 明示的にuser_idを設定
+        is_published: true
       };
-      const { data, error } = await (supabase as any).from('cms_pages').insert(payload).select('*').maybeSingle();
-      if (error) throw error;
+      
+      console.log("📤 Inserting page with payload:", payload);
+      const { data, error } = await supabase.from('cms_pages').insert(payload).select('*').single();
+      
+      if (error) {
+        console.error("❌ Insert error:", error);
+        throw error;
+      }
+      
+      console.log("✅ Page created successfully:", data);
       setPages(prev => [data, ...prev]);
       setSelectedId(data.id);
       toast.success("ページを追加しました");
     } catch (e: any) {
-      console.error(e);
-      toast.error("ページの追加に失敗しました");
+      console.error("❌ Failed to add page:", e);
+      toast.error(`ページの追加に失敗しました: ${e.message}`);
     }
   };
 

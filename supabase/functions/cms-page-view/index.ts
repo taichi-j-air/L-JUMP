@@ -111,13 +111,19 @@ serve(async (req) => {
       const originalUid = uid;
       const trimmedUid = uid.trim();
       
-      // プレースホルダーや空文字をすべて拒否
+      // プレースホルダーや空文字、無効な値をすべて拒否
       if (!trimmedUid || 
           trimmedUid === '[UID]' || 
           trimmedUid === 'UID' ||
           trimmedUid === 'undefined' ||
-          trimmedUid === 'null') {
-        console.log("❌ STRICT: Invalid UID format:", { original: originalUid, trimmed: trimmedUid });
+          trimmedUid === 'null' ||
+          trimmedUid.length < 2) {  // 最低2文字は必要
+        console.log("❌ STRICT: Invalid UID format detected:", { 
+          original: originalUid, 
+          trimmed: trimmedUid,
+          length: trimmedUid.length,
+          reason: "UID is placeholder, empty, or too short"
+        });
         return new Response(JSON.stringify({
           access_denied: true,
           reason: "not_friend"
@@ -146,7 +152,13 @@ serve(async (req) => {
 
       // 友達が見つからない場合は即座に拒否
       if (friendErr || !friendData) {
-        console.log("❌ STRICT: Friend not found in database - UID does not exist or is invalid");
+        console.log("❌ STRICT: Friend not found in database:", {
+          uidUpper,
+          user_id: page.user_id,
+          friendErr: friendErr?.message,
+          friendData,
+          reason: "UID does not exist in friend database or query failed"
+        });
         return new Response(JSON.stringify({
           access_denied: true,
           reason: "not_friend"
