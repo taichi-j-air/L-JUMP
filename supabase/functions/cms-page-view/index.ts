@@ -107,17 +107,25 @@ serve(async (req) => {
         });
       }
 
-      // 無効なUID形式の詳細チェック  
+      // 無効なUID形式の詳細チェック - フォームと同じロジック適用
       const originalUid = uid;
       const trimmedUid = uid.trim();
       
-      // プレースホルダーや空文字をすべて拒否
+      console.log("🔍 UID validation check:", { original: originalUid, trimmed: trimmedUid });
+      
+      // プレースホルダーや空文字、2文字未満をすべて拒否（フォームと同じロジック）
       if (!trimmedUid || 
           trimmedUid === '[UID]' || 
           trimmedUid === 'UID' ||
           trimmedUid === 'undefined' ||
-          trimmedUid === 'null') {
-        console.log("❌ STRICT: Invalid UID format:", { original: originalUid, trimmed: trimmedUid });
+          trimmedUid === 'null' ||
+          trimmedUid.length < 2) {
+        console.log("❌ STRICT: Invalid UID format - BLOCKED:", { 
+          original: originalUid, 
+          trimmed: trimmedUid,
+          length: trimmedUid.length,
+          reason: "placeholder_or_invalid_format"
+        });
         return new Response(JSON.stringify({
           access_denied: true,
           reason: "not_friend"
