@@ -258,7 +258,7 @@ export default function CMSFriendsPublicView() {
         </div>
         
         {/* LJUMP Banner */}
-        <div className="p-4 text-center" style={{ backgroundColor: 'rgb(12, 179, 134)' }}>
+        <div className="p-4 text-center" style={{ backgroundColor: 'rgb(153, 153, 153)' }}>
           <div className="flex items-center justify-center space-x-2">
             <span className="font-bold text-lg text-white">L!JUMP-LINE公式アカウント拡張ツール</span>
           </div>
