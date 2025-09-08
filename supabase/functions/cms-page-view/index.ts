@@ -132,30 +132,8 @@ serve(async (req) => {
       }
 
       const uidUpper = trimmedUid.toUpperCase();
-        console.log("STRICT: Invalid UID format:", { original: uid, trimmed: uidTrimmed });
-        
-        const { data: profile } = await supabase
-          .from("profiles")
-          .select("display_name, line_user_id, add_friend_url")
-          .eq("user_id", page.user_id)
-          .maybeSingle();
 
-        const friendInfo = {
-          account_name: profile?.display_name || null,
-          line_id: profile?.line_user_id || null,
-          add_friend_url: profile?.add_friend_url || null,
-          message: "無効なアクセスコード形式です。正しいリンクからアクセスしてください。"
-        };
-
-        return new Response(
-          JSON.stringify({ 
-            require_friend: true,
-            friend_info: friendInfo
-          }),
-          { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-        );
-      }
-
+      // 修正: 重複していた無効なUID処理ブロックを削除し、正しい処理のみ残す
       console.log("STRICT Friend authentication check:", { uid: trimmedUid, uidUpper, user_id: page.user_id });
 
       // 友達テーブルから検索（大文字小文字を区別しない検索）
