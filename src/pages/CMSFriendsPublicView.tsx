@@ -222,28 +222,21 @@ export default function CMSFriendsPublicView() {
     return (
       <div className="min-h-screen bg-background flex flex-col">
         <div className="flex-1 flex items-center justify-center px-4">
-          <Card className="w-full max-w-md">
-            <CardHeader className="text-center">
-              <CardTitle className="text-muted-foreground">非公開ページ</CardTitle>
-            </CardHeader>
-            <CardContent className="text-center space-y-4">
-              <div className="text-4xl mb-4">🔒</div>
-              <p className="text-muted-foreground">
+          <div className="w-full max-w-md bg-muted-foreground/20 p-6 rounded-lg">
+            <div className="text-center space-y-4">
+              <h3 className="text-2xl font-semibold leading-none tracking-tight text-white">非公開ページ</h3>
+              <p className="text-white">
                 このページは現在非公開に設定されています
               </p>
-            </CardContent>
-          </Card>
+            </div>
+          </div>
         </div>
         
         {/* LJUMP Banner */}
-        <div className="bg-primary text-primary-foreground p-4 text-center">
+        <div className="p-4 text-center" style={{ backgroundColor: 'rgb(12, 179, 134)' }}>
           <div className="flex items-center justify-center space-x-2">
-            <span className="font-bold text-lg">L!JUMP</span>
-            <span className="text-sm opacity-90">で作成されました</span>
+            <span className="font-bold text-lg text-white">L!JUMP-LINE公式アカウント拡張ツール</span>
           </div>
-          <p className="text-xs opacity-75 mt-1">
-            LINE公式アカウント運用プラットフォーム
-          </p>
         </div>
       </div>
     );
@@ -253,29 +246,22 @@ export default function CMSFriendsPublicView() {
     return (
       <div className="min-h-screen bg-background flex flex-col">
         <div className="flex-1 flex items-center justify-center px-4">
-          <Card className="w-full max-w-md">
-            <CardHeader className="text-center">
-              <CardTitle className="text-muted-foreground">LINE友だち限定WEBページ</CardTitle>
-            </CardHeader>
-            <CardContent className="text-center space-y-4">
-              <div className="text-4xl mb-4">🔒</div>
-              <p className="text-muted-foreground">
+          <div className="w-full max-w-md bg-muted-foreground/20 p-6 rounded-lg">
+            <div className="text-center space-y-4">
+              <h3 className="text-2xl font-semibold leading-none tracking-tight text-white">LINE友だち限定WEBページ</h3>
+              <p className="text-white">
                 このページはLINE友だち限定です。<br />
                 正しいリンクから開いてください。
               </p>
-            </CardContent>
-          </Card>
+            </div>
+          </div>
         </div>
         
         {/* LJUMP Banner */}
-        <div className="bg-primary text-primary-foreground p-4 text-center">
+        <div className="p-4 text-center" style={{ backgroundColor: 'rgb(12, 179, 134)' }}>
           <div className="flex items-center justify-center space-x-2">
-            <span className="font-bold text-lg">L!JUMP</span>
-            <span className="text-sm opacity-90">で作成されました</span>
+            <span className="font-bold text-lg text-white">L!JUMP-LINE公式アカウント拡張ツール</span>
           </div>
-          <p className="text-xs opacity-75 mt-1">
-            LINE公式アカウント運用プラットフォーム
-          </p>
         </div>
       </div>
     );

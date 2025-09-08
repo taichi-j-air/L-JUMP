@@ -95,33 +95,29 @@ serve(async (req) => {
     // 公開ページは認証をスキップ（friends_onlyのみ認証必須）
     let friend = null;
     if (page.visibility === "friends_only") {
+      // UIDが提供されていない場合は即座に拒否
       if (!uid) {
-        console.log("No UID provided for LINE friend-limited page - STRICT AUTHENTICATION REQUIRED");
-        const { data: profile } = await supabase
-          .from("profiles")
-          .select("display_name, line_user_id, add_friend_url")
-          .eq("user_id", page.user_id)
-          .maybeSingle();
-
-        const friendInfo = {
-          account_name: profile?.display_name || null,
-          line_id: profile?.line_user_id || null,
-          add_friend_url: profile?.add_friend_url || null,
-          message: "Authentication required. Please access through the correct link."
-        };
-
-        return new Response(
-          JSON.stringify({ require_friend: true, friend_info: friendInfo }),
-          { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-        );
+        console.log("❌ STRICT: No UID provided for friends_only page");
+        return new Response(JSON.stringify({
+          access_denied: true,
+          reason: "not_friend"
+        }), {
+          status: 200,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
       }
 
       // 無効なUID形式の詳細チェック  
       const originalUid = uid;
       const trimmedUid = uid.trim();
       
-      if (!trimmedUid || trimmedUid === '[UID]' || trimmedUid === 'UID') {
-        console.log("STRICT: Invalid UID format:", { original: originalUid, trimmed: trimmedUid });
+      // プレースホルダーや空文字をすべて拒否
+      if (!trimmedUid || 
+          trimmedUid === '[UID]' || 
+          trimmedUid === 'UID' ||
+          trimmedUid === 'undefined' ||
+          trimmedUid === 'null') {
+        console.log("❌ STRICT: Invalid UID format:", { original: originalUid, trimmed: trimmedUid });
         return new Response(JSON.stringify({
           access_denied: true,
           reason: "not_friend"
@@ -132,9 +128,7 @@ serve(async (req) => {
       }
 
       const uidUpper = trimmedUid.toUpperCase();
-
-      // 修正: 重複していた無効なUID処理ブロックを削除し、正しい処理のみ残す
-      console.log("STRICT Friend authentication check:", { uid: trimmedUid, uidUpper, user_id: page.user_id });
+      console.log("🔍 STRICT Friend authentication check:", { uid: trimmedUid, uidUpper, user_id: page.user_id });
 
       // 友達テーブルから検索（大文字小文字を区別しない検索）
       const { data: friendData, error: friendErr } = await supabase
@@ -144,14 +138,15 @@ serve(async (req) => {
         .ilike("short_uid_ci", uidUpper)
         .maybeSingle();
 
-      console.log("STRICT Friend query result:", {
+      console.log("🔍 STRICT Friend query result:", {
         friendData,
         friendErr,
         query_params: { user_id: page.user_id, short_uid_ci: uidUpper }
       });
 
+      // 友達が見つからない場合は即座に拒否
       if (friendErr || !friendData) {
-        console.log("STRICT: Friend not found in database");
+        console.log("❌ STRICT: Friend not found in database - UID does not exist or is invalid");
         return new Response(JSON.stringify({
           access_denied: true,
           reason: "not_friend"
@@ -162,7 +157,7 @@ serve(async (req) => {
       }
 
       friend = friendData;
-      console.log("STRICT: Friend authentication successful:", { id: friend.id, line_user_id: friend.line_user_id });
+      console.log("✅ STRICT: Friend authentication successful:", { id: friend.id, line_user_id: friend.line_user_id });
 
       // 友達別のページアクセス制御をチェック
       const { data: accessData } = await supabase
@@ -221,7 +216,7 @@ serve(async (req) => {
           }
         }
         
-        // 期限切れの場合、hide_page設定に関係なく確実にブロック
+        // 期限切れの場合、hide_page設定の時は確実にブロック
         if (isExpired && (page.expire_action === 'hide_page' || page.expire_action === 'hide')) {
           console.log("🚫 PAGE EXPIRED - BLOCKING ACCESS:", { 
             friend_id: friend.id, 
@@ -231,7 +226,7 @@ serve(async (req) => {
             reason: expirationReason
           });
 
-          // 期限切れによるアクセス拒否
+          // 期限切れによるアクセス拒否 - 友達認証エラーとして返す
           return new Response(JSON.stringify({
             access_denied: true,
             reason: "expired"
@@ -392,32 +387,23 @@ serve(async (req) => {
             expire_action: page.expire_action
           });
 
-          if (isExpired && page.expire_action === 'hide') {
+          if (isExpired && (page.expire_action === 'hide' || page.expire_action === 'hide_page')) {
             // アクセスを無効化
             await supabase
               .from("friend_page_access")
               .update({ access_enabled: false, updated_at: new Date().toISOString() })
               .eq("id", currentAccessData.id);
 
-            console.log("TIMER EXPIRED - ACCESS DISABLED");
+            console.log("🚫 TIMER EXPIRED - ACCESS DISABLED");
             
-            const { data: profile } = await supabase
-              .from("profiles")
-              .select("display_name, line_user_id, add_friend_url")
-              .eq("user_id", page.user_id)
-              .maybeSingle();
-
-            const friendInfo = {
-              account_name: profile?.display_name || null,
-              line_id: profile?.line_user_id || null,
-              add_friend_url: profile?.add_friend_url || null,
-              message: "このページの閲覧期限が終了しました。"
-            };
-
-            return new Response(
-              JSON.stringify({ require_friend: true, friend_info: friendInfo }),
-              { status: 410, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-            );
+            // 期限切れによるアクセス拒否として返す
+            return new Response(JSON.stringify({
+              access_denied: true,
+              reason: "expired"
+            }), {
+              status: 200,
+              headers: { ...corsHeaders, "Content-Type": "application/json" },
+            });
           }
         }
       }
