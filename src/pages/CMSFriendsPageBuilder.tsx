@@ -9,7 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Checkbox } from "@/components/ui/checkbox";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { Textarea } from "@/components/ui/textarea";
-import { X, Eye, Link, Copy, ExternalLink } from "lucide-react";
+import { X, Eye, Link, Copy, ExternalLink, Trash2 } from "lucide-react";
 import { TimerPreview } from "@/components/TimerPreview";
 import FormAccessSelector from "@/components/FormAccessSelector";
 import { FormEmbedSelector } from "@/components/FormEmbedSelector";
@@ -229,6 +229,23 @@ export default function CMSFriendsPageBuilder() {
     }
   };
 
+  const handleDeletePage = async (pageId: string) => {
+    try {
+      const { error } = await supabase.from('cms_pages').delete().eq('id', pageId);
+      if (error) throw error;
+      
+      setPages(prev => prev.filter(p => p.id !== pageId));
+      if (selectedId === pageId) {
+        setSelectedId("");
+        resetForm();
+      }
+      toast.success("ページを削除しました");
+    } catch (e: any) {
+      console.error(e);
+      toast.error("ページの削除に失敗しました");
+    }
+  };
+
   const handleSave = async (): Promise<void> => {
     if (!selected) return;
     setSaving(true);
@@ -341,34 +358,53 @@ export default function CMSFriendsPageBuilder() {
               <CardTitle className="text-base">ページ一覧</CardTitle>
               <Button size="sm" onClick={handleAddPage}>ページを追加</Button>
             </CardHeader>
-            <CardContent className="space-y-2">
+            <CardContent className="p-2">
               {pages.length === 0 ? (
-                <p className="text-sm text-muted-foreground">まだページがありません</p>
+                <p className="text-sm text-muted-foreground p-2">まだページがありません</p>
               ) : (
                 <div className="space-y-1">
                   {pages.map((p) => (
                     <div
                       key={p.id}
-                      className={`flex items-center justify-between rounded-md px-3 py-2 transition-colors ${selectedId === p.id ? 'bg-muted' : 'hover:bg-muted/60'}`}
+                      className={`flex items-center justify-between border rounded-md px-2 py-1.5 transition-all ${
+                        selectedId === p.id 
+                          ? 'bg-primary/10 border-primary shadow-sm' 
+                          : 'border-border hover:border-primary/50 hover:bg-muted/60'
+                      }`}
                     >
                       <button
                         onClick={() => setSelectedId(p.id)}
-                        className="flex-1 text-left"
+                        className="flex-1 text-left min-w-0"
                       >
-                        <div className="text-sm font-medium line-clamp-1">{p.internal_name || p.title}</div>
-                        <div className="text-xs text-muted-foreground line-clamp-1">/{p.slug}</div>
+                        <div className="text-sm font-medium line-clamp-1">{p.title}</div>
                       </button>
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setSelectedId(p.id);
-                          openPreview();
-                        }}
-                      >
-                        <Eye className="h-3 w-3" />
-                      </Button>
+                      <div className="flex items-center gap-1 ml-2">
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          className="h-6 w-6 p-0"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setSelectedId(p.id);
+                            openPreview();
+                          }}
+                        >
+                          <Eye className="h-3 w-3" />
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          className="h-6 w-6 p-0 text-destructive hover:text-destructive"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            if (confirm('このページを削除しますか？')) {
+                              handleDeletePage(p.id);
+                            }
+                          }}
+                        >
+                          <Trash2 className="h-3 w-3" />
+                        </Button>
+                      </div>
                     </div>
                   ))}
                 </div>
