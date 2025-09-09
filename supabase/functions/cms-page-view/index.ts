@@ -92,20 +92,12 @@ serve(async (req) => {
       });
     }
 
-// 公開ページは認証をスキップ（friends_onlyのみ認証必須）
+// UIDパラメーターが渡された場合は友達認証を実行（visibilityに関係なく）
 let friend = null;
-if (page.visibility === "friends_only") {
-  // UIDが提供されていない場合は即座に拒否
-  if (!uid) {
-    console.log("❌ STRICT: No UID provided for friends_only page");
-    return new Response(JSON.stringify({
-      access_denied: true,
-      reason: "not_friend"
-    }), {
-      status: 200,
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
-    });
-  }
+if (uid) {
+  console.log("🔍 UID parameter detected - performing friend authentication check");
+  
+  // UIDが提供されている場合は友達認証を必須とする
 
       // 無効なUID形式の詳細チェック - フォームと同じロジック適用
       const originalUid = uid;
