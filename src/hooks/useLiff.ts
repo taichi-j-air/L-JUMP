@@ -67,7 +67,7 @@ export const useLiff = (liffId?: string) => {
           displayName: userProfile.displayName,
           pictureUrl: userProfile.pictureUrl
         });
-        console.log('[LIFF] User profile loaded:', userProfile.displayName);
+        // Profile loaded successfully
       }
 
       const liffContext = window.liff.getContext();

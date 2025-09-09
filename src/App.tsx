@@ -88,7 +88,6 @@ function AppContent() {
             console.error('Profile fetch error:', error);
             setProfile(null);
           } else {
-            console.log('Profile loaded:', profileData); // デバッグログ追加
             setProfile(profileData);
           }
         } catch (error) {
