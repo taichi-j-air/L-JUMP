@@ -198,7 +198,14 @@ export default function CMSFriendsPageBuilder() {
 
   const handleAddPage = async () => {
     try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) {
+        toast.error("認証が必要です");
+        return;
+      }
+
       const payload = {
+        user_id: user.id,
         title: "新しいページ",
         slug: `page-${Date.now()}`,
         content: "",
