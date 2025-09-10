@@ -70,6 +70,7 @@ serve(async (req) => {
     }
 
     // 友だち限定ページのチェック
+    let friend = null
     if (page.visibility === "friends_only" && !isPreview) {
       if (!uid || uid === "[UID]") {
         return errorResponse("access_denied", "UID is required to view this page", 403)
@@ -80,15 +81,59 @@ serve(async (req) => {
         return errorResponse("access_denied", "Invalid UID format", 403)
       }
 
-      const { data: friend, error: friendError } = await supabase
+      const { data: friendData, error: friendError } = await supabase
         .from("line_friends")
         .select("id, display_name, line_user_id, user_id, short_uid_ci")
         .eq("short_uid_ci", uid.toUpperCase())
         .eq("user_id", page.user_id)
         .single()
 
-      if (friendError || !friend) {
+      if (friendError || !friendData) {
         return errorResponse("access_denied", "Friend not found or unauthorized access", 403)
+      }
+      
+      friend = friendData
+    }
+
+    // タグ条件チェック（友だち限定ページのみ）
+    if (page.visibility === "friends_only" && friend && !isPreview) {
+      const hasAllowedTagIds = page.allowed_tag_ids && page.allowed_tag_ids.length > 0
+      const hasBlockedTagIds = page.blocked_tag_ids && page.blocked_tag_ids.length > 0
+      
+      if (hasAllowedTagIds || hasBlockedTagIds) {
+        // 友だちのタグを取得
+        const { data: friendTags, error: tagError } = await supabase
+          .from("friend_tags")
+          .select("tag_id")
+          .eq("friend_id", friend.id)
+        
+        if (tagError) {
+          console.error("Tag lookup error:", tagError)
+          return errorResponse("server_error", "Tag lookup failed", 500)
+        }
+        
+        const friendTagIds = friendTags?.map(ft => ft.tag_id) || []
+        console.log(`🏷️ Friend tags: ${friendTagIds.join(', ')}`)
+        
+        // 閲覧禁止タグチェック
+        if (hasBlockedTagIds) {
+          const hasBlockedTag = page.blocked_tag_ids.some(tagId => friendTagIds.includes(tagId))
+          if (hasBlockedTag) {
+            console.log("❌ Friend has blocked tag")
+            return errorResponse("tag_blocked", "Access denied due to tag restrictions", 403)
+          }
+        }
+        
+        // 閲覧可能タグチェック
+        if (hasAllowedTagIds) {
+          const hasAllowedTag = page.allowed_tag_ids.some(tagId => friendTagIds.includes(tagId))
+          if (!hasAllowedTag) {
+            console.log("❌ Friend does not have required tag")
+            return errorResponse("tag_required", "Access denied: required tag not found", 403)
+          }
+        }
+        
+        console.log("✅ Tag conditions passed")
       }
     }
 
