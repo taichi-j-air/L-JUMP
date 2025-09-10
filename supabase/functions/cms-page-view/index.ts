@@ -21,7 +21,7 @@ serve(async (req) => {
     const { shareCode, uid, pageId, passcode = "", isPreview = false } = await req.json()
 
     console.log(
-      `Request received: shareCode=${shareCode}, uid=${uid}, pageId=${pageId}, isPreview=${isPreview}`
+      `🔍 Request received: shareCode=${shareCode}, uid=${uid}, pageId=${pageId}, isPreview=${isPreview}, passcode=${passcode ? '***' : 'none'}`
     )
 
     const supabase = createClient(
@@ -72,7 +72,8 @@ serve(async (req) => {
     // 友だち限定ページのチェック
     if (page.visibility === "friends_only" && !isPreview) {
       if (!uid || uid === "[UID]") {
-        console.log("❌ STRICT: Missing or placeholder UID - BLOCKED")
+        console.log("❌ FRIENDS_ONLY: Missing or placeholder UID - BLOCKED")
+        console.log(`   Current UID value: "${uid}"`)
         return errorResponse("access_denied", "UID is required to view this page", 403)
       }
 
@@ -80,20 +81,36 @@ serve(async (req) => {
 
       // UIDフォーマットチェック
       if (!/^[A-Z0-9]{6}$/.test(uid)) {
-        console.log("❌ STRICT: Invalid UID format - BLOCKED")
+        console.log("❌ FRIENDS_ONLY: Invalid UID format - BLOCKED")
+        console.log(`   Expected: 6 alphanumeric characters, Got: "${uid}" (length: ${uid.length})`)
         return errorResponse("access_denied", "Invalid UID format", 403)
       }
 
-      // DB照合（UIDが存在するかつページ所有者の友達か）
+      // DB照合前にデバッグ情報を出力
+      console.log(`🔍 Looking up friend: uid="${uid}", page_user_id="${page.user_id}"`)
+      
       const { data: friend, error: friendError } = await supabase
         .from("line_friends")
-        .select("id, display_name, line_user_id, user_id")
+        .select("id, display_name, line_user_id, user_id, short_uid_ci")
         .eq("short_uid_ci", uid.toUpperCase())
         .eq("user_id", page.user_id)
         .single()
 
+      console.log(`📊 Friend lookup result:`, { friend, friendError })
+
       if (friendError || !friend) {
-        console.log("❌ STRICT: Friend not found or unauthorized - BLOCKED")
+        console.log("❌ FRIENDS_ONLY: Friend not found or unauthorized - BLOCKED")
+        console.log(`   Error details: ${friendError?.message}`)
+        
+        // Check if any friends exist for this user to help debugging
+        const { data: allFriends, error: allError } = await supabase
+          .from("line_friends")
+          .select("short_uid_ci, display_name")
+          .eq("user_id", page.user_id)
+          .limit(5)
+
+        console.log(`📋 Available friends for user ${page.user_id}:`, allFriends?.map(f => f.short_uid_ci) || 'none')
+        
         return errorResponse("access_denied", "Friend not found or unauthorized access", 403)
       }
 

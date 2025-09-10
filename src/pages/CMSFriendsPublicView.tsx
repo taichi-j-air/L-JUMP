@@ -75,9 +75,10 @@ export default function CMSFriendsPublicView() {
       console.log("🔍 Page access attempt:", { 
         isPreview, 
         shareCode, 
-        uid, 
+        uid: uid || 'undefined', 
         pathname: window.location.pathname,
-        hasPageId: !!pageId
+        hasPageId: !!pageId,
+        fullUrl: window.location.href
       });
 
       // プレビューモードでも基本的な認証が必要
@@ -145,12 +146,20 @@ export default function CMSFriendsPublicView() {
 
       // ---- replace start ----
 console.log("🌐 Public page - using Edge Function for strict authentication");
+console.log("📤 Request payload:", { shareCode, uid: uid || 'undefined', hasPasscode: !!withPasscode });
 
 const { data: res, error: fnErr } = await supabase.functions.invoke("cms-page-view", {
   body: { shareCode, uid, passcode: withPasscode },
 });
 
-console.log("📡 Edge Function response:", { res, fnErr });
+console.log("📡 Edge Function response:", { 
+  res: res ? 'success' : 'null', 
+  fnErr: fnErr ? {
+    message: fnErr.message,
+    status: (fnErr as any)?.context?.response?.status || (fnErr as any)?.status,
+    body: (fnErr as any)?.context?.body
+  } : 'none'
+});
 
 // 非2xxは throw せず UI に振り分ける
 if (fnErr) {
@@ -181,7 +190,8 @@ if (fnErr) {
     return;
   }
 
-  setError("読み込みに失敗しました");
+  console.error("❌ Unhandled error:", { status, code, fullError: fnErr });
+  setError(`読み込みに失敗しました (${status || 'unknown'})`);
   setLoading(false);
   return;
 }
