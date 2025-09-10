@@ -66,12 +66,12 @@ export default function CMSFriendsPublicView() {
   }, [data?.title, data?.tag_label]);
 
   const fetchData = async (withPasscode?: string) => {
-    try {
-      setLoading(true);
-      setError(null);
-      setFriendInfo(null);
-      setRequirePass(false);
+    setLoading(true);
+    setError(null);
+    setFriendInfo(null);
+    setRequirePass(false);
 
+    try {
       console.log("🔍 Page access attempt:", { 
         isPreview, 
         shareCode, 
@@ -93,7 +93,9 @@ export default function CMSFriendsPublicView() {
           .maybeSingle();
 
         if (pageError || !page) {
-          throw new Error("プレビュー対象のページが見つかりません。");
+          setError("not_found");
+          setLoading(false);
+          return;
         }
 
         // Check if page is published
@@ -113,7 +115,9 @@ export default function CMSFriendsPublicView() {
             return;
           }
           if ((urlPasscode || withPasscode) !== page.passcode) {
-            throw new Error("パスコードが正しくありません");
+            setError("not_found");
+            setLoading(false);
+            return;
           }
         }
 
@@ -131,24 +135,26 @@ export default function CMSFriendsPublicView() {
               timer_deadline: page.timer_deadline,
               current_time: now 
             });
-            throw new Error("このページの表示期限が過ぎています。");
+            setError("not_found");
+            setLoading(false);
+            return;
           }
         }
 
         setData(page as PagePayload);
+        setLoading(false);
         return;
       }
 
       // 通常の公開ページ表示 - Edge Functionを必ず使用
       if (!shareCode) {
         console.error("❌ Missing shareCode");
-        setError("共有コードがありません");
+        setError("not_found");
         setLoading(false);
         return;
       }
 
       console.log("🌐 Calling Edge Function with shareCode:", shareCode);
-
       console.log("📤 Edge Function request:", { shareCode, uid, passcode: withPasscode || 'none' });
       
       const { data: res, error: fnErr } = await supabase.functions.invoke("cms-page-view", {
@@ -162,7 +168,7 @@ export default function CMSFriendsPublicView() {
         responseData: res
       });
 
-      // エラーハンドリング
+      // エラーハンドリング - HTTPステータスコードに基づく適切な処理
       if (fnErr) {
         console.log("🚨 Edge Function error details:", {
           message: fnErr.message,
@@ -177,18 +183,23 @@ export default function CMSFriendsPublicView() {
 
         console.log("🔍 Error processing:", { status, code, body });
 
+        // 401: パスコード必要
         if (status === 401 || code === "passcode_required") {
           console.log("➡️ Setting requirePass = true");
           setRequirePass(true);
           setLoading(false);
           return;
         }
+        
+        // 423: 非公開ページ
         if (status === 423 || code === "not_published") {
           console.log("➡️ Setting error = not_published");
           setError("not_published");
           setLoading(false);
           return;
         }
+        
+        // 403: アクセス拒否（タグ制限含む）
         if (status === 403) {
           if (code === "tag_blocked") {
             console.log("➡️ Setting error = tag_blocked");
@@ -203,6 +214,8 @@ export default function CMSFriendsPublicView() {
           setLoading(false);
           return;
         }
+        
+        // 404: ページが見つからない
         if (status === 404 || code === "not_found") {
           console.log("➡️ Setting error = not_found");
           setError("not_found");
@@ -210,22 +223,25 @@ export default function CMSFriendsPublicView() {
           return;
         }
         
+        // その他のエラー
         console.log("➡️ Unhandled error, setting error = not_found");
         setError("not_found");
         setLoading(false);
         return;
       }
 
-      // レスポンス処理
+      // 正常レスポンスの処理
       if (!res) {
         setError("not_found");
         setLoading(false);
         return;
       }
 
-      // 関数が200で {error: "..."} を返す場合
+      // 200レスポンスでもエラーオブジェクトが含まれる場合の処理
       if ((res as any).error) {
         const code = (res as any).error;
+        console.log("📋 200 response with error code:", code);
+        
         if (code === "passcode_required") {
           setRequirePass(true);
           setLoading(false);
@@ -266,18 +282,20 @@ export default function CMSFriendsPublicView() {
           isExpired = now > new Date(res.timer_deadline);
         }
         if (isExpired) {
-          setError("このページの表示期限が過ぎています。");
+          setError("not_found");
           setLoading(false);
           return;
         }
       }
 
+      // 成功時の処理
+      console.log("✅ Page loaded successfully");
       setData(res as PagePayload);
-
+      setLoading(false);
 
     } catch (e: any) {
-      setError(e?.message || "読み込みに失敗しました");
-    } finally {
+      console.error("💥 Unexpected error in fetchData:", e);
+      setError("not_found");
       setLoading(false);
     }
   };
