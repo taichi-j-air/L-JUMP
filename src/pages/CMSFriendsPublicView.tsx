@@ -173,70 +173,74 @@ export default function CMSFriendsPublicView() {
         if (fnErr) {
           console.log("🚨 Edge Function error details:", {
             message: fnErr.message,
-            status: (fnErr as any)?.context?.response?.status || (fnErr as any)?.status,
-            body: (fnErr as any)?.context?.body,
             fullError: fnErr
           });
 
-          const status = (fnErr as any)?.context?.response?.status ?? (fnErr as any)?.status ?? 0;
-          const body = (fnErr as any)?.context?.body ?? {};
-          const code = body.error || body.code;
+          // Supabase Functions の新しいエラー形式に対応
+          let status = 0;
+          let errorBody: any = {};
+
+          // FunctionsHttpError からステータスコードを取得
+          if (fnErr instanceof Error && fnErr.message.includes('401')) {
+            status = 401;
+          } else if (fnErr instanceof Error && fnErr.message.includes('403')) {
+            status = 403;
+          } else if (fnErr instanceof Error && fnErr.message.includes('423')) {
+            status = 423;
+          } else if (fnErr instanceof Error && fnErr.message.includes('404')) {
+            status = 404;
+          }
+
+          // 旧形式のサポート（互換性のため）
+          if (!status) {
+            status = (fnErr as any)?.context?.response?.status ?? (fnErr as any)?.status ?? 0;
+            errorBody = (fnErr as any)?.context?.body ?? {};
+          }
 
           console.log("🔍 Detailed error processing:", { 
             status, 
-            code, 
-            body, 
-            hasContext: !!(fnErr as any)?.context,
-            contextKeys: Object.keys((fnErr as any)?.context || {}),
-            responseKeys: Object.keys((fnErr as any)?.context?.response || {})
+            errorMessage: fnErr.message,
+            errorType: fnErr.constructor.name
           });
 
           // 401: パスコード必要
-          if (status === 401 || code === "passcode_required") {
-            console.log("✅ Passcode required detected - showing passcode input");
+          if (status === 401) {
+            console.log("✅ Passcode required detected (401) - showing passcode input");
             setRequirePass(true);
             setLoading(false);
             return;
           }
-        
-        // 423: 非公開ページ
-        if (status === 423 || code === "not_published") {
-          console.log("➡️ Setting error = not_published");
-          setError("not_published");
-          setLoading(false);
-          return;
-        }
-        
-        // 403: アクセス拒否（タグ制限含む）
-        if (status === 403) {
-          if (code === "tag_blocked") {
-            console.log("➡️ Setting error = tag_blocked");
-            setError("tag_blocked");
-          } else if (code === "tag_required") {
-            console.log("➡️ Setting error = tag_required");
-            setError("tag_required");
-          } else {
-            console.log("➡️ Setting error = access_denied");
-            setError("access_denied");
+          
+          // 423: 非公開ページ
+          if (status === 423) {
+            console.log("✅ Private page detected (423) - showing private page error");
+            setError("not_published");
+            setLoading(false);
+            return;
           }
-          setLoading(false);
-          return;
-        }
-        
-        // 404: ページが見つからない
-        if (status === 404 || code === "not_found") {
-          console.log("➡️ Setting error = not_found");
+          
+          // 403: アクセス拒否（タグ制限含む）
+          if (status === 403) {
+            console.log("✅ Access denied detected (403) - showing access denied error");
+            setError("access_denied");
+            setLoading(false);
+            return;
+          }
+          
+          // 404: ページが見つからない
+          if (status === 404) {
+            console.log("✅ Not found detected (404) - showing not found error");
+            setError("not_found");
+            setLoading(false);
+            return;
+          }
+          
+          // その他のエラー
+          console.log("➡️ Unhandled error status:", status, "- setting error = not_found");
           setError("not_found");
           setLoading(false);
           return;
         }
-        
-        // その他のエラー
-        console.log("➡️ Unhandled error, setting error = not_found");
-        setError("not_found");
-        setLoading(false);
-        return;
-      }
 
       // 正常レスポンスの処理
       if (!res) {
