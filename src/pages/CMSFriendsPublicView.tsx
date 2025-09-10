@@ -144,107 +144,86 @@ export default function CMSFriendsPublicView() {
         return;
       }
 
-      // ---- replace start ----
-console.log("🌐 Public page - using Edge Function for strict authentication");
-console.log("📤 Request payload:", { shareCode, uid: uid || 'undefined', hasPasscode: !!withPasscode });
+      const { data: res, error: fnErr } = await supabase.functions.invoke("cms-page-view", {
+        body: { shareCode, uid, passcode: withPasscode },
+      });
 
-const { data: res, error: fnErr } = await supabase.functions.invoke("cms-page-view", {
-  body: { shareCode, uid, passcode: withPasscode },
-});
+      // エラーハンドリング
+      if (fnErr) {
+        const status = (fnErr as any)?.context?.response?.status ?? (fnErr as any)?.status ?? 0;
+        const body = (fnErr as any)?.context?.body ?? {};
+        const code = body.error || body.code;
 
-console.log("📡 Edge Function response:", { 
-  res: res ? 'success' : 'null', 
-  fnErr: fnErr ? {
-    message: fnErr.message,
-    status: (fnErr as any)?.context?.response?.status || (fnErr as any)?.status,
-    body: (fnErr as any)?.context?.body
-  } : 'none'
-});
+        if (status === 401 || code === "passcode_required") {
+          setRequirePass(true);
+          setLoading(false);
+          return;
+        }
+        if (status === 403 || code === "access_denied") {
+          setError("access_denied");
+          setLoading(false);
+          return;
+        }
+        if (status === 404 || code === "not_found") {
+          setError("not_found");
+          setLoading(false);
+          return;
+        }
+        if (status === 423 || code === "not_published") {
+          setError("not_published");
+          setLoading(false);
+          return;
+        }
+        // その他のエラーは無視して処理を続行
+      }
 
-// 非2xxは throw せず UI に振り分ける
-if (fnErr) {
-  const status =
-    (fnErr as any)?.context?.response?.status ??
-    (fnErr as any)?.status ?? 0;
-  const body = (fnErr as any)?.context?.body ?? {};
-  const code = body.error || body.code;
+      // レスポンス処理
+      if (!res) {
+        setError("not_found");
+        setLoading(false);
+        return;
+      }
 
-  if (status === 401 || code === "passcode_required") {
-    setRequirePass(true);
-    setLoading(false);
-    return;
-  }
-  if (status === 403 || code === "access_denied") {
-    setError("access_denied");
-    setLoading(false);
-    return;
-  }
-  if (status === 404 || code === "not_found") {
-    setError("not_found");
-    setLoading(false);
-    return;
-  }
-  if (status === 423 || code === "not_published") {
-    setError("not_published");
-    setLoading(false);
-    return;
-  }
+      // 関数が200で {error: "..."} を返す場合
+      if ((res as any).error) {
+        const code = (res as any).error;
+        if (code === "passcode_required") {
+          setRequirePass(true);
+          setLoading(false);
+          return;
+        }
+        if (code === "access_denied") {
+          setError("access_denied");
+          setLoading(false);
+          return;
+        }
+        if (code === "not_published") {
+          setError("not_published");
+          setLoading(false);
+          return;
+        }
+        if (code === "not_found") {
+          setError("not_found");
+          setLoading(false);
+          return;
+        }
+      }
 
-  console.error("❌ Unhandled error:", { status, code, fullError: fnErr });
-  setError(`読み込みに失敗しました (${status || 'unknown'})`);
-  setLoading(false);
-  return;
-}
+      // 期限切れチェック
+      if (res.timer_enabled && res.expire_action === "hide_page") {
+        const now = new Date();
+        let isExpired = false;
+        if (res.timer_mode === "absolute" && res.timer_deadline) {
+          isExpired = now > new Date(res.timer_deadline);
+        }
+        if (isExpired) {
+          setError("このページの表示期限が過ぎています。");
+          setLoading(false);
+          return;
+        }
+      }
 
-// 2xx のとき
-if (!res) {
-  setError("読み込みに失敗しました");
-  setLoading(false);
-  return;
-}
-
-// 関数が200で {error: "..."} を返す場合にも対応
-if ((res as any).error) {
-  const code = (res as any).error;
-  if (code === "passcode_required") {
-    setRequirePass(true);
-    setLoading(false);
-    return;
-  }
-  if (code === "access_denied") {
-    setError("access_denied");
-    setLoading(false);
-    return;
-  }
-  if (code === "not_published") {
-    setError("not_published");
-    setLoading(false);
-    return;
-  }
-  if (code === "not_found") {
-    setError("not_found");
-    setLoading(false);
-    return;
-  }
-}
-
-// 任意: 期限切れのフロント側チェック
-if (res.timer_enabled && res.expire_action === "hide_page") {
-  const now = new Date();
-  let isExpired = false;
-  if (res.timer_mode === "absolute" && res.timer_deadline) {
-    isExpired = now > new Date(res.timer_deadline);
-  }
-  if (isExpired) {
-    setError("このページの表示期限が過ぎています。");
-    setLoading(false);
-    return;
-  }
-}
-
-console.log("✅ Page loaded successfully:", res.title || res.tag_label);
-setData(res as PagePayload);
-// ---- replace end ----
+      setData(res as PagePayload);
 
 
     } catch (e: any) {
@@ -309,8 +288,36 @@ setData(res as PagePayload);
       </div>
     );
   }
+
+  if (error === "not_found") {
+    return (
+      <div className="min-h-screen bg-background flex flex-col">
+        <div className="flex-1 flex items-center justify-center px-4">
+          <div className="w-full max-w-md p-6 rounded-lg" style={{ backgroundColor: '#999999' }}>
+            <div className="text-center space-y-4">
+              <h3 className="text-2xl font-semibold leading-none tracking-tight text-white">ページが見つかりません</h3>
+              <p className="text-white">
+                お探しのページは存在しないか、削除された可能性があります。
+              </p>
+            </div>
+          </div>
+        </div>
+        
+        {/* LJUMP Banner */}
+        <div className="p-4 text-center" style={{ backgroundColor: 'rgb(12, 179, 134)' }}>
+          <div className="flex items-center justify-center space-x-2">
+            <span className="font-bold text-lg text-white">L!JUMP-LINE公式アカウント拡張ツール</span>
+          </div>
+        </div>
+      </div>
+    );
+  }
   
-  if (error) return <div className="container mx-auto p-6 text-destructive">{error}</div>;
+  // その他のエラーは表示しない（上記で具体的なエラーを処理済み）
+  if (error && !["access_denied", "not_found", "not_published"].includes(error)) {
+    setError("not_found"); // デフォルトで404扱い
+    return null;
+  }
 
   // 【修正】パスコード入力画面の表示ロジックを優先
   if (requirePass) {
