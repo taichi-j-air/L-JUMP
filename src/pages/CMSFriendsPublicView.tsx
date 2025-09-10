@@ -78,7 +78,8 @@ export default function CMSFriendsPublicView() {
         uid: uid || 'undefined', 
         pathname: window.location.pathname,
         hasPageId: !!pageId,
-        fullUrl: window.location.href
+        fullUrl: window.location.href,
+        withPasscode: !!withPasscode
       });
 
       // プレビューモードでも基本的な認証が必要
@@ -140,12 +141,25 @@ export default function CMSFriendsPublicView() {
 
       // 通常の公開ページ表示 - Edge Functionを必ず使用
       if (!shareCode) {
+        console.error("❌ Missing shareCode");
         setError("共有コードがありません");
+        setLoading(false);
         return;
       }
 
+      console.log("🌐 Calling Edge Function with shareCode:", shareCode);
+
+      console.log("📤 Edge Function request:", { shareCode, uid, passcode: withPasscode || 'none' });
+      
       const { data: res, error: fnErr } = await supabase.functions.invoke("cms-page-view", {
         body: { shareCode, uid, passcode: withPasscode },
+      });
+
+      console.log("📡 Edge Function response:", { 
+        success: !!res, 
+        errorMessage: fnErr?.message,
+        errorStatus: (fnErr as any)?.context?.response?.status || (fnErr as any)?.status,
+        responseData: res
       });
 
       // エラーハンドリング
