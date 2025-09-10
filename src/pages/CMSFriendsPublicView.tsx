@@ -146,18 +146,27 @@ export default function CMSFriendsPublicView() {
       console.log("🌐 Public page - using Edge Function for strict authentication");
 
       const { data: res, error: fnErr } = await supabase.functions.invoke("cms-page-view", {
-        body: { shareCode, uid, passcode: withPasscode },
-      });
-      
-      console.log("📡 Edge Function response:", { res, fnErr });
-      
-      if (fnErr) throw new Error(fnErr.message || "エッジ関数でエラーが発生しました");
-      if (!res) throw new Error("レスポンスがありません");
-      
-      if (res.error) {
-        console.log("🚫 Edge Function returned error:", res.error);
-        throw new Error(res.error);
-      }
+  body: { shareCode, uid, passcode: withPasscode },
+});
+
+console.log("📡 Edge Function response:", { res, fnErr });
+
+// ネットワークレベルのエラー
+if (fnErr) {
+  throw new Error(fnErr.message || "エッジ関数でエラーが発生しました");
+}
+
+if (!res) {
+  throw new Error("レスポンスがありません");
+}
+
+// Edge Functionがエラーを返した場合の処理
+if (res.error) {
+  console.log("🚫 Edge Function returned error:", res.error);
+  setError(res.error);   // 👈 throw ではなく state に渡す
+  return;
+}
+
       
       // 非公開ページチェック
       if (res.not_published) {
