@@ -66,27 +66,14 @@ export default function CMSFriendsPublicView() {
   }, [data?.title, data?.tag_label]);
 
   const fetchData = async (withPasscode?: string) => {
-    console.log("🚀 fetchData called with passcode:", !!withPasscode);
     setLoading(true);
     setError(null);
     setFriendInfo(null);
     setRequirePass(false);
 
     try {
-      console.log("🔍 Page access attempt:", { 
-        isPreview, 
-        shareCode, 
-        uid: uid || 'undefined', 
-        pathname: window.location.pathname,
-        hasPageId: !!pageId,
-        fullUrl: window.location.href,
-        withPasscode: !!withPasscode
-      });
-
       // プレビューモードでも基本的な認証が必要
       if (isPreview) {
-        console.log("📋 Preview mode - loading page directly with basic checks");
-        
         const { data: page, error: pageError } = await supabase
           .from("cms_pages")
           .select("*")
@@ -107,37 +94,20 @@ export default function CMSFriendsPublicView() {
         }
 
         // プレビューでもパスコードチェック
-        console.log("🔐 Preview passcode check:", { 
-          require_passcode: page.require_passcode, 
-          has_passcode: !!page.passcode,
-          withPasscode: !!withPasscode 
-        });
-        
         if (page.require_passcode && page.passcode) {
           const urlParams = new URLSearchParams(window.location.search);
           const urlPasscode = urlParams.get('passcode');
-          console.log("🔑 Passcode validation:", { 
-            urlPasscode: !!urlPasscode, 
-            withPasscode: !!withPasscode,
-            pagePasscode: !!page.passcode,
-            urlPasscodeValue: urlPasscode,
-            withPasscodeValue: withPasscode,
-            pagePasscodeValue: page.passcode
-          });
           
           if (!urlPasscode && !withPasscode) {
-            console.log("✅ Preview: Showing passcode input (no passcode provided)");
             setRequirePass(true);
             setLoading(false);
             return;
           }
           if ((urlPasscode || withPasscode) !== page.passcode) {
-            console.log("❌ Preview: Incorrect passcode provided, showing input again");
             setRequirePass(true);
             setLoading(false);
             return;
           }
-          console.log("✅ Preview: Passcode is correct, proceeding");
         }
 
         // プレビューでも期限切れチェック
@@ -173,60 +143,30 @@ export default function CMSFriendsPublicView() {
         return;
       }
 
-      console.log("🌐 Calling Edge Function with shareCode:", shareCode);
-      console.log("📤 Edge Function request:", { shareCode, uid, passcode: withPasscode || 'none' });
-      
       const { data: res, error: fnErr } = await supabase.functions.invoke("cms-page-view", {
         body: { shareCode, uid, passcode: withPasscode },
       });
 
-      console.log("📡 Edge Function response:", { 
-        success: !!res, 
-        errorMessage: fnErr?.message,
-        errorStatus: (fnErr as any)?.context?.response?.status || (fnErr as any)?.status,
-        responseData: res
-      });
-
         // エラーハンドリング - HTTPステータスコードに基づく適切な処理
         if (fnErr) {
-          console.log("🚨 Edge Function error details:", {
-            message: fnErr.message,
-            fullError: fnErr
-          });
-
           // Supabase Functions の新しいエラー形式に対応
           let status = 0;
           let errorBody: any = {};
 
-          // FunctionsHttpError からステータスコードを取得（複数の方法で試行）
+          // FunctionsHttpError からステータスコードを取得
           if (fnErr instanceof Error) {
             const errorMessage = fnErr.message.toLowerCase();
-            console.log("🔍 Analyzing error message:", errorMessage);
             
-            // 1. 401 Unauthorized を検出
             if (errorMessage.includes('401') || errorMessage.includes('unauthorized')) {
               status = 401;
-              console.log("✅ Detected 401 from error message");
-            }
-            // 2. 403 Forbidden を検出  
-            else if (errorMessage.includes('403') || errorMessage.includes('forbidden')) {
+            } else if (errorMessage.includes('403') || errorMessage.includes('forbidden')) {
               status = 403;
-              console.log("✅ Detected 403 from error message");
-            }
-            // 3. 423 Locked を検出
-            else if (errorMessage.includes('423') || errorMessage.includes('locked')) {
+            } else if (errorMessage.includes('423') || errorMessage.includes('locked')) {
               status = 423;
-              console.log("✅ Detected 423 from error message");
-            }
-            // 4. 404 Not Found を検出
-            else if (errorMessage.includes('404') || errorMessage.includes('not found')) {
+            } else if (errorMessage.includes('404') || errorMessage.includes('not found')) {
               status = 404;
-              console.log("✅ Detected 404 from error message");
-            }
-            // 5. 一般的な non-2xx エラーを401として扱う（パスコードが原因の可能性が高い）
-            else if (errorMessage.includes('non-2xx status code')) {
+            } else if (errorMessage.includes('non-2xx status code')) {
               status = 401;
-              console.log("🔄 Treating non-2xx as 401 for passcode");
             }
           }
 
@@ -236,16 +176,8 @@ export default function CMSFriendsPublicView() {
             errorBody = (fnErr as any)?.context?.body ?? {};
           }
 
-          console.log("🔍 Final status determination:", { 
-            status, 
-            errorMessage: fnErr.message,
-            errorType: fnErr.constructor.name,
-            willShowPasscode: status === 401
-          });
-
           // 401: パスコード必要
           if (status === 401) {
-            console.log("✅ Passcode required detected (401) - showing passcode input");
             setRequirePass(true);
             setLoading(false);
             return;
@@ -253,7 +185,6 @@ export default function CMSFriendsPublicView() {
           
           // 423: 非公開ページ
           if (status === 423) {
-            console.log("✅ Private page detected (423) - showing private page error");
             setError("not_published");
             setLoading(false);
             return;
@@ -261,7 +192,6 @@ export default function CMSFriendsPublicView() {
           
           // 403: アクセス拒否（タグ制限含む）
           if (status === 403) {
-            console.log("✅ Access denied detected (403) - showing access denied error");
             setError("access_denied");
             setLoading(false);
             return;
@@ -269,14 +199,12 @@ export default function CMSFriendsPublicView() {
           
           // 404: ページが見つからない
           if (status === 404) {
-            console.log("✅ Not found detected (404) - showing not found error");
             setError("not_found");
             setLoading(false);
             return;
           }
           
           // その他のエラー
-          console.log("➡️ Unhandled error status:", status, "- setting error = not_found");
           setError("not_found");
           setLoading(false);
           return;
@@ -292,10 +220,8 @@ export default function CMSFriendsPublicView() {
       // 200レスポンスでもエラーオブジェクトが含まれる場合の処理
       if ((res as any).error) {
         const code = (res as any).error;
-        console.log("📋 200 response with error code:", code);
         
         if (code === "passcode_required") {
-          console.log("✅ Passcode required from 200 response - showing passcode input");
           setRequirePass(true);
           setLoading(false);
           return;
@@ -342,12 +268,10 @@ export default function CMSFriendsPublicView() {
       }
 
       // 成功時の処理
-      console.log("✅ Page loaded successfully");
       setData(res as PagePayload);
       setLoading(false);
 
     } catch (e: any) {
-      console.error("💥 Unexpected error in fetchData:", e);
       setError("not_found");
       setLoading(false);
     }
@@ -493,22 +417,26 @@ export default function CMSFriendsPublicView() {
   }
 
   // パスコード入力画面の表示ロジック
-  console.log("🎯 Render check - requirePass:", requirePass, "error:", error, "loading:", loading);
   if (requirePass) {
     return (
-      <div className="container mx-auto max-w-3xl p-4">
-        <Card>
-          <CardContent className="p-4 space-y-3">
-            <div>このページはパスコードで保護されています。</div>
-            <Input 
-              value={passcode} 
-              onChange={(e) => setPasscode(e.target.value)} 
-              placeholder="パスコード"
-              onKeyDown={(e) => e.key === 'Enter' && fetchData(passcode)}
-            />
-            <Button onClick={() => fetchData(passcode)}>送信</Button>
-          </CardContent>
-        </Card>
+      <div className="min-h-screen bg-background flex items-center justify-center px-4">
+        <div className="w-full max-w-md">
+          <Card>
+            <CardContent className="p-6 space-y-4">
+              <div className="text-center text-lg font-medium">このページはパスコードで保護されています。</div>
+              <Input 
+                value={passcode} 
+                onChange={(e) => setPasscode(e.target.value)} 
+                placeholder="パスコードを入力してください"
+                onKeyDown={(e) => e.key === 'Enter' && fetchData(passcode)}
+                className="text-center"
+              />
+              <div className="flex justify-center">
+                <Button onClick={() => fetchData(passcode)} className="min-w-[100px]">送信</Button>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
       </div>
     );
   }
