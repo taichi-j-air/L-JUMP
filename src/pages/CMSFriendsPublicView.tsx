@@ -286,9 +286,10 @@ export default function CMSFriendsPublicView() {
         </div>
         
         {/* LJUMP Banner */}
-        <div className="p-4 text-center" style={{ backgroundColor: 'rgb(12, 179, 134)' }}>
-          <div className="flex items-center justify-center space-x-2">
-            <span className="font-bold text-lg text-white">L!JUMP-LINE公式アカウント拡張ツール</span>
+        <div className="py-2 text-center" style={{ backgroundColor: 'rgb(12, 179, 134)' }}>
+          <div className="flex flex-col items-center justify-center">
+            <span className="font-bold text-lg text-white">L！JUMP</span>
+            <span className="text-xs text-white opacity-90">LINE公式アカウント拡張ツール</span>
           </div>
         </div>
       </div>
@@ -311,9 +312,10 @@ export default function CMSFriendsPublicView() {
         </div>
         
         {/* LJUMP Banner */}
-        <div className="p-4 text-center" style={{ backgroundColor: 'rgb(12, 179, 134)' }}>
-          <div className="flex items-center justify-center space-x-2">
-            <span className="font-bold text-lg text-white">L!JUMP-LINE公式アカウント拡張ツール</span>
+        <div className="py-2 text-center" style={{ backgroundColor: 'rgb(12, 179, 134)' }}>
+          <div className="flex flex-col items-center justify-center">
+            <span className="font-bold text-lg text-white">L！JUMP</span>
+            <span className="text-xs text-white opacity-90">LINE公式アカウント拡張ツール</span>
           </div>
         </div>
       </div>
@@ -335,9 +337,10 @@ export default function CMSFriendsPublicView() {
         </div>
         
         {/* LJUMP Banner */}
-        <div className="p-4 text-center" style={{ backgroundColor: 'rgb(12, 179, 134)' }}>
-          <div className="flex items-center justify-center space-x-2">
-            <span className="font-bold text-lg text-white">L!JUMP-LINE公式アカウント拡張ツール</span>
+        <div className="py-2 text-center" style={{ backgroundColor: 'rgb(12, 179, 134)' }}>
+          <div className="flex flex-col items-center justify-center">
+            <span className="font-bold text-lg text-white">L！JUMP</span>
+            <span className="text-xs text-white opacity-90">LINE公式アカウント拡張ツール</span>
           </div>
         </div>
       </div>
