@@ -59,17 +59,18 @@ serve(async (req) => {
 
     // 公開状態チェック
     if (!isPreview && !page.is_published) {
-      return errorResponse("not_published", "Page is not published", 403)
+      return errorResponse("not_published", "Page is not published", 423)
     }
 
     // パスコードチェック
     if (page.require_passcode && !isPreview) {
       if (!passcode || passcode !== page.passcode) {
-        return errorResponse("passcode_required", "Passcode is required", 403)
+        return errorResponse("passcode_required", "Passcode is required", 401)
       }
     }
 
     // 友だち限定ページのチェック
+    let friend = null
     if (page.visibility === "friends_only" && !isPreview) {
       if (!uid || uid === "[UID]") {
         return errorResponse("access_denied", "UID is required to view this page", 403)
@@ -80,15 +81,49 @@ serve(async (req) => {
         return errorResponse("access_denied", "Invalid UID format", 403)
       }
 
-      const { data: friend, error: friendError } = await supabase
+      const { data: friendData, error: friendError } = await supabase
         .from("line_friends")
         .select("id, display_name, line_user_id, user_id, short_uid_ci")
         .eq("short_uid_ci", uid.toUpperCase())
         .eq("user_id", page.user_id)
         .single()
 
-      if (friendError || !friend) {
+      if (friendError || !friendData) {
         return errorResponse("access_denied", "Friend not found or unauthorized access", 403)
+      }
+      
+      friend = friendData
+    }
+
+    // タグベースアクセス制御（友だち限定ページでのみ実行）
+    if (friend && (page.blocked_tag_ids?.length > 0 || page.allowed_tag_ids?.length > 0)) {
+      console.log(`Checking tag access for friend ${friend.id}`)
+      
+      // 友だちのタグを取得
+      const { data: friendTags } = await supabase
+        .from("friend_tags")
+        .select("tag_id")
+        .eq("friend_id", friend.id)
+      
+      const friendTagIds = friendTags?.map(ft => ft.tag_id) || []
+      console.log(`Friend has tags: ${friendTagIds}`)
+      
+      // 閲覧禁止タグチェック
+      if (page.blocked_tag_ids?.length > 0) {
+        const hasBlockedTag = page.blocked_tag_ids.some(tagId => friendTagIds.includes(tagId))
+        if (hasBlockedTag) {
+          console.log(`Friend blocked by tag`)
+          return errorResponse("tag_blocked", "Access denied due to tag restrictions", 403)
+        }
+      }
+      
+      // 閲覧可能タグチェック
+      if (page.allowed_tag_ids?.length > 0) {
+        const hasAllowedTag = page.allowed_tag_ids.some(tagId => friendTagIds.includes(tagId))
+        if (!hasAllowedTag) {
+          console.log(`Friend missing required tag`)
+          return errorResponse("tag_required", "Required tag not found", 403)
+        }
       }
     }
 

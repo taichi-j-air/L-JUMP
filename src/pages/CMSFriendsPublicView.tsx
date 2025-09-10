@@ -183,21 +183,29 @@ export default function CMSFriendsPublicView() {
           setLoading(false);
           return;
         }
-        if (status === 403 || code === "access_denied") {
-          console.log("➡️ Setting error = access_denied");
-          setError("access_denied");
+        if (status === 423 || code === "not_published") {
+          console.log("➡️ Setting error = not_published");
+          setError("not_published");
+          setLoading(false);
+          return;
+        }
+        if (status === 403) {
+          if (code === "tag_blocked") {
+            console.log("➡️ Setting error = tag_blocked");
+            setError("tag_blocked");
+          } else if (code === "tag_required") {
+            console.log("➡️ Setting error = tag_required");
+            setError("tag_required");
+          } else {
+            console.log("➡️ Setting error = access_denied");
+            setError("access_denied");
+          }
           setLoading(false);
           return;
         }
         if (status === 404 || code === "not_found") {
           console.log("➡️ Setting error = not_found");
           setError("not_found");
-          setLoading(false);
-          return;
-        }
-        if (status === 423 || code === "not_published") {
-          console.log("➡️ Setting error = not_published");
-          setError("not_published");
           setLoading(false);
           return;
         }
@@ -223,13 +231,23 @@ export default function CMSFriendsPublicView() {
           setLoading(false);
           return;
         }
-        if (code === "access_denied") {
-          setError("access_denied");
+        if (code === "not_published") {
+          setError("not_published");
           setLoading(false);
           return;
         }
-        if (code === "not_published") {
-          setError("not_published");
+        if (code === "tag_blocked") {
+          setError("tag_blocked");
+          setLoading(false);
+          return;
+        }
+        if (code === "tag_required") {
+          setError("tag_required");
+          setLoading(false);
+          return;
+        }
+        if (code === "access_denied") {
+          setError("access_denied");
           setLoading(false);
           return;
         }
@@ -322,6 +340,56 @@ export default function CMSFriendsPublicView() {
     );
   }
 
+  if (error === "tag_blocked") {
+    return (
+      <div className="min-h-screen bg-background flex flex-col">
+        <div className="flex-1 flex items-center justify-center px-4">
+          <div className="w-full max-w-md p-6 rounded-lg" style={{ backgroundColor: '#999999' }}>
+            <div className="text-center space-y-4">
+              <h3 className="text-2xl font-semibold leading-none tracking-tight text-white">アクセス制限</h3>
+              <p className="text-white">
+                申し訳ございませんが、このページを閲覧する権限がありません。
+              </p>
+            </div>
+          </div>
+        </div>
+        
+        {/* LJUMP Banner */}
+        <div className="py-2 text-center" style={{ backgroundColor: 'rgb(12, 179, 134)' }}>
+          <div className="flex flex-col items-center justify-center">
+            <span className="font-bold text-lg text-white">L！JUMP</span>
+            <span className="text-xs text-white opacity-90">LINE公式アカウント拡張ツール</span>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (error === "tag_required") {
+    return (
+      <div className="min-h-screen bg-background flex flex-col">
+        <div className="flex-1 flex items-center justify-center px-4">
+          <div className="w-full max-w-md p-6 rounded-lg" style={{ backgroundColor: '#999999' }}>
+            <div className="text-center space-y-4">
+              <h3 className="text-2xl font-semibold leading-none tracking-tight text-white">アクセス権限が必要です</h3>
+              <p className="text-white">
+                このページを閲覧するには特定の条件を満たしている必要があります。
+              </p>
+            </div>
+          </div>
+        </div>
+        
+        {/* LJUMP Banner */}
+        <div className="py-2 text-center" style={{ backgroundColor: 'rgb(12, 179, 134)' }}>
+          <div className="flex flex-col items-center justify-center">
+            <span className="font-bold text-lg text-white">L！JUMP</span>
+            <span className="text-xs text-white opacity-90">LINE公式アカウント拡張ツール</span>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   if (error === "not_found") {
     return (
       <div className="min-h-screen bg-background flex flex-col">
@@ -348,7 +416,7 @@ export default function CMSFriendsPublicView() {
   }
   
   // その他のエラーは表示しない（上記で具体的なエラーを処理済み）
-  if (error && !["access_denied", "not_found", "not_published"].includes(error)) {
+  if (error && !["access_denied", "not_found", "not_published", "tag_blocked", "tag_required"].includes(error)) {
     setError("not_found"); // デフォルトで404扱い
     return null;
   }
