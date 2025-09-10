@@ -82,46 +82,56 @@ serve(async (req) => {
       }
     }
 
-    // Friend authentication for friends_only pages with UID
-    if (page.visibility === "friends_only" && uid && uid !== '[UID]' && !isPreview) {
-      console.log(`🔐 Friend authentication required for UID: ${uid}`)
-      
-      // Validate UID format (6 uppercase alphanumeric characters)
-      if (!/^[A-Z0-9]{6}$/.test(uid)) {
-        console.log(`❌ STRICT: Invalid UID format - BLOCKED`)
-        return new Response(
-          JSON.stringify({ 
-            error: 'access_denied',
-            message: 'Invalid friend identification'
-          }),
-          { 
-            status: 403,
-            headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-          }
-        )
-      }
+// Friend authentication for friends_only pages
+if (page.visibility === "friends_only" && !isPreview) {
+  // UIDが存在しない or 未変換のときは即ブロック
+  if (!uid || uid === '[UID]') {
+    console.log(`❌ STRICT: Missing or placeholder UID - BLOCKED`)
+    return new Response(
+      JSON.stringify({ 
+        error: 'access_denied',
+        message: 'UID is required to view this page'
+      }),
+      { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+    )
+  }
 
-      // Check if friend exists and belongs to page owner
-      const { data: friend, error: friendError } = await supabase
-        .from('line_friends')
-        .select('id, display_name, line_user_id, user_id')
-        .eq('short_uid_ci', uid.toUpperCase())
-        .eq('user_id', page.user_id)
-        .single()
+  console.log(`🔐 Friend authentication required for UID: ${uid}`)
 
-      if (friendError || !friend) {
-        console.log(`❌ STRICT: Friend not found or unauthorized - BLOCKED`)
-        return new Response(
-          JSON.stringify({ 
-            error: 'access_denied',
-            message: 'Friend not found or unauthorized access'
-          }),
-          { 
-            status: 403,
-            headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-          }
-        )
-      }
+  // UIDフォーマットチェック
+  if (!/^[A-Z0-9]{6}$/.test(uid)) {
+    console.log(`❌ STRICT: Invalid UID format - BLOCKED`)
+    return new Response(
+      JSON.stringify({ 
+        error: 'access_denied',
+        message: 'Invalid friend identification'
+      }),
+      { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+    )
+  }
+
+  // DB照合（UIDが存在するかつページ所有者の友達か）
+  const { data: friend, error: friendError } = await supabase
+    .from('line_friends')
+    .select('id, display_name, line_user_id, user_id')
+    .eq('short_uid_ci', uid.toUpperCase())
+    .eq('user_id', page.user_id)
+    .single()
+
+  if (friendError || !friend) {
+    console.log(`❌ STRICT: Friend not found or unauthorized - BLOCKED`)
+    return new Response(
+      JSON.stringify({ 
+        error: 'access_denied',
+        message: 'Friend not found or unauthorized access'
+      }),
+      { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+    )
+  }
+
+  console.log(`✅ Friend authenticated: ${friend.display_name} (${uid})`)
+}
+
 
       console.log(`✅ Friend authenticated: ${friend.display_name} (${uid})`)
     }
