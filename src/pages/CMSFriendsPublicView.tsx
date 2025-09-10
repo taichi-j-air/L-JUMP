@@ -146,26 +146,40 @@ export default function CMSFriendsPublicView() {
       console.log("🌐 Public page - using Edge Function for strict authentication");
 
       const { data: res, error: fnErr } = await supabase.functions.invoke("cms-page-view", {
-  body: { shareCode, uid, passcode: withPasscode },
-});
+        body: { shareCode, uid, passcode: withPasscode },
+      });
 
-console.log("📡 Edge Function response:", { res, fnErr });
+      console.log("📡 Edge Function response:", { res, fnErr });
 
-// ネットワークレベルのエラー
-if (fnErr) {
-  throw new Error(fnErr.message || "エッジ関数でエラーが発生しました");
-}
+      // ネットワークレベルのエラー
+      if (fnErr) {
+        console.error("Edge Function network error:", fnErr);
+        throw new Error(fnErr.message || "Edge Functionへの接続に失敗しました");
+      }
 
-if (!res) {
-  throw new Error("レスポンスがありません");
-}
+      if (!res) {
+        throw new Error("Edge Functionからレスポンスがありません");
+      }
 
-// Edge Functionがエラーを返した場合の処理
-if (res.error) {
-  console.log("🚫 Edge Function returned error:", res.error);
-  setError(res.error);   // 👈 throw ではなく state に渡す
-  return;
-}
+      // Edge Functionがエラーを返した場合の処理
+      if (res.error) {
+        console.log("🚫 Edge Function returned error:", res.error);
+        
+        // 特定のエラーに対する処理
+        if (res.error === "passcode_required") {
+          setRequirePass(true);
+          setLoading(false);
+          return;
+        }
+        
+        if (res.error === "access_denied" || res.error === "not_found") {
+          setError(res.error);
+          setLoading(false);
+          return;
+        }
+        
+        throw new Error(res.message || "ページの読み込みに失敗しました");
+      }
 
       
       // 非公開ページチェック

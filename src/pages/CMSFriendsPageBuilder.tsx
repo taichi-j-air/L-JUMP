@@ -250,6 +250,13 @@ export default function CMSFriendsPageBuilder() {
     if (!selected) return;
     setSaving(true);
     try {
+      // 認証状態の確認
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) {
+        toast.error("認証が必要です");
+        return;
+      }
+
       const payload = {
         title,
         slug,
@@ -278,20 +285,25 @@ export default function CMSFriendsPageBuilder() {
         timer_step_id: timerMode === "step_delivery" ? selectedStep || null : null,
       };
 
-      const { data, error } = await (supabase as any)
+      console.log("Saving page with payload:", payload);
+      const { data, error } = await supabase
         .from('cms_pages')
         .update(payload)
         .eq('id', selected.id)
         .select('*')
         .maybeSingle();
-      if (error) throw error;
+      
+      if (error) {
+        console.error("Save error:", error);
+        throw error;
+      }
 
       setPages(prev => prev.map(p => (p.id === selected.id ? { ...(p as any), ...(data as any) } : p)) as any);
       toast.success("保存しました");
       return Promise.resolve();
     } catch (e: any) {
-      console.error(e);
-      toast.error("保存に失敗しました");
+      console.error("Save failed:", e);
+      toast.error(`保存に失敗しました: ${e.message}`);
       return Promise.reject(e);
     } finally {
       setSaving(false);
