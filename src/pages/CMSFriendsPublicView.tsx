@@ -164,31 +164,48 @@ export default function CMSFriendsPublicView() {
 
       // エラーハンドリング
       if (fnErr) {
+        console.log("🚨 Edge Function error details:", {
+          message: fnErr.message,
+          status: (fnErr as any)?.context?.response?.status || (fnErr as any)?.status,
+          body: (fnErr as any)?.context?.body,
+          fullError: fnErr
+        });
+
         const status = (fnErr as any)?.context?.response?.status ?? (fnErr as any)?.status ?? 0;
         const body = (fnErr as any)?.context?.body ?? {};
         const code = body.error || body.code;
 
+        console.log("🔍 Error processing:", { status, code, body });
+
         if (status === 401 || code === "passcode_required") {
+          console.log("➡️ Setting requirePass = true");
           setRequirePass(true);
           setLoading(false);
           return;
         }
         if (status === 403 || code === "access_denied") {
+          console.log("➡️ Setting error = access_denied");
           setError("access_denied");
           setLoading(false);
           return;
         }
         if (status === 404 || code === "not_found") {
+          console.log("➡️ Setting error = not_found");
           setError("not_found");
           setLoading(false);
           return;
         }
         if (status === 423 || code === "not_published") {
+          console.log("➡️ Setting error = not_published");
           setError("not_published");
           setLoading(false);
           return;
         }
-        // その他のエラーは無視して処理を続行
+        
+        console.log("➡️ Unhandled error, setting error = not_found");
+        setError("not_found");
+        setLoading(false);
+        return;
       }
 
       // レスポンス処理
