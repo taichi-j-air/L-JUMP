@@ -143,89 +143,99 @@ export default function CMSFriendsPublicView() {
         return;
       }
 
-      console.log("🌐 Public page - using Edge Function for strict authentication");
+      // ---- replace start ----
+console.log("🌐 Public page - using Edge Function for strict authentication");
 
-      const { data: res, error: fnErr } = await supabase.functions.invoke("cms-page-view", {
-        body: { shareCode, uid, passcode: withPasscode },
-      });
+const { data: res, error: fnErr } = await supabase.functions.invoke("cms-page-view", {
+  body: { shareCode, uid, passcode: withPasscode },
+});
 
-      console.log("📡 Edge Function response:", { res, fnErr });
+console.log("📡 Edge Function response:", { res, fnErr });
 
-      // ネットワークレベルのエラー
-      if (fnErr) {
-        console.error("Edge Function network error:", fnErr);
-        throw new Error(fnErr.message || "Edge Functionへの接続に失敗しました");
-      }
+// 非2xxは throw せず UI に振り分ける
+if (fnErr) {
+  const status =
+    (fnErr as any)?.context?.response?.status ??
+    (fnErr as any)?.status ?? 0;
+  const body = (fnErr as any)?.context?.body ?? {};
+  const code = body.error || body.code;
 
-      if (!res) {
-        throw new Error("Edge Functionからレスポンスがありません");
-      }
+  if (status === 401 || code === "passcode_required") {
+    setRequirePass(true);
+    setLoading(false);
+    return;
+  }
+  if (status === 403 || code === "access_denied") {
+    setError("access_denied");
+    setLoading(false);
+    return;
+  }
+  if (status === 404 || code === "not_found") {
+    setError("not_found");
+    setLoading(false);
+    return;
+  }
+  if (status === 423 || code === "not_published") {
+    setError("not_published");
+    setLoading(false);
+    return;
+  }
 
-      // Edge Functionがエラーを返した場合の処理
-      if (res.error) {
-        console.log("🚫 Edge Function returned error:", res.error);
-        
-        // 特定のエラーに対する処理
-        if (res.error === "passcode_required") {
-          setRequirePass(true);
-          setLoading(false);
-          return;
-        }
-        
-        if (res.error === "access_denied" || res.error === "not_found") {
-          setError(res.error);
-          setLoading(false);
-          return;
-        }
-        
-        throw new Error(res.message || "ページの読み込みに失敗しました");
-      }
+  setError("読み込みに失敗しました");
+  setLoading(false);
+  return;
+}
 
-      
-      // 非公開ページチェック
-      if (res.not_published) {
-        console.log("📝 Page is not published");
-        setError("not_published");
-        return;
-      }
+// 2xx のとき
+if (!res) {
+  setError("読み込みに失敗しました");
+  setLoading(false);
+  return;
+}
 
-      if (res.access_denied) {
-        console.log("🚫 Access denied:", res.reason);
-        setError("access_denied");
-        return;
-      }
-      
-      if (res.require_passcode) {
-        console.log("🔑 Passcode required");
-        return setRequirePass(true);
-      }
-      if (res.require_friend) {
-        console.log("👥 Friend authentication required:", res.friend_info);
-        return setFriendInfo(res.friend_info || null);
-      }
+// 関数が200で {error: "..."} を返す場合にも対応
+if ((res as any).error) {
+  const code = (res as any).error;
+  if (code === "passcode_required") {
+    setRequirePass(true);
+    setLoading(false);
+    return;
+  }
+  if (code === "access_denied") {
+    setError("access_denied");
+    setLoading(false);
+    return;
+  }
+  if (code === "not_published") {
+    setError("not_published");
+    setLoading(false);
+    return;
+  }
+  if (code === "not_found") {
+    setError("not_found");
+    setLoading(false);
+    return;
+  }
+}
 
-      // フロントエンドでの追加期限チェック
-      if (res.timer_enabled && res.expire_action === 'hide_page') {
-        const now = new Date();
-        let isExpired = false;
+// 任意: 期限切れのフロント側チェック
+if (res.timer_enabled && res.expire_action === "hide_page") {
+  const now = new Date();
+  let isExpired = false;
+  if (res.timer_mode === "absolute" && res.timer_deadline) {
+    isExpired = now > new Date(res.timer_deadline);
+  }
+  if (isExpired) {
+    setError("このページの表示期限が過ぎています。");
+    setLoading(false);
+    return;
+  }
+}
 
-        if (res.timer_mode === 'absolute' && res.timer_deadline) {
-          isExpired = now > new Date(res.timer_deadline);
-          console.log("🔍 Frontend expiration check (absolute):", { 
-            deadline: res.timer_deadline, 
-            now: now.toISOString(), 
-            isExpired 
-          });
-        }
+console.log("✅ Page loaded successfully:", res.title || res.tag_label);
+setData(res as PagePayload);
+// ---- replace end ----
 
-        if (isExpired) {
-          console.log("🚫 Frontend detected expired page");
-          throw new Error("このページの表示期限が過ぎています。");
-        }
-      }
-
-      console.log("✅ Page loaded successfully:", res.title || res.tag_label);
-      setData(res as PagePayload);
 
     } catch (e: any) {
       setError(e?.message || "読み込みに失敗しました");
