@@ -107,16 +107,30 @@ export default function CMSFriendsPublicView() {
         }
 
         // プレビューでもパスコードチェック
+        console.log("🔐 Preview passcode check:", { 
+          require_passcode: page.require_passcode, 
+          has_passcode: !!page.passcode,
+          withPasscode: !!withPasscode 
+        });
+        
         if (page.require_passcode && page.passcode) {
           const urlParams = new URLSearchParams(window.location.search);
           const urlPasscode = urlParams.get('passcode');
+          console.log("🔑 Passcode validation:", { 
+            urlPasscode: !!urlPasscode, 
+            withPasscode: !!withPasscode,
+            pagePasscode: !!page.passcode 
+          });
+          
           if (!urlPasscode && !withPasscode) {
+            console.log("✅ Preview: Showing passcode input (no passcode provided)");
             setRequirePass(true);
             setLoading(false);
             return;
           }
           if ((urlPasscode || withPasscode) !== page.passcode) {
-            setError("not_found");
+            console.log("❌ Preview: Incorrect passcode provided");
+            setRequirePass(true);
             setLoading(false);
             return;
           }
@@ -181,14 +195,17 @@ export default function CMSFriendsPublicView() {
           let errorBody: any = {};
 
           // FunctionsHttpError からステータスコードを取得
-          if (fnErr instanceof Error && fnErr.message.includes('401')) {
-            status = 401;
-          } else if (fnErr instanceof Error && fnErr.message.includes('403')) {
-            status = 403;
-          } else if (fnErr instanceof Error && fnErr.message.includes('423')) {
-            status = 423;
-          } else if (fnErr instanceof Error && fnErr.message.includes('404')) {
-            status = 404;
+          if (fnErr instanceof Error) {
+            const errorMessage = fnErr.message.toLowerCase();
+            if (errorMessage.includes('401') || errorMessage.includes('unauthorized')) {
+              status = 401;
+            } else if (errorMessage.includes('403') || errorMessage.includes('forbidden')) {
+              status = 403;
+            } else if (errorMessage.includes('423') || errorMessage.includes('locked')) {
+              status = 423;
+            } else if (errorMessage.includes('404') || errorMessage.includes('not found')) {
+              status = 404;
+            }
           }
 
           // 旧形式のサポート（互換性のため）
@@ -197,10 +214,11 @@ export default function CMSFriendsPublicView() {
             errorBody = (fnErr as any)?.context?.body ?? {};
           }
 
-          console.log("🔍 Detailed error processing:", { 
+          console.log("🔍 Final status determination:", { 
             status, 
             errorMessage: fnErr.message,
-            errorType: fnErr.constructor.name
+            errorType: fnErr.constructor.name,
+            willShowPasscode: status === 401
           });
 
           // 401: パスコード必要
