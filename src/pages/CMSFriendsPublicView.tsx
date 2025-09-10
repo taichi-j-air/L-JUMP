@@ -119,7 +119,10 @@ export default function CMSFriendsPublicView() {
           console.log("🔑 Passcode validation:", { 
             urlPasscode: !!urlPasscode, 
             withPasscode: !!withPasscode,
-            pagePasscode: !!page.passcode 
+            pagePasscode: !!page.passcode,
+            urlPasscodeValue: urlPasscode,
+            withPasscodeValue: withPasscode,
+            pagePasscodeValue: page.passcode
           });
           
           if (!urlPasscode && !withPasscode) {
@@ -129,11 +132,12 @@ export default function CMSFriendsPublicView() {
             return;
           }
           if ((urlPasscode || withPasscode) !== page.passcode) {
-            console.log("❌ Preview: Incorrect passcode provided");
+            console.log("❌ Preview: Incorrect passcode provided, showing input again");
             setRequirePass(true);
             setLoading(false);
             return;
           }
+          console.log("✅ Preview: Passcode is correct, proceeding");
         }
 
         // プレビューでも期限切れチェック
@@ -194,17 +198,35 @@ export default function CMSFriendsPublicView() {
           let status = 0;
           let errorBody: any = {};
 
-          // FunctionsHttpError からステータスコードを取得
+          // FunctionsHttpError からステータスコードを取得（複数の方法で試行）
           if (fnErr instanceof Error) {
             const errorMessage = fnErr.message.toLowerCase();
+            console.log("🔍 Analyzing error message:", errorMessage);
+            
+            // 1. 401 Unauthorized を検出
             if (errorMessage.includes('401') || errorMessage.includes('unauthorized')) {
               status = 401;
-            } else if (errorMessage.includes('403') || errorMessage.includes('forbidden')) {
+              console.log("✅ Detected 401 from error message");
+            }
+            // 2. 403 Forbidden を検出  
+            else if (errorMessage.includes('403') || errorMessage.includes('forbidden')) {
               status = 403;
-            } else if (errorMessage.includes('423') || errorMessage.includes('locked')) {
+              console.log("✅ Detected 403 from error message");
+            }
+            // 3. 423 Locked を検出
+            else if (errorMessage.includes('423') || errorMessage.includes('locked')) {
               status = 423;
-            } else if (errorMessage.includes('404') || errorMessage.includes('not found')) {
+              console.log("✅ Detected 423 from error message");
+            }
+            // 4. 404 Not Found を検出
+            else if (errorMessage.includes('404') || errorMessage.includes('not found')) {
               status = 404;
+              console.log("✅ Detected 404 from error message");
+            }
+            // 5. 一般的な non-2xx エラーを401として扱う（パスコードが原因の可能性が高い）
+            else if (errorMessage.includes('non-2xx status code')) {
+              status = 401;
+              console.log("🔄 Treating non-2xx as 401 for passcode");
             }
           }
 
