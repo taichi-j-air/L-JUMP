@@ -132,10 +132,6 @@ if (page.visibility === "friends_only" && !isPreview) {
   console.log(`✅ Friend authenticated: ${friend.display_name} (${uid})`)
 }
 
-
-      console.log(`✅ Friend authenticated: ${friend.display_name} (${uid})`)
-    }
-
     // Return page data
     const pageData = {
       id: page.id,
