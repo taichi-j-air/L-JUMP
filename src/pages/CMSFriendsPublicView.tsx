@@ -69,7 +69,7 @@ export default function CMSFriendsPublicView() {
       }
 
       if (!res) {
-        
+        setError("not_found");
         return;
       }
 
