@@ -66,6 +66,7 @@ export default function CMSFriendsPublicView() {
   }, [data?.title, data?.tag_label]);
 
   const fetchData = async (withPasscode?: string) => {
+    console.log("🚀 fetchData called with passcode:", !!withPasscode);
     setLoading(true);
     setError(null);
     setFriendInfo(null);
@@ -168,28 +169,35 @@ export default function CMSFriendsPublicView() {
         responseData: res
       });
 
-      // エラーハンドリング - HTTPステータスコードに基づく適切な処理
-      if (fnErr) {
-        console.log("🚨 Edge Function error details:", {
-          message: fnErr.message,
-          status: (fnErr as any)?.context?.response?.status || (fnErr as any)?.status,
-          body: (fnErr as any)?.context?.body,
-          fullError: fnErr
-        });
+        // エラーハンドリング - HTTPステータスコードに基づく適切な処理
+        if (fnErr) {
+          console.log("🚨 Edge Function error details:", {
+            message: fnErr.message,
+            status: (fnErr as any)?.context?.response?.status || (fnErr as any)?.status,
+            body: (fnErr as any)?.context?.body,
+            fullError: fnErr
+          });
 
-        const status = (fnErr as any)?.context?.response?.status ?? (fnErr as any)?.status ?? 0;
-        const body = (fnErr as any)?.context?.body ?? {};
-        const code = body.error || body.code;
+          const status = (fnErr as any)?.context?.response?.status ?? (fnErr as any)?.status ?? 0;
+          const body = (fnErr as any)?.context?.body ?? {};
+          const code = body.error || body.code;
 
-        console.log("🔍 Error processing:", { status, code, body });
+          console.log("🔍 Detailed error processing:", { 
+            status, 
+            code, 
+            body, 
+            hasContext: !!(fnErr as any)?.context,
+            contextKeys: Object.keys((fnErr as any)?.context || {}),
+            responseKeys: Object.keys((fnErr as any)?.context?.response || {})
+          });
 
-        // 401: パスコード必要
-        if (status === 401 || code === "passcode_required") {
-          console.log("➡️ Setting requirePass = true");
-          setRequirePass(true);
-          setLoading(false);
-          return;
-        }
+          // 401: パスコード必要
+          if (status === 401 || code === "passcode_required") {
+            console.log("✅ Passcode required detected - showing passcode input");
+            setRequirePass(true);
+            setLoading(false);
+            return;
+          }
         
         // 423: 非公開ページ
         if (status === 423 || code === "not_published") {
@@ -243,6 +251,7 @@ export default function CMSFriendsPublicView() {
         console.log("📋 200 response with error code:", code);
         
         if (code === "passcode_required") {
+          console.log("✅ Passcode required from 200 response - showing passcode input");
           setRequirePass(true);
           setLoading(false);
           return;
@@ -439,7 +448,8 @@ export default function CMSFriendsPublicView() {
     return null;
   }
 
-  // 【修正】パスコード入力画面の表示ロジックを優先
+  // パスコード入力画面の表示ロジック
+  console.log("🎯 Render check - requirePass:", requirePass, "error:", error, "loading:", loading);
   if (requirePass) {
     return (
       <div className="container mx-auto max-w-3xl p-4">
