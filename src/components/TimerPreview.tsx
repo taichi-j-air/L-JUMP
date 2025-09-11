@@ -264,7 +264,7 @@ export const TimerPreview = ({
   }, [targetTime, showEndDate]);
 
   const styleClasses = {
-    solid: "rounded-md p-3",
+    solid: "rounded-none p-3",
     glass: "rounded-md p-3 backdrop-blur border border-white/20",
     outline: "rounded-md p-3 border",
   } as const;
