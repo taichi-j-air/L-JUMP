@@ -75,6 +75,10 @@ export default function CMSFriendsPublicView() {
   }, [data?.title, data?.tag_label]);
 
   const parseFnError = (fnErr: any) => {
+    console.log("🔍 Full error object:", fnErr);
+    console.log("🔍 Error message:", fnErr?.message);
+    console.log("🔍 Error context:", fnErr?.context);
+    
     // 最優先：Supabase Functions の context から status/code を取得
     let status: number | undefined =
       fnErr?.context?.response?.status ?? fnErr?.status;
@@ -83,24 +87,32 @@ export default function CMSFriendsPublicView() {
     let message: string | undefined =
       fnErr?.context?.body?.message || fnErr?.message;
 
+    console.log("🔍 Extracted values:", { status, code, message });
+
     // 次点：message 文字列から推定（最終手段）
     if (!status && typeof fnErr?.message === "string") {
       const m = fnErr.message.toLowerCase();
+      console.log("🔍 Analyzing message for status codes:", m);
       
       if (m.includes("401") || m.includes("unauthorized")) {
         status = 401;
+        console.log("✅ Detected 401 from message");
       }
       else if (m.includes("403") || m.includes("forbidden")) {
         status = 403;
+        console.log("✅ Detected 403 from message");
       }
       else if (m.includes("423") || m.includes("locked")) {
         status = 423;
+        console.log("✅ Detected 423 from message");
       }
       else if (m.includes("404") || m.includes("not found")) {
         status = 404;
+        console.log("✅ Detected 404 from message");
       }
     }
 
+    console.log("🔍 Final result:", { status: status ?? 0, code, message });
     return { status: status ?? 0, code, message };
   };
 
@@ -177,11 +189,13 @@ export default function CMSFriendsPublicView() {
       );
 
       if (fnErr) {
+        console.log("🚨 Edge Function error occurred");
         const { status, code, message } = parseFnError(fnErr);
+        console.log("🎯 Error handling decision:", { status, code, message });
 
         // ステータス優先で分岐
         if (status === 401) {
-          // パスコード要求
+          console.log("🔑 401 detected - showing passcode input");
           setRequirePass(true);
           setLoading(false);
           return;
@@ -223,7 +237,10 @@ export default function CMSFriendsPublicView() {
       }
       if ((res as any).error) {
         const code = (res as any).error as KnownErrors | string;
+        console.log("🔍 Response body contains error code:", code);
+        
         if (code === "passcode_required") {
+          console.log("🔑 passcode_required detected - showing passcode input");
           setRequirePass(true);
           setLoading(false);
           return;

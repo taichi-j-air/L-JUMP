@@ -51,10 +51,12 @@ serve(async (req) => {
       return errorResponse("not_found", "Page not found", 404)
     }
 
-    console.log(`Page found: {
+    console.log(`📄 Page found: {
       id: "${page.id}",
       user_id: "${page.user_id}",
-      visibility: "${page.visibility}"
+      visibility: "${page.visibility}",
+      require_passcode: ${page.require_passcode},
+      is_published: ${page.is_published}
     }`)
 
     // 公開状態チェック
@@ -64,9 +66,12 @@ serve(async (req) => {
 
     // パスコードチェック
     if (page.require_passcode && !isPreview) {
+      console.log(`🔐 Passcode check: required=${page.require_passcode}, provided=${passcode ? 'PROVIDED' : 'NONE'}, expectedLength=${page.passcode?.length || 0}`)
       if (!passcode || passcode !== page.passcode) {
+        console.log(`🚫 Passcode validation FAILED - returning 401 with passcode_required`)
         return errorResponse("passcode_required", "Passcode is required", 401)
       }
+      console.log(`✅ Passcode validation SUCCESS`)
     }
 
     // 友だち限定ページのチェック
