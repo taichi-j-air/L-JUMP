@@ -448,21 +448,8 @@ return (
   <div className="min-h-screen bg-gray-100 flex justify-center">
     {/* 中央の白い部分 */}
     <div className="w-full max-w-3xl bg-white border-x border-gray-200 flex flex-col">
-      {/* 中身 */}
-      {isPreview && (
-        <div className="fixed top-4 right-4 z-50">
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => window.close()}
-            className="flex items-center gap-2"
-          >
-            <X className="h-4 w-4" />
-            プレビュー画面を閉じる
-          </Button>
-        </div>
-      )}
-
+      
+      {/* タイマー */}
       {data.timer_enabled && (
         <TimerPreview
           mode={data.timer_mode || "absolute"}
@@ -490,10 +477,53 @@ return (
         />
       )}
 
+      {/* コンテンツ本文 */}
       <article className="prose max-w-none dark:prose-invert flex-1 p-4">
         {Array.isArray(data.content_blocks) && data.content_blocks.length > 0 ? (
           data.content_blocks.map((block, idx) => {
             const html = DOMPurify.sanitize(block || "");
+
+            // ★ ここ残す！ → FormEmbed 検出処理
+            if (html.includes("<FormEmbed") && html.includes("formId=")) {
+              const formIdMatch = html.match(/formId="([^"]+)"/);
+              const uidMatch = html.match(/uid="([^"]+)"/);
+              if (formIdMatch) {
+                const formId = formIdMatch[1];
+                const embedUid = uidMatch && uidMatch[1] === "[UID]" ? uid : uidMatch ? uidMatch[1] : "";
+                return (
+                  <div key={idx} className="mt-4 first:mt-0">
+                    <FormEmbedComponent formId={formId} uid={embedUid} className="my-6" />
+                  </div>
+                );
+              }
+            }
+
+            // ★ 他のフォーム形式も残す（form-embed-container / form-embed）
+            if (html.includes('class="form-embed-container"') && html.includes("data-form-id=")) {
+              const formIdMatch = html.match(/data-form-id="([^"]+)"/);
+              if (formIdMatch) {
+                const formId = formIdMatch[1];
+                return (
+                  <div key={idx} className="mt-4 first:mt-0">
+                    <FormEmbedComponent formId={formId} uid={uid} className="my-6" />
+                  </div>
+                );
+              }
+            }
+
+            if (html.includes('class="form-embed"') && html.includes("data-form-id=")) {
+              const formIdMatch = html.match(/data-form-id="([^"]+)"/);
+              if (formIdMatch) {
+                const formId = formIdMatch[1];
+                return (
+                  <div key={idx} className="mt-4 first:mt-0">
+                    <FormEmbedComponent formId={formId} uid={uid} className="my-6" />
+                  </div>
+                );
+              }
+            }
+
+            // 通常HTMLはそのまま表示
             return (
               <div
                 key={idx}
@@ -509,5 +539,4 @@ return (
     </div>
   </div>
 );
-
 }
