@@ -482,14 +482,18 @@ return (
         {Array.isArray(data.content_blocks) && data.content_blocks.length > 0 ? (
           data.content_blocks.map((block, idx) => {
             const html = DOMPurify.sanitize(block || "");
+            console.log(`Block ${idx}:`, block);
+            console.log(`Sanitized HTML ${idx}:`, html);
 
             // ★ ここ残す！ → FormEmbed 検出処理
             if (html.includes("<FormEmbed") && html.includes("formId=")) {
+              console.log(`FormEmbed detected in block ${idx}`);
               const formIdMatch = html.match(/formId="([^"]+)"/);
               const uidMatch = html.match(/uid="([^"]+)"/);
               if (formIdMatch) {
                 const formId = formIdMatch[1];
                 const embedUid = uidMatch && uidMatch[1] === "[UID]" ? uid : uidMatch ? uidMatch[1] : "";
+                console.log(`Rendering FormEmbedComponent with formId: ${formId}, uid: ${embedUid}`);
                 return (
                   <div key={idx} className="mt-4 first:mt-0">
                     <FormEmbedComponent formId={formId} uid={embedUid} className="my-6" />

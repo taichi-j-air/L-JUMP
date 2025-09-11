@@ -257,6 +257,20 @@ export default function CMSFriendsPageBuilder() {
         return;
       }
 
+      // Calculate current durationSeconds from form inputs
+      const currentDurationSeconds = toSeconds(durDays, durHours, durMinutes, durSecs);
+
+      // Validate timer_deadline for absolute mode
+      let validatedTimerDeadline = null;
+      if (timerMode === "absolute" && timerDeadline) {
+        const deadlineDate = new Date(timerDeadline);
+        if (isNaN(deadlineDate.getTime())) {
+          toast.error("期限日時が正しくありません");
+          return;
+        }
+        validatedTimerDeadline = deadlineDate.toISOString();
+      }
+
       const payload = {
         title,
         slug,
@@ -268,8 +282,8 @@ export default function CMSFriendsPageBuilder() {
         passcode: requirePass ? passcode : null,
         timer_enabled: timerEnabled,
         timer_mode: timerMode,
-        timer_deadline: timerMode === "absolute" ? new Date(timerDeadline).toISOString() : null,
-        timer_duration_seconds: (timerMode === "per_access" || timerMode === "step_delivery") ? durationSeconds : null,
+        timer_deadline: validatedTimerDeadline,
+        timer_duration_seconds: (timerMode === "per_access" || timerMode === "step_delivery") ? currentDurationSeconds : null,
         show_milliseconds: showMilliseconds,
         timer_style: timerStyle,
         timer_bg_color: timerBgColor,
@@ -690,7 +704,7 @@ export default function CMSFriendsPageBuilder() {
                                     setDurDays(v);
                                     const newSeconds = toSeconds(v, durHours, durMinutes, durSecs);
                                     setDurationSeconds(newSeconds);
-                                    console.log('Updated duration (days):', { days: v, hours: durHours, minutes: durMinutes, seconds: durSecs, total: newSeconds });
+                                    
                                   }}
                                   className="h-8 w-full text-sm"
                                   inputMode="numeric"
@@ -708,7 +722,7 @@ export default function CMSFriendsPageBuilder() {
                                     setDurHours(v);
                                     const newSeconds = toSeconds(durDays, v, durMinutes, durSecs);
                                     setDurationSeconds(newSeconds);
-                                    console.log('Updated duration (hours):', { days: durDays, hours: v, minutes: durMinutes, seconds: durSecs, total: newSeconds });
+                                    
                                   }}
                                   className="h-8 w-full text-sm"
                                   inputMode="numeric"
@@ -726,7 +740,7 @@ export default function CMSFriendsPageBuilder() {
                                     setDurMinutes(v);
                                     const newSeconds = toSeconds(durDays, durHours, v, durSecs);
                                     setDurationSeconds(newSeconds);
-                                    console.log('Updated duration (minutes):', { days: durDays, hours: durHours, minutes: v, seconds: durSecs, total: newSeconds });
+                                    
                                   }}
                                   className="h-8 w-full text-sm"
                                   inputMode="numeric"
@@ -744,7 +758,7 @@ export default function CMSFriendsPageBuilder() {
                                     setDurSecs(v);
                                     const newSeconds = toSeconds(durDays, durHours, durMinutes, v);
                                     setDurationSeconds(newSeconds);
-                                    console.log('Updated duration (seconds):', { days: durDays, hours: durHours, minutes: durMinutes, seconds: v, total: newSeconds });
+                                    
                                   }}
                                   className="h-8 w-full text-sm"
                                   inputMode="numeric"
@@ -855,7 +869,12 @@ export default function CMSFriendsPageBuilder() {
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
           <FormEmbedSelector
             onInsert={(formHtml) => {
-              setContentBlocks(prev => [...prev, formHtml]);
+              console.log("Form embed HTML:", formHtml);
+              setContentBlocks(prev => {
+                const updated = [...prev, formHtml];
+                console.log("Updated content blocks:", updated);
+                return updated;
+              });
               setShowFormEmbed(false);
             }}
             onClose={() => setShowFormEmbed(false)}
