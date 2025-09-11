@@ -589,6 +589,7 @@ return (
           />
         )}
       </article>
-    </div>
+      </div>
   </div>
-);
+  );
+}
