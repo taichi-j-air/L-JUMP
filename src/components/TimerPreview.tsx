@@ -1,17 +1,19 @@
+// src/components/TimerPreview.tsx
 import { useEffect, useMemo, useRef, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 
 export type TimerMode = "absolute" | "per_access" | "step_delivery";
+// 画像③のために minimal を追加
 export type TimerStyle = "solid" | "glass" | "outline" | "minimal";
 
 interface TimerPreviewProps {
   mode: TimerMode;
-  deadline?: string | null;          // absolute の締切（ISO）
-  durationSeconds?: number | null;   // per_access / step_delivery の秒数
+  deadline?: string | null;
+  durationSeconds?: number | null;
   showMilliseconds?: boolean;
-  styleVariant?: TimerStyle;         // solid / glass(画像①) / outline(画像②) / minimal(画像③)
-  bgColor?: string;                  // 背景色（solid などに反映）
-  textColor?: string;                // 文字色（solid などに反映）
+  styleVariant?: TimerStyle;
+  bgColor?: string;
+  textColor?: string;
   shareCode?: string;
   uid?: string;
   className?: string;
@@ -20,23 +22,58 @@ interface TimerPreviewProps {
   minuteLabel?: string;
   secondLabel?: string;
   preview?: boolean;
-  internalTimer?: boolean;           // 内部タイマーテキスト固定表示
-  timerText?: string;                // 内部タイマーテキスト
-  showEndDate?: boolean;             // 終了日時の表示
-  scenarioId?: string;               // step_delivery 用
-  stepId?: string;                   // step_delivery 用
+  internalTimer?: boolean;
+  timerText?: string;
+  showEndDate?: boolean;
+  scenarioId?: string;
+  stepId?: string;
 }
 
-function splitTime(ms: number) {
+function partsFromMs(ms: number) {
   const totalSeconds = Math.max(0, Math.floor(ms / 1000));
   const days = Math.floor(totalSeconds / 86400);
   const hours = Math.floor((totalSeconds % 86400) / 3600);
   const minutes = Math.floor((totalSeconds % 3600) / 60);
   const seconds = totalSeconds % 60;
-  return { days, hours, minutes, seconds };
+  const milli = Math.max(0, ms % 1000);
+  return { days, hours, minutes, seconds, milli };
 }
 
-const pad2 = (n: number) => n.toString().padStart(2, "0");
+function formatInline(
+  ms: number,
+  withMs: boolean,
+  labels: { dayLabel: string; hourLabel: string; minuteLabel: string; secondLabel: string }
+) {
+  const { days, hours, minutes, seconds, milli } = partsFromMs(ms);
+  let timeStr = "";
+  if (days > 0) timeStr += `${days}${labels.dayLabel}`;
+  if (hours > 0 || days > 0) timeStr += `${hours}${labels.hourLabel}`;
+  if (minutes > 0 || hours > 0 || days > 0) timeStr += `${minutes}${labels.minuteLabel}`;
+  timeStr += `${seconds}${labels.secondLabel}`;
+  const base = `残り${timeStr}`;
+  if (!withMs) return base;
+  return `${base}${Math.floor(milli / 10).toString().padStart(2, "0")}`; // 2桁（センチ秒）表示
+}
+
+const hexToRgb = (hex?: string) => {
+  if (!hex) return null;
+  const m = hex.replace("#", "");
+  const v = m.length === 3
+    ? m.split("").map((c) => c + c).join("")
+    : m.length === 6
+      ? m
+      : null;
+  if (!v) return null;
+  const r = parseInt(v.slice(0, 2), 16);
+  const g = parseInt(v.slice(2, 4), 16);
+  const b = parseInt(v.slice(4, 6), 16);
+  return { r, g, b };
+};
+const rgba = (hex?: string, a: number = 1) => {
+  const rgb = hexToRgb(hex);
+  if (!rgb) return hex || `rgba(0,0,0,${a})`;
+  return `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, ${a})`;
+};
 
 export const TimerPreview = ({
   mode,
@@ -45,7 +82,7 @@ export const TimerPreview = ({
   showMilliseconds = false,
   styleVariant = "solid",
   bgColor = "#0cb386",
-  textColor = "#ffffff",
+  textColor = "#111111",
   shareCode,
   uid,
   className,
@@ -67,25 +104,24 @@ export const TimerPreview = ({
 
   // サーバー同期（per_access / step_delivery）
   useEffect(() => {
-    const run = async () => {
+    const fetchTimerInfo = async () => {
       if (shareCode && (mode === "per_access" || mode === "step_delivery") && !preview) {
         try {
           const { data, error } = await supabase.functions.invoke("get-timer-info", {
             body: { pageShareCode: shareCode, uid },
           });
-          if (!error && data?.success && data?.timer_start_at) {
+          if (error) return;
+          if (data?.success && data?.timer_start_at) {
             setServerSyncedStart(new Date(data.timer_start_at));
             setServerSyncExpired(!!data.expired);
           }
-        } catch {
-          // noop
-        }
+        } catch {}
       }
     };
-    run();
+    fetchTimerInfo();
   }, [shareCode, uid, mode, preview]);
 
-  // 目標時刻
+  // ゴール時刻（締切）を算出
   const targetTime = useMemo(() => {
     if (mode === "absolute" && deadline) {
       const t = new Date(deadline).getTime();
@@ -94,170 +130,252 @@ export const TimerPreview = ({
     if ((mode === "per_access" || mode === "step_delivery") && durationSeconds && durationSeconds > 0) {
       if (preview) return Date.now() + durationSeconds * 1000;
       if (serverSyncedStart) return serverSyncedStart.getTime() + durationSeconds * 1000;
-      return Date.now() + durationSeconds * 1000;
+
+      // localStorage フォールバック
+      const key =
+        mode === "step_delivery" && scenarioId && stepId && uid && shareCode
+          ? `step_delivery_timer:${shareCode}:${uid}:${scenarioId}:${stepId}`
+          : `cms_page_first_access:${shareCode || "preview"}:${uid || "anon"}`;
+
+      try {
+        const stored = localStorage.getItem(key);
+        const start = stored ? Number(stored) : Date.now();
+        if (!stored || isNaN(start)) localStorage.setItem(key, String(start));
+        return start + durationSeconds * 1000;
+      } catch {
+        return Date.now() + durationSeconds * 1000;
+      }
     }
     return Date.now();
-  }, [mode, deadline, durationSeconds, serverSyncedStart, preview]);
+  }, [mode, deadline, durationSeconds, shareCode, uid, preview, scenarioId, stepId, serverSyncedStart]);
 
-  // Tick
+  // 残り時間の更新ループ
   useEffect(() => {
-    if (intervalRef.current) window.clearInterval(intervalRef.current);
+    if (intervalRef.current) {
+      window.clearInterval(intervalRef.current);
+      intervalRef.current = null;
+    }
     const tick = () => setRemainingMs(Math.max(0, targetTime - Date.now()));
     tick();
-    intervalRef.current = window.setInterval(tick, showMilliseconds ? 50 : 500);
+    const intervalMs = showMilliseconds ? 50 : 500;
+    intervalRef.current = window.setInterval(tick, intervalMs);
     return () => {
       if (intervalRef.current) window.clearInterval(intervalRef.current);
+      intervalRef.current = null;
     };
   }, [targetTime, showMilliseconds]);
 
-  const { days, hours, minutes, seconds } = splitTime(remainingMs);
-
-  // 期限判定
   const isExpired =
     (remainingMs <= 0 &&
       (mode === "absolute" || ((mode === "per_access" || mode === "step_delivery") && !preview))) ||
     serverSyncExpired;
 
-  // 終了日時テキスト
   const endDateText = useMemo(() => {
     if (!showEndDate) return null;
-    const d = new Date(targetTime);
-    if (isNaN(d.getTime())) return null;
-    return `${d.getFullYear()}年${d.getMonth() + 1}月${d.getDate()}日 ${pad2(d.getHours())}時${pad2(d.getMinutes())}分まで`;
+    const endDate = new Date(targetTime);
+    if (isNaN(endDate.getTime())) return null;
+    const y = endDate.getFullYear();
+    const m = endDate.getMonth() + 1;
+    const d = endDate.getDate();
+    const h = endDate.getHours().toString();
+    const min = endDate.getMinutes().toString().padStart(2, "0");
+    return `${y}年${m}月${d}日 ${h}時${min}分まで`;
   }, [targetTime, showEndDate]);
 
-  // ========= 各スタイル =========
+  // --------------- スタイルごとの描画 ----------------
 
-  // 1) solid（従来の帯／角丸なし）
-  if (styleVariant === "solid") {
+  // 画像①：横長ラベル（glass）
+  const LabelBar = () => {
+    const { days, hours, minutes, seconds, milli } = partsFromMs(remainingMs);
+    const cs = Math.floor(milli / 10).toString().padStart(2, "0"); // centiseconds
+    if (internalTimer) {
+      return (
+        <div
+          className="w-full rounded-md p-2 md:p-3 backdrop-blur"
+          style={{ background: rgba(bgColor, 0.18), color: textColor, border: `1px solid ${rgba(textColor, 0.15)}` }}
+        >
+          <span className="font-semibold tracking-wide">{timerText}</span>
+        </div>
+      );
+    }
     return (
-      <div className={className}>
-        <div className="rounded-none p-3" style={{ background: bgColor, color: textColor }}>
-          <div className="text-xl font-semibold tracking-wide">
-            {isExpired ? "期間終了" : internalTimer ? timerText : `残り${days}${dayLabel}${hours}${hourLabel}${minutes}${minuteLabel}${seconds}${secondLabel}`}
+      <div
+        className="w-full rounded-md p-2 md:p-3 backdrop-blur flex items-baseline gap-2 md:gap-3 flex-wrap"
+        style={{ background: rgba(bgColor, 0.18), color: textColor, border: `1px solid ${rgba(textColor, 0.15)}` }}
+      >
+        <span className="text-sm md:text-base opacity-80">終了まで</span>
+        <span className="text-lg md:text-2xl font-extrabold tabular-nums">{days}</span>
+        <span className="text-sm md:text-base opacity-80">{dayLabel}</span>
+        <span className="text-lg md:text-2xl font-extrabold tabular-nums">{hours.toString().padStart(2, "0")}</span>
+        <span className="text-sm md:text-base opacity-80">{hourLabel}</span>
+        <span className="text-lg md:text-2xl font-extrabold tabular-nums">{minutes.toString().padStart(2, "0")}</span>
+        <span className="text-sm md:text-base opacity-80">{minuteLabel}</span>
+        <span className="text-lg md:text-2xl font-extrabold tabular-nums">{seconds.toString().padStart(2, "0")}</span>
+        <span className="text-sm md:text-base opacity-80">{secondLabel}</span>
+        {showMilliseconds && <span className="text-lg md:text-2xl font-extrabold tabular-nums">{cs}</span>}
+      </div>
+    );
+  };
+
+  // 画像②：円リング（outline）
+  const Ring = ({
+    value,
+    max,
+    label,
+  }: {
+    value: number;
+    max: number;
+    label: string;
+  }) => {
+    const r = 36;
+    const c = 2 * Math.PI * r;
+    const pct = Math.max(0, Math.min(1, value / max));
+    const offset = c * (1 - pct);
+    return (
+      <div className="flex flex-col items-center justify-center">
+        <svg width="96" height="96" viewBox="0 0 96 96" className="block">
+          <g transform="rotate(-90 48 48)">
+            {/* track */}
+            <circle cx="48" cy="48" r={r} stroke={rgba(textColor, 0.15)} strokeWidth="8" fill="none" />
+            {/* progress */}
+            <circle
+              cx="48"
+              cy="48"
+              r={r}
+              stroke={bgColor}
+              strokeWidth="8"
+              strokeLinecap="round"
+              fill="none"
+              strokeDasharray={c}
+              strokeDashoffset={offset}
+            />
+          </g>
+        </svg>
+        <div className="mt-[-72px] text-center select-none pointer-events-none">
+          <div className="text-2xl font-extrabold tabular-nums" style={{ color: textColor }}>
+            {value.toString().padStart(2, "0")}
           </div>
-          {showEndDate && endDateText && !isExpired && (
-            <div className="text-sm mt-1 opacity-80">{endDateText}</div>
-          )}
+          <div className="text-xs opacity-70" style={{ color: textColor }}>
+            {label}
+          </div>
         </div>
       </div>
     );
-  }
+  };
 
-  // 2) glass = 画像①風（横長グレー帯＋黒文字）
-  if (styleVariant === "glass") {
+  const RingGrid = () => {
+    const { days, hours, minutes, seconds } = partsFromMs(remainingMs);
+    if (internalTimer) {
+      return (
+        <div className="rounded-md p-3 text-center" style={{ color: textColor, background: rgba(bgColor, 0.08) }}>
+          <span className="font-semibold">{timerText}</span>
+        </div>
+      );
+    }
+    // 正規化（リングの進捗）：daysは最大30日で丸め
+    const dayMax = Math.max(1, Math.min(30, days || 1));
+    return (
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 items-center justify-items-center">
+        <Ring value={Math.min(days, 99)} max={dayMax} label="days" />
+        <Ring value={hours} max={24} label="hours" />
+        <Ring value={minutes} max={60} label="minutes" />
+        <Ring value={seconds} max={60} label="seconds" />
+      </div>
+    );
+  };
+
+  // 画像③：ミニマル（minimal）
+  const Minimal = () => {
+    const { days, hours, minutes, seconds } = partsFromMs(remainingMs);
+    if (internalTimer) {
+      return (
+        <div className="text-center">
+          <div className="text-2xl md:text-3xl font-semibold" style={{ color: textColor }}>
+            {timerText}
+          </div>
+        </div>
+      );
+    }
+    return (
+      <div className="w-full">
+        <div
+          className="flex items-end justify-between sm:justify-around gap-4 sm:gap-8"
+          style={{ color: textColor }}
+        >
+          <div className="text-center">
+            <div className="font-mono tabular-nums text-5xl sm:text-7xl font-light">{days}</div>
+            <div className="text-xs sm:text-sm opacity-70 mt-1">{dayLabel}</div>
+          </div>
+          <div className="text-center">
+            <div className="font-mono tabular-nums text-5xl sm:text-7xl font-light">
+              {hours.toString().padStart(2, "0")}
+            </div>
+            <div className="text-xs sm:text-sm opacity-70 mt-1">{hourLabel}</div>
+          </div>
+          <div className="text-center">
+            <div className="font-mono tabular-nums text-5xl sm:text-7xl font-light">
+              {minutes.toString().padStart(2, "0")}
+            </div>
+            <div className="text-xs sm:text-sm opacity-70 mt-1">{minuteLabel}</div>
+          </div>
+          <div className="text-center">
+            <div className="font-mono tabular-nums text-5xl sm:text-7xl font-light">
+              {seconds.toString().padStart(2, "0")}
+            </div>
+            <div className="text-xs sm:text-sm opacity-70 mt-1">{secondLabel}</div>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  // 既存：solid（角丸0・バー1本）
+  const Solid = () => {
+    const text = formatInline(remainingMs, showMilliseconds, {
+      dayLabel,
+      hourLabel,
+      minuteLabel,
+      secondLabel,
+    });
+    return (
+      <div
+        className="rounded-none p-3"
+        style={{ background: bgColor, color: textColor }}
+      >
+        <div className="text-xl font-semibold tracking-wide">{internalTimer ? timerText : text}</div>
+      </div>
+    );
+  };
+
+  // --------------- 出力 ---------------
+  if (isExpired) {
     return (
       <div className={className}>
         <div
-          className="rounded-none px-4 py-2 flex items-center gap-2 text-lg font-bold"
-          style={{ background: "#e5e7eb", color: "#111827" }}
+          className={styleVariant === "solid" ? "rounded-none p-3" : "rounded-md p-3"}
+          style={{
+            background: styleVariant === "solid" ? bgColor : rgba(bgColor, 0.12),
+            color: textColor,
+            border: styleVariant === "solid" ? undefined : `1px solid ${rgba(textColor, 0.12)}`,
+          }}
         >
-          {isExpired ? (
-            "終了しました"
-          ) : internalTimer ? (
-            timerText
-          ) : (
-            <>
-              終了まで
-              <span className="text-xl">{days}</span>{dayLabel}
-              <span className="text-xl">{pad2(hours)}</span>{hourLabel}
-              <span className="text-xl">{pad2(minutes)}</span>{minuteLabel}
-              <span className="text-xl">{pad2(seconds)}</span>{secondLabel}
-            </>
-          )}
+          <div className="text-xl font-semibold tracking-wide">期間終了</div>
         </div>
-        {showEndDate && endDateText && !isExpired && (
-          <div className="text-sm mt-1 opacity-70">{endDateText}</div>
-        )}
       </div>
     );
   }
 
-  // 3) outline = 画像②風（円形プログレス4つ）
-  if (styleVariant === "outline") {
-    // 円周 ≒ 2πr （r=36）
-    const C = 2 * Math.PI * 36; // ≒ 226
-    // 簡易上限（days は最大30想定）
-    const unitMax = { days: 30, hours: 24, minutes: 60, seconds: 60 } as const;
-    const parts = [
-      { key: "days", label: "days", value: Math.min(days, 99), max: unitMax.days },
-      { key: "hours", label: "hours", value: hours, max: unitMax.hours },
-      { key: "minutes", label: "minutes", value: minutes, max: unitMax.minutes },
-      { key: "seconds", label: "seconds", value: seconds, max: unitMax.seconds },
-    ] as const;
-
-    return (
-      <div className={className}>
-        <div className="flex gap-6">
-          {parts.map((p, i) => {
-            const frac = Math.max(0, Math.min(1, p.value / p.max));
-            const dash = C * frac;
-            return (
-              <div key={i} className="relative w-20 h-20">
-                <svg className="absolute inset-0 w-full h-full">
-                  <circle cx="40" cy="40" r="36" stroke="#4b5563" strokeWidth="4" fill="none" />
-                  {!isExpired && (
-                    <circle
-                      cx="40"
-                      cy="40"
-                      r="36"
-                      stroke="#fb923c"
-                      strokeWidth="4"
-                      fill="none"
-                      strokeDasharray={`${dash} ${C - dash}`}
-                      transform="rotate(-90 40 40)"
-                      strokeLinecap="round"
-                    />
-                  )}
-                </svg>
-                <div className="flex flex-col items-center justify-center h-full text-white">
-                  <span className="text-xl font-bold">
-                    {pad2(p.value)}
-                  </span>
-                  <span className="text-xs opacity-80">{p.label}</span>
-                </div>
-              </div>
-            );
-          })}
-        </div>
-        {showEndDate && endDateText && !isExpired && (
-          <div className="text-sm mt-2 opacity-80 text-white">{endDateText}</div>
-        )}
-      </div>
-    );
-  }
-
-  // 4) minimal = 画像③風（大きい数字＋単位を下に）
   return (
     <div className={className}>
-      <div className="flex gap-8">
-        {isExpired ? (
-          <div className="text-xl">期間終了</div>
-        ) : internalTimer ? (
-          <div className="text-xl">{timerText}</div>
-        ) : (
-          <>
-            <div className="flex flex-col items-center">
-              <span className="text-5xl font-light">{pad2(days)}</span>
-              <span className="text-sm opacity-80">{dayLabel}</span>
-            </div>
-            <div className="flex flex-col items-center">
-              <span className="text-5xl font-light">{pad2(hours)}</span>
-              <span className="text-sm opacity-80">{hourLabel}</span>
-            </div>
-            <div className="flex flex-col items-center">
-              <span className="text-5xl font-light">{pad2(minutes)}</span>
-              <span className="text-sm opacity-80">{minuteLabel}</span>
-            </div>
-            <div className="flex flex-col items-center">
-              <span className="text-5xl font-light">{pad2(seconds)}</span>
-              <span className="text-sm opacity-80">{secondLabel}</span>
-            </div>
-          </>
-        )}
-      </div>
-      {showEndDate && endDateText && !isExpired && (
-        <div className="text-sm mt-2 opacity-80">{endDateText}</div>
+      {styleVariant === "solid" && <Solid />}
+      {styleVariant === "glass" && <LabelBar />}
+      {styleVariant === "outline" && <RingGrid />}
+      {styleVariant === "minimal" && <Minimal />}
+
+      {showEndDate && endDateText && (
+        <div className="text-sm mt-2 text-center" style={{ color: rgba(textColor, 0.8) }}>
+          {endDateText}
+        </div>
       )}
     </div>
   );
