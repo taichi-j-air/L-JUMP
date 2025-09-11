@@ -445,14 +445,10 @@ export default function CMSFriendsPublicView() {
   if (!data) return null;
 
 return (
-  <div className="min-h-screen bg-gray-100"> 
-    {/* 全体背景 → 薄いグレー */}
-    
-    <div className="mx-auto max-w-3xl bg-white p-4 space-y-4 border-x border-gray-300 sm:border-0">
-      {/* 中央コンテンツ部分 */}
-      {/* - PC: 最大幅 3xl, 白背景, 左右にグレーのボーダー
-          - スマホ: 全幅表示, ボーダーなし */}
-      
+  <div className="min-h-screen bg-gray-100 flex justify-center">
+    {/* 中央の白い部分 */}
+    <div className="w-full max-w-3xl bg-white border-x border-gray-200 flex flex-col">
+      {/* 中身 */}
       {isPreview && (
         <div className="fixed top-4 right-4 z-50">
           <Button
@@ -470,14 +466,9 @@ return (
       {data.timer_enabled && (
         <TimerPreview
           mode={data.timer_mode || "absolute"}
-          deadline={
-            data.timer_mode === "absolute"
-              ? data.timer_deadline || undefined
-              : undefined
-          }
+          deadline={data.timer_mode === "absolute" ? data.timer_deadline || undefined : undefined}
           durationSeconds={
-            data.timer_mode === "per_access" ||
-            data.timer_mode === "step_delivery"
+            data.timer_mode === "per_access" || data.timer_mode === "step_delivery"
               ? data.timer_duration_seconds || undefined
               : undefined
           }
@@ -493,103 +484,30 @@ return (
           secondLabel={data.timer_second_label || "秒"}
           internalTimer={!!data.internal_timer}
           timerText={data.timer_text || "期間限定公開"}
-          showEndDate={
-            data.timer_mode === "per_access" ||
-            data.timer_mode === "step_delivery"
-          }
+          showEndDate={data.timer_mode === "per_access" || data.timer_mode === "step_delivery"}
           scenarioId={data.timer_scenario_id || undefined}
           stepId={data.timer_step_id || undefined}
         />
       )}
 
-      <article className="prose max-w-none dark:prose-invert">
+      <article className="prose max-w-none dark:prose-invert flex-1 p-4">
         {Array.isArray(data.content_blocks) && data.content_blocks.length > 0 ? (
           data.content_blocks.map((block, idx) => {
             const html = DOMPurify.sanitize(block || "");
-
-            // <FormEmbed formId="..." uid="..."/> の簡易検出
-            if (html.includes("<FormEmbed") && html.includes("formId=")) {
-              const formIdMatch = html.match(/formId="([^"]+)"/);
-              const uidMatch = html.match(/uid="([^"]+)"/);
-              if (formIdMatch) {
-                const formId = formIdMatch[1];
-                const embedUid =
-                  uidMatch && uidMatch[1] === "[UID]"
-                    ? uid
-                    : uidMatch
-                    ? uidMatch[1]
-                    : "";
-                return (
-                  <div key={idx} className="mt-4 first:mt-0">
-                    <FormEmbedComponent
-                      formId={formId}
-                      uid={embedUid}
-                      className="my-6"
-                    />
-                  </div>
-                );
-              }
-            }
-
-            // 新しい form-embed-container 形式
-            if (
-              html.includes('class="form-embed-container"') &&
-              html.includes("data-form-id=")
-            ) {
-              const formIdMatch = html.match(/data-form-id="([^"]+)"/);
-              if (formIdMatch) {
-                const formId = formIdMatch[1];
-                return (
-                  <div key={idx} className="mt-4 first:mt-0">
-                    <FormEmbedComponent
-                      formId={formId}
-                      uid={uid}
-                      className="my-6"
-                    />
-                  </div>
-                );
-              }
-            }
-
-            // 従来の form-embed 形式
-            if (
-              html.includes('class="form-embed"') &&
-              html.includes("data-form-id=")
-            ) {
-              const formIdMatch = html.match(/data-form-id="([^"]+)"/);
-              if (formIdMatch) {
-                const formId = formIdMatch[1];
-                return (
-                  <div key={idx} className="mt-4 first:mt-0">
-                    <FormEmbedComponent
-                      formId={formId}
-                      uid={uid}
-                      className="my-6"
-                    />
-                  </div>
-                );
-              }
-            }
-
             return (
               <div
                 key={idx}
                 className="mt-4 first:mt-0"
-                dangerouslySetInnerHTML={{
-                  __html: DOMPurify.sanitize(html),
-                }}
+                dangerouslySetInnerHTML={{ __html: html }}
               />
             );
           })
         ) : (
-          <div
-            dangerouslySetInnerHTML={{
-              __html: DOMPurify.sanitize(data.content || ""),
-            }}
-          />
+          <div dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(data.content || "") }} />
         )}
       </article>
-      </div>
+    </div>
   </div>
-  );
+);
+
 }
