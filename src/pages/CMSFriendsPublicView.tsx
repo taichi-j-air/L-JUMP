@@ -86,12 +86,19 @@ export default function CMSFriendsPublicView() {
     // 次点：message 文字列から推定（最終手段）
     if (!status && typeof fnErr?.message === "string") {
       const m = fnErr.message.toLowerCase();
-      if (m.includes("401") || m.includes("unauthorized")) status = 401;
-      else if (m.includes("403") || m.includes("forbidden")) status = 403;
-      else if (m.includes("423") || m.includes("locked")) status = 423;
-      else if (m.includes("404") || m.includes("not found")) status = 404;
-      // 「non-2xx status code」は誤って 401 に**しない**
-      // if (m.includes("non-2xx status code")) { /* 何もしない */ }
+      
+      if (m.includes("401") || m.includes("unauthorized")) {
+        status = 401;
+      }
+      else if (m.includes("403") || m.includes("forbidden")) {
+        status = 403;
+      }
+      else if (m.includes("423") || m.includes("locked")) {
+        status = 423;
+      }
+      else if (m.includes("404") || m.includes("not found")) {
+        status = 404;
+      }
     }
 
     return { status: status ?? 0, code, message };
@@ -170,7 +177,7 @@ export default function CMSFriendsPublicView() {
       );
 
       if (fnErr) {
-        const { status, code } = parseFnError(fnErr);
+        const { status, code, message } = parseFnError(fnErr);
 
         // ステータス優先で分岐
         if (status === 401) {
