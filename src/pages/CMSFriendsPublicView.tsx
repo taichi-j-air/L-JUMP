@@ -165,9 +165,8 @@ export default function CMSFriendsPublicView() {
               status = 423;
             } else if (errorMessage.includes('404') || errorMessage.includes('not found')) {
               status = 404;
-            } else if (errorMessage.includes('non-2xx status code')) {
-              status = 401;
             }
+            // non-2xxの場合はデフォルトを404にして、パスコード画面の誤表示を防ぐ
           }
 
           // 旧形式のサポート（互換性のため）
