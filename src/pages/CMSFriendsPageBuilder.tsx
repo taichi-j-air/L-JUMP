@@ -41,7 +41,10 @@ export default function CMSFriendsPageBuilder() {
   const [timerDeadline, setTimerDeadline] = useState("");
   const [durationSeconds, setDurationSeconds] = useState<number>(0);
   const [showMilliseconds, setShowMilliseconds] = useState<boolean>(false);
-  const [timerStyle, setTimerStyle] = useState<"solid" | "glass" | "outline">("solid");
+
+  // ▼ 画像③(minimal) を追加
+  const [timerStyle, setTimerStyle] = useState<"solid" | "glass" | "outline" | "minimal">("solid");
+
   const [timerBgColor, setTimerBgColor] = useState<string>("#0cb386");
   const [timerTextColor, setTimerTextColor] = useState<string>("#ffffff");
   const [internalTimer, setInternalTimer] = useState(false);
@@ -171,7 +174,10 @@ export default function CMSFriendsPageBuilder() {
     setTimerDeadline((selected as any).timer_deadline || "");
     setDurationSeconds((selected as any).timer_duration_seconds || 0);
     setShowMilliseconds(!!(selected as any).show_milliseconds);
-    setTimerStyle((selected as any).timer_style || "solid");
+
+    // ▼ minimal を含む union で受ける
+    setTimerStyle(((selected as any).timer_style as "solid" | "glass" | "outline" | "minimal") || "solid");
+
     setTimerBgColor((selected as any).timer_bg_color || "#0cb386");
     setTimerTextColor((selected as any).timer_text_color || "#ffffff");
     setInternalTimer(!!(selected as any).internal_timer);
@@ -285,7 +291,10 @@ export default function CMSFriendsPageBuilder() {
         timer_deadline: validatedTimerDeadline,
         timer_duration_seconds: (timerMode === "per_access" || timerMode === "step_delivery") ? currentDurationSeconds : null,
         show_milliseconds: showMilliseconds,
+
+        // ▼ minimal をそのまま保存
         timer_style: timerStyle,
+
         timer_bg_color: timerBgColor,
         timer_text_color: timerTextColor,
         internal_timer: internalTimer,
@@ -794,10 +803,11 @@ export default function CMSFriendsPageBuilder() {
                                 <SelectTrigger>
                                   <SelectValue />
                                 </SelectTrigger>
-                                <SelectContent>
+                                <SelectContent className="bg-background">
                                   <SelectItem value="solid">ソリッド</SelectItem>
-                                  <SelectItem value="glass">グラス</SelectItem>
-                                  <SelectItem value="outline">アウトライン</SelectItem>
+                                  <SelectItem value="glass">画像①（横ラベル）</SelectItem>
+                                  <SelectItem value="outline">画像②（円リング）</SelectItem>
+                                  <SelectItem value="minimal">画像③（ミニマル）</SelectItem>
                                 </SelectContent>
                               </Select>
                             </div>
