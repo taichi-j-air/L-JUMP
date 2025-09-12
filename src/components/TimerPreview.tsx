@@ -50,10 +50,6 @@ function mixToLighter(hex: string, ratio = 0.35) {
   const bb = Math.round(b + (255 - b) * ratio);
   return `rgb(${rr}, ${gg}, ${bb})`;
 }
-function translucent(hex: string, a = 0.2) {
-  const { r, g, b } = hexToRgb(hex);
-  return `rgba(${r}, ${g}, ${b}, ${a})`;
-}
 
 export const TimerPreview = ({
   mode,
@@ -173,7 +169,7 @@ export const TimerPreview = ({
 
   /* ==================== スタイル別ビュー ==================== */
 
-  // 画像①: ガラス風横並び（数字を大きく、ミリ秒対応、色は濃く）
+  // 画像①: ガラス風（数字大・ミリ秒対応・色は濃く）
   const GlassInlineView = () => (
     <div className="p-3">
       <div className="flex items-baseline gap-2 flex-wrap" style={{ color: textColor }}>
@@ -193,10 +189,10 @@ export const TimerPreview = ({
     </div>
   );
 
-  // 画像②: 円リング（背景は透明＝変更しても“背景”は変わらない／リング色だけbgColorで変化）
+  // 画像②: 円リング（背景は透明／リング色のみ bgColor を反映）
   const OutlineView = () => {
-    const accent = mixToLighter(bgColor, 0.35); // 進捗リング
-    const track = mixToLighter(bgColor, 0.85);  // 下地リング
+    const accent = mixToLighter(bgColor, 0.35);
+    const track = mixToLighter(bgColor, 0.85);
 
     const Circle = ({ value, max, label }: { value: number; max: number; label: string }) => {
       const r = 28;
@@ -257,7 +253,7 @@ export const TimerPreview = ({
     );
   };
 
-  // 画像③: ミニマル（背景は透明、中央見出し、左右余白）
+  // 画像③: ミニマル（背景透明・中央見出し・左右余白）
   const MinimalView = () => {
     const Cell = ({ v, l }: { v: number; l: string }) => (
       <div className="flex flex-col items-center justify-center min-w-[64px]">
@@ -286,28 +282,25 @@ export const TimerPreview = ({
     );
   };
 
-  // コンテナ装飾
+  // コンテナ装飾（角丸0は維持）
   const containerClass = {
     solid: "rounded-none p-3",
-    glass: "rounded-none p-0 backdrop-blur border border-white/20",
-    outline: "rounded-none p-0",
+    glass: "rounded-none p-0",   // ← 外枠なし
+    outline: "rounded-none p-0", // ← 外枠なし
     minimal: "rounded-none p-0",
   } as const;
 
-  // ②/③は“背景を透明”にして、bgColorは内部部品の色生成のみに使用
+  // 背景色：glass も不透明（薄くならない）
   const containerStyle: React.CSSProperties =
     styleVariant === "solid"
       ? { background: bgColor, color: textColor }
       : styleVariant === "glass"
-      ? { background: translucent(bgColor, 0.2), color: textColor }
+      ? { background: bgColor, color: textColor } // ← 透過をやめる
       : { background: "transparent", color: textColor };
-
-  const borderForOutline =
-    styleVariant === "outline" ? { borderColor: textColor, borderWidth: 1, borderStyle: "solid" as const } : {};
 
   return (
     <div className={className}>
-      <div className={`${containerClass[styleVariant]}`} style={{ ...containerStyle, ...borderForOutline }}>
+      <div className={`${containerClass[styleVariant]}`} style={containerStyle}>
         {isExpired ? (
           <div className="text-xl font-semibold tracking-wide p-3" style={{ color: textColor }}>
             期間終了
@@ -320,7 +313,6 @@ export const TimerPreview = ({
           <>
             {styleVariant === "solid" && (
               <div className="text-xl font-semibold tracking-wide" style={{ color: textColor }}>
-                {/* solidは従来表記 */}
                 残り
                 {days > 0 && `${days}${dayLabel}`}
                 {(hours > 0 || days > 0) && `${hours}${hourLabel}`}
