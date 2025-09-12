@@ -23,6 +23,7 @@ interface TimerPreviewProps {
   internalTimer?: boolean;
   timerText?: string;
   showEndDate?: boolean;
+  showRemainingText?: boolean;
   scenarioId?: string;
   stepId?: string;
 }
@@ -73,6 +74,7 @@ export const TimerPreview = ({
   internalTimer = false,
   timerText = "期間限定公開",
   showEndDate = false,
+  showRemainingText = true,
   scenarioId,
   stepId,
 }: TimerPreviewProps) => {
@@ -237,9 +239,11 @@ export const TimerPreview = ({
 
     return (
       <div className="pt-3 px-4">
-        <div className="mb-2 text-sm font-medium text-center" style={{ color: textColor }}>
-          終了まで残り
-        </div>
+        {showRemainingText && (
+          <div className="mb-2 text-sm font-medium text-center" style={{ color: textColor }}>
+            終了まで残り
+          </div>
+        )}
         <div
           className="flex items-center justify-between gap-3 flex-nowrap overflow-x-auto whitespace-nowrap"
           style={{ color: textColor }}
@@ -267,9 +271,11 @@ export const TimerPreview = ({
     );
     return (
       <div className="pt-3 px-4">
-        <div className="mb-2 text-sm font-medium text-center" style={{ color: textColor }}>
-          終了まで残り
-        </div>
+        {showRemainingText && (
+          <div className="mb-2 text-sm font-medium text-center" style={{ color: textColor }}>
+            終了まで残り
+          </div>
+        )}
         <div className="flex items-end justify-between gap-4 flex-nowrap overflow-x-auto whitespace-nowrap">
           <Cell v={days} l={dayLabel} />
           <Cell v={hours} l={hourLabel} />

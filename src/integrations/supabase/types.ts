@@ -109,7 +109,9 @@ export type Database = {
           passcode: string | null
           require_passcode: boolean
           share_code: string
+          show_end_date: boolean
           show_milliseconds: boolean
+          show_remaining_text: boolean
           slug: string
           tag_label: string | null
           timer_bg_color: string
@@ -147,7 +149,9 @@ export type Database = {
           passcode?: string | null
           require_passcode?: boolean
           share_code?: string
+          show_end_date?: boolean
           show_milliseconds?: boolean
+          show_remaining_text?: boolean
           slug: string
           tag_label?: string | null
           timer_bg_color?: string
@@ -185,7 +189,9 @@ export type Database = {
           passcode?: string | null
           require_passcode?: boolean
           share_code?: string
+          show_end_date?: boolean
           show_milliseconds?: boolean
+          show_remaining_text?: boolean
           slug?: string
           tag_label?: string | null
           timer_bg_color?: string

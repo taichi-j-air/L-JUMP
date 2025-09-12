@@ -62,6 +62,10 @@ export default function CMSFriendsPageBuilder() {
   const [durHours, setDurHours] = useState<number>(0);
   const [durMinutes, setDurMinutes] = useState<number>(0);
   const [durSecs, setDurSecs] = useState<number>(0);
+  
+  // Toggle controls for timer display
+  const [showRemainingText, setShowRemainingText] = useState<boolean>(true);
+  const [showEndDate, setShowEndDate] = useState<boolean>(true);
 
   // ✅ 正しい秒換算
   const toSeconds = (d: number, h: number, m: number, s: number) => d * 86400 + h * 3600 + m * 60 + s;
@@ -155,6 +159,8 @@ export default function CMSFriendsPageBuilder() {
     setDurHours(0);
     setDurMinutes(0);
     setDurSecs(0);
+    setShowRemainingText(true);
+    setShowEndDate(true);
   };
 
   // Load selected page data
@@ -200,6 +206,10 @@ export default function CMSFriendsPageBuilder() {
     setDurHours(hours);
     setDurMinutes(minutes);
     setDurSecs(seconds);
+    
+    // Set toggle states
+    setShowRemainingText((selected as any).show_remaining_text ?? true);
+    setShowEndDate((selected as any).show_end_date ?? true);
   }, [selected]);
 
   const handleAddPage = async () => {
@@ -306,6 +316,8 @@ export default function CMSFriendsPageBuilder() {
         timer_second_label: secondLabel,
         timer_scenario_id: timerMode === "step_delivery" ? selectedScenario || null : null,
         timer_step_id: timerMode === "step_delivery" ? selectedStep || null : null,
+        show_remaining_text: showRemainingText,
+        show_end_date: showEndDate,
       };
 
       console.log("Saving page with payload:", payload);
@@ -491,10 +503,11 @@ export default function CMSFriendsPageBuilder() {
                         hourLabel={hourLabel}
                         minuteLabel={minuteLabel}
                         secondLabel={secondLabel}
-                        preview={true}
-                        internalTimer={internalTimer}
-                        timerText={timerText}
-                        showEndDate={timerMode === 'per_access' || timerMode === 'step_delivery'}
+                         preview={true}
+                         internalTimer={internalTimer}
+                         timerText={timerText}
+                         showEndDate={showEndDate}
+                         showRemainingText={showRemainingText}
                       />
                     </div>
                   )}
@@ -859,6 +872,30 @@ export default function CMSFriendsPageBuilder() {
                               <Label className="flex items-center justify-between">
                                 ミリ秒表示
                                 <Switch checked={showMilliseconds} onCheckedChange={(v) => setShowMilliseconds(!!v)} />
+                              </Label>
+                            </div>
+
+                            {/* 終了まで残りテキスト表示制御 - outline/minimal スタイル時のみ表示 */}
+                            {(timerStyle === 'outline' || timerStyle === 'minimal') && (
+                              <div className="space-y-2">
+                                <Label className="flex items-center justify-between">
+                                  「終了まで残り」テキスト表示
+                                  <Switch
+                                    checked={showRemainingText}
+                                    onCheckedChange={setShowRemainingText}
+                                  />
+                                </Label>
+                              </div>
+                            )}
+
+                            {/* 終了日時表示制御 - 全スタイルに適用 */}
+                            <div className="space-y-2">
+                              <Label className="flex items-center justify-between">
+                                終了日時表示
+                                <Switch
+                                  checked={showEndDate}
+                                  onCheckedChange={setShowEndDate}
+                                />
                               </Label>
                             </div>
                           </AccordionContent>

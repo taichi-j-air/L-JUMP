@@ -31,6 +31,8 @@ interface PagePayload {
   timer_scenario_id?: string | null;
   timer_step_id?: string | null;
   expire_action?: "hide_page" | "keep_public";
+  show_remaining_text?: boolean;
+  show_end_date?: boolean;
 }
 
 interface FriendInfo {
@@ -471,7 +473,8 @@ return (
           secondLabel={data.timer_second_label || "秒"}
           internalTimer={!!data.internal_timer}
           timerText={data.timer_text || "期間限定公開"}
-          showEndDate={data.timer_mode === "per_access" || data.timer_mode === "step_delivery"}
+          showEndDate={data.show_end_date ?? true}
+          showRemainingText={data.show_remaining_text ?? true}
           scenarioId={data.timer_scenario_id || undefined}
           stepId={data.timer_step_id || undefined}
         />
