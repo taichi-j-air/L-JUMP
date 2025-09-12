@@ -289,9 +289,9 @@ export const TimerPreview = ({
   // コンテナ装飾
   const containerClass = {
     solid: "rounded-none p-3",
-    glass: "rounded-md p-0 backdrop-blur border border-white/20",
-    outline: "rounded-md p-0",
-    minimal: "rounded-md p-0",
+    glass: "rounded-none p-0 backdrop-blur border border-white/20",
+    outline: "rounded-none p-0",
+    minimal: "rounded-none p-0",
   } as const;
 
   // ②/③は“背景を透明”にして、bgColorは内部部品の色生成のみに使用
