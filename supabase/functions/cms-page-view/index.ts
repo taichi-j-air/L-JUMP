@@ -147,6 +147,8 @@ serve(async (req) => {
       timer_mode_step_delivery: page.timer_mode_step_delivery,
       timer_step_id: page.timer_step_id,
       timer_scenario_id: page.timer_scenario_id,
+      show_remaining_text: page.show_remaining_text,
+      show_end_date: page.show_end_date,
       require_passcode: page.require_passcode,
       tag_label: page.tag_label,
       allowed_tag_ids: page.allowed_tag_ids,
