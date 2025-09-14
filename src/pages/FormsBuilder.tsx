@@ -342,19 +342,6 @@ const handleUpdate = async () => {
       <div className="grid gap-4 lg:grid-cols-12">
         {/* 左: フォーム一覧 */}
         <div className="lg:col-span-4 space-y-2">
-        
-         {/* 公開/非公開スイッチ */}
-  <div className="flex items-center justify-between rounded-md border px-3 py-2">
-    <span className="text-sm font-medium">公開設定</span>
-    <div className="flex items-center space-x-2">
-      <Switch
-        checked={isPublic}
-        onCheckedChange={setIsPublic}
-      />
-      <span className="text-xs">{isPublic ? "公開中" : "非公開"}</span>
-    </div>
-  </div>
-        
           <FormListPanel
             items={forms as any}
             loading={loading}
