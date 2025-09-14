@@ -514,6 +514,9 @@ const handleUpdate = async () => {
                 scenarios={scenarios}
                 formId={editingId || 'new'}
                 onSave={editingId ? handleUpdate : handleCreate}
+                // 👇 ダミーを渡して回避
+  isPublic={false}
+  setIsPublic={() => {}}
                />
              </CardContent>
            </Card>
