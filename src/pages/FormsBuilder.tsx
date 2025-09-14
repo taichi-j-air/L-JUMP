@@ -78,17 +78,16 @@ export default function FormsBuilder() {
   const [requireLineFriend, setRequireLineFriend] = useState(false);
   const [preventDuplicate, setPreventDuplicate] = useState(false);
   const [postScenario, setPostScenario] = useState<string | null>(null);
-  const [scenarios, setScenarios] = useState<Array<{ id: string; name: string }>>([]);
-  const [submitButtonText, setSubmitButtonText] = useState<string>("送信");
-  const [submitButtonVariant, setSubmitButtonVariant] = useState<string>("default");
-  const [editingId, setEditingId] = useState<string | null>(null);
-  const [selectedFieldId, setSelectedFieldId] = useState<string | null>(null);
-  const [submitButtonBgColor, setSubmitButtonBgColor] = useState<string>("#0cb386");
-  const [submitButtonTextColor, setSubmitButtonTextColor] = useState<string>("#ffffff");
-  const [accentColor, setAccentColor] = useState<string>("#0cb386");
-  const [showShareDialog, setShowShareDialog] = useState(false);
-  const [selectedFormForShare, setSelectedFormForShare] = useState<{id: string, name: string} | null>(null);
-
+const [scenarios, setScenarios] = useState<Array<{ id: string; name: string }>>([]);
+const [submitButtonText, setSubmitButtonText] = useState<string>("送信");
+const [submitButtonVariant, setSubmitButtonVariant] = useState<string>("default");
+const [editingId, setEditingId] = useState<string | null>(null);
+const [selectedFieldId, setSelectedFieldId] = useState<string | null>(null);
+const [submitButtonBgColor, setSubmitButtonBgColor] = useState<string>("#0cb386");
+const [submitButtonTextColor, setSubmitButtonTextColor] = useState<string>("#ffffff");
+const [accentColor, setAccentColor] = useState<string>("#0cb386");
+const [showShareDialog, setShowShareDialog] = useState(false);
+const [selectedFormForShare, setSelectedFormForShare] = useState<{id: string, name: string} | null>(null);
   const loadForms = async () => {
     setLoading(true);
     const { data: { user } } = await supabase.auth.getUser();
@@ -146,11 +145,11 @@ export default function FormsBuilder() {
     }
   }, [requireLineFriend]);
 
-  const addField = () => {
-    const id = crypto.randomUUID();
-    setFields(prev => [...prev, { id, label: "", name: `field_${id.slice(0,8)}`, type: "textarea", required: false }]);
-    setSelectedFieldId(id);
-  };
+const addField = () => {
+  const id = crypto.randomUUID();
+  setFields(prev => [...prev, { id, label: "", name: `field_${id.slice(0,8)}`, type: "textarea", required: false }]);
+  setSelectedFieldId(id);
+};
 
   const updateField = (id: string, patch: Partial<FormRow["fields"][number]>) => {
     setFields(prev => prev.map(f => f.id === id ? { ...f, ...patch } : f));
@@ -163,43 +162,50 @@ export default function FormsBuilder() {
 
   const selectedField = useMemo(() => fields.find(f => f.id === selectedFieldId) ?? null, [fields, selectedFieldId]);
 
-  const resetCreator = () => {
-    setFormName("");
-    setDescription("");
-    setIsPublic(false);
-    setSuccessMessageMode('plain');
-    setSuccessMessagePlain("送信ありがとうございました。");
-    setSuccessMessageTemplateId(null);
-    setFields([]);
-    setRequireLineFriend(false);
-    setPreventDuplicate(false);
-    setPostScenario(null);
-    setSubmitButtonText("送信");
-    setSubmitButtonVariant("default");
-    setSubmitButtonBgColor("#0cb386");
-    setSubmitButtonTextColor("#ffffff");
-    setAccentColor("#0cb386");
-    setEditingId(null);
-  };
+const resetCreator = () => {
+  setFormName("");
+  setDescription("");
+  setIsPublic(false);
+  setSuccessMessageMode('plain');
+  setSuccessMessagePlain("送信ありがとうございました。");
+  setSuccessMessageTemplateId(null);
+  setFields([]);
+  setRequireLineFriend(false);
+  setPreventDuplicate(false);
+  setPostScenario(null);
+  setSubmitButtonText("送信");
+  setSubmitButtonVariant("default");
+  setSubmitButtonBgColor("#0cb386");
+  setSubmitButtonTextColor("#ffffff");
+  setAccentColor("#0cb386");
+  setEditingId(null);
+};
 
-  // Helper: success message
+  // Helper function to get final success message for database save
   const getFinalSuccessMessage = async (): Promise<string> => {
-    if (successMessageMode === 'plain') return successMessagePlain;
+    if (successMessageMode === 'plain') {
+      return successMessagePlain;
+    }
+    
     if (successMessageMode === 'rich' && successMessageTemplateId) {
       try {
         const { data: { user } } = await supabase.auth.getUser();
         if (!user) return successMessagePlain;
+
         const { data } = await supabase
           .from('success_message_templates')
           .select('content_html')
           .eq('id', successMessageTemplateId)
           .eq('user_id', user.id)
           .single();
+
         return data?.content_html || successMessagePlain;
-      } catch {
+      } catch (error) {
+        console.error('Error fetching template:', error);
         return successMessagePlain;
       }
     }
+    
     return successMessagePlain;
   };
 
@@ -211,33 +217,30 @@ export default function FormsBuilder() {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) { toast.error('ログインが必要です'); return; }
 
-    const cleanFields = fields.map(f => ({
-      id: f.id, label: f.label.trim(), name: f.name.trim(), type: f.type,
-      required: !!f.required, options: Array.isArray(f.options) ? f.options : undefined,
-      placeholder: f.placeholder?.trim() || undefined, rows: f.rows ? Number(f.rows) : undefined
-    }));
+const cleanFields = fields.map(f => ({ id: f.id, label: f.label.trim(), name: f.name.trim(), type: f.type, required: !!f.required, options: Array.isArray(f.options) ? f.options : undefined, placeholder: f.placeholder?.trim() || undefined, rows: f.rows ? Number(f.rows) : undefined }));
 
-    const finalSuccessMessage = await getFinalSuccessMessage();
+// Get final success message from template or plain text
+const finalSuccessMessage = await getFinalSuccessMessage();
 
-    const { data: created, error } = await (supabase as any).from('forms').insert({
-      user_id: user.id,
-      name: formName.trim(),
-      description: description.trim() || null,
-      is_public: isPublic, // 初期は false のまま、公開は一覧トグルで
-      success_message: finalSuccessMessage,
-      success_message_mode: successMessageMode,
-      success_message_plain: successMessagePlain,
-      success_message_template_id: successMessageTemplateId,
-      fields: cleanFields,
-      require_line_friend: requireLineFriend,
-      prevent_duplicate_per_friend: preventDuplicate,
-      post_submit_scenario_id: postScenario,
-      submit_button_text: submitButtonText,
-      submit_button_variant: 'default',
-      submit_button_bg_color: submitButtonBgColor,
-      submit_button_text_color: submitButtonTextColor,
-      accent_color: accentColor,
-    }).select('id').single();
+const { data: created, error } = await (supabase as any).from('forms').insert({
+  user_id: user.id,
+  name: formName.trim(),
+  description: description.trim() || null,
+  is_public: isPublic,
+  success_message: finalSuccessMessage,
+  success_message_mode: successMessageMode,
+  success_message_plain: successMessagePlain,
+  success_message_template_id: successMessageTemplateId,
+  fields: cleanFields,
+  require_line_friend: requireLineFriend,
+  prevent_duplicate_per_friend: preventDuplicate,
+  post_submit_scenario_id: postScenario,
+  submit_button_text: submitButtonText,
+  submit_button_variant: 'default',
+  submit_button_bg_color: submitButtonBgColor,
+  submit_button_text_color: submitButtonTextColor,
+  accent_color: accentColor,
+}).select('id').single();
     if (error) {
       console.error(error);
       toast.error('作成に失敗しました');
@@ -248,86 +251,86 @@ export default function FormsBuilder() {
     }
   };
 
-  const deleteForm = async (formId: string) => {
-    const { error } = await (supabase as any).functions.invoke('delete-form', { body: { form_id: formId } });
-    if (error) {
-      console.error(error);
-      toast.error('削除に失敗しました');
-    } else {
-      toast.success('フォームを削除しました');
-      loadForms();
-    }
-  };
+const deleteForm = async (formId: string) => {
+  const { error } = await (supabase as any).functions.invoke('delete-form', { body: { form_id: formId } });
+  if (error) {
+    console.error(error);
+    toast.error('削除に失敗しました');
+  } else {
+    toast.success('フォームを削除しました');
+    loadForms();
+  }
+};
 
-  const startEdit = (f: FormRow) => {
-    setCreating(true);
-    setEditingId(f.id);
-    setFormName(f.name);
-    setDescription(f.description || "");
-    setIsPublic(!!f.is_public); // 状態としては保持（UIには出さない）
-    setSuccessMessageMode(f.success_message_mode === 'rich' ? 'rich' : 'plain');
-    setSuccessMessagePlain(f.success_message_plain || f.success_message || "送信ありがとうございました。");
-    setSuccessMessageTemplateId(f.success_message_template_id || null);
-    const normalized = Array.isArray(f.fields) ? f.fields : [];
-    setFields(normalized);
-    setSelectedFieldId(normalized[0]?.id ?? null);
-    setRequireLineFriend(f.require_line_friend ?? false);
-    setPreventDuplicate(f.prevent_duplicate_per_friend ?? false);
-    setPostScenario(f.post_submit_scenario_id ?? null);
-    setSubmitButtonText(f.submit_button_text || "送信");
-    setSubmitButtonVariant('default');
-    setSubmitButtonBgColor(f.submit_button_bg_color || "#0cb386");
-    setSubmitButtonTextColor(f.submit_button_text_color || "#ffffff");
-    setAccentColor(f.accent_color || "#0cb386");
-  };
+const startEdit = (f: FormRow) => {
+  setCreating(true);
+  setEditingId(f.id);
+  setFormName(f.name);
+  setDescription(f.description || "");
+  setIsPublic(!!f.is_public);
+  
+  // Set success message state from database
+  setSuccessMessageMode(f.success_message_mode === 'rich' ? 'rich' : 'plain');
+  setSuccessMessagePlain(f.success_message_plain || f.success_message || "送信ありがとうございました。");
+  setSuccessMessageTemplateId(f.success_message_template_id || null);
+  
+  const normalized = Array.isArray(f.fields) ? f.fields : [];
+  setFields(normalized);
+  setSelectedFieldId(normalized[0]?.id ?? null);
+  setRequireLineFriend(f.require_line_friend ?? false);
+  setPreventDuplicate(f.prevent_duplicate_per_friend ?? false);
+  setPostScenario(f.post_submit_scenario_id ?? null);
+  setSubmitButtonText(f.submit_button_text || "送信");
+  setSubmitButtonVariant('default');
+  setSubmitButtonBgColor(f.submit_button_bg_color || "#0cb386");
+  setSubmitButtonTextColor(f.submit_button_text_color || "#ffffff");
+  setAccentColor(f.accent_color || "#0cb386");
+};
 
   const copyLink = (id: string) => {
     const url = `${window.location.origin}/form/${id}?uid=[UID]`;
     navigator.clipboard.writeText(url);
     toast.success('パラメーター付きURLをコピーしました');
-  };
+};
 
-  const handleUpdate = async () => {
-    if (!editingId) return;
-    if (!formName.trim()) { toast.error('フォーム名を入力してください'); return; }
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) { toast.error('ログインが必要です'); return; }
+const handleUpdate = async () => {
+  if (!editingId) return;
+  if (!formName.trim()) { toast.error('フォーム名を入力してください'); return; }
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) { toast.error('ログインが必要です'); return; }
 
-    const cleanFields = fields.map(f => ({
-      id: f.id, label: f.label.trim(), name: f.name.trim(), type: f.type,
-      required: !!f.required, options: Array.isArray(f.options) ? f.options : undefined,
-      placeholder: f.placeholder?.trim() || undefined, rows: f.rows ? Number(f.rows) : undefined
-    }));
+  const cleanFields = fields.map(f => ({ id: f.id, label: f.label.trim(), name: f.name.trim(), type: f.type, required: !!f.required, options: Array.isArray(f.options) ? f.options : undefined, placeholder: f.placeholder?.trim() || undefined, rows: f.rows ? Number(f.rows) : undefined }));
+  
+  // Get final success message from template or plain text
+  const finalSuccessMessage = await getFinalSuccessMessage();
 
-    const finalSuccessMessage = await getFinalSuccessMessage();
+  const { error } = await (supabase as any).from('forms').update({
+    name: formName.trim(),
+    description: description.trim() || null,
+    is_public: isPublic,
+    success_message: finalSuccessMessage,
+    success_message_mode: successMessageMode,
+    success_message_plain: successMessagePlain,
+    success_message_template_id: successMessageTemplateId,
+    fields: cleanFields,
+    require_line_friend: requireLineFriend,
+    prevent_duplicate_per_friend: preventDuplicate,
+    post_submit_scenario_id: postScenario,
+    submit_button_text: submitButtonText,
+    submit_button_variant: 'default',
+    submit_button_bg_color: submitButtonBgColor,
+    submit_button_text_color: submitButtonTextColor,
+    accent_color: accentColor,
+  }).eq('id', editingId);
 
-    // 🔴 is_public は UPDATE しない（一覧トグルの変更を上書きしない）
-    const { error } = await (supabase as any).from('forms').update({
-      name: formName.trim(),
-      description: description.trim() || null,
-      success_message: finalSuccessMessage,
-      success_message_mode: successMessageMode,
-      success_message_plain: successMessagePlain,
-      success_message_template_id: successMessageTemplateId,
-      fields: cleanFields,
-      require_line_friend: requireLineFriend,
-      prevent_duplicate_per_friend: preventDuplicate,
-      post_submit_scenario_id: postScenario,
-      submit_button_text: submitButtonText,
-      submit_button_variant: 'default',
-      submit_button_bg_color: submitButtonBgColor,
-      submit_button_text_color: submitButtonTextColor,
-      accent_color: accentColor,
-    }).eq('id', editingId);
-
-    if (error) {
-      console.error(error);
-      toast.error('更新に失敗しました');
-    } else {
-      toast.success('フォームを更新しました');
-      await loadForms();
-    }
-  };
+  if (error) {
+    console.error(error);
+    toast.error('更新に失敗しました');
+  } else {
+    toast.success('フォームを更新しました');
+    await loadForms();
+  }
+};
 
   return (
     <div className="container mx-auto max-w-7xl space-y-4">
@@ -350,9 +353,13 @@ export default function FormsBuilder() {
             onAddNew={async () => {
               const { data: { user } } = await supabase.auth.getUser();
               if (!user) { toast.error('ログインが必要です'); return; }
-
+              
+              // Get final success message from template or plain text
               const getFinalMessage = async (): Promise<string> => {
-                if (successMessageMode === 'plain') return successMessagePlain;
+                if (successMessageMode === 'plain') {
+                  return successMessagePlain;
+                }
+                
                 if (successMessageMode === 'rich' && successMessageTemplateId) {
                   try {
                     const { data } = await supabase
@@ -361,23 +368,26 @@ export default function FormsBuilder() {
                       .eq('id', successMessageTemplateId)
                       .eq('user_id', user.id)
                       .single();
+
                     return data?.content_html || successMessagePlain;
-                  } catch {
+                  } catch (error) {
                     return successMessagePlain;
                   }
                 }
+                
                 return successMessagePlain;
               };
 
               const finalMessage = await getFinalMessage();
-
+              
+              // 即時DB作成
               const { data, error } = await (supabase as any)
                 .from('forms')
                 .insert({
                   user_id: user.id,
                   name: '無題のフォーム',
                   description: null,
-                  is_public: false, // 初期は非公開。公開は一覧のトグルで。
+                  is_public: false,
                   success_message: finalMessage,
                   success_message_mode: 'plain',
                   success_message_plain: '送信ありがとうございました。',
@@ -399,6 +409,7 @@ export default function FormsBuilder() {
                 toast.error('フォームの作成に失敗しました');
                 return;
               }
+              // 一覧に反映して編集状態へ
               await loadForms();
               const created = { ...data, fields: Array.isArray(data.fields) ? data.fields : [] } as any;
               startEdit(created);
@@ -454,7 +465,7 @@ export default function FormsBuilder() {
           </Card>
         </div>
 
-        {/* 右: プレビュー + 設定（公開スイッチは撤去済み） */}
+        {/* 右: プレビュー + 設定 */}
         <div className="lg:col-span-4">
           <Card>
             <CardHeader>
@@ -484,6 +495,8 @@ export default function FormsBuilder() {
                 setSuccessMessagePlain={setSuccessMessagePlain}
                 successMessageTemplateId={successMessageTemplateId}
                 setSuccessMessageTemplateId={setSuccessMessageTemplateId}
+                isPublic={isPublic}
+                setIsPublic={setIsPublic}
                 requireLineFriend={requireLineFriend}
                 setRequireLineFriend={setRequireLineFriend}
                 preventDuplicate={preventDuplicate}
