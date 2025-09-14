@@ -469,7 +469,7 @@ const handleUpdate = async () => {
         <div className="lg:col-span-4">
           <Card>
             <CardHeader>
-              <CardTitle className="text-sm font-semibold">フォームの公開設定</CardTitle>
+              <CardTitle className="text-sm font-semibold">フォーム公開設定</CardTitle>
                <div className="flex items-center space-x-2">
       <Switch
         checked={isPublic}
@@ -482,40 +482,39 @@ const handleUpdate = async () => {
             </CardHeader>
             <CardContent>
               <FormPreviewPanel
-               key={editingId || 'new'}
-  formName={formName}
-  setFormName={setFormName}
-  description={description}
-  setDescription={setDescription}
-  fields={fields as any}
-  submitButtonText={submitButtonText}
-  setSubmitButtonText={setSubmitButtonText}
-  submitButtonVariant={submitButtonVariant}
-  setSubmitButtonVariant={setSubmitButtonVariant}
-  submitButtonBgColor={submitButtonBgColor}
-  setSubmitButtonBgColor={setSubmitButtonBgColor}
-  submitButtonTextColor={submitButtonTextColor}
-  setSubmitButtonTextColor={setSubmitButtonTextColor}
-  accentColor={accentColor}
-  setAccentColor={setAccentColor}
-  successMessageMode={successMessageMode}
-  setSuccessMessageMode={setSuccessMessageMode}
-  successMessagePlain={successMessagePlain}
-  setSuccessMessagePlain={setSuccessMessagePlain}
-  successMessageTemplateId={successMessageTemplateId}
-  setSuccessMessageTemplateId={setSuccessMessageTemplateId}
-  isPublic={isPublic}
-  setIsPublic={setIsPublic}
-  requireLineFriend={requireLineFriend}
-  setRequireLineFriend={setRequireLineFriend}
-  preventDuplicate={preventDuplicate}
-  setPreventDuplicate={setPreventDuplicate}
-  postScenario={postScenario}
-  setPostScenario={setPostScenario}
-  scenarios={scenarios}
-  formId={editingId || 'new'}
-  onSave={editingId ? handleUpdate : handleCreate}
-  className="hide-public-switch"
+                key={editingId || 'new'}
+                formName={formName}
+                setFormName={setFormName}
+                description={description}
+                setDescription={setDescription}
+                fields={fields as any}
+                submitButtonText={submitButtonText}
+                setSubmitButtonText={setSubmitButtonText}
+                submitButtonVariant={submitButtonVariant}
+                setSubmitButtonVariant={setSubmitButtonVariant}
+                submitButtonBgColor={submitButtonBgColor}
+                setSubmitButtonBgColor={setSubmitButtonBgColor}
+                submitButtonTextColor={submitButtonTextColor}
+                setSubmitButtonTextColor={setSubmitButtonTextColor}
+                accentColor={accentColor}
+                setAccentColor={setAccentColor}
+                successMessageMode={successMessageMode}
+                setSuccessMessageMode={setSuccessMessageMode}
+                successMessagePlain={successMessagePlain}
+                setSuccessMessagePlain={setSuccessMessagePlain}
+                successMessageTemplateId={successMessageTemplateId}
+                setSuccessMessageTemplateId={setSuccessMessageTemplateId}
+                isPublic={isPublic}
+                setIsPublic={setIsPublic}
+                requireLineFriend={requireLineFriend}
+                setRequireLineFriend={setRequireLineFriend}
+                preventDuplicate={preventDuplicate}
+                setPreventDuplicate={setPreventDuplicate}
+                postScenario={postScenario}
+                setPostScenario={setPostScenario}
+                scenarios={scenarios}
+                formId={editingId || 'new'}
+                onSave={editingId ? handleUpdate : handleCreate}
                />
              </CardContent>
            </Card>
