@@ -504,8 +504,7 @@ const handleUpdate = async () => {
                 setSuccessMessagePlain={setSuccessMessagePlain}
                 successMessageTemplateId={successMessageTemplateId}
                 setSuccessMessageTemplateId={setSuccessMessageTemplateId}
-                isPublic={isPublic}
-                setIsPublic={setIsPublic}
+                
                 requireLineFriend={requireLineFriend}
                 setRequireLineFriend={setRequireLineFriend}
                 preventDuplicate={preventDuplicate}
