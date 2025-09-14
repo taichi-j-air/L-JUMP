@@ -37,6 +37,9 @@ export default function FieldEditorPanel({ field, onChange }: Props) {
         </div>
         <div className="space-y-1">
           <Label className="text-xs">フィールド名</Label>
+            <span className="text-xs text-red-500">
+        ※フィールド名は基本的には変更不要です
+      </span>
           <Input value={field.name} onChange={(e) => onChange({ name: e.target.value })} placeholder="例）name" />
         </div>
       </div>
