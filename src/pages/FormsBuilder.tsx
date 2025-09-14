@@ -483,41 +483,39 @@ const handleUpdate = async () => {
             <CardContent>
               <FormPreviewPanel
                 key={editingId || 'new'}
-                formName={formName}
-                setFormName={setFormName}
-                description={description}
-                setDescription={setDescription}
-                fields={fields as any}
-                submitButtonText={submitButtonText}
-                setSubmitButtonText={setSubmitButtonText}
-                submitButtonVariant={submitButtonVariant}
-                setSubmitButtonVariant={setSubmitButtonVariant}
-                submitButtonBgColor={submitButtonBgColor}
-                setSubmitButtonBgColor={setSubmitButtonBgColor}
-                submitButtonTextColor={submitButtonTextColor}
-                setSubmitButtonTextColor={setSubmitButtonTextColor}
-                accentColor={accentColor}
-                setAccentColor={setAccentColor}
-                successMessageMode={successMessageMode}
-                setSuccessMessageMode={setSuccessMessageMode}
-                successMessagePlain={successMessagePlain}
-                setSuccessMessagePlain={setSuccessMessagePlain}
-                successMessageTemplateId={successMessageTemplateId}
-                setSuccessMessageTemplateId={setSuccessMessageTemplateId}
-                
-                requireLineFriend={requireLineFriend}
-                setRequireLineFriend={setRequireLineFriend}
-                preventDuplicate={preventDuplicate}
-                setPreventDuplicate={setPreventDuplicate}
-                postScenario={postScenario}
-                setPostScenario={setPostScenario}
-                scenarios={scenarios}
-                formId={editingId || 'new'}
-                onSave={editingId ? handleUpdate : handleCreate}
-                // ↓ props はダミーで渡す
-  isPublic={false}
-  setIsPublic={() => {}}
-  className="hidden"
+    formName={formName}
+    setFormName={setFormName}
+    description={description}
+    setDescription={setDescription}
+    fields={fields as any}
+    submitButtonText={submitButtonText}
+    setSubmitButtonText={setSubmitButtonText}
+    submitButtonVariant={submitButtonVariant}
+    setSubmitButtonVariant={setSubmitButtonVariant}
+    submitButtonBgColor={submitButtonBgColor}
+    setSubmitButtonBgColor={setSubmitButtonBgColor}
+    submitButtonTextColor={submitButtonTextColor}
+    setSubmitButtonTextColor={setSubmitButtonTextColor}
+    accentColor={accentColor}
+    setAccentColor={setAccentColor}
+    successMessageMode={successMessageMode}
+    setSuccessMessageMode={setSuccessMessageMode}
+    successMessagePlain={successMessagePlain}
+    setSuccessMessagePlain={setSuccessMessagePlain}
+    successMessageTemplateId={successMessageTemplateId}
+    setSuccessMessageTemplateId={setSuccessMessageTemplateId}
+    requireLineFriend={requireLineFriend}
+    setRequireLineFriend={setRequireLineFriend}
+    preventDuplicate={preventDuplicate}
+    setPreventDuplicate={setPreventDuplicate}
+    postScenario={postScenario}
+    setPostScenario={setPostScenario}
+    scenarios={scenarios}
+    formId={editingId || 'new'}
+    onSave={editingId ? handleUpdate : handleCreate}
+    // isPublic / setIsPublic は残す必要あり
+    isPublic={isPublic}
+    setIsPublic={setIsPublic}
                />
              </CardContent>
            </Card>
