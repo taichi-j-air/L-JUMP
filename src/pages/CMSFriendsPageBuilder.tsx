@@ -66,6 +66,9 @@ export default function CMSFriendsPageBuilder() {
   // Toggle controls for timer display
   const [showRemainingText, setShowRemainingText] = useState<boolean>(true);
   const [showEndDate, setShowEndDate] = useState<boolean>(true);
+  
+  // External browser control
+  const [forceExternalBrowser, setForceExternalBrowser] = useState<boolean>(false);
 
   // ✅ 正しい秒換算
   const toSeconds = (d: number, h: number, m: number, s: number) => d * 86400 + h * 3600 + m * 60 + s;
@@ -210,6 +213,7 @@ export default function CMSFriendsPageBuilder() {
     // Set toggle states
     setShowRemainingText((selected as any).show_remaining_text ?? true);
     setShowEndDate((selected as any).show_end_date ?? true);
+    setForceExternalBrowser((selected as any).force_external_browser ?? false);
   }, [selected]);
 
   const handleAddPage = async () => {
@@ -318,6 +322,7 @@ export default function CMSFriendsPageBuilder() {
         timer_step_id: timerMode === "step_delivery" ? selectedStep || null : null,
         show_remaining_text: showRemainingText,
         show_end_date: showEndDate,
+        force_external_browser: forceExternalBrowser,
       };
 
       console.log("Saving page with payload:", payload);
@@ -598,6 +603,23 @@ export default function CMSFriendsPageBuilder() {
                   </div>
 
                   <Accordion type="multiple" className="w-full">
+                    <AccordionItem value="url-settings">
+                      <AccordionTrigger className="text-sm">URL設定</AccordionTrigger>
+                      <AccordionContent className="space-y-3">
+                        <div className="flex items-center justify-between gap-3">
+                          <Label htmlFor="force-external">外部ブラウザで強制表示</Label>
+                          <Switch 
+                            id="force-external"
+                            checked={forceExternalBrowser} 
+                            onCheckedChange={setForceExternalBrowser} 
+                          />
+                        </div>
+                        <p className="text-xs text-muted-foreground">
+                          ONにすると、URL発行時に &openExternalBrowser=1 が自動で付与され、LINEアプリ内ブラウザではなく外部ブラウザで開きます。
+                        </p>
+                      </AccordionContent>
+                    </AccordionItem>
+
                     <AccordionItem value="tag-access">
                       <AccordionTrigger className="text-sm">タグアクセス制御</AccordionTrigger>
                       <AccordionContent className="space-y-3">

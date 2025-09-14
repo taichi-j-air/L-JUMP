@@ -48,6 +48,8 @@ interface Props {
   setRequireLineFriend: (v: boolean) => void;
   preventDuplicate: boolean;
   setPreventDuplicate: (v: boolean) => void;
+  duplicatePolicy: 'allow' | 'block' | 'overwrite';
+  setDuplicatePolicy: (v: 'allow' | 'block' | 'overwrite') => void;
   postScenario: string | null;
   setPostScenario: (v: string | null) => void;
   scenarios: Array<{ id: string; name: string }>;
@@ -85,6 +87,8 @@ export default function FormPreviewPanel({
   setRequireLineFriend,
   preventDuplicate,
   setPreventDuplicate,
+  duplicatePolicy,
+  setDuplicatePolicy,
   postScenario,
   setPostScenario,
   scenarios,
@@ -257,9 +261,23 @@ export default function FormPreviewPanel({
               LIFFが未設定の場合は設定が必要です。
             </p>
           </div>
-          <div className="flex items-center justify-between gap-3 text-sm">
-            <span>同一友だちの重複回答を禁止</span>
-            <Switch disabled={!requireLineFriend} checked={preventDuplicate} onCheckedChange={setPreventDuplicate} />
+          <div className="space-y-2">
+            <label className="text-sm font-medium">重複回答の扱い</label>
+            <Select value={duplicatePolicy} onValueChange={setDuplicatePolicy}>
+              <SelectTrigger className="px-3">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent className="bg-background z-[60]">
+                <SelectItem value="allow">回答しても何度でも回答可</SelectItem>
+                <SelectItem value="block">一度だけ回答可（重複禁止）</SelectItem>
+                <SelectItem value="overwrite">回答を上書き可（新規回答では無く上書き保存）</SelectItem>
+              </SelectContent>
+            </Select>
+            <p className="text-xs text-muted-foreground">
+              {duplicatePolicy === 'allow' && '同じユーザーが何度でも回答できます。'}
+              {duplicatePolicy === 'block' && '同じユーザーは一度だけ回答でき、回答済みの場合は結果を表示します。'}
+              {duplicatePolicy === 'overwrite' && '同じユーザーが再回答する場合、前回の回答内容をプリセットして上書き保存します。'}
+            </p>
           </div>
           <div className="space-y-2">
             <label className="text-sm">回答後のシナリオ遷移（任意）</label>

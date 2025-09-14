@@ -102,6 +102,7 @@ export type Database = {
           content_blocks: Json
           created_at: string
           expire_action: string
+          force_external_browser: boolean | null
           id: string
           internal_name: string | null
           internal_timer: boolean
@@ -142,6 +143,7 @@ export type Database = {
           content_blocks?: Json
           created_at?: string
           expire_action?: string
+          force_external_browser?: boolean | null
           id?: string
           internal_name?: string | null
           internal_timer?: boolean
@@ -182,6 +184,7 @@ export type Database = {
           content_blocks?: Json
           created_at?: string
           expire_action?: string
+          force_external_browser?: boolean | null
           id?: string
           internal_name?: string | null
           internal_timer?: boolean
@@ -342,6 +345,7 @@ export type Database = {
           accent_color: string
           created_at: string
           description: string | null
+          duplicate_policy: string | null
           fields: Json
           id: string
           is_public: boolean
@@ -364,6 +368,7 @@ export type Database = {
           accent_color?: string
           created_at?: string
           description?: string | null
+          duplicate_policy?: string | null
           fields?: Json
           id?: string
           is_public?: boolean
@@ -386,6 +391,7 @@ export type Database = {
           accent_color?: string
           created_at?: string
           description?: string | null
+          duplicate_policy?: string | null
           fields?: Json
           id?: string
           is_public?: boolean

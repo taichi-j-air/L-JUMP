@@ -22,6 +22,7 @@ interface PublicFormRow {
   user_id?: string;
   require_line_friend?: boolean;
   prevent_duplicate_per_friend?: boolean;
+  duplicate_policy?: 'allow' | 'block' | 'overwrite';
   post_submit_scenario_id?: string | null;
   submit_button_text?: string | null;
   submit_button_variant?: string | null;
@@ -58,6 +59,8 @@ export default function PublicForm() {
   const [values, setValues] = useState<Record<string, any>>({});
   const [submitted, setSubmitted] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [existingSubmission, setExistingSubmission] = useState<any>(null);
+  const [isFirstSubmission, setIsFirstSubmission] = useState(true);
   const [liffId, setLiffId] = useState<string | null>(null);
   const isMobile = useIsMobile();
 
@@ -100,7 +103,7 @@ export default function PublicForm() {
             .from('forms')
             .select(`
               id, name, description, fields, success_message, is_public, user_id,
-              require_line_friend, prevent_duplicate_per_friend, post_submit_scenario_id,
+              require_line_friend, prevent_duplicate_per_friend, duplicate_policy, post_submit_scenario_id,
               submit_button_text, submit_button_variant, submit_button_bg_color,
               submit_button_text_color, accent_color
             `)
@@ -119,7 +122,7 @@ export default function PublicForm() {
               ? fallbackData.fields as Array<{ id: string; label: string; name: string; type: string; required?: boolean; options?: string[]; placeholder?: string; rows?: number }>
               : [];
             
-            setForm({ ...fallbackData, fields: formFields });
+            setForm({ ...fallbackData, fields: formFields, duplicate_policy: (fallbackData.duplicate_policy as 'allow' | 'block' | 'overwrite') || 'allow' });
             
             // Fallback時もLIFF IDを取得する
             try {
@@ -165,6 +168,55 @@ export default function PublicForm() {
     
     if (formId) load();
   }, [formId]);
+
+  // Check for existing submission after form loads
+  useEffect(() => {
+    const checkExistingSubmission = async () => {
+      if (!form || form.duplicate_policy === 'allow') return;
+
+      const url = new URL(window.location.href);
+      let sourceUid = url.searchParams.get('uid') || url.searchParams.get('suid') || url.searchParams.get('s');
+      sourceUid = sourceUid?.trim()?.toUpperCase() || null;
+      
+      // Check LIFF profile if available
+      let lineUserId = null;
+      if (isLiffReady && isLoggedIn && profile?.userId) {
+        lineUserId = profile.userId;
+      }
+
+      if (!sourceUid && !lineUserId) return;
+
+      try {
+        // Query existing submission
+        let query = supabase
+          .from('form_submissions')
+          .select('id, data, submitted_at')
+          .eq('form_id', form.id);
+
+        if (sourceUid) {
+          query = query.eq('source_uid', sourceUid);
+        } else if (lineUserId) {
+          query = query.eq('line_user_id', lineUserId);
+        }
+
+        const { data: existingData } = await query.maybeSingle();
+
+        if (existingData) {
+          setExistingSubmission(existingData);
+          setIsFirstSubmission(false);
+          
+          if (form.duplicate_policy === 'overwrite' && existingData.data && typeof existingData.data === 'object') {
+            // Prefill form with existing data
+            setValues(existingData.data as Record<string, any>);
+          }
+        }
+      } catch (error) {
+        console.error('Error checking existing submission:', error);
+      }
+    };
+
+    checkExistingSubmission();
+  }, [form, isLiffReady, isLoggedIn, profile]);
 
   // Browser translation detection
   useEffect(() => {
@@ -279,9 +331,21 @@ export default function PublicForm() {
 
     console.log('[insert.payload]', payload);
 
-    const { error } = await supabase
-      .from('form_submissions')
-      .insert(payload);
+    let error;
+    if (form.duplicate_policy === 'overwrite' && existingSubmission) {
+      // Update existing submission
+      const updateResult = await supabase
+        .from('form_submissions')
+        .update({ data: values, submitted_at: new Date().toISOString() })
+        .eq('id', existingSubmission.id);
+      error = updateResult.error;
+    } else {
+      // Insert new submission
+      const insertResult = await supabase
+        .from('form_submissions')
+        .insert(payload);
+      error = insertResult.error;
+    }
 
     if (error) {
       console.error('[insert.error]', error, payload);
@@ -297,7 +361,12 @@ export default function PublicForm() {
     
     console.log('[insert.success] Form submitted successfully');
     setSubmitted(true);
-    toast.success('送信しました');
+    
+    // Only trigger scenario on first submission
+    const shouldTriggerScenario = isFirstSubmission && form.post_submit_scenario_id;
+    console.log('Scenario trigger decision:', { isFirstSubmission, hasScenario: !!form.post_submit_scenario_id, shouldTriggerScenario });
+    
+    toast.success(form.duplicate_policy === 'overwrite' && !isFirstSubmission ? '回答を更新しました' : '送信しました');
   };
 
   if (loading) return <div className={isMobile ? "p-4" : "container mx-auto max-w-3xl p-4"}>読み込み中...</div>;
@@ -324,6 +393,33 @@ export default function PublicForm() {
                   )
                 }} 
               />
+            </div>
+          ) : form.duplicate_policy === 'block' && existingSubmission ? (
+            <div className="space-y-4">
+              <div className="p-4 bg-muted rounded-lg">
+                <h3 className="font-medium mb-3">回答済みの内容</h3>
+                <div className="space-y-3">
+                  {form.fields.map((field) => {
+                    const value = (existingSubmission.data as any)?.[field.name];
+                    if (!value) return null;
+                    
+                    return (
+                      <div key={field.id} className="border-b border-border/50 pb-2 last:border-b-0">
+                        <div className="text-sm font-medium text-muted-foreground">{field.label}</div>
+                        <div className="text-sm mt-1">
+                          {Array.isArray(value) ? value.join(', ') : String(value)}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+                <div className="mt-3 text-xs text-muted-foreground">
+                  回答日時: {new Date(existingSubmission.submitted_at).toLocaleString('ja-JP')}
+                </div>
+              </div>
+              <div className="text-center text-sm text-muted-foreground">
+                このフォームは既に回答済みです。
+              </div>
             </div>
           ) : (
             <form

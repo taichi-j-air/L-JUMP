@@ -33,6 +33,7 @@ interface FormRow {
   accent_color?: string | null;
   require_line_friend?: boolean;
   prevent_duplicate_per_friend?: boolean;
+  duplicate_policy?: 'allow' | 'block' | 'overwrite';
   post_submit_scenario_id?: string | null;
   fields: Array<{ id: string; label: string; name: string; type: string; required?: boolean; options?: string[]; placeholder?: string; rows?: number }>;
   created_at: string;
@@ -77,6 +78,7 @@ export default function FormsBuilder() {
   const [fields, setFields] = useState<FormRow["fields"]>([]);
   const [requireLineFriend, setRequireLineFriend] = useState(false);
   const [preventDuplicate, setPreventDuplicate] = useState(false);
+  const [duplicatePolicy, setDuplicatePolicy] = useState<'allow' | 'block' | 'overwrite'>('allow');
   const [postScenario, setPostScenario] = useState<string | null>(null);
 const [scenarios, setScenarios] = useState<Array<{ id: string; name: string }>>([]);
 const [submitButtonText, setSubmitButtonText] = useState<string>("送信");
@@ -170,9 +172,10 @@ const resetCreator = () => {
   setSuccessMessagePlain("送信ありがとうございました。");
   setSuccessMessageTemplateId(null);
   setFields([]);
-  setRequireLineFriend(false);
-  setPreventDuplicate(false);
-  setPostScenario(null);
+    setRequireLineFriend(false);
+    setPreventDuplicate(false);
+    setDuplicatePolicy('allow');
+    setPostScenario(null);
   setSubmitButtonText("送信");
   setSubmitButtonVariant("default");
   setSubmitButtonBgColor("#0cb386");
@@ -279,6 +282,7 @@ const startEdit = (f: FormRow) => {
   setSelectedFieldId(normalized[0]?.id ?? null);
   setRequireLineFriend(f.require_line_friend ?? false);
   setPreventDuplicate(f.prevent_duplicate_per_friend ?? false);
+  setDuplicatePolicy(f.duplicate_policy || 'allow');
   setPostScenario(f.post_submit_scenario_id ?? null);
   setSubmitButtonText(f.submit_button_text || "送信");
   setSubmitButtonVariant('default');
@@ -315,6 +319,7 @@ const handleUpdate = async () => {
     fields: cleanFields,
     require_line_friend: requireLineFriend,
     prevent_duplicate_per_friend: preventDuplicate,
+    duplicate_policy: duplicatePolicy,
     post_submit_scenario_id: postScenario,
     submit_button_text: submitButtonText,
     submit_button_variant: 'default',
@@ -395,6 +400,7 @@ const handleUpdate = async () => {
                   fields: [],
                   require_line_friend: false,
                   prevent_duplicate_per_friend: false,
+                  duplicate_policy: 'allow',
                   post_submit_scenario_id: null,
                   submit_button_text: '送信',
                   submit_button_variant: 'default',
@@ -510,6 +516,8 @@ const handleUpdate = async () => {
                 setRequireLineFriend={setRequireLineFriend}
                 preventDuplicate={preventDuplicate}
                 setPreventDuplicate={setPreventDuplicate}
+                duplicatePolicy={duplicatePolicy}
+                setDuplicatePolicy={setDuplicatePolicy}
                 postScenario={postScenario}
                 setPostScenario={setPostScenario}
                 scenarios={scenarios}
