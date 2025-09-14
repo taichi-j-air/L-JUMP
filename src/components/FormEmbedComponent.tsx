@@ -48,6 +48,11 @@ export default function FormEmbedComponent({ formId, uid, className }: FormEmbed
   const [submitted, setSubmitted] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  const rootClass = `not-prose ${className ?? ''}`;
+  const accentStyle = formData ? ({ ['--form-accent' as any]: formData.accent_color || '#0cb386' }) : undefined;
+  const accentInputRing =
+    'focus-visible:ring-[var(--form-accent)] focus-visible:ring-2 focus-visible:ring-offset-2';
+
   useEffect(() => {
     const fetchFormData = async () => {
       try {
@@ -82,7 +87,6 @@ export default function FormEmbedComponent({ formId, uid, className }: FormEmbed
 
   const handleInputChange = (fieldId: string, value: any) => {
     setFormValues(prev => ({ ...prev, [fieldId]: value }));
-    // 入力が始まったらエラーメッセージはクリア
     if (error) setError(null);
   };
 
@@ -90,7 +94,6 @@ export default function FormEmbedComponent({ formId, uid, className }: FormEmbed
     e.preventDefault();
     if (!formData) return;
 
-    // 必須項目チェック（チェックボックスは空配列はOK、未定義はNG）
     const missingLabels = formData.fields
       .filter(f => f.required)
       .filter(f => {
@@ -135,7 +138,7 @@ export default function FormEmbedComponent({ formId, uid, className }: FormEmbed
         return;
       }
 
-      // ✅ 右下の吹き出し（toast）は呼ばない
+      // ✅ 右下トーストは使わない（全端末/埋め込み・単体問わず非表示）
       setSubmitted(true);
     } catch (err) {
       console.error('Submit error:', err);
@@ -146,35 +149,87 @@ export default function FormEmbedComponent({ formId, uid, className }: FormEmbed
   };
 
   const renderField = (field: FormField) => {
-    const commonProps = {
-      id: field.id,
-      required: field.required,
-      placeholder: field.placeholder,
-      value: formValues[field.id] ?? '',
-      onChange: (e: any) => handleInputChange(field.id, e.target.value),
-    };
-
     switch (field.type) {
       case 'text':
-        return <Input {...commonProps} type="text" />;
+        return (
+          <Input
+            id={field.id}
+            required={field.required}
+            placeholder={field.placeholder}
+            value={formValues[field.id] ?? ''}
+            onChange={(e) => handleInputChange(field.id, e.target.value)}
+            className={accentInputRing}
+          />
+        );
       case 'email':
-        return <Input {...commonProps} type="email" />;
+        return (
+          <Input
+            id={field.id}
+            type="email"
+            required={field.required}
+            placeholder={field.placeholder}
+            value={formValues[field.id] ?? ''}
+            onChange={(e) => handleInputChange(field.id, e.target.value)}
+            className={accentInputRing}
+          />
+        );
       case 'tel':
-        return <Input {...commonProps} type="tel" />;
+        return (
+          <Input
+            id={field.id}
+            type="tel"
+            required={field.required}
+            placeholder={field.placeholder}
+            value={formValues[field.id] ?? ''}
+            onChange={(e) => handleInputChange(field.id, e.target.value)}
+            className={accentInputRing}
+          />
+        );
       case 'number':
-        return <Input {...commonProps} type="number" />;
+        return (
+          <Input
+            id={field.id}
+            type="number"
+            required={field.required}
+            placeholder={field.placeholder}
+            value={formValues[field.id] ?? ''}
+            onChange={(e) => handleInputChange(field.id, e.target.value)}
+            className={accentInputRing}
+          />
+        );
       case 'textarea':
-        return <Textarea {...commonProps} onChange={(e) => handleInputChange(field.id, e.target.value)} />;
+        return (
+          <Textarea
+            id={field.id}
+            required={field.required}
+            placeholder={field.placeholder}
+            value={formValues[field.id] ?? ''}
+            onChange={(e) => handleInputChange(field.id, e.target.value)}
+            className={accentInputRing}
+          />
+        );
       case 'select':
         return (
-          <Select value={formValues[field.id] ?? ''} onValueChange={(v) => handleInputChange(field.id, v)}>
-            <SelectTrigger>
+          <Select
+            value={formValues[field.id] ?? ''}
+            onValueChange={(value) => handleInputChange(field.id, value)}
+          >
+            <SelectTrigger className={accentInputRing}>
               <SelectValue placeholder={field.placeholder || '選択してください'} />
             </SelectTrigger>
             <SelectContent>
-              {field.options?.map((o, i) => (
-                <SelectItem key={i} value={o}>
-                  {o}
+              {field.options?.map((option, index) => (
+                <SelectItem
+                  key={index}
+                  value={option}
+                  className="
+                    data-[state=checked]:bg-[var(--form-accent)]
+                    data-[state=checked]:text-white
+                    focus:bg-[var(--form-accent)]
+                    focus:text-white
+                  "
+                >
+                  {option}
                 </SelectItem>
               ))}
             </SelectContent>
@@ -182,11 +237,22 @@ export default function FormEmbedComponent({ formId, uid, className }: FormEmbed
         );
       case 'radio':
         return (
-          <RadioGroup value={formValues[field.id] ?? ''} onValueChange={(v) => handleInputChange(field.id, v)}>
-            {field.options?.map((o, i) => (
-              <div key={i} className="flex items-center space-x-2">
-                <RadioGroupItem value={o} id={`${field.id}-${i}`} />
-                <Label htmlFor={`${field.id}-${i}`}>{o}</Label>
+          <RadioGroup
+            value={formValues[field.id] ?? ''}
+            onValueChange={(value) => handleInputChange(field.id, value)}
+          >
+            {field.options?.map((option, index) => (
+              <div key={index} className="flex items-center space-x-2">
+                <RadioGroupItem
+                  value={option}
+                  id={`${field.id}-${index}`}
+                  className="
+                    border-[var(--form-accent)]
+                    data-[state=checked]:bg-[var(--form-accent)]
+                    data-[state=checked]:text-white
+                  "
+                />
+                <Label htmlFor={`${field.id}-${index}`}>{option}</Label>
               </div>
             ))}
           </RadioGroup>
@@ -194,35 +260,49 @@ export default function FormEmbedComponent({ formId, uid, className }: FormEmbed
       case 'checkbox':
         return (
           <div className="space-y-2">
-            {field.options?.map((o, i) => {
+            {field.options?.map((option, index) => {
               const curr: string[] = Array.isArray(formValues[field.id]) ? formValues[field.id] : [];
-              const checked = curr.includes(o);
+              const checked = curr.includes(option);
               return (
-                <div key={i} className="flex items-center space-x-2">
+                <div key={index} className="flex items-center space-x-2">
                   <Checkbox
-                    id={`${field.id}-${i}`}
+                    id={`${field.id}-${index}`}
                     checked={checked}
                     onCheckedChange={(v) => {
                       const next = new Set(curr);
-                      if (v === true) next.add(o);
-                      else next.delete(o);
+                      if (v === true) next.add(option);
+                      else next.delete(option);
                       handleInputChange(field.id, Array.from(next));
                     }}
+                    className="
+                      border-[var(--form-accent)]
+                      data-[state=checked]:bg-[var(--form-accent)]
+                      data-[state=checked]:text-white
+                    "
                   />
-                  <Label htmlFor={`${field.id}-${i}`}>{o}</Label>
+                  <Label htmlFor={`${field.id}-${index}`}>{option}</Label>
                 </div>
               );
             })}
           </div>
         );
       default:
-        return <Input {...commonProps} type="text" />;
+        return (
+          <Input
+            id={field.id}
+            required={field.required}
+            placeholder={field.placeholder}
+            value={formValues[field.id] ?? ''}
+            onChange={(e) => handleInputChange(field.id, e.target.value)}
+            className={accentInputRing}
+          />
+        );
     }
   };
 
   if (loading) {
     return (
-      <Card className={className}>
+      <Card className={rootClass}>
         <CardContent className="p-6">
           <div className="flex items-center justify-center">
             <Loader2 className="h-6 w-6 animate-spin" />
@@ -235,7 +315,7 @@ export default function FormEmbedComponent({ formId, uid, className }: FormEmbed
 
   if (error) {
     return (
-      <Card className={className}>
+      <Card className={rootClass}>
         <CardContent className="p-6">
           <div className="text-center">
             <p className="text-destructive">{error}</p>
@@ -247,7 +327,7 @@ export default function FormEmbedComponent({ formId, uid, className }: FormEmbed
 
   if (!formData) {
     return (
-      <Card className={className}>
+      <Card className={rootClass}>
         <CardContent className="p-6">
           <div className="text-center">
             <p>フォームが見つかりません</p>
@@ -259,12 +339,11 @@ export default function FormEmbedComponent({ formId, uid, className }: FormEmbed
 
   if (submitted) {
     return (
-      <Card className={className}>
+      <Card className={rootClass} style={accentStyle}>
         <CardContent className="p-6">
           <div className="text-center">
             <h3 className="text-lg font-semibold mb-2">送信完了</h3>
             <div
-              // 安全のためサニタイズ（設定したHTMLは残すが危険要素は除去）
               dangerouslySetInnerHTML={{
                 __html: DOMPurify.sanitize(
                   formData.success_message || "フォームを送信しました。ありがとうございました。"
@@ -278,7 +357,7 @@ export default function FormEmbedComponent({ formId, uid, className }: FormEmbed
   }
 
   return (
-    <Card className={className}>
+    <Card className={rootClass} style={accentStyle}>
       <CardContent className="p-6">
         <form onSubmit={handleSubmit} className="space-y-6">
           <div className="space-y-2">
