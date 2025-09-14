@@ -32,7 +32,7 @@ export default function FieldEditorPanel({ field, onChange }: Props) {
     <div className="space-y-3">
       <div className="grid grid-cols-2 gap-3">
         <div className="space-y-1">
-          <Label className="text-xs">ラベル</Label>
+          <Label className="text-xs">質問名[タイトル]</Label>
           <Input value={field.label} onChange={(e) => onChange({ label: e.target.value })} placeholder="例）お名前" />
         </div>
         <div className="space-y-1">
