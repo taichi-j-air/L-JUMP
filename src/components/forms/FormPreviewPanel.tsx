@@ -270,7 +270,7 @@ export default function FormPreviewPanel({
               <SelectContent className="bg-background z-[60]">
                 <SelectItem value="allow">回答しても何度でも回答可</SelectItem>
                 <SelectItem value="block">一度だけ回答可（重複禁止）</SelectItem>
-                <SelectItem value="overwrite">回答を上書き可（新規回答では無く上書き保存）</SelectItem>
+                
               </SelectContent>
             </Select>
             <p className="text-xs text-muted-foreground">
