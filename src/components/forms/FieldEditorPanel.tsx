@@ -32,7 +32,7 @@ export default function FieldEditorPanel({ field, onChange }: Props) {
     <div className="space-y-3">
       <div className="grid grid-cols-2 gap-3">
         <div className="space-y-1">
-          <Label className="text-xs">質問名[タイトル]</Label>
+          <Label className="text-xs">ラベル</Label>
           <Input value={field.label} onChange={(e) => onChange({ label: e.target.value })} placeholder="例）お名前" />
         </div>
         <div className="space-y-1">
@@ -43,7 +43,7 @@ export default function FieldEditorPanel({ field, onChange }: Props) {
 
       <div className="grid grid-cols-2 gap-3">
         <div className="space-y-1">
-          <Label className="text-xs">タイプ</Label>
+          <Label className="text-xs">回答形式</Label>
           <Select value={field.type} onValueChange={(v) => onChange({ type: v })}>
             <SelectTrigger className="px-3">
               <SelectValue placeholder="タイプを選択" />
