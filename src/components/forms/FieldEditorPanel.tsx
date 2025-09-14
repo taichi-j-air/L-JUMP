@@ -30,26 +30,25 @@ export default function FieldEditorPanel({ field, onChange }: Props) {
 
   return (
     <div className="space-y-3">
-  <div className="grid grid-cols-2 gap-3">
-    <div className="space-y-1">
-      <Label className="text-xs">ラベル</Label>
-      <Input
-        value={field.label}
-        onChange={(e) => onChange({ label: e.target.value })}
-        placeholder="例）お名前"
-      />
-    </div>
-    <div className="space-y-1">
-      <Label className="text-xs">フィールド名</Label>
-      <Input
-        value={field.name}
-        onChange={(e) => onChange({ name: e.target.value })}
-        placeholder="例）name"
-      />
-      <span className="text-xs text-red-500">
-        ※フィールド名は基本的には変更不要です
-      </span>
-    </div>
+      <div className="grid grid-cols-2 gap-3">
+  <div className="space-y-1">
+    <Label className="text-xs">ラベル</Label>
+    <Input
+      value={field.label}
+      onChange={(e) => onChange({ label: e.target.value })}
+      placeholder="例）お名前"
+    />
+  </div>
+  <div className="space-y-1">
+    <Label className="text-xs">フィールド名</Label>
+    <Input
+      value={field.name}
+      onChange={(e) => onChange({ name: e.target.value })}
+      placeholder="例）name"
+    />
+    <span className="text-xs text-red-500 block">
+      ※フィールド名は基本的に変更不要です
+    </span>
   </div>
 </div>
 
