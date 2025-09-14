@@ -30,25 +30,22 @@ export default function FieldEditorPanel({ field, onChange }: Props) {
 
   return (
     <div className="space-y-4">
-      {/* フィールド名 */}
+      {/* ① フィールド名 */}
       <div className="space-y-1">
         <Label className="text-xs">フィールド名</Label>
-        <span className="text-[10px] text-red-500 block">
-          ※フィールド名は基本的には変更不要です
-        </span>
         <Input
           value={field.name}
           onChange={(e) => onChange({ name: e.target.value })}
           placeholder="例）name"
         />
+        <p className="text-[11px] text-red-500 mt-1">※フィールド名は基本的には変更不要です</p>
       </div>
 
-      {/* 横線 */}
-      <hr className="border-t border-gray-200 my-2" />
+      <hr className="border-t border-border" />
 
-      {/* 質問名 */}
+      {/* ② 質問名（ラベル） */}
       <div className="space-y-1">
-        <Label className="text-xs">質問名 [タイトル]</Label>
+        <Label className="text-xs">質問名［タイトル］</Label>
         <Input
           value={field.label}
           onChange={(e) => onChange({ label: e.target.value })}
@@ -56,10 +53,19 @@ export default function FieldEditorPanel({ field, onChange }: Props) {
         />
       </div>
 
-      {/* 回答形式 */}
+      {/* ③ 回答形式 */}
       <div className="space-y-1">
         <Label className="text-xs">回答形式</Label>
-        <Select value={field.type} onValueChange={(v) => onChange({ type: v })}>
+        <Select
+          value={field.type}
+          onValueChange={(v) =>
+            onChange({
+              type: v,
+              // ✅ select に切り替えたら placeholder は空にして残らないようにする
+              ...(v === "select" ? { placeholder: "" } : {}),
+            })
+          }
+        >
           <SelectTrigger className="px-3">
             <SelectValue placeholder="タイプを選択" />
           </SelectTrigger>
@@ -74,24 +80,25 @@ export default function FieldEditorPanel({ field, onChange }: Props) {
         </Select>
       </div>
 
-      {/* 回答必須 */}
+      {/* ④ 回答必須 */}
       <div className="flex items-center gap-2">
-        <Label className="text-xs whitespace-nowrap">回答必須：</Label>
+        <Label className="text-xs">回答必須：</Label>
         <Switch checked={!!field.required} onCheckedChange={(v) => onChange({ required: !!v })} />
       </div>
 
-      {/* プレースホルダー */}
+      {/* プレースホルダー（text / email / textarea のみ） */}
       {(field.type === "text" || field.type === "email" || field.type === "textarea") && (
         <div className="space-y-1">
           <Label className="text-xs">プレースホルダー</Label>
           <Input
             value={field.placeholder || ""}
             onChange={(e) => onChange({ placeholder: e.target.value })}
+            placeholder="入力例）山田太郎"
           />
         </div>
       )}
 
-      {/* 行数 */}
+      {/* 行数（textarea のみ） */}
       {field.type === "textarea" && (
         <div className="space-y-1">
           <Label className="text-xs">行数</Label>
@@ -104,7 +111,7 @@ export default function FieldEditorPanel({ field, onChange }: Props) {
         </div>
       )}
 
-      {/* 選択肢 */}
+      {/* 選択肢（select / radio / checkbox のみ） */}
       {isOptionType && (
         <div className="space-y-1">
           <Label className="text-xs">選択肢（1行に1つ、改行で追加）</Label>
