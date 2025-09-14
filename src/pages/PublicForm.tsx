@@ -1,11 +1,32 @@
+// PublicForm.tsx（完全版）
+// 変更点サマリ：
+// - INSERT ペイロードから source_uid を完全に削除（generated column のため）
+// - meta.source_uid にのみ格納し、DB 側の generated 列に任せる
+// - 既存回答チェックは URL(uid) / LINE userId の OR で実施
+// - duplicate_policy=block のときは既存回答を表示して送信不可
+// - PostgREST のエラーコード（23505/unique, 42501/RLS 等）を日本語で丁寧に出す
+// - LIFF が使えない/CSP ブロックでも require_line_friend=false なら送信できる動線のまま
+
 import { useEffect, useState } from "react";
 import { useParams } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { Select, SelectTrigger, SelectContent, SelectItem, SelectValue } from "@/components/ui/select";
+import {
+  Select,
+  SelectTrigger,
+  SelectContent,
+  SelectItem,
+  SelectValue,
+} from "@/components/ui/select";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Checkbox } from "@/components/ui/checkbox";
 import { toast } from "sonner";
@@ -44,13 +65,17 @@ interface PublicFormRow {
 const useSEO = (title: string, description: string, canonical?: string) => {
   useEffect(() => {
     document.title = title;
-    const meta = document.querySelector('meta[name="description"]') || document.createElement("meta");
+    const meta =
+      (document.querySelector('meta[name="description"]') as HTMLMetaElement) ||
+      document.createElement("meta");
     meta.setAttribute("name", "description");
     meta.setAttribute("content", description);
-    document.head.appendChild(meta);
+    if (!meta.parentNode) document.head.appendChild(meta);
 
     if (canonical) {
-      let link = document.querySelector('link[rel="canonical"]') as HTMLLinkElement | null;
+      let link = document.querySelector(
+        'link[rel="canonical"]'
+      ) as HTMLLinkElement | null;
       if (!link) {
         link = document.createElement("link");
         link.rel = "canonical";
@@ -59,6 +84,15 @@ const useSEO = (title: string, description: string, canonical?: string) => {
       link.href = canonical;
     }
   }, [title, description, canonical]);
+};
+
+// UID の正規化（空やダミー値は null）
+const normalizeUid = (raw: string | null) => {
+  const v = (raw || "").trim();
+  if (!v) return null;
+  const up = v.toUpperCase();
+  if (["[UID]", "UID", "NULL"].includes(up)) return null;
+  return up;
 };
 
 export default function PublicForm() {
@@ -74,10 +108,21 @@ export default function PublicForm() {
   const [liffId, setLiffId] = useState<string | null>(null);
 
   const isMobile = useIsMobile();
-  const { isLiffReady, isLoggedIn, profile, error: liffError } = useLiff(liffId || undefined);
+  const {
+    isLiffReady,
+    isLoggedIn,
+    profile,
+    error: liffError,
+  } = useLiff(liffId || undefined);
 
   useEffect(() => {
-    console.log("[LIFF DEBUG] State changed:", { liffId, isLiffReady, isLoggedIn, profile, liffError });
+    console.log("[LIFF DEBUG] State changed:", {
+      liffId,
+      isLiffReady,
+      isLoggedIn,
+      profile,
+      liffError,
+    });
   }, [liffId, isLiffReady, isLoggedIn, profile, liffError]);
 
   useSEO(
@@ -86,7 +131,7 @@ export default function PublicForm() {
     typeof window !== "undefined" ? window.location.href : undefined
   );
 
-  // フォームメタ取得（RPC → フォールバック）
+  // フォームメタ取得（RPC → Fallback）
   useEffect(() => {
     const load = async () => {
       setLoading(true);
@@ -119,14 +164,17 @@ export default function PublicForm() {
           }
 
           if (fallbackData) {
-            const formFields = Array.isArray(fallbackData.fields) ? fallbackData.fields : [];
+            const formFields = Array.isArray(fallbackData.fields)
+              ? fallbackData.fields
+              : [];
             setForm({
               ...fallbackData,
               fields: formFields as any,
-              duplicate_policy: (fallbackData.duplicate_policy as any) || "allow",
+              duplicate_policy:
+                (fallbackData.duplicate_policy as any) || "allow",
             });
 
-            // LIFF IDも取得
+            // LIFF IDの取得（ユーザープロファイルに格納されている前提）
             try {
               const { data: profileData } = await supabase
                 .from("profiles")
@@ -139,7 +187,9 @@ export default function PublicForm() {
             }
           }
         } else if (formData) {
-          const formFields = Array.isArray(formData.fields) ? formData.fields : [];
+          const formFields = Array.isArray(formData.fields)
+            ? formData.fields
+            : [];
           setForm({ ...formData, fields: formFields as any });
           if ((formData as any).liff_id) setLiffId((formData as any).liff_id);
         }
@@ -154,14 +204,17 @@ export default function PublicForm() {
     if (formId) load();
   }, [formId]);
 
-  // 既存回答チェック（UID優先、無ければ LINE、両方あれば OR）
+  // 既存回答チェック（UID/LINE を OR）
   useEffect(() => {
     const checkExistingSubmission = async () => {
       if (!form || form.duplicate_policy === "allow") return;
 
       const url = new URL(window.location.href);
-      let sourceUid = url.searchParams.get("uid") || url.searchParams.get("suid") || url.searchParams.get("s");
-      sourceUid = sourceUid?.trim() ? sourceUid.trim().toUpperCase() : null;
+      const sourceUid = normalizeUid(
+        url.searchParams.get("uid") ||
+          url.searchParams.get("suid") ||
+          url.searchParams.get("s")
+      );
 
       let lineUserId: string | null = null;
       if (isLiffReady && isLoggedIn && profile?.userId) {
@@ -179,7 +232,9 @@ export default function PublicForm() {
           .limit(1);
 
         if (sourceUid && lineUserId) {
-          query = query.or(`source_uid.eq.${sourceUid},line_user_id.eq.${lineUserId}`);
+          query = query.or(
+            `source_uid.eq.${sourceUid},line_user_id.eq.${lineUserId}`
+          );
         } else if (sourceUid) {
           query = query.eq("source_uid", sourceUid);
         } else if (lineUserId) {
@@ -189,7 +244,7 @@ export default function PublicForm() {
         const { data: existingData, error } = await query.maybeSingle();
 
         if (error) {
-          // 複数ヒットなどで maybeSingle がエラーのときに保険で先頭要素を見る
+          // maybeSingle が複数ヒットで落ちた場合のフォールバック
           // @ts-ignore
           const { data: rows } = await query;
           const first = Array.isArray(rows) && rows.length > 0 ? rows[0] : null;
@@ -204,7 +259,11 @@ export default function PublicForm() {
           setExistingSubmission(existingData);
           setIsFirstSubmission(false);
 
-          if (form.duplicate_policy === "overwrite" && existingData.data && typeof existingData.data === "object") {
+          if (
+            form.duplicate_policy === "overwrite" &&
+            existingData.data &&
+            typeof existingData.data === "object"
+          ) {
             setValues(existingData.data as Record<string, any>);
           }
         }
@@ -216,7 +275,7 @@ export default function PublicForm() {
     checkExistingSubmission();
   }, [form, isLiffReady, isLoggedIn, profile]);
 
-  // ブラウザ翻訳の検出
+  // ブラウザ翻訳の検出（念のため）
   useEffect(() => {
     const checkTranslation = () => {
       const isTranslated =
@@ -227,7 +286,10 @@ export default function PublicForm() {
         document.body.style.top === "-30000px";
       if (isTranslated) {
         console.warn("[Browser Translation] Detected");
-        toast.error("ブラウザの翻訳機能が検出されました。正常に動作しない場合は翻訳をオフにしてください。", { duration: 8000 });
+        toast.error(
+          "ブラウザの翻訳機能が検出されました。正常に動作しない場合は翻訳をオフにしてください。",
+          { duration: 8000 }
+        );
       }
     };
     const timer = setTimeout(checkTranslation, 1000);
@@ -251,7 +313,7 @@ export default function PublicForm() {
             toast.error(`${f.label} は必須です`);
             return;
           }
-        } else if (!val) {
+        } else if (val === undefined || val === null || val === "") {
           toast.error(`${f.label} は必須です`);
           return;
         }
@@ -261,33 +323,38 @@ export default function PublicForm() {
     // URL/LIFF から ID 抽出（UID優先）
     const url = new URL(window.location.href);
     let lineUserIdParam =
-      url.searchParams.get("line_user_id") || url.searchParams.get("lu") || url.searchParams.get("user_id");
+      url.searchParams.get("line_user_id") ||
+      url.searchParams.get("lu") ||
+      url.searchParams.get("user_id");
 
     if (isLiffReady && isLoggedIn && profile?.userId) {
       lineUserIdParam = profile.userId;
     }
 
-    let shortUid = url.searchParams.get("uid") || url.searchParams.get("suid") || url.searchParams.get("s");
-    shortUid = shortUid?.trim() ? shortUid.trim().toUpperCase() : null;
-    if (shortUid && ["[UID]", "UID", ""].includes(shortUid)) shortUid = null;
+    const shortUid = normalizeUid(
+      url.searchParams.get("uid") ||
+        url.searchParams.get("suid") ||
+        url.searchParams.get("s")
+    );
 
     // 友だち限定のチェック
     if (form.require_line_friend) {
       if (!profile?.userId && !lineUserIdParam && !shortUid) {
-        toast.error("このフォームはLINE友だち限定です。LINEアプリから開いてください。");
+        toast.error(
+          "このフォームはLINE友だち限定です。LINEアプリから開いてください。"
+        );
         return;
       }
     }
 
-    // 送信ペイロード（常にINSERT、DB側で重複制御）
+    // INSERT ペイロード（※ source_uid は入れない！）
     const payload: any = {
       form_id: form.id,
       data: values,
       user_id: form.user_id,
       line_user_id: lineUserIdParam || null,
-      // source_uid は直接設定（DB側で meta からも抽出する）
-      source_uid: shortUid || null,
       meta: {
+        // ここに入れておけば DB 側の generated 列が拾う想定
         source_uid: shortUid || null,
         full_url: window.location.href,
         user_agent: navigator.userAgent,
@@ -304,40 +371,71 @@ export default function PublicForm() {
 
     console.log("[insert.payload]", payload);
 
-    // 重複制御はDB側に完全委任（常にINSERT実行）
-    const insertResult = await supabase.from("form_submissions").insert(payload);
-    const error = insertResult.error;
+    // 重複制御は DB 側（generated column / トリガ / unique 制約）に委任
+    const { error } = await supabase
+      .from("form_submissions")
+      .insert(payload)
+      // .select().single() // 必要なら挿入行を取得
+      ;
 
     if (error) {
       console.error("[insert.error]", error, payload);
-      
-      // エラーハンドリングの改善
-      if (form.require_line_friend && (error.code === "42501" || error.code === "PGRST301" || error.code === "401")) {
-        toast.error("このフォームはLINE友だち限定です。LINEでログインしてから送信してください。");
-      } else if (error.code === "23505" || error.message?.includes("既に回答済み")) {
-        // DB側のblockエラー
+
+      // よくあるエラーのユーザー向け説明
+      const msg =
+        error.message || (error as any)?.hint || "エラーが発生しました";
+
+      if (
+        form.require_line_friend &&
+        (error.code === "42501" ||
+          error.code === "PGRST301" ||
+          (error as any).status === 401)
+      ) {
+        toast.error(
+          "このフォームはLINE友だち限定です。LINEでログインしてから送信してください。"
+        );
+        return;
+      }
+
+      // 重複（unique violation / トリガでの例外）
+      if (
+        error.code === "23505" || // unique_violation
+        /既に回答済み|duplicate|conflict|unique/i.test(msg)
+      ) {
         if (form.duplicate_policy === "block") {
           toast.error("このフォームには既に回答済みです。");
         } else {
-          toast.error("既に回答済みです。");
+          toast.error("既に回答済みのようです。");
         }
-      } else {
-        toast.error(`送信に失敗しました: ${error.message || "エラーが発生しました"}`);
+        return;
       }
+
+      // generated column を手で入れてしまったときのエラー保険
+      if (
+        error.code === "428C9" ||
+        /generated column|cannot insert a non-DEFAULT value/i.test(msg)
+      ) {
+        toast.error(
+          "内部列の扱いに問題があります。ページを再読込してもう一度お試しください。"
+        );
+        return;
+      }
+
+      toast.error(`送信に失敗しました: ${msg}`);
       return;
     }
 
     setSubmitted(true);
 
-    // 初回のみシナリオ発火（ここではログのみに留める）
-    const shouldTriggerScenario = isFirstSubmission && form.post_submit_scenario_id;
+    // 初回のみシナリオ発火（必要ならここで実装）
+    const shouldTriggerScenario =
+      isFirstSubmission && form.post_submit_scenario_id;
     console.log("Scenario trigger decision:", {
       isFirstSubmission,
       hasScenario: !!form.post_submit_scenario_id,
       shouldTriggerScenario,
     });
 
-    // 成功メッセージ
     if (form.duplicate_policy === "overwrite" && !isFirstSubmission) {
       toast.success("回答を更新しました");
     } else {
@@ -345,16 +443,37 @@ export default function PublicForm() {
     }
   };
 
-  if (loading) return <div className={isMobile ? "p-4" : "container mx-auto max-w-3xl p-4"}>読み込み中...</div>;
-  if (!form) return <div className={isMobile ? "p-4" : "container mx-auto max-w-3xl p-4"}>フォームが見つかりません</div>;
-  if (!form.is_public) return <div className={isMobile ? "p-4" : "container mx-auto max-w-3xl p-4"}>このフォームは非公開です</div>;
+  if (loading)
+    return (
+      <div className={isMobile ? "p-4" : "container mx-auto max-w-3xl p-4"}>
+        読み込み中...
+      </div>
+    );
+  if (!form)
+    return (
+      <div className={isMobile ? "p-4" : "container mx-auto max-w-3xl p-4"}>
+        フォームが見つかりません
+      </div>
+    );
+  if (!form.is_public)
+    return (
+      <div className={isMobile ? "p-4" : "container mx-auto max-w-3xl p-4"}>
+        このフォームは非公開です
+      </div>
+    );
+
+  const containerClass = isMobile
+    ? "min-h-screen px-2 pt-1"
+    : "container mx-auto max-w-3xl p-4";
 
   return (
-    <div className={isMobile ? "min-h-screen px-2 pt-1" : "container mx-auto max-w-3xl p-4"}>
+    <div className={containerClass}>
       <Card className={isMobile ? "border-0 rounded-none min-h-screen shadow-none" : ""}>
         <CardHeader className={isMobile ? "px-1 pt-2 pb-2" : ""}>
           <CardTitle>{form.name}</CardTitle>
-          {form.description && <CardDescription>{form.description}</CardDescription>}
+          {form.description && (
+            <CardDescription>{form.description}</CardDescription>
+          )}
         </CardHeader>
         <CardContent className={isMobile ? "space-y-4 px-1" : "space-y-4"}>
           {submitted ? (
@@ -363,7 +482,9 @@ export default function PublicForm() {
                 className="text-center text-muted-foreground prose prose-sm mx-auto"
                 dangerouslySetInnerHTML={{
                   __html: DOMPurify.sanitize(
-                    form.success_message && form.success_message.trim() ? form.success_message : "送信ありがとうございました。"
+                    form.success_message && form.success_message.trim()
+                      ? form.success_message
+                      : "送信ありがとうございました。"
                   ),
                 }}
               />
@@ -375,29 +496,45 @@ export default function PublicForm() {
                 <div className="space-y-3">
                   {form.fields.map((field) => {
                     const value = (existingSubmission.data as any)?.[field.name];
-                    if (!value) return null;
+                    if (value === undefined || value === null) return null;
                     return (
-                      <div key={field.id} className="border-b border-border/50 pb-2 last:border-b-0">
-                        <div className="text-sm font-medium text-muted-foreground">{field.label}</div>
-                        <div className="text-sm mt-1">{Array.isArray(value) ? value.join(", ") : String(value)}</div>
+                      <div
+                        key={field.id ?? field.name}
+                        className="border-b border-border/50 pb-2 last:border-b-0"
+                      >
+                        <div className="text-sm font-medium text-muted-foreground">
+                          {field.label}
+                        </div>
+                        <div className="text-sm mt-1">
+                          {Array.isArray(value) ? value.join(", ") : String(value)}
+                        </div>
                       </div>
                     );
                   })}
                 </div>
                 <div className="mt-3 text-xs text-muted-foreground">
-                  回答日時: {new Date(existingSubmission.submitted_at).toLocaleString("ja-JP")}
+                  回答日時:{" "}
+                  {new Date(
+                    existingSubmission.submitted_at
+                  ).toLocaleString("ja-JP")}
                 </div>
               </div>
-              <div className="text-center text-sm text-muted-foreground">このフォームは既に回答済みです。</div>
+              <div className="text-center text-sm text-muted-foreground">
+                このフォームは既に回答済みです。
+              </div>
             </div>
           ) : (
             <form
               className="space-y-4"
               onSubmit={handleSubmit}
-              style={{ ["--form-accent" as any]: form.accent_color || "#0cb386" }}
+              style={{
+                ["--form-accent" as any]: form.accent_color || "#0cb386",
+              }}
             >
               {form.require_line_friend && (
-                <p className="text-xs text-muted-foreground">このフォームはLINE友だち限定です。LINEから開くと自動で認証されます。</p>
+                <p className="text-xs text-muted-foreground">
+                  このフォームはLINE友だち限定です。LINEから開くと自動で認証されます。
+                </p>
               )}
 
               {form.fields.map((f) => {
@@ -405,7 +542,12 @@ export default function PublicForm() {
                 const isGroup = f.type === "radio" || f.type === "checkbox";
 
                 const TopLabel = (
-                  <label className="text-sm font-medium" {...(isGroup ? { id: `${fieldId}-label` } : { htmlFor: fieldId })}>
+                  <label
+                    className="text-sm font-medium"
+                    {...(isGroup
+                      ? { id: `${fieldId}-label` }
+                      : { htmlFor: fieldId })}
+                  >
                     {f.label}
                     {f.required && (
                       <span className="ml-1 inline-flex items-center rounded px-1.5 py-0.5 text-[10px] bg-destructive text-destructive-foreground">
@@ -423,7 +565,7 @@ export default function PublicForm() {
                       <Textarea
                         id={fieldId}
                         name={f.name}
-                        placeholder={f.placeholder}
+                        placeholder={f.placeholder || ""}
                         rows={f.rows || 3}
                         required={!!f.required}
                         onChange={(e) => handleChange(f.name, e.target.value)}
@@ -435,7 +577,7 @@ export default function PublicForm() {
                         id={fieldId}
                         name={f.name}
                         type={f.type || "text"}
-                        placeholder={f.placeholder}
+                        placeholder={f.placeholder || ""}
                         required={!!f.required}
                         onChange={(e) => handleChange(f.name, e.target.value)}
                       />
@@ -444,7 +586,12 @@ export default function PublicForm() {
                     {f.type === "select" && Array.isArray(f.options) && (
                       <div>
                         <Select onValueChange={(v) => handleChange(f.name, v)}>
-                          <SelectTrigger id={fieldId} name={f.name} className="px-3" aria-labelledby={`${fieldId}-label`}>
+                          <SelectTrigger
+                            id={fieldId}
+                            name={f.name}
+                            className="px-3"
+                            aria-labelledby={`${fieldId}-label`}
+                          >
                             <SelectValue placeholder="選択してください" />
                           </SelectTrigger>
                           <SelectContent className="bg-background z-[60]">
@@ -464,18 +611,27 @@ export default function PublicForm() {
                     {f.type === "radio" && Array.isArray(f.options) && (
                       <fieldset aria-labelledby={`${fieldId}-label`}>
                         <legend className="sr-only">{f.label}</legend>
-                        <RadioGroup value={values[f.name] || ""} onValueChange={(v) => handleChange(f.name, v)}>
+                        <RadioGroup
+                          value={values[f.name] || ""}
+                          onValueChange={(v) => handleChange(f.name, v)}
+                        >
                           <div className="flex flex-col gap-2">
                             {f.options.map((opt, index) => {
                               const radioId = `${fieldId}-radio-${index}`;
                               return (
-                                <div key={opt} className="inline-flex items-center gap-2">
+                                <div
+                                  key={opt}
+                                  className="inline-flex items-center gap-2"
+                                >
                                   <RadioGroupItem
                                     id={radioId}
                                     value={opt}
                                     className="border-[var(--form-accent)] data-[state=checked]:bg-[var(--form-accent)] data-[state=checked]:text-white"
                                   />
-                                  <label htmlFor={radioId} className="text-sm cursor-pointer">
+                                  <label
+                                    htmlFor={radioId}
+                                    className="text-sm cursor-pointer"
+                                  >
                                     {opt}
                                   </label>
                                 </div>
@@ -492,24 +648,42 @@ export default function PublicForm() {
                         <div className="flex flex-col gap-2" role="group">
                           {f.options.map((opt, index) => {
                             const checkboxId = `${fieldId}-checkbox-${index}`;
-                            const checked = Array.isArray(values[f.name]) && values[f.name].includes(opt);
+                            const checked =
+                              Array.isArray(values[f.name]) &&
+                              values[f.name].includes(opt);
                             return (
-                              <div key={opt} className="inline-flex items-center gap-2">
+                              <div
+                                key={opt}
+                                className="inline-flex items-center gap-2"
+                              >
                                 <Checkbox
                                   id={checkboxId}
                                   name={`${f.name}[]`}
                                   className="border-[var(--form-accent)] data-[state=checked]:bg-[var(--form-accent)] data-[state=checked]:text-white"
                                   checked={!!checked}
                                   onCheckedChange={(v) => {
-                                    const prev: string[] = Array.isArray(values[f.name]) ? values[f.name] : [];
+                                    const prev: string[] = Array.isArray(
+                                      values[f.name]
+                                    )
+                                      ? values[f.name]
+                                      : [];
                                     if (v === true) {
-                                      handleChange(f.name, Array.from(new Set([...prev, opt])));
+                                      handleChange(
+                                        f.name,
+                                        Array.from(new Set([...prev, opt]))
+                                      );
                                     } else {
-                                      handleChange(f.name, prev.filter((x) => x !== opt));
+                                      handleChange(
+                                        f.name,
+                                        prev.filter((x) => x !== opt)
+                                      );
                                     }
                                   }}
                                 />
-                                <label htmlFor={checkboxId} className="text-sm cursor-pointer">
+                                <label
+                                  htmlFor={checkboxId}
+                                  className="text-sm cursor-pointer"
+                                >
                                   {opt}
                                 </label>
                               </div>
