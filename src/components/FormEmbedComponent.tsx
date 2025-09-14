@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from "@/integrations/supabase/client";
-import DOMPurify from "dompurify";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -9,6 +8,7 @@ import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { useToast } from "@/hooks/use-toast";
 import { Loader2 } from "lucide-react";
 
 interface FormEmbedComponentProps {
@@ -47,11 +47,7 @@ export default function FormEmbedComponent({ formId, uid, className }: FormEmbed
   const [submitting, setSubmitting] = useState(false);
   const [submitted, setSubmitted] = useState(false);
   const [error, setError] = useState<string | null>(null);
-
-  const rootClass = `not-prose ${className ?? ''}`;
-  const accentStyle = formData ? ({ ['--form-accent' as any]: formData.accent_color || '#0cb386' }) : undefined;
-  const accentInputRing =
-    'focus-visible:ring-[var(--form-accent)] focus-visible:ring-2 focus-visible:ring-offset-2';
+  const { toast } = useToast();
 
   useEffect(() => {
     const fetchFormData = async () => {
@@ -69,11 +65,16 @@ export default function FormEmbedComponent({ formId, uid, className }: FormEmbed
           return;
         }
 
-        const parsedFields = Array.isArray(data.fields)
-          ? (data.fields as unknown as FormField[])
-          : [];
+        // Parse fields from Json to FormField[] with proper type conversion
+        const parsedFields = Array.isArray(data.fields) ? 
+          (data.fields as unknown as FormField[]) : 
+          [];
+        const formDataTyped: FormData = {
+          ...data,
+          fields: parsedFields
+        };
 
-        setFormData({ ...data, fields: parsedFields });
+        setFormData(formDataTyped);
       } catch (err) {
         console.error('Error:', err);
         setError('フォームの読み込みに失敗しました');
@@ -86,25 +87,28 @@ export default function FormEmbedComponent({ formId, uid, className }: FormEmbed
   }, [formId]);
 
   const handleInputChange = (fieldId: string, value: any) => {
-    setFormValues(prev => ({ ...prev, [fieldId]: value }));
-    if (error) setError(null);
+    setFormValues(prev => ({
+      ...prev,
+      [fieldId]: value
+    }));
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    
     if (!formData) return;
 
-    const missingLabels = formData.fields
-      .filter(f => f.required)
-      .filter(f => {
-        const v = formValues[f.id];
-        if (f.type === 'checkbox') return !Array.isArray(v) || v.length === 0;
-        return v == null || String(v).trim() === '';
-      })
-      .map(f => f.label);
+    // Validate required fields
+    const missingFields = formData.fields
+      .filter(field => field.required && !formValues[field.id])
+      .map(field => field.label);
 
-    if (missingLabels.length > 0) {
-      setError(`以下の項目は必須です: ${missingLabels.join(', ')}`);
+    if (missingFields.length > 0) {
+      toast({
+        title: "入力エラー",
+        description: `以下の項目は必須です: ${missingFields.join(', ')}`,
+        variant: "destructive"
+      });
       return;
     }
 
@@ -118,8 +122,8 @@ export default function FormEmbedComponent({ formId, uid, className }: FormEmbed
         meta: {
           source_uid: uid,
           timestamp: new Date().toISOString(),
-          user_agent: navigator.userAgent,
-        },
+          user_agent: navigator.userAgent
+        }
       };
 
       const { error: submitError } = await supabase
@@ -128,9 +132,9 @@ export default function FormEmbedComponent({ formId, uid, className }: FormEmbed
 
       if (submitError) {
         console.error('Submission error:', submitError);
-        if (submitError.message?.includes('既にこのフォームに回答済みです')) {
+        if (submitError.message.includes('既にこのフォームに回答済みです')) {
           setError('このフォームには既に回答いただいています。');
-        } else if (submitError.message?.includes('友だち限定')) {
+        } else if (submitError.message.includes('友だち限定')) {
           setError('このフォームはLINE友だち限定です。正しいリンクから開いてください。');
         } else {
           setError('送信に失敗しました。もう一度お試しください。');
@@ -138,8 +142,12 @@ export default function FormEmbedComponent({ formId, uid, className }: FormEmbed
         return;
       }
 
-      // ✅ 右下トーストは使わない（全端末/埋め込み・単体問わず非表示）
       setSubmitted(true);
+      toast({
+        title: "送信完了",
+        description: formData.success_message || "フォームを送信しました。",
+      });
+
     } catch (err) {
       console.error('Submit error:', err);
       setError('送信に失敗しました。もう一度お試しください。');
@@ -149,160 +157,100 @@ export default function FormEmbedComponent({ formId, uid, className }: FormEmbed
   };
 
   const renderField = (field: FormField) => {
+    const commonProps = {
+      id: field.id,
+      required: field.required,
+      placeholder: field.placeholder,
+      value: formValues[field.id] || '',
+      onChange: (e: any) => handleInputChange(field.id, e.target.value)
+    };
+
     switch (field.type) {
       case 'text':
-        return (
-          <Input
-            id={field.id}
-            required={field.required}
-            placeholder={field.placeholder}
-            value={formValues[field.id] ?? ''}
-            onChange={(e) => handleInputChange(field.id, e.target.value)}
-            className={accentInputRing}
-          />
-        );
+        return <Input {...commonProps} type="text" />;
+      
       case 'email':
-        return (
-          <Input
-            id={field.id}
-            type="email"
-            required={field.required}
-            placeholder={field.placeholder}
-            value={formValues[field.id] ?? ''}
-            onChange={(e) => handleInputChange(field.id, e.target.value)}
-            className={accentInputRing}
-          />
-        );
+        return <Input {...commonProps} type="email" />;
+      
       case 'tel':
-        return (
-          <Input
-            id={field.id}
-            type="tel"
-            required={field.required}
-            placeholder={field.placeholder}
-            value={formValues[field.id] ?? ''}
-            onChange={(e) => handleInputChange(field.id, e.target.value)}
-            className={accentInputRing}
-          />
-        );
+        return <Input {...commonProps} type="tel" />;
+      
       case 'number':
-        return (
-          <Input
-            id={field.id}
-            type="number"
-            required={field.required}
-            placeholder={field.placeholder}
-            value={formValues[field.id] ?? ''}
-            onChange={(e) => handleInputChange(field.id, e.target.value)}
-            className={accentInputRing}
-          />
-        );
+        return <Input {...commonProps} type="number" />;
+      
       case 'textarea':
         return (
           <Textarea
-            id={field.id}
-            required={field.required}
-            placeholder={field.placeholder}
-            value={formValues[field.id] ?? ''}
+            {...commonProps}
             onChange={(e) => handleInputChange(field.id, e.target.value)}
-            className={accentInputRing}
           />
         );
+      
       case 'select':
         return (
           <Select
-            value={formValues[field.id] ?? ''}
+            value={formValues[field.id] || ''}
             onValueChange={(value) => handleInputChange(field.id, value)}
           >
-            <SelectTrigger className={accentInputRing}>
+            <SelectTrigger>
               <SelectValue placeholder={field.placeholder || '選択してください'} />
             </SelectTrigger>
             <SelectContent>
               {field.options?.map((option, index) => (
-                <SelectItem
-                  key={index}
-                  value={option}
-                  className="
-                    data-[state=checked]:bg-[var(--form-accent)]
-                    data-[state=checked]:text-white
-                    focus:bg-[var(--form-accent)]
-                    focus:text-white
-                  "
-                >
+                <SelectItem key={index} value={option}>
                   {option}
                 </SelectItem>
               ))}
             </SelectContent>
           </Select>
         );
+      
       case 'radio':
         return (
           <RadioGroup
-            value={formValues[field.id] ?? ''}
+            value={formValues[field.id] || ''}
             onValueChange={(value) => handleInputChange(field.id, value)}
           >
             {field.options?.map((option, index) => (
               <div key={index} className="flex items-center space-x-2">
-                <RadioGroupItem
-                  value={option}
-                  id={`${field.id}-${index}`}
-                  className="
-                    border-[var(--form-accent)]
-                    data-[state=checked]:bg-[var(--form-accent)]
-                    data-[state=checked]:text-white
-                  "
-                />
+                <RadioGroupItem value={option} id={`${field.id}-${index}`} />
                 <Label htmlFor={`${field.id}-${index}`}>{option}</Label>
               </div>
             ))}
           </RadioGroup>
         );
+      
       case 'checkbox':
         return (
           <div className="space-y-2">
-            {field.options?.map((option, index) => {
-              const curr: string[] = Array.isArray(formValues[field.id]) ? formValues[field.id] : [];
-              const checked = curr.includes(option);
-              return (
-                <div key={index} className="flex items-center space-x-2">
-                  <Checkbox
-                    id={`${field.id}-${index}`}
-                    checked={checked}
-                    onCheckedChange={(v) => {
-                      const next = new Set(curr);
-                      if (v === true) next.add(option);
-                      else next.delete(option);
-                      handleInputChange(field.id, Array.from(next));
-                    }}
-                    className="
-                      border-[var(--form-accent)]
-                      data-[state=checked]:bg-[var(--form-accent)]
-                      data-[state=checked]:text-white
-                    "
-                  />
-                  <Label htmlFor={`${field.id}-${index}`}>{option}</Label>
-                </div>
-              );
-            })}
+            {field.options?.map((option, index) => (
+              <div key={index} className="flex items-center space-x-2">
+                <Checkbox
+                  id={`${field.id}-${index}`}
+                  checked={formValues[field.id]?.includes(option) || false}
+                  onCheckedChange={(checked) => {
+                    const currentValues = formValues[field.id] || [];
+                    if (checked) {
+                      handleInputChange(field.id, [...currentValues, option]);
+                    } else {
+                      handleInputChange(field.id, currentValues.filter((v: string) => v !== option));
+                    }
+                  }}
+                />
+                <Label htmlFor={`${field.id}-${index}`}>{option}</Label>
+              </div>
+            ))}
           </div>
         );
+      
       default:
-        return (
-          <Input
-            id={field.id}
-            required={field.required}
-            placeholder={field.placeholder}
-            value={formValues[field.id] ?? ''}
-            onChange={(e) => handleInputChange(field.id, e.target.value)}
-            className={accentInputRing}
-          />
-        );
+        return <Input {...commonProps} type="text" />;
     }
   };
 
   if (loading) {
     return (
-      <Card className={rootClass}>
+      <Card className={className}>
         <CardContent className="p-6">
           <div className="flex items-center justify-center">
             <Loader2 className="h-6 w-6 animate-spin" />
@@ -315,7 +263,7 @@ export default function FormEmbedComponent({ formId, uid, className }: FormEmbed
 
   if (error) {
     return (
-      <Card className={rootClass}>
+      <Card className={className}>
         <CardContent className="p-6">
           <div className="text-center">
             <p className="text-destructive">{error}</p>
@@ -327,7 +275,7 @@ export default function FormEmbedComponent({ formId, uid, className }: FormEmbed
 
   if (!formData) {
     return (
-      <Card className={rootClass}>
+      <Card className={className}>
         <CardContent className="p-6">
           <div className="text-center">
             <p>フォームが見つかりません</p>
@@ -339,16 +287,14 @@ export default function FormEmbedComponent({ formId, uid, className }: FormEmbed
 
   if (submitted) {
     return (
-      <Card className={rootClass} style={accentStyle}>
+      <Card className={className}>
         <CardContent className="p-6">
           <div className="text-center">
             <h3 className="text-lg font-semibold mb-2">送信完了</h3>
-            <div
-              dangerouslySetInnerHTML={{
-                __html: DOMPurify.sanitize(
-                  formData.success_message || "フォームを送信しました。ありがとうございました。"
-                ),
-              }}
+            <div 
+              dangerouslySetInnerHTML={{ 
+                __html: formData.success_message || "フォームを送信しました。ありがとうございました。" 
+              }} 
             />
           </div>
         </CardContent>
@@ -357,33 +303,45 @@ export default function FormEmbedComponent({ formId, uid, className }: FormEmbed
   }
 
   return (
-    <Card className={rootClass} style={accentStyle}>
+    <Card className={className}>
       <CardContent className="p-6">
         <form onSubmit={handleSubmit} className="space-y-6">
           <div className="space-y-2">
             <h3 className="text-lg font-semibold">{formData.name}</h3>
-            {formData.description && <p className="text-muted-foreground">{formData.description}</p>}
+            {formData.description && (
+              <p className="text-muted-foreground">{formData.description}</p>
+            )}
           </div>
 
           <div className="space-y-4">
             {formData.fields.map((field) => (
               <div key={field.id} className="space-y-2">
                 <Label htmlFor={field.id}>
-                  {field.label}
-                  {field.required && <span className="text-destructive ml-1">*</span>}
-                </Label>
+  {field.label}
+  {field.required && (
+    <span className="ml-1 inline-flex items-center rounded px-1.5 py-0.5 text-[10px] bg-destructive text-destructive-foreground align-middle">
+      必須
+    </span>
+  )}
+</Label>
+
                 {renderField(field)}
               </div>
             ))}
           </div>
 
-          {error && <div className="text-destructive text-sm">{error}</div>}
+          {error && (
+            <div className="text-destructive text-sm">{error}</div>
+          )}
 
           <Button
             type="submit"
             disabled={submitting}
             className="w-full"
-            style={{ backgroundColor: formData.submit_button_bg_color, color: formData.submit_button_text_color }}
+            style={{
+              backgroundColor: formData.submit_button_bg_color,
+              color: formData.submit_button_text_color
+            }}
           >
             {submitting ? (
               <>
