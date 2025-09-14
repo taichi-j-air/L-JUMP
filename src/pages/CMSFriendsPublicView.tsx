@@ -66,6 +66,60 @@ export default function CMSFriendsPublicView() {
 
   const isPreview = window.location.pathname.includes("/preview/") && !!pageId;
 
+  // ====== 追加: 公開側で折返し＆アラインを効かせるCSS ======
+  // （CSPでinline styleが禁止なら、グローバルCSSへ同内容を置いてください）
+  const AlignAndWrapCSS = (
+    <style>{`
+      .ql-content { 
+        white-space: pre-wrap;
+        overflow-wrap: break-word;
+        word-break: break-word;
+      }
+      .ql-content img, .ql-content video, .ql-content iframe {
+        max-width: 100%;
+        height: auto;
+      }
+      .ql-align-center { text-align: center; }
+      .ql-align-right  { text-align: right; }
+      .ql-align-justify{ text-align: justify; }
+    `}</style>
+  );
+
+  // ====== 追加: DOMPurify 設定と後処理 ======
+  const sanitizeOptions = {
+    ALLOW_DATA_ATTR: true,
+    // 必要に応じて許可タグを増減
+    ALLOWED_TAGS: [
+      "p","div","span","a","img","br","strong","em","u","ol","ul","li","blockquote",
+      "h1","h2","h3","h4","h5","h6","iframe","video","source"
+    ],
+    ALLOWED_ATTR: [
+      "class","style","id",
+      "href","target","rel","title",
+      "src","alt","width","height","controls","allow","allowfullscreen","frameborder",
+      // data-* を許可
+      "data-form-id","data-*"
+    ],
+    // ここでscriptやon*はもともと除去されます（DOMPurify既定）
+  } as DOMPurify.Config;
+
+  const secureLinks = (html: string) =>
+    html.replace(
+      /<a\s+([^>]*href=['"][^'"]+['"][^>]*)>/gi,
+      (m, attrs) => {
+        // rel未設定/不十分なら付与
+        if (!/rel=/.test(attrs)) {
+          return `<a ${attrs} rel="noopener noreferrer">`;
+        }
+        return m;
+      }
+    );
+
+  const sanitizeHtml = (raw: string) => {
+    const clean = DOMPurify.sanitize(raw, sanitizeOptions);
+    return secureLinks(clean);
+  };
+
   useEffect(() => {
     document.title = data?.title ? `${data.title} | ページ` : "ページ";
     const meta = document.querySelector('meta[name="description"]');
@@ -77,33 +131,19 @@ export default function CMSFriendsPublicView() {
   }, [data?.title, data?.tag_label]);
 
   const parseFnError = (fnErr: any) => {
-    // 最優先：Supabase Functions の context（Response オブジェクト）から status を取得
     let status: number | undefined = fnErr?.context?.status ?? fnErr?.status;
     let code: string | undefined = fnErr?.context?.body?.error ?? fnErr?.code;
     let message: string | undefined = fnErr?.context?.body?.message || fnErr?.message;
-
-    // context が Response オブジェクトの場合、Response.json() でボディを取得する必要がある
-    // ただし、ここでは同期的に処理するため、message から推定も行う
-    
-    // 次点：message 文字列から推定（最終手段）
     if (!status && typeof fnErr?.message === "string") {
       const m = fnErr.message.toLowerCase();
-      
-      if (m.includes("401") || m.includes("unauthorized")) {
-        status = 401;
-      }
-      else if (m.includes("403") || m.includes("forbidden")) {
-        status = 403;
-      }
-      else if (m.includes("423") || m.includes("locked")) {
-        status = 423;
-      }
+      if (m.includes("401") || m.includes("unauthorized")) status = 401;
+      else if (m.includes("403") || m.includes("forbidden")) status = 403;
+      else if (m.includes("423") || m.includes("locked")) status = 423;
       else if (m.includes("404") || m.includes("not found")) {
         status = 404;
         console.log("✅ Detected 404 from message");
       }
     }
-
     console.log("🔍 Final result:", { status: status ?? 0, code, message });
     return { status: status ?? 0, code, message };
   };
@@ -129,14 +169,12 @@ export default function CMSFriendsPublicView() {
           return;
         }
 
-        // プレビュー時も is_published を尊重（必要に応じて外してOK）
         if (!page.is_published) {
           setError("not_published");
           setLoading(false);
           return;
         }
 
-        // プレビュー時のパスコードチェック
         if (page.require_passcode && page.passcode) {
           const urlParams = new URLSearchParams(window.location.search);
           const urlPasscode = urlParams.get("passcode");
@@ -148,7 +186,6 @@ export default function CMSFriendsPublicView() {
           }
         }
 
-        // 期限チェック（hide_page）
         if (page.timer_enabled && page.expire_action === "hide_page") {
           const now = new Date();
           if (page.timer_mode === "absolute" && page.timer_deadline) {
@@ -175,81 +212,35 @@ export default function CMSFriendsPublicView() {
 
       const { data: res, error: fnErr } = await supabase.functions.invoke(
         "cms-page-view",
-        {
-          body: { shareCode, uid, passcode: withPasscode },
-        }
+        { body: { shareCode, uid, passcode: withPasscode } }
       );
 
       if (fnErr) {
-        const { status, code, message } = parseFnError(fnErr);
-
-        // ステータス優先で分岐
-        if (status === 401) {
-          setRequirePass(true);
-          setLoading(false);
-          return;
-        }
-        if (status === 423) {
-          setError("not_published");
-          setLoading(false);
-          return;
-        }
+        const { status, code } = parseFnError(fnErr);
+        if (status === 401) { setRequirePass(true); setLoading(false); return; }
+        if (status === 423) { setError("not_published"); setLoading(false); return; }
         if (status === 403) {
-          // タグ系を優先（code が載っている場合）
-          if (code === "tag_blocked") {
-            setError("tag_blocked");
-          } else if (code === "tag_required") {
-            setError("tag_required");
-          } else {
-            setError("access_denied");
-          }
+          if (code === "tag_blocked") setError("tag_blocked");
+          else if (code === "tag_required") setError("tag_required");
+          else setError("access_denied");
           setLoading(false);
           return;
         }
-        if (status === 404) {
-          setError("not_found");
-          setLoading(false);
-          return;
-        }
-
-        // 不明ステータスは 404 にフォールバック
-        setError("not_found");
-        setLoading(false);
-        return;
+        if (status === 404) { setError("not_found"); setLoading(false); return; }
+        setError("not_found"); setLoading(false); return;
       }
 
-      // 200 でも {error: "..."} が返る可能性に対応
-      if (!res) {
-        setError("not_found");
-        setLoading(false);
-        return;
-      }
+      if (!res) { setError("not_found"); setLoading(false); return; }
       if ((res as any).error) {
         const code = (res as any).error as KnownErrors | string;
-        
-        if (code === "passcode_required") {
-          setRequirePass(true);
-          setLoading(false);
-          return;
-        }
+        if (code === "passcode_required") { setRequirePass(true); setLoading(false); return; }
         if (
-          code === "not_published" ||
-          code === "tag_blocked" ||
-          code === "tag_required" ||
-          code === "access_denied" ||
-          code === "not_found"
-        ) {
-          setError(code as KnownErrors);
-          setLoading(false);
-          return;
-        }
-        // その他は 404 扱い
-        setError("not_found");
-        setLoading(false);
-        return;
+          code === "not_published" || code === "tag_blocked" ||
+          code === "tag_required" || code === "access_denied" || code === "not_found"
+        ) { setError(code as KnownErrors); setLoading(false); return; }
+        setError("not_found"); setLoading(false); return;
       }
 
-      // 期限切れ（hide_page）
       if ((res as any).timer_enabled && (res as any).expire_action === "hide_page") {
         const now = new Date();
         if ((res as any).timer_mode === "absolute" && (res as any).timer_deadline) {
@@ -264,8 +255,7 @@ export default function CMSFriendsPublicView() {
 
       setData(res as PagePayload);
       setLoading(false);
-    } catch (e) {
-      // 例外時は 404 にフォールバック
+    } catch {
       setError("not_found");
       setLoading(false);
     }
@@ -308,7 +298,9 @@ export default function CMSFriendsPublicView() {
           <div className="w-full max-w-md p-6 rounded-lg" style={{ backgroundColor: "#999999" }}>
             <div className="text-center space-y-4">
               <h3 className="text-2xl font-semibold text-white">LINE友だち限定WEBページ</h3>
-              <p className="text-white">このページはLINE友だち限定です。<br />正しいリンクから開いてください。</p>
+              <p className="text-white">
+                このページはLINE友だち限定です。<br />正しいリンクから開いてください。
+              </p>
             </div>
           </div>
         </div>
@@ -367,7 +359,7 @@ export default function CMSFriendsPublicView() {
   if (error === "not_found") {
     return (
       <div className="min-h-screen bg-background flex flex-col">
-        <div className="flex-1 flex items-center justify-center px-4">
+        <div className="flex-1 flex items中心 justify-center px-4">
           <div className="w-full max-w-md p-6 rounded-lg" style={{ backgroundColor: "#999999" }}>
             <div className="text-center space-y-4">
               <h3 className="text-2xl font-semibold text-white">ページが見つかりません</h3>
@@ -446,104 +438,106 @@ export default function CMSFriendsPublicView() {
 
   if (!data) return null;
 
-return (
-  <div className="min-h-screen bg-gray-100 flex justify-center">
-    {/* 中央の白い部分 */}
-    <div className="w-full max-w-3xl bg-white border-x border-gray-200 flex flex-col">
-      
-      {/* タイマー */}
-      {data.timer_enabled && (
-        <TimerPreview
-          mode={data.timer_mode || "absolute"}
-          deadline={data.timer_mode === "absolute" ? data.timer_deadline || undefined : undefined}
-          durationSeconds={
-            data.timer_mode === "per_access" || data.timer_mode === "step_delivery"
-              ? data.timer_duration_seconds || undefined
-              : undefined
-          }
-          showMilliseconds={!!data.show_milliseconds}
-          styleVariant={data.timer_style || "solid"}
-          bgColor={data.timer_bg_color || "#0cb386"}
-          textColor={data.timer_text_color || "#ffffff"}
-          shareCode={shareCode}
-          uid={uid}
-          dayLabel={data.timer_day_label || "日"}
-          hourLabel={data.timer_hour_label || "時間"}
-          minuteLabel={data.timer_minute_label || "分"}
-          secondLabel={data.timer_second_label || "秒"}
-          internalTimer={!!data.internal_timer}
-          timerText={data.timer_text || "期間限定公開"}
-          showEndDate={data.show_end_date ?? true}
-          showRemainingText={data.show_remaining_text ?? true}
-          scenarioId={data.timer_scenario_id || undefined}
-          stepId={data.timer_step_id || undefined}
-        />
-      )}
+  return (
+    <div className="min-h-screen bg-gray-100 flex justify-center">
+      {/* 中央の白い部分 */}
+      <div className="w-full max-w-3xl bg-white border-x border-gray-200 flex flex-col">
+        {AlignAndWrapCSS}
 
-      {/* コンテンツ本文 */}
-      <article className="prose max-w-none dark:prose-invert flex-1 p-4">
-        {Array.isArray(data.content_blocks) && data.content_blocks.length > 0 ? (
-          data.content_blocks.map((block, idx) => {
-            const html = DOMPurify.sanitize(block || "");
-            console.log(`Block ${idx}:`, block);
-            console.log(`Sanitized HTML ${idx}:`, html);
-
-            // ★ ここ残す！ → FormEmbed 検出処理
-            if (html.includes("<FormEmbed") && html.includes("formId=")) {
-              console.log(`FormEmbed detected in block ${idx}`);
-              const formIdMatch = html.match(/formId="([^"]+)"/);
-              const uidMatch = html.match(/uid="([^"]+)"/);
-              if (formIdMatch) {
-                const formId = formIdMatch[1];
-                const embedUid = uidMatch && uidMatch[1] === "[UID]" ? uid : uidMatch ? uidMatch[1] : "";
-                console.log(`Rendering FormEmbedComponent with formId: ${formId}, uid: ${embedUid}`);
-                return (
-                  <div key={idx} className="mt-4 first:mt-0">
-                    <FormEmbedComponent formId={formId} uid={embedUid} className="my-6" />
-                  </div>
-                );
-              }
+        {/* タイマー */}
+        {data.timer_enabled && (
+          <TimerPreview
+            mode={data.timer_mode || "absolute"}
+            deadline={data.timer_mode === "absolute" ? data.timer_deadline || undefined : undefined}
+            durationSeconds={
+              data.timer_mode === "per_access" || data.timer_mode === "step_delivery"
+                ? data.timer_duration_seconds || undefined
+                : undefined
             }
-
-            // ★ 他のフォーム形式も残す（form-embed-container / form-embed）
-            if (html.includes('class="form-embed-container"') && html.includes("data-form-id=")) {
-              const formIdMatch = html.match(/data-form-id="([^"]+)"/);
-              if (formIdMatch) {
-                const formId = formIdMatch[1];
-                return (
-                  <div key={idx} className="mt-4 first:mt-0">
-                    <FormEmbedComponent formId={formId} uid={uid} className="my-6" />
-                  </div>
-                );
-              }
-            }
-
-            if (html.includes('class="form-embed"') && html.includes("data-form-id=")) {
-              const formIdMatch = html.match(/data-form-id="([^"]+)"/);
-              if (formIdMatch) {
-                const formId = formIdMatch[1];
-                return (
-                  <div key={idx} className="mt-4 first:mt-0">
-                    <FormEmbedComponent formId={formId} uid={uid} className="my-6" />
-                  </div>
-                );
-              }
-            }
-
-            // 通常HTMLはそのまま表示
-            return (
-              <div
-                key={idx}
-                className="mt-4 first:mt-0"
-                dangerouslySetInnerHTML={{ __html: html }}
-              />
-            );
-          })
-        ) : (
-          <div dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(data.content || "") }} />
+            showMilliseconds={!!data.show_milliseconds}
+            styleVariant={data.timer_style || "solid"}
+            bgColor={data.timer_bg_color || "#0cb386"}
+            textColor={data.timer_text_color || "#ffffff"}
+            shareCode={shareCode}
+            uid={uid}
+            dayLabel={data.timer_day_label || "日"}
+            hourLabel={data.timer_hour_label || "時間"}
+            minuteLabel={data.timer_minute_label || "分"}
+            secondLabel={data.timer_second_label || "秒"}
+            internalTimer={!!data.internal_timer}
+            timerText={data.timer_text || "期間限定公開"}
+            showEndDate={data.show_end_date ?? true}
+            showRemainingText={data.show_remaining_text ?? true}
+            scenarioId={data.timer_scenario_id || undefined}
+            stepId={data.timer_step_id || undefined}
+          />
         )}
-      </article>
+
+        {/* コンテンツ本文 */}
+        <article className="prose max-w-none dark:prose-invert flex-1 p-4 ql-content">
+          {Array.isArray(data.content_blocks) && data.content_blocks.length > 0 ? (
+            data.content_blocks.map((block, idx) => {
+              const raw = block || "";
+
+              // --- まず生HTMLでFormEmbedを検出（サニタイズ前にやる） ---
+              if (raw.includes("<FormEmbed") && raw.includes("formId=")) {
+                const formIdMatch = raw.match(/formId="([^"]+)"/);
+                const uidMatch = raw.match(/uid="([^"]+)"/);
+                if (formIdMatch) {
+                  const formId = formIdMatch[1];
+                  const embedUid = uidMatch && uidMatch[1] === "[UID]" ? uid : uidMatch ? uidMatch[1] : "";
+                  return (
+                    <div key={idx} className="mt-4 first:mt-0">
+                      <FormEmbedComponent formId={formId} uid={embedUid} className="my-6" />
+                    </div>
+                  );
+                }
+              }
+              if (raw.includes('class="form-embed-container"') && raw.includes("data-form-id=")) {
+                const formIdMatch = raw.match(/data-form-id="([^"]+)"/);
+                if (formIdMatch) {
+                  const formId = formIdMatch[1];
+                  return (
+                    <div key={idx} className="mt-4 first:mt-0">
+                      <FormEmbedComponent formId={formId} uid={uid} className="my-6" />
+                    </div>
+                  );
+                }
+              }
+              if (raw.includes('class="form-embed"') && raw.includes("data-form-id=")) {
+                const formIdMatch = raw.match(/data-form-id="([^"]+)"/);
+                if (formIdMatch) {
+                  const formId = formIdMatch[1];
+                  return (
+                    <div key={idx} className="mt-4 first:mt-0">
+                      <FormEmbedComponent formId={formId} uid={uid} className="my-6" />
+                    </div>
+                  );
+                }
+              }
+
+              // --- フォーム以外はサニタイズして表示 ---
+              const html = sanitizeHtml(raw);
+              // デバッグが必要なら下記ログを残す（本番は消してOK）
+              // console.log(`Block ${idx}:`, raw);
+              // console.log(`Sanitized HTML ${idx}:`, html);
+
+              return (
+                <div
+                  key={idx}
+                  className="mt-4 first:mt-0"
+                  dangerouslySetInnerHTML={{ __html: html }}
+                />
+              );
+            })
+          ) : (
+            <div
+              className="mt-4 first:mt-0"
+              dangerouslySetInnerHTML={{ __html: sanitizeHtml(data.content || "") }}
+            />
+          )}
+        </article>
+      </div>
     </div>
-  </div>
-);
+  );
 }
