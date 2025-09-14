@@ -6,6 +6,7 @@
 // - duplicate_policy=block のときは既存回答を表示して送信不可
 // - PostgREST のエラーコード（23505/unique, 42501/RLS 等）を日本語で丁寧に出す
 // - LIFF が使えない/CSP ブロックでも require_line_friend=false なら送信できる動線のまま
+// - ★ 23505（重複）を最優先で判定し、「既に回答済の為、送信できません。」を表示（その他は汎用）
 
 import { useEffect, useState } from "react";
 import { useParams } from "react-router-dom";
@@ -283,7 +284,7 @@ export default function PublicForm() {
         document.documentElement.classList.contains("translated-rtl") ||
         document.querySelector('[class*="translate"]') ||
         document.querySelector("font[face]") ||
-        document.body.style.top === "-30000px";
+        (document.body && (document.body.style.top as any) === "-30000px");
       if (isTranslated) {
         console.warn("[Browser Translation] Detected");
         toast.error(
@@ -372,19 +373,18 @@ export default function PublicForm() {
     console.log("[insert.payload]", payload);
 
     // 重複制御は DB 側（generated column / トリガ / unique 制約）に委任
-    const { error } = await supabase
-      .from("form_submissions")
-      .insert(payload)
-      // .select().single() // 必要なら挿入行を取得
-      ;
+    const { error } = await supabase.from("form_submissions").insert(payload);
 
     if (error) {
       console.error("[insert.error]", error, payload);
 
-      // よくあるエラーのユーザー向け説明
-      const msg =
-        error.message || (error as any)?.hint || "エラーが発生しました";
+      // ★ 23505（unique_violation）を最優先で判定
+      if (error.code === "23505") {
+        toast.error("既に回答済の為、送信できません。");
+        return;
+      }
 
+      // LINE友だち限定（RLS/認可系）
       if (
         form.require_line_friend &&
         (error.code === "42501" ||
@@ -397,20 +397,8 @@ export default function PublicForm() {
         return;
       }
 
-      // 重複（unique violation / トリガでの例外）
-      if (
-        error.code === "23505" || // unique_violation
-        /既に回答済み|duplicate|conflict|unique/i.test(msg)
-      ) {
-        if (form.duplicate_policy === "block") {
-          toast.error("このフォームには既に回答済みです。");
-        } else {
-          toast.error("既に回答済みのようです。");
-        }
-        return;
-      }
-
       // generated column を手で入れてしまったときのエラー保険
+      const msg = error.message || (error as any)?.hint || "エラーが発生しました";
       if (
         error.code === "428C9" ||
         /generated column|cannot insert a non-DEFAULT value/i.test(msg)
@@ -421,7 +409,8 @@ export default function PublicForm() {
         return;
       }
 
-      toast.error(`送信に失敗しました: ${msg}`);
+      // その他の汎用エラー
+      toast.error("送信に失敗しました。もう一度お試しください。");
       return;
     }
 
