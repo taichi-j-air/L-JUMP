@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { useParams, useLocation } from "react-router-dom";
+import { useParams } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -64,17 +64,11 @@ export default function PublicForm() {
   const [liffId, setLiffId] = useState<string | null>(null);
   const isMobile = useIsMobile();
 
-  // LIFFの状態を取得
   const { isLiffReady, isLoggedIn, profile, error: liffError } = useLiff(liffId || undefined);
 
-  // LIFF状態の詳細ログ
   useEffect(() => {
     console.log('[LIFF DEBUG] State changed:', {
-      liffId,
-      isLiffReady,
-      isLoggedIn,
-      profile,
-      liffError
+      liffId, isLiffReady, isLoggedIn, profile, liffError
     });
   }, [liffId, isLiffReady, isLoggedIn, profile, liffError]);
 
@@ -84,21 +78,18 @@ export default function PublicForm() {
     typeof window !== "undefined" ? window.location.href : undefined
   );
 
+  // フォームメタ取得（RPC → フォールバック）
   useEffect(() => {
     const load = async () => {
       setLoading(true);
-      
       try {
-        // First, try the RPC method
         const { data: formData, error: formError } = await supabase
           .rpc('get_public_form_meta', { p_form_id: formId })
           .maybeSingle();
 
         if (formError) {
           console.error('[forms.load] RPC error:', formError);
-          
-          // Fallback to direct table query if RPC fails
-          console.log('[forms.load] Trying fallback method...');
+
           const { data: fallbackData, error: fallbackError } = await supabase
             .from('forms')
             .select(`
@@ -110,53 +101,37 @@ export default function PublicForm() {
             .eq('id', formId)
             .eq('is_public', true)
             .maybeSingle();
-            
+
           if (fallbackError) {
             console.error('[forms.load] Fallback error:', fallbackError);
             toast.error('フォームの取得に失敗しました');
             return;
           }
-          
+
           if (fallbackData) {
-            const formFields = Array.isArray(fallbackData.fields) 
-              ? fallbackData.fields as Array<{ id: string; label: string; name: string; type: string; required?: boolean; options?: string[]; placeholder?: string; rows?: number }>
-              : [];
-            
-            setForm({ ...fallbackData, fields: formFields, duplicate_policy: (fallbackData.duplicate_policy as 'allow' | 'block' | 'overwrite') || 'allow' });
-            
-            // Fallback時もLIFF IDを取得する
+            const formFields = Array.isArray(fallbackData.fields) ? fallbackData.fields : [];
+            setForm({
+              ...fallbackData,
+              fields: formFields as any,
+              duplicate_policy: (fallbackData.duplicate_policy as any) || 'allow'
+            });
+
+            // LIFF IDも取得
             try {
               const { data: profileData } = await supabase
                 .from('profiles')
                 .select('liff_id')
                 .eq('user_id', fallbackData.user_id)
                 .maybeSingle();
-              
-              if (profileData?.liff_id) {
-                console.log('[liff] Setting LIFF ID from profile:', profileData.liff_id);
-                setLiffId(profileData.liff_id);
-              }
-            } catch (error) {
-              console.warn('[liff] Failed to get LIFF ID from profile:', error);
+              if (profileData?.liff_id) setLiffId(profileData.liff_id);
+            } catch (e) {
+              console.warn('[liff] Failed to get LIFF ID from profile:', e);
             }
-            
-            console.log('[forms.load] Fallback method successful');
           }
         } else if (formData) {
-          // RPC method successful
-          const formFields = Array.isArray(formData.fields) 
-            ? formData.fields as Array<{ id: string; label: string; name: string; type: string; required?: boolean; options?: string[]; placeholder?: string; rows?: number }>
-            : [];
-          
-          setForm({ ...formData, fields: formFields });
-          
-          // LIFF IDをRPCから設定
-          if (formData.liff_id) {
-            console.log('[liff] Setting LIFF ID from RPC:', formData.liff_id);
-            setLiffId(formData.liff_id);
-          } else {
-            console.log('[liff] No LIFF ID returned from RPC:', formData);
-          }
+          const formFields = Array.isArray(formData.fields) ? formData.fields : [];
+          setForm({ ...formData, fields: formFields as any });
+          if ((formData as any).liff_id) setLiffId((formData as any).liff_id);
         }
       } catch (error) {
         console.error('[forms.load] unexpected error:', error);
@@ -165,48 +140,63 @@ export default function PublicForm() {
         setLoading(false);
       }
     };
-    
+
     if (formId) load();
   }, [formId]);
 
-  // Check for existing submission after form loads
+  // 既存回答チェック（UID優先、無ければ LINE、両方あれば OR）
   useEffect(() => {
     const checkExistingSubmission = async () => {
       if (!form || form.duplicate_policy === 'allow') return;
 
       const url = new URL(window.location.href);
       let sourceUid = url.searchParams.get('uid') || url.searchParams.get('suid') || url.searchParams.get('s');
-      sourceUid = sourceUid?.trim()?.toUpperCase() || null;
-      
-      // Check LIFF profile if available
-      let lineUserId = null;
+      sourceUid = sourceUid?.trim() ? sourceUid.trim().toUpperCase() : null;
+
+      let lineUserId: string | null = null;
       if (isLiffReady && isLoggedIn && profile?.userId) {
         lineUserId = profile.userId;
       }
 
+      // どちらも無いなら判定不可
       if (!sourceUid && !lineUserId) return;
 
       try {
-        // Query existing submission
         let query = supabase
           .from('form_submissions')
           .select('id, data, submitted_at')
-          .eq('form_id', form.id);
+          .eq('form_id', form.id)
+          .order('submitted_at', { ascending: false })
+          .limit(1);
 
-        if (sourceUid) {
+        if (sourceUid && lineUserId) {
+          // どちらか一致でヒット（OR）
+          // 値は英数想定なのでエスケープ不要
+          query = query.or(`source_uid.eq.${sourceUid},line_user_id.eq.${lineUserId}`);
+        } else if (sourceUid) {
           query = query.eq('source_uid', sourceUid);
         } else if (lineUserId) {
           query = query.eq('line_user_id', lineUserId);
         }
 
-        const { data: existingData } = await query.maybeSingle();
+        const { data: existingData, error } = await query.maybeSingle();
+        if (error) {
+          // 複数ヒット時など maybeSingle がエラーになり得るので、その場合も rows[0] を拾う
+          // @ts-ignore internal fetch
+          const { data: rows } = await query;
+          const first = Array.isArray(rows) && rows.length > 0 ? rows[0] : null;
+          if (first) {
+            setExistingSubmission(first);
+            setIsFirstSubmission(false);
+          }
+          return;
+        }
 
         if (existingData) {
           setExistingSubmission(existingData);
           setIsFirstSubmission(false);
-          
+
           if (form.duplicate_policy === 'overwrite' && existingData.data && typeof existingData.data === 'object') {
-            // Prefill form with existing data
             setValues(existingData.data as Record<string, any>);
           }
         }
@@ -218,24 +208,20 @@ export default function PublicForm() {
     checkExistingSubmission();
   }, [form, isLiffReady, isLoggedIn, profile]);
 
-  // Browser translation detection
+  // ブラウザ翻訳の検出（そのまま）
   useEffect(() => {
     const checkTranslation = () => {
-      const isTranslated = document.documentElement.classList.contains('translated-ltr') || 
-                          document.documentElement.classList.contains('translated-rtl') ||
-                          document.querySelector('[class*="translate"]') ||
-                          document.querySelector('font[face]') ||
-                          document.body.style.top === '-30000px';
-      
+      const isTranslated =
+        document.documentElement.classList.contains('translated-ltr') ||
+        document.documentElement.classList.contains('translated-rtl') ||
+        document.querySelector('[class*="translate"]') ||
+        document.querySelector('font[face]') ||
+        (document.body.style.top === '-30000px');
       if (isTranslated) {
-        console.warn('[Browser Translation] Page translation detected - this may cause errors');
-        toast.error('ブラウザの翻訳機能が検出されました。正常に動作しない場合は翻訳をオフにしてください。', {
-          duration: 8000
-        });
+        console.warn('[Browser Translation] Detected');
+        toast.error('ブラウザの翻訳機能が検出されました。正常に動作しない場合は翻訳をオフにしてください。', { duration: 8000 });
       }
     };
-
-    // Check after component mount
     const timer = setTimeout(checkTranslation, 1000);
     return () => clearTimeout(timer);
   }, []);
@@ -248,7 +234,7 @@ export default function PublicForm() {
     e.preventDefault();
     if (!form) return;
 
-    // 必須チェック（checkbox/radioは上で制御）
+    // 必須チェック
     for (const f of form.fields) {
       const val = values[f.name];
       if (f.required) {
@@ -264,60 +250,34 @@ export default function PublicForm() {
       }
     }
 
-    // URLパラメータとLIFF情報の取得・統合
+    // URL/LIFF からID抽出（UID優先）
     const url = new URL(window.location.href);
     let lineUserIdParam = url.searchParams.get('line_user_id') || url.searchParams.get('lu') || url.searchParams.get('user_id');
-    
-    // LIFFからLINE友達情報を取得（優先）
     if (isLiffReady && isLoggedIn && profile?.userId) {
-      console.log('[liff] Using LIFF profile:', profile);
       lineUserIdParam = profile.userId;
     }
 
     let shortUid = url.searchParams.get('uid') || url.searchParams.get('suid') || url.searchParams.get('s');
-    shortUid = shortUid?.trim() || null;
-    if (shortUid && !['[UID]', 'UID', ''].includes(shortUid)) {
-      shortUid = shortUid.toUpperCase();
-    } else {
-      shortUid = null;
-    }
+    shortUid = shortUid?.trim() ? shortUid.trim().toUpperCase() : null;
+    if (shortUid && ['[UID]', 'UID', ''].includes(shortUid)) shortUid = null;
 
-    console.log('フォーム送信開始 - 情報統合:', {
-      fullUrl: window.location.href,
-      urlParams: Object.fromEntries(url.searchParams.entries()),
-      liffInfo: { isLiffReady, isLoggedIn, hasProfile: !!profile },
-      extractedParams: { lineUserIdParam, shortUid },
-      requireLineFriend: form.require_line_friend,
-    });
-
-    // 友だち限定フォームのチェック
+    // 友だち限定のチェック
     if (form.require_line_friend) {
-      console.log('[LIFF DEBUG] Friend-only form check:', {
-        liffId,
-        isLiffReady,
-        isLoggedIn,
-        hasProfile: !!profile,
-        profileUserId: profile?.userId,
-        lineUserIdParam,
-        shortUid
-      });
-
-      // LIFF友達情報またはURLパラメータが必要
       if (!profile?.userId && !lineUserIdParam && !shortUid) {
-        console.error('[LIFF DEBUG] No LINE friend info available');
         toast.error('このフォームはLINE友だち限定です。LINEアプリから開いてください。');
         return;
       }
     }
 
-    // ペイロードを作成（LIFFまたはURLパラメータから取得した情報を使用）
-    const payload = {
+    // 送信ペイロード（source_uid もトップレベルで保存）
+    const payload: any = {
       form_id: form.id,
       data: values,
       user_id: form.user_id,
-      line_user_id: lineUserIdParam,
+      line_user_id: lineUserIdParam || null,
+      source_uid: shortUid || null,
       meta: {
-        source_uid: shortUid,
+        source_uid: shortUid || null,
         full_url: window.location.href,
         user_agent: navigator.userAgent,
         timestamp: new Date().toISOString(),
@@ -333,14 +293,12 @@ export default function PublicForm() {
 
     let error;
     if (form.duplicate_policy === 'overwrite' && existingSubmission) {
-      // Update existing submission
       const updateResult = await supabase
         .from('form_submissions')
-        .update({ data: values, submitted_at: new Date().toISOString() })
+        .update({ data: values, submitted_at: new Date().toISOString(), source_uid: payload.source_uid, line_user_id: payload.line_user_id })
         .eq('id', existingSubmission.id);
       error = updateResult.error;
     } else {
-      // Insert new submission
       const insertResult = await supabase
         .from('form_submissions')
         .insert(payload);
@@ -358,14 +316,13 @@ export default function PublicForm() {
       }
       return;
     }
-    
-    console.log('[insert.success] Form submitted successfully');
+
     setSubmitted(true);
-    
-    // Only trigger scenario on first submission
+
+    // 初回のみシナリオ発火（ロギングのみ / 実処理は別箇所ならここで条件分岐に利用）
     const shouldTriggerScenario = isFirstSubmission && form.post_submit_scenario_id;
     console.log('Scenario trigger decision:', { isFirstSubmission, hasScenario: !!form.post_submit_scenario_id, shouldTriggerScenario });
-    
+
     toast.success(form.duplicate_policy === 'overwrite' && !isFirstSubmission ? '回答を更新しました' : '送信しました');
   };
 
@@ -383,15 +340,15 @@ export default function PublicForm() {
         <CardContent className={isMobile ? "space-y-4 px-1" : "space-y-4"}>
           {submitted ? (
             <div className="py-8">
-              <div 
-                className="text-center text-muted-foreground prose prose-sm mx-auto" 
-                dangerouslySetInnerHTML={{ 
+              <div
+                className="text-center text-muted-foreground prose prose-sm mx-auto"
+                dangerouslySetInnerHTML={{
                   __html: DOMPurify.sanitize(
-                    form.success_message && form.success_message.trim() 
-                      ? form.success_message 
+                    form.success_message && form.success_message.trim()
+                      ? form.success_message
                       : '送信ありがとうございました。'
                   )
-                }} 
+                }}
               />
             </div>
           ) : form.duplicate_policy === 'block' && existingSubmission ? (
@@ -402,7 +359,6 @@ export default function PublicForm() {
                   {form.fields.map((field) => {
                     const value = (existingSubmission.data as any)?.[field.name];
                     if (!value) return null;
-                    
                     return (
                       <div key={field.id} className="border-b border-border/50 pb-2 last:border-b-0">
                         <div className="text-sm font-medium text-muted-foreground">{field.label}</div>
@@ -437,7 +393,6 @@ export default function PublicForm() {
                 const fieldId = `field-${f.id || f.name}`;
                 const isGroup = f.type === 'radio' || f.type === 'checkbox';
 
-                // 上部ラベル：単一入力は htmlFor、グループ入力は id と aria-labelledby を使う
                 const TopLabel = (
                   <label
                     className="text-sm font-medium"
