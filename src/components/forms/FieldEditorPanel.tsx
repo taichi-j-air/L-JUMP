@@ -29,20 +29,32 @@ export default function FieldEditorPanel({ field, onChange }: Props) {
   const optionsText = (field.options || []).join("\n");
 
   return (
-    <div className="space-y-3">
-      <div className="grid grid-cols-2 gap-3">
-        <div className="space-y-1">
-          <Label className="text-xs">質問名[タイトル]</Label>
-          <Input value={field.label} onChange={(e) => onChange({ label: e.target.value })} placeholder="例）お名前" />
-        </div>
-        <div className="space-y-1">
-          <Label className="text-xs">フィールド名</Label>
-            <span className="text-[10px] text-red-500">
-        ※フィールド名は基本的には変更不要です
-      </span>
-          <Input value={field.name} onChange={(e) => onChange({ name: e.target.value })} placeholder="例）name" />
-        </div>
-      </div>
+   <div className="space-y-3">
+  <div className="space-y-1">
+    <Label className="text-xs">質問名 [タイトル]</Label>
+    <Input
+      value={field.label}
+      onChange={(e) => onChange({ label: e.target.value })}
+      placeholder="例）お名前"
+    />
+  </div>
+
+  {/* 横線 */}
+  <hr className="border-t border-gray-200" />
+
+  <div className="space-y-1">
+    <Label className="text-xs">フィールド名</Label>
+    <span className="text-[10px] text-red-500">
+      ※フィールド名は基本的には変更不要です
+    </span>
+    <Input
+      value={field.name}
+      onChange={(e) => onChange({ name: e.target.value })}
+      placeholder="例）name"
+    />
+  </div>
+</div>
+
 
       <div className="grid grid-cols-2 gap-3">
         <div className="space-y-1">
