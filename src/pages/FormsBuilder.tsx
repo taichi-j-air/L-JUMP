@@ -470,6 +470,15 @@ const handleUpdate = async () => {
           <Card>
             <CardHeader>
               <CardTitle className="text-sm font-semibold">プレビューと設定</CardTitle>
+               <div className="flex items-center space-x-2">
+      <Switch
+        checked={isPublic}
+        onCheckedChange={setIsPublic}
+      />
+      <span className="text-xs">
+        {isPublic ? "公開中" : "非公開"}
+      </span>
+    </div>
             </CardHeader>
             <CardContent>
               <FormPreviewPanel
