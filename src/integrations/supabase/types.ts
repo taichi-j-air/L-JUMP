@@ -1139,6 +1139,92 @@ export type Database = {
         }
         Relationships: []
       }
+      rich_menu_areas: {
+        Row: {
+          action_type: string
+          action_value: string
+          created_at: string
+          height_percent: number
+          id: string
+          rich_menu_id: string
+          updated_at: string
+          width_percent: number
+          x_percent: number
+          y_percent: number
+        }
+        Insert: {
+          action_type: string
+          action_value: string
+          created_at?: string
+          height_percent: number
+          id?: string
+          rich_menu_id: string
+          updated_at?: string
+          width_percent: number
+          x_percent: number
+          y_percent: number
+        }
+        Update: {
+          action_type?: string
+          action_value?: string
+          created_at?: string
+          height_percent?: number
+          id?: string
+          rich_menu_id?: string
+          updated_at?: string
+          width_percent?: number
+          x_percent?: number
+          y_percent?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "rich_menu_areas_rich_menu_id_fkey"
+            columns: ["rich_menu_id"]
+            isOneToOne: false
+            referencedRelation: "rich_menus"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      rich_menus: {
+        Row: {
+          background_image_url: string | null
+          chat_bar_text: string | null
+          created_at: string
+          id: string
+          is_active: boolean | null
+          is_default: boolean | null
+          name: string
+          size: string | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          background_image_url?: string | null
+          chat_bar_text?: string | null
+          created_at?: string
+          id?: string
+          is_active?: boolean | null
+          is_default?: boolean | null
+          name: string
+          size?: string | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          background_image_url?: string | null
+          chat_bar_text?: string | null
+          created_at?: string
+          id?: string
+          is_active?: boolean | null
+          is_default?: boolean | null
+          name?: string
+          size?: string | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       scenario_friend_logs: {
         Row: {
           added_at: string
