@@ -279,12 +279,14 @@ export default function PublicForm() {
       }
     }
 
-    // 送信ペイロード（⚠️ source_uid は生成列なのでトップレベルには入れない）
+    // 送信ペイロード（常にINSERT、DB側で重複制御）
     const payload: any = {
       form_id: form.id,
       data: values,
       user_id: form.user_id,
       line_user_id: lineUserIdParam || null,
+      // source_uid は直接設定（DB側で meta からも抽出する）
+      source_uid: shortUid || null,
       meta: {
         source_uid: shortUid || null,
         full_url: window.location.href,
@@ -302,36 +304,23 @@ export default function PublicForm() {
 
     console.log("[insert.payload]", payload);
 
-    let error;
-    if (form.duplicate_policy === "overwrite" && existingSubmission) {
-      // 既存メタに上書き（source_uid は meta 内だけ更新）
-      const nextMeta =
-        existingSubmission?.meta && typeof existingSubmission.meta === "object"
-          ? { ...existingSubmission.meta, source_uid: shortUid || existingSubmission.meta.source_uid || null }
-          : { source_uid: shortUid || null };
-
-      const updateResult = await supabase
-        .from("form_submissions")
-        .update({
-          data: values,
-          submitted_at: new Date().toISOString(),
-          line_user_id: payload.line_user_id,
-          meta: nextMeta,
-        })
-        .eq("id", existingSubmission.id);
-
-      error = updateResult.error;
-    } else {
-      const insertResult = await supabase.from("form_submissions").insert(payload);
-      error = insertResult.error;
-    }
+    // 重複制御はDB側に完全委任（常にINSERT実行）
+    const insertResult = await supabase.from("form_submissions").insert(payload);
+    const error = insertResult.error;
 
     if (error) {
       console.error("[insert.error]", error, payload);
+      
+      // エラーハンドリングの改善
       if (form.require_line_friend && (error.code === "42501" || error.code === "PGRST301" || error.code === "401")) {
         toast.error("このフォームはLINE友だち限定です。LINEでログインしてから送信してください。");
-      } else if (error.code === "23505") {
-        toast.error("この友だちは既にこのフォームに回答済みです。");
+      } else if (error.code === "23505" || error.message?.includes("既に回答済み")) {
+        // DB側のblockエラー
+        if (form.duplicate_policy === "block") {
+          toast.error("このフォームには既に回答済みです。");
+        } else {
+          toast.error("既に回答済みです。");
+        }
       } else {
         toast.error(`送信に失敗しました: ${error.message || "エラーが発生しました"}`);
       }
@@ -348,7 +337,12 @@ export default function PublicForm() {
       shouldTriggerScenario,
     });
 
-    toast.success(form.duplicate_policy === "overwrite" && !isFirstSubmission ? "回答を更新しました" : "送信しました");
+    // 成功メッセージ
+    if (form.duplicate_policy === "overwrite" && !isFirstSubmission) {
+      toast.success("回答を更新しました");
+    } else {
+      toast.success("送信しました");
+    }
   };
 
   if (loading) return <div className={isMobile ? "p-4" : "container mx-auto max-w-3xl p-4"}>読み込み中...</div>;
