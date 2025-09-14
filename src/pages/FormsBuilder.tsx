@@ -514,9 +514,10 @@ const handleUpdate = async () => {
                 scenarios={scenarios}
                 formId={editingId || 'new'}
                 onSave={editingId ? handleUpdate : handleCreate}
-                // 👇 ダミーを渡して回避
+                // ↓ props はダミーで渡す
   isPublic={false}
   setIsPublic={() => {}}
+  className="hidden"
                />
              </CardContent>
            </Card>
