@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { useParams, useSearchParams } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
-import DOMPurify from "dompurify";
+import DOMPurify, { Config as DOMPurifyConfig } from "dompurify";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -66,8 +66,8 @@ export default function CMSFriendsPublicView() {
 
   const isPreview = window.location.pathname.includes("/preview/") && !!pageId;
 
-  // ====== 追加: 公開側で折返し＆アラインを効かせるCSS ======
-  // （CSPでinline styleが禁止なら、グローバルCSSへ同内容を置いてください）
+  // ====== 公開側で折返し＆アラインを効かせるCSS ======
+  // ※ CSPでインラインstyleが禁止の場合は、この内容をグローバルCSSに移してください
   const AlignAndWrapCSS = (
     <style>{`
       .ql-content { 
@@ -85,10 +85,9 @@ export default function CMSFriendsPublicView() {
     `}</style>
   );
 
-  // ====== 追加: DOMPurify 設定と後処理 ======
-  const sanitizeOptions = {
+  // ====== DOMPurify 設定（型安全） ======
+  const sanitizeOptions: DOMPurifyConfig = {
     ALLOW_DATA_ATTR: true,
-    // 必要に応じて許可タグを増減
     ALLOWED_TAGS: [
       "p","div","span","a","img","br","strong","em","u","ol","ul","li","blockquote",
       "h1","h2","h3","h4","h5","h6","iframe","video","source"
@@ -97,23 +96,19 @@ export default function CMSFriendsPublicView() {
       "class","style","id",
       "href","target","rel","title",
       "src","alt","width","height","controls","allow","allowfullscreen","frameborder",
-      // data-* を許可
       "data-form-id","data-*"
     ],
-    // ここでscriptやon*はもともと除去されます（DOMPurify既定）
-  } as DOMPurify.Config;
+    // 危険なタグ（script, style内の危険等）はデフォルトで除去されます
+  };
 
+  // aタグに rel を補強
   const secureLinks = (html: string) =>
-    html.replace(
-      /<a\s+([^>]*href=['"][^'"]+['"][^>]*)>/gi,
-      (m, attrs) => {
-        // rel未設定/不十分なら付与
-        if (!/rel=/.test(attrs)) {
-          return `<a ${attrs} rel="noopener noreferrer">`;
-        }
-        return m;
+    html.replace(/<a\s+([^>]*href=['"][^'"]+['"][^>]*)>/gi, (m, attrs) => {
+      if (!/rel=/.test(attrs)) {
+        return `<a ${attrs} rel="noopener noreferrer">`;
       }
-    );
+      return m;
+    });
 
   const sanitizeHtml = (raw: string) => {
     const clean = DOMPurify.sanitize(raw, sanitizeOptions);
@@ -134,6 +129,7 @@ export default function CMSFriendsPublicView() {
     let status: number | undefined = fnErr?.context?.status ?? fnErr?.status;
     let code: string | undefined = fnErr?.context?.body?.error ?? fnErr?.code;
     let message: string | undefined = fnErr?.context?.body?.message || fnErr?.message;
+
     if (!status && typeof fnErr?.message === "string") {
       const m = fnErr.message.toLowerCase();
       if (m.includes("401") || m.includes("unauthorized")) status = 401;
@@ -144,6 +140,7 @@ export default function CMSFriendsPublicView() {
         console.log("✅ Detected 404 from message");
       }
     }
+
     console.log("🔍 Final result:", { status: status ?? 0, code, message });
     return { status: status ?? 0, code, message };
   };
@@ -297,7 +294,7 @@ export default function CMSFriendsPublicView() {
         <div className="flex-1 flex items-center justify-center px-4">
           <div className="w-full max-w-md p-6 rounded-lg" style={{ backgroundColor: "#999999" }}>
             <div className="text-center space-y-4">
-              <h3 className="text-2xl font-semibold text-white">LINE友だち限定WEBページ</h3>
+              <h3 className="text-2xl font-semibold text白">LINE友だち限定WEBページ</h3>
               <p className="text-white">
                 このページはLINE友だち限定です。<br />正しいリンクから開いてください。
               </p>
@@ -359,7 +356,7 @@ export default function CMSFriendsPublicView() {
   if (error === "not_found") {
     return (
       <div className="min-h-screen bg-background flex flex-col">
-        <div className="flex-1 flex items中心 justify-center px-4">
+        <div className="flex-1 flex items-center justify-center px-4">
           <div className="w-full max-w-md p-6 rounded-lg" style={{ backgroundColor: "#999999" }}>
             <div className="text-center space-y-4">
               <h3 className="text-2xl font-semibold text-white">ページが見つかりません</h3>
@@ -406,7 +403,7 @@ export default function CMSFriendsPublicView() {
     );
   }
 
-  // -------- Friend info (今は Edge Function 側の返却がない想定なので未使用) --------
+  // -------- Friend info (未使用想定) --------
   if (friendInfo) {
     return (
       <div className="container mx-auto max-w-3xl p-4 space-y-4">
@@ -479,7 +476,7 @@ export default function CMSFriendsPublicView() {
             data.content_blocks.map((block, idx) => {
               const raw = block || "";
 
-              // --- まず生HTMLでFormEmbedを検出（サニタイズ前にやる） ---
+              // --- 生HTMLでFormEmbed検出（サニタイズ前） ---
               if (raw.includes("<FormEmbed") && raw.includes("formId=")) {
                 const formIdMatch = raw.match(/formId="([^"]+)"/);
                 const uidMatch = raw.match(/uid="([^"]+)"/);
@@ -518,10 +515,6 @@ export default function CMSFriendsPublicView() {
 
               // --- フォーム以外はサニタイズして表示 ---
               const html = sanitizeHtml(raw);
-              // デバッグが必要なら下記ログを残す（本番は消してOK）
-              // console.log(`Block ${idx}:`, raw);
-              // console.log(`Sanitized HTML ${idx}:`, html);
-
               return (
                 <div
                   key={idx}
