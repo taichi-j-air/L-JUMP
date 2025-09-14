@@ -469,7 +469,7 @@ const handleUpdate = async () => {
         <div className="lg:col-span-4">
           <Card>
             <CardHeader>
-              <CardTitle className="text-sm font-semibold">プレビューと設定</CardTitle>
+              <CardTitle className="text-sm font-semibold">フォームの公開設定</CardTitle>
                <div className="flex items-center space-x-2">
       <Switch
         checked={isPublic}
