@@ -8,6 +8,7 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { ArrowLeft, Save, CheckCircle } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
+import { useSecureCredentials } from "@/hooks/useSecureCredentials";
 
 const LineApiSettings = () => {
   const [channelAccessToken, setChannelAccessToken] = useState("");
@@ -19,10 +20,21 @@ const LineApiSettings = () => {
   const [currentStatus, setCurrentStatus] = useState<string>("not_configured");
   const navigate = useNavigate();
   const { toast } = useToast();
+  const { credentials, loading: credentialsLoading, saveCredential } = useSecureCredentials();
 
   useEffect(() => {
     loadCurrentSettings();
   }, []);
+
+  // Load credentials when they're available
+  useEffect(() => {
+    if (credentials) {
+      setChannelAccessToken(credentials.channel_access_token || '');
+      setChannelSecret(credentials.channel_secret || '');
+      setChannelId(credentials.channel_id || '');
+      setLineBotId(credentials.bot_id || '');
+    }
+  }, [credentials]);
 
   const loadCurrentSettings = async () => {
     try {
@@ -47,20 +59,6 @@ const LineApiSettings = () => {
         setCurrentStatus(profile.line_api_status || 'not_configured');
       }
 
-      // Get secure credentials using the security function
-      const { data: credentials, error: credError } = await supabase
-        .rpc('get_user_line_credentials', { p_user_id: user.id });
-
-      if (credError) {
-        console.error('Failed to load credentials:', credError);
-        // Don't throw error for credentials - they might not exist yet
-      } else if (credentials && credentials.length > 0) {
-        const creds = credentials[0];
-        setChannelAccessToken(creds.channel_access_token || '');
-        setChannelSecret(creds.channel_secret || '');
-        setChannelId(creds.channel_id || '');
-        setLineBotId(creds.bot_id || '');
-      }
     } catch (error) {
       console.error("設定の読み込みエラー:", error);
       toast({
@@ -98,37 +96,11 @@ const LineApiSettings = () => {
         return;
       }
 
-      // Save credentials securely
-      const credentialTypes = [
-        { type: 'channel_access_token', value: channelAccessToken.trim() },
-        { type: 'channel_secret', value: channelSecret.trim() },
-        { type: 'channel_id', value: channelId.trim() },
-        { type: 'bot_id', value: lineBotId.trim() }
-      ];
-
-      // Use upsert for each credential type
-      for (const cred of credentialTypes) {
-        const { error } = await supabase
-          .from('secure_line_credentials')
-          .upsert({
-            user_id: user.id,
-            credential_type: cred.type,
-            encrypted_value: cred.value, // TODO: Implement proper encryption with Vault
-            updated_at: new Date().toISOString()
-          }, {
-            onConflict: 'user_id, credential_type'
-          });
-
-        if (error) {
-          console.error(`Failed to save credential ${cred.type}:`, error);
-          toast({
-            title: "エラー",
-            description: `認証情報の保存に失敗しました: ${cred.type}`,
-            variant: "destructive",
-          });
-          return;
-        }
-      }
+      // Save credentials securely using encryption
+      await saveCredential('channel_access_token', channelAccessToken.trim());
+      await saveCredential('channel_secret', channelSecret.trim());
+      await saveCredential('channel_id', channelId.trim());
+      await saveCredential('bot_id', lineBotId.trim());
 
       // Update API status in profiles
       const { error: profileError } = await supabase
@@ -164,7 +136,7 @@ const LineApiSettings = () => {
     }
   };
 
-  if (initialLoading) {
+  if (initialLoading || credentialsLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background">
         <div className="text-center">

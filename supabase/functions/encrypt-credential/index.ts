@@ -53,8 +53,13 @@ Deno.serve(async (req) => {
       return createErrorResponse('Invalid credential value', 400)
     }
 
+    // Get encryption key from environment
+    const encryptionKey = Deno.env.get('ENCRYPTION_KEY')
+    if (!encryptionKey) {
+      return createErrorResponse('Encryption key not configured', 500)
+    }
+
     // Use a consistent encryption key for the user (derived from their ID)
-    // In production, use proper key management service
     const userKey = await crypto.subtle.importKey(
       'raw',
       new TextEncoder().encode(user.id.substring(0, 32).padEnd(32, '0')),

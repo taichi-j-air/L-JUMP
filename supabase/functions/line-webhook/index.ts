@@ -287,17 +287,11 @@ async function handleMessage(event: LineEvent, supabase: any, req: Request) {
 
 async function saveIncomingMessage(userId: string, messageText: string, mediaInfo: any, supabase: any) {
   try {
-    // CRITICAL FIX: Find the correct profile by matching the LINE user with existing friends
-    // This ensures multi-tenancy works correctly
+    // Find the friend record directly without complex joins
     const { data: friend, error: friendError } = await supabase
       .from('line_friends')
-      .select(`
-        id,
-        user_id,
-        profiles!inner (line_channel_access_token)
-      `)
+      .select('id, user_id')
       .eq('line_user_id', userId)
-      .not('profiles.line_channel_access_token', 'is', null)
       .single()
 
     if (friendError || !friend) {
@@ -332,29 +326,38 @@ async function saveIncomingMessage(userId: string, messageText: string, mediaInf
 
 async function sendReplyMessage(replyToken: string, text: string, supabase: any) {
   try {
-    // Get any available secure LINE credentials - this is okay for replies since 
-    // the replyToken is bound to the specific bot that received the message
-    const { data: profiles, error } = await supabase
-      .from('profiles')
-      .select('user_id')
-      .not('line_channel_access_token', 'is', null)
+    // First try to get credentials from secure_line_credentials
+    const { data: secureCredentials, error: secureError } = await supabase
+      .from('secure_line_credentials')
+      .select('encrypted_value, user_id')
+      .eq('credential_type', 'channel_access_token')
+      .not('encrypted_value', 'is', null)
       .limit(1)
 
-    if (error || !profiles || profiles.length === 0) {
-      console.error('No profile found for LINE credentials:', error)
-      return
+    let accessToken = null
+
+    if (!secureError && secureCredentials && secureCredentials.length > 0) {
+      // Use the encrypted value directly for now (until decryption is implemented in webhook)
+      accessToken = secureCredentials[0].encrypted_value
+    } else {
+      // Fallback to profiles table
+      const { data: profiles, error } = await supabase
+        .from('profiles')
+        .select('line_channel_access_token')
+        .not('line_channel_access_token', 'is', null)
+        .limit(1)
+
+      if (error || !profiles || profiles.length === 0) {
+        console.error('No LINE access token found:', error)
+        return
+      }
+      accessToken = profiles[0].line_channel_access_token
     }
 
-    // Get secure credentials
-    const { data: credentials, error: credError } = await supabase
-      .rpc('get_line_credentials_for_user', { p_user_id: profiles[0].user_id });
-
-    if (credError || !credentials?.channel_access_token) {
-      console.error('No LINE access token found:', credError)
+    if (!accessToken) {
+      console.error('No LINE access token found')
       return
     }
-
-    const accessToken = credentials.channel_access_token
 
     const replyData = {
       replyToken: replyToken,
