@@ -287,26 +287,17 @@ async function handleMessage(event: LineEvent, supabase: any, req: Request) {
 
 async function saveIncomingMessage(userId: string, messageText: string, mediaInfo: any, supabase: any) {
   try {
-    // Find the profile that owns this LINE bot
-    const { data: profiles, error: profileError } = await supabase
-      .from('profiles')
-      .select('user_id')
-      .not('line_channel_access_token', 'is', null)
-      .limit(1)
-
-    if (profileError || !profiles || profiles.length === 0) {
-      console.error('No profile found for saving message:', profileError)
-      return
-    }
-
-    const profile = profiles[0]
-
-    // Get the friend record
+    // CRITICAL FIX: Find the correct profile by matching the LINE user with existing friends
+    // This ensures multi-tenancy works correctly
     const { data: friend, error: friendError } = await supabase
       .from('line_friends')
-      .select('id')
-      .eq('user_id', profile.user_id)
+      .select(`
+        id,
+        user_id,
+        profiles!inner (line_channel_access_token)
+      `)
       .eq('line_user_id', userId)
+      .not('profiles.line_channel_access_token', 'is', null)
       .single()
 
     if (friendError || !friend) {
@@ -314,11 +305,13 @@ async function saveIncomingMessage(userId: string, messageText: string, mediaInf
       return
     }
 
+    console.log('Found friend for message saving:', friend.id, 'user:', friend.user_id)
+
     // Save the message with media info
     const { error: messageError } = await supabase
       .from('chat_messages')
       .insert({
-        user_id: profile.user_id,
+        user_id: friend.user_id,
         friend_id: friend.id,
         message_text: messageText,
         message_type: 'incoming',
@@ -329,7 +322,7 @@ async function saveIncomingMessage(userId: string, messageText: string, mediaInf
     if (messageError) {
       console.error('Error saving incoming message:', messageError)
     } else {
-      console.log('Incoming message saved successfully')
+      console.log('Incoming message saved successfully for user:', friend.user_id)
     }
 
   } catch (error) {
@@ -339,7 +332,8 @@ async function saveIncomingMessage(userId: string, messageText: string, mediaInf
 
 async function sendReplyMessage(replyToken: string, text: string, supabase: any) {
   try {
-    // Get secure LINE credentials from any configured profile
+    // Get any available secure LINE credentials - this is okay for replies since 
+    // the replyToken is bound to the specific bot that received the message
     const { data: profiles, error } = await supabase
       .from('profiles')
       .select('user_id')
