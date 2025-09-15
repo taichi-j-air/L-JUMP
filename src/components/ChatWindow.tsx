@@ -286,10 +286,14 @@ export function ChatWindow({ user, friend, onClose }: ChatWindowProps) {
                   className={`flex ${message.message_type === 'outgoing' ? 'justify-end' : 'justify-start'}`}
                 >
                   <div
-                     className={`max-w-[80%] rounded-lg px-3 py-2 mx-2 word-wrap break-words ${
-                       message.message_type === 'outgoing'
-                         ? 'bg-primary text-primary-foreground'
-                         : 'bg-muted'
+                     className={`max-w-[80%] rounded-lg mx-2 word-wrap break-words ${
+                       message.media_kind === 'sticker' 
+                         ? '' 
+                         : `px-3 py-2 ${
+                             message.message_type === 'outgoing'
+                               ? 'bg-primary text-primary-foreground'
+                               : 'bg-muted'
+                           }`
                      }`}
                    >
                      {message.media_kind === 'image' && message.media_url ? (
@@ -358,12 +362,9 @@ export function ChatWindow({ user, friend, onClose }: ChatWindowProps) {
                          <div className="text-4xl" style={{ display: message.media_url ? 'none' : 'block' }}>
                            🎨
                          </div>
-                         {message.message_text && (
-                           <p className="text-sm">{message.message_text}</p>
-                         )}
-                         {message.sticker_id && (
-                           <p className="text-xs opacity-60">スタンプID: {message.sticker_id}</p>
-                         )}
+                          {message.message_text && (
+                            <p className="text-sm">{message.message_text}</p>
+                          )}
                        </div>
                      ) : message.media_kind === 'file' ? (
                        <div className="space-y-2">
@@ -400,11 +401,14 @@ export function ChatWindow({ user, friend, onClose }: ChatWindowProps) {
                        <p className="text-sm whitespace-pre-wrap">{message.message_text}</p>
                      )}
                      <p className="text-xs opacity-70 mt-1">
-                       {new Date(message.sent_at).toLocaleTimeString('ja-JP', {
-                         hour: '2-digit',
-                         minute: '2-digit'
-                       })}
-                     </p>
+                        {new Date(message.sent_at).toLocaleString('ja-JP', {
+                          year: 'numeric',
+                          month: '2-digit',
+                          day: '2-digit',
+                          hour: '2-digit',
+                          minute: '2-digit'
+                        })}
+                      </p>
                    </div>
                 </div>
               ))
