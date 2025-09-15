@@ -1288,16 +1288,6 @@ async function findRecentInviteCode(lineUserId: string, supabase: any) {
   }
 }
 
-// Function to download LINE media content and store in Supabase Storage
-async function downloadLineMedia(messageId: string, lineUserId: string, supabase: any) {
-  try {
-    // Get user's LINE access token
-    const { data: friendData } = await supabase
-      .from('line_friends')
-      .select('user_id')
-      .eq('line_user_id', lineUserId)
-      .single()
-
     if (!friendData) {
       console.error('Friend not found for media download')
       return { success: false, error: 'Friend not found' }

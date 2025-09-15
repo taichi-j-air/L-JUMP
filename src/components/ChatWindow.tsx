@@ -268,7 +268,7 @@ export function ChatWindow({ user, friend, onClose }: ChatWindowProps) {
         </CardHeader>
       
         <CardContent className="flex-1 flex flex-col p-4 min-h-0">
-          <div className="flex-1 overflow-y-auto space-y-4 mb-4 min-h-0">
+          <div className="flex-1 overflow-y-auto space-y-4 mb-4 min-h-0" style={{ backgroundColor: 'rgb(140, 171, 216)' }}>
             {loading ? (
               <div className="text-center text-muted-foreground py-8">
                 <Loader2 className="h-6 w-6 animate-spin mx-auto mb-2" />
