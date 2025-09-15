@@ -192,26 +192,57 @@ async function handleMessage(event: LineEvent, supabase: any, req: Request) {
       messageText = '[画像]';
       mediaInfo = {
         media_kind: 'image',
-        content_type: 'image/jpeg'
+        content_type: 'image/jpeg',
+        line_message_id: message.id
       };
+      // Download and store image
+      const mediaResult = await downloadLineMedia(message.id, source.userId, supabase)
+      if (mediaResult.success) {
+        mediaInfo.media_url = mediaResult.public_url
+        mediaInfo.thumbnail_url = mediaResult.public_url
+        messageText = '' // Clear placeholder text since we have the actual image
+      }
     } else if (message.type === 'video') {
       messageText = '[動画]';
       mediaInfo = {
         media_kind: 'video',
-        content_type: 'video/mp4'
+        content_type: 'video/mp4',
+        line_message_id: message.id
       };
+      // Download and store video
+      const mediaResult = await downloadLineMedia(message.id, source.userId, supabase)
+      if (mediaResult.success) {
+        mediaInfo.media_url = mediaResult.public_url
+        messageText = '' // Clear placeholder text
+      }
     } else if (message.type === 'audio') {
       messageText = '[音声]';
       mediaInfo = {
         media_kind: 'audio',
-        content_type: 'audio/mp4'
+        content_type: 'audio/m4a',
+        line_message_id: message.id
       };
+      // Download and store audio
+      const mediaResult = await downloadLineMedia(message.id, source.userId, supabase)
+      if (mediaResult.success) {
+        mediaInfo.media_url = mediaResult.public_url
+        mediaInfo.file_name = `audio_${message.id}.m4a`
+        messageText = '' // Clear placeholder text
+      }
     } else if (message.type === 'file') {
       messageText = '[ファイル]';
       mediaInfo = {
         media_kind: 'file',
-        file_name: 'unknown'
+        file_name: (message as any).fileName || 'ファイル',
+        file_size: (message as any).fileSize,
+        line_message_id: message.id
       };
+      // Download and store file
+      const mediaResult = await downloadLineMedia(message.id, source.userId, supabase)
+      if (mediaResult.success) {
+        mediaInfo.media_url = mediaResult.public_url
+        messageText = '' // Clear placeholder text
+      }
     } else if (message.type === 'sticker') {
       messageText = '[スタンプ]';
       mediaInfo = {
@@ -219,6 +250,12 @@ async function handleMessage(event: LineEvent, supabase: any, req: Request) {
         sticker_id: (message as any).stickerId,
         sticker_package_id: (message as any).packageId
       };
+      // Get sticker image URL
+      const stickerResult = await getStickerImageUrl((message as any).packageId, (message as any).stickerId)
+      if (stickerResult.success) {
+        mediaInfo.media_url = stickerResult.image_url
+        messageText = '' // Clear placeholder text
+      }
     } else {
       console.log(`Unsupported message type: ${message.type}`);
       messageText = `[${message.type}メッセージ]`;
@@ -1088,6 +1125,135 @@ async function getLineUserProfile(userId: string, supabase: any) {
   }
 }
 
+// Function to download LINE media content and store in Supabase Storage
+async function downloadLineMedia(messageId: string, lineUserId: string, supabase: any) {
+  try {
+    // Get user's LINE access token
+    const { data: friendData } = await supabase
+      .from('line_friends')
+      .select('user_id')
+      .eq('line_user_id', lineUserId)
+      .single()
+
+    if (!friendData) {
+      console.error('Friend not found for media download')
+      return { success: false, error: 'Friend not found' }
+    }
+
+    // Get access token from secure credentials
+    const { data: credentials } = await supabase
+      .from('secure_line_credentials')
+      .select('encrypted_value')
+      .eq('user_id', friendData.user_id)
+      .eq('credential_type', 'channel_access_token')
+      .single()
+
+    if (!credentials?.encrypted_value) {
+      console.error('No access token found for media download')
+      return { success: false, error: 'No access token found' }
+    }
+
+    const accessToken = credentials.encrypted_value
+
+    // Download content from LINE
+    const contentResponse = await fetch(`https://api-data.line.me/v2/bot/message/${messageId}/content`, {
+      headers: {
+        'Authorization': `Bearer ${accessToken}`
+      }
+    })
+
+    if (!contentResponse.ok) {
+      console.error('Failed to download content from LINE:', contentResponse.status)
+      return { success: false, error: 'Failed to download from LINE' }
+    }
+
+    const contentType = contentResponse.headers.get('content-type') || 'application/octet-stream'
+    const contentBuffer = await contentResponse.arrayBuffer()
+    
+    // Determine file extension based on content type
+    let extension = 'bin'
+    if (contentType.includes('image/jpeg')) extension = 'jpg'
+    else if (contentType.includes('image/png')) extension = 'png'
+    else if (contentType.includes('image/gif')) extension = 'gif'
+    else if (contentType.includes('video/mp4')) extension = 'mp4'
+    else if (contentType.includes('audio/m4a')) extension = 'm4a'
+    else if (contentType.includes('audio/ogg')) extension = 'ogg'
+
+    // Create file path: user_id/message_id.extension
+    const filePath = `${friendData.user_id}/${messageId}.${extension}`
+
+    // Upload to Supabase Storage
+    const { data: uploadData, error: uploadError } = await supabase.storage
+      .from('chat-media')
+      .upload(filePath, contentBuffer, {
+        contentType: contentType,
+        upsert: true
+      })
+
+    if (uploadError) {
+      console.error('Failed to upload to storage:', uploadError)
+      return { success: false, error: 'Failed to upload to storage' }
+    }
+
+    // Get public URL
+    const { data: urlData } = supabase.storage
+      .from('chat-media')
+      .getPublicUrl(filePath)
+
+    console.log('Media uploaded successfully:', filePath)
+    
+    return {
+      success: true,
+      storage_path: filePath,
+      public_url: urlData.publicUrl,
+      content_type: contentType
+    }
+
+  } catch (error) {
+    console.error('Error downloading LINE media:', error)
+    return { success: false, error: error.message }
+  }
+}
+
+// Function to get sticker image URL
+async function getStickerImageUrl(packageId: string, stickerId: string) {
+  try {
+    // LINE stickers follow a predictable URL pattern
+    const stickerUrl = `https://stickershop.line-scdn.net/stickershop/v1/sticker/${stickerId}/android/sticker.png`
+    
+    // Verify the sticker exists by attempting to fetch it
+    const response = await fetch(stickerUrl, { method: 'HEAD' })
+    
+    if (response.ok) {
+      return {
+        success: true,
+        image_url: stickerUrl
+      }
+    } else {
+      // Fallback URL pattern for some stickers
+      const fallbackUrl = `https://stickershop.line-scdn.net/stickershop/v1/product/${packageId}/android/stickers/${stickerId}.png`
+      const fallbackResponse = await fetch(fallbackUrl, { method: 'HEAD' })
+      
+      if (fallbackResponse.ok) {
+        return {
+          success: true,
+          image_url: fallbackUrl
+        }
+      }
+    }
+    
+    console.log('Sticker image not found, using placeholder')
+    return {
+      success: false,
+      error: 'Sticker image not found'
+    }
+
+  } catch (error) {
+    console.error('Error getting sticker URL:', error)
+    return { success: false, error: error.message }
+  }
+}
+
 // Find recent invite code for a user based on timing and other factors
 async function findRecentInviteCode(lineUserId: string, supabase: any) {
   try {
@@ -1119,5 +1285,134 @@ async function findRecentInviteCode(lineUserId: string, supabase: any) {
   } catch (error) {
     console.error('招待コード検索エラー:', error)
     return null
+  }
+}
+
+// Function to download LINE media content and store in Supabase Storage
+async function downloadLineMedia(messageId: string, lineUserId: string, supabase: any) {
+  try {
+    // Get user's LINE access token
+    const { data: friendData } = await supabase
+      .from('line_friends')
+      .select('user_id')
+      .eq('line_user_id', lineUserId)
+      .single()
+
+    if (!friendData) {
+      console.error('Friend not found for media download')
+      return { success: false, error: 'Friend not found' }
+    }
+
+    // Get access token from secure credentials
+    const { data: credentials } = await supabase
+      .from('secure_line_credentials')
+      .select('encrypted_value')
+      .eq('user_id', friendData.user_id)
+      .eq('credential_type', 'channel_access_token')
+      .single()
+
+    if (!credentials?.encrypted_value) {
+      console.error('No access token found for media download')
+      return { success: false, error: 'No access token found' }
+    }
+
+    const accessToken = credentials.encrypted_value
+
+    // Download content from LINE
+    const contentResponse = await fetch(`https://api-data.line.me/v2/bot/message/${messageId}/content`, {
+      headers: {
+        'Authorization': `Bearer ${accessToken}`
+      }
+    })
+
+    if (!contentResponse.ok) {
+      console.error('Failed to download content from LINE:', contentResponse.status)
+      return { success: false, error: 'Failed to download from LINE' }
+    }
+
+    const contentType = contentResponse.headers.get('content-type') || 'application/octet-stream'
+    const contentBuffer = await contentResponse.arrayBuffer()
+    
+    // Determine file extension based on content type
+    let extension = 'bin'
+    if (contentType.includes('image/jpeg')) extension = 'jpg'
+    else if (contentType.includes('image/png')) extension = 'png'
+    else if (contentType.includes('image/gif')) extension = 'gif'
+    else if (contentType.includes('video/mp4')) extension = 'mp4'
+    else if (contentType.includes('audio/m4a')) extension = 'm4a'
+    else if (contentType.includes('audio/ogg')) extension = 'ogg'
+
+    // Create file path: user_id/message_id.extension
+    const filePath = `${friendData.user_id}/${messageId}.${extension}`
+
+    // Upload to Supabase Storage
+    const { data: uploadData, error: uploadError } = await supabase.storage
+      .from('chat-media')
+      .upload(filePath, contentBuffer, {
+        contentType: contentType,
+        upsert: true
+      })
+
+    if (uploadError) {
+      console.error('Failed to upload to storage:', uploadError)
+      return { success: false, error: 'Failed to upload to storage' }
+    }
+
+    // Get public URL
+    const { data: urlData } = supabase.storage
+      .from('chat-media')
+      .getPublicUrl(filePath)
+
+    console.log('Media uploaded successfully:', filePath)
+    
+    return {
+      success: true,
+      storage_path: filePath,
+      public_url: urlData.publicUrl,
+      content_type: contentType
+    }
+
+  } catch (error) {
+    console.error('Error downloading LINE media:', error)
+    return { success: false, error: error.message }
+  }
+}
+
+// Function to get sticker image URL
+async function getStickerImageUrl(packageId: string, stickerId: string) {
+  try {
+    // LINE stickers follow a predictable URL pattern
+    const stickerUrl = `https://stickershop.line-scdn.net/stickershop/v1/sticker/${stickerId}/android/sticker.png`
+    
+    // Verify the sticker exists by attempting to fetch it
+    const response = await fetch(stickerUrl, { method: 'HEAD' })
+    
+    if (response.ok) {
+      return {
+        success: true,
+        image_url: stickerUrl
+      }
+    } else {
+      // Fallback URL pattern for some stickers
+      const fallbackUrl = `https://stickershop.line-scdn.net/stickershop/v1/product/${packageId}/android/stickers/${stickerId}.png`
+      const fallbackResponse = await fetch(fallbackUrl, { method: 'HEAD' })
+      
+      if (fallbackResponse.ok) {
+        return {
+          success: true,
+          image_url: fallbackUrl
+        }
+      }
+    }
+    
+    console.log('Sticker image not found, using placeholder')
+    return {
+      success: false,
+      error: 'Sticker image not found'
+    }
+
+  } catch (error) {
+    console.error('Error getting sticker URL:', error)
+    return { success: false, error: error.message }
   }
 }

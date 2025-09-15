@@ -297,12 +297,16 @@ export function ChatWindow({ user, friend, onClose }: ChatWindowProps) {
                          <img 
                            src={message.media_url} 
                            alt="送信された画像" 
-                           className="max-w-full h-auto rounded-lg"
+                           className="max-w-full h-auto rounded-lg cursor-pointer hover:opacity-90 transition-opacity"
                            onError={(e) => {
-                             e.currentTarget.style.display = 'none';
+                             console.error('Image failed to load:', message.media_url);
+                             e.currentTarget.src = 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjAwIiBoZWlnaHQ9IjEwMCIgdmlld0JveD0iMCAwIDIwMCAxMDAiIGZpbGw9Im5vbmUiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+CjxyZWN0IHdpZHRoPSIyMDAiIGhlaWdodD0iMTAwIiBmaWxsPSIjRjNGNEY2Ii8+Cjx0ZXh0IHg9IjEwMCIgeT0iNTUiIGZvbnQtZmFtaWx5PSJBcmlhbCIgZm9udC1zaXplPSIxNCIgZmlsbD0iIzZCNzI4MCIgdGV4dC1hbmNob3I9Im1pZGRsZSI+55S75YOP44GM6Kqt44G/6L6844KB44G+44Gb44KT44Gn44GX44GfPC90ZXh0Pgo8L3N2Zz4K';
                            }}
+                           onClick={() => window.open(message.media_url, '_blank')}
                          />
-                         <p className="text-sm">{message.message_text}</p>
+                         {message.message_text && (
+                           <p className="text-sm">{message.message_text}</p>
+                         )}
                        </div>
                      ) : message.media_kind === 'video' && message.media_url ? (
                        <div className="space-y-2">
@@ -310,32 +314,87 @@ export function ChatWindow({ user, friend, onClose }: ChatWindowProps) {
                            controls 
                            className="max-w-full h-auto rounded-lg"
                            poster={message.thumbnail_url}
+                           preload="metadata"
                          >
                            <source src={message.media_url} type={message.content_type || 'video/mp4'} />
                            お使いのブラウザは動画をサポートしていません。
                          </video>
-                         <p className="text-sm">{message.message_text}</p>
+                         {message.message_text && (
+                           <p className="text-sm">{message.message_text}</p>
+                         )}
+                       </div>
+                     ) : message.media_kind === 'audio' && message.media_url ? (
+                       <div className="space-y-2">
+                         <div className="bg-muted/50 rounded-lg p-3">
+                           <div className="flex items-center gap-2 mb-2">
+                             <span className="text-lg">🎵</span>
+                             <span className="text-sm font-medium">音声メッセージ</span>
+                           </div>
+                           <audio controls className="w-full">
+                             <source src={message.media_url} type={message.content_type || 'audio/m4a'} />
+                             お使いのブラウザは音声をサポートしていません。
+                           </audio>
+                         </div>
+                         {message.message_text && (
+                           <p className="text-sm">{message.message_text}</p>
+                         )}
                        </div>
                      ) : message.media_kind === 'sticker' ? (
                        <div className="space-y-2">
-                         <div className="text-4xl">🎨</div>
-                         <p className="text-sm">{message.message_text}</p>
+                         {message.media_url ? (
+                           <img 
+                             src={message.media_url}
+                             alt="スタンプ"
+                             className="w-32 h-32 object-contain rounded-lg"
+                             onError={(e) => {
+                               console.error('Sticker failed to load:', message.media_url);
+                               // Fallback to emoji
+                               e.currentTarget.style.display = 'none';
+                               const fallback = e.currentTarget.nextElementSibling as HTMLElement;
+                               if (fallback) fallback.style.display = 'block';
+                             }}
+                           />
+                         ) : null}
+                         <div className="text-4xl" style={{ display: message.media_url ? 'none' : 'block' }}>
+                           🎨
+                         </div>
+                         {message.message_text && (
+                           <p className="text-sm">{message.message_text}</p>
+                         )}
                          {message.sticker_id && (
-                           <p className="text-xs opacity-60">ID: {message.sticker_id}</p>
+                           <p className="text-xs opacity-60">スタンプID: {message.sticker_id}</p>
                          )}
                        </div>
                      ) : message.media_kind === 'file' ? (
                        <div className="space-y-2">
-                         <div className="flex items-center gap-2 text-sm">
-                           <span>📎</span>
-                           <span>{message.file_name || 'ファイル'}</span>
-                           {message.file_size && (
-                             <span className="text-xs opacity-60">
-                               ({(message.file_size / 1024).toFixed(1)}KB)
-                             </span>
-                           )}
+                         <div className="bg-muted/50 rounded-lg p-3">
+                           <div className="flex items-center gap-2">
+                             <span className="text-lg">📎</span>
+                             <div className="flex-1 min-w-0">
+                               {message.media_url ? (
+                                 <a 
+                                   href={message.media_url}
+                                   download={message.file_name}
+                                   className="text-sm font-medium text-primary hover:underline truncate block"
+                                 >
+                                   {message.file_name || 'ファイル'}
+                                 </a>
+                               ) : (
+                                 <span className="text-sm font-medium truncate block">
+                                   {message.file_name || 'ファイル'}
+                                 </span>
+                               )}
+                               {message.file_size && (
+                                 <span className="text-xs text-muted-foreground">
+                                   {(message.file_size / 1024).toFixed(1)}KB
+                                 </span>
+                               )}
+                             </div>
+                           </div>
                          </div>
-                         <p className="text-sm">{message.message_text}</p>
+                         {message.message_text && (
+                           <p className="text-sm">{message.message_text}</p>
+                         )}
                        </div>
                      ) : (
                        <p className="text-sm whitespace-pre-wrap">{message.message_text}</p>
