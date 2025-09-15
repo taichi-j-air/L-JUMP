@@ -21,6 +21,14 @@ interface ChatMessage {
   message_text: string
   message_type: 'outgoing' | 'incoming'
   sent_at: string
+  media_kind?: string
+  content_type?: string
+  media_url?: string
+  thumbnail_url?: string
+  file_name?: string
+  file_size?: number
+  sticker_id?: string
+  sticker_package_id?: string
 }
 
 interface ChatWindowProps {
@@ -75,7 +83,7 @@ export function ChatWindow({ user, friend, onClose }: ChatWindowProps) {
     try {
       const { data, error } = await supabase
         .from('chat_messages')
-        .select('id, message_text, message_type, sent_at')
+        .select('id, message_text, message_type, sent_at, media_kind, content_type, media_url, thumbnail_url, file_name, file_size, sticker_id, sticker_package_id')
         .eq('friend_id', friend.id)
         .order('sent_at', { ascending: true })
 
@@ -278,20 +286,67 @@ export function ChatWindow({ user, friend, onClose }: ChatWindowProps) {
                   className={`flex ${message.message_type === 'outgoing' ? 'justify-end' : 'justify-start'}`}
                 >
                   <div
-                    className={`max-w-[80%] rounded-lg px-3 py-2 word-wrap break-words ${
-                      message.message_type === 'outgoing'
-                        ? 'bg-primary text-primary-foreground'
-                        : 'bg-muted'
-                    }`}
-                  >
-                    <p className="text-sm whitespace-pre-wrap">{message.message_text}</p>
-                    <p className="text-xs opacity-70 mt-1">
-                      {new Date(message.sent_at).toLocaleTimeString('ja-JP', {
-                        hour: '2-digit',
-                        minute: '2-digit'
-                      })}
-                    </p>
-                  </div>
+                     className={`max-w-[80%] rounded-lg px-3 py-2 word-wrap break-words ${
+                       message.message_type === 'outgoing'
+                         ? 'bg-primary text-primary-foreground'
+                         : 'bg-muted'
+                     }`}
+                   >
+                     {message.media_kind === 'image' && message.media_url ? (
+                       <div className="space-y-2">
+                         <img 
+                           src={message.media_url} 
+                           alt="送信された画像" 
+                           className="max-w-full h-auto rounded-lg"
+                           onError={(e) => {
+                             e.currentTarget.style.display = 'none';
+                           }}
+                         />
+                         <p className="text-sm">{message.message_text}</p>
+                       </div>
+                     ) : message.media_kind === 'video' && message.media_url ? (
+                       <div className="space-y-2">
+                         <video 
+                           controls 
+                           className="max-w-full h-auto rounded-lg"
+                           poster={message.thumbnail_url}
+                         >
+                           <source src={message.media_url} type={message.content_type || 'video/mp4'} />
+                           お使いのブラウザは動画をサポートしていません。
+                         </video>
+                         <p className="text-sm">{message.message_text}</p>
+                       </div>
+                     ) : message.media_kind === 'sticker' ? (
+                       <div className="space-y-2">
+                         <div className="text-4xl">🎨</div>
+                         <p className="text-sm">{message.message_text}</p>
+                         {message.sticker_id && (
+                           <p className="text-xs opacity-60">ID: {message.sticker_id}</p>
+                         )}
+                       </div>
+                     ) : message.media_kind === 'file' ? (
+                       <div className="space-y-2">
+                         <div className="flex items-center gap-2 text-sm">
+                           <span>📎</span>
+                           <span>{message.file_name || 'ファイル'}</span>
+                           {message.file_size && (
+                             <span className="text-xs opacity-60">
+                               ({(message.file_size / 1024).toFixed(1)}KB)
+                             </span>
+                           )}
+                         </div>
+                         <p className="text-sm">{message.message_text}</p>
+                       </div>
+                     ) : (
+                       <p className="text-sm whitespace-pre-wrap">{message.message_text}</p>
+                     )}
+                     <p className="text-xs opacity-70 mt-1">
+                       {new Date(message.sent_at).toLocaleTimeString('ja-JP', {
+                         hour: '2-digit',
+                         minute: '2-digit'
+                       })}
+                     </p>
+                   </div>
                 </div>
               ))
             )}

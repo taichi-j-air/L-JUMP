@@ -169,23 +169,67 @@ async function handleMessage(event: LineEvent, supabase: any, req: Request) {
   try {
     const { message, replyToken, source } = event
     
-    if (!message || !message.text) {
-      console.log('No text message to process')
+    if (!message) {
+      console.log('No message to process')
       return
     }
 
-    // Sanitize message text to prevent XSS
-    const sanitizedText = sanitizeTextInput(message.text);
-    if (!sanitizedText) {
-      console.warn('Message text failed sanitization, skipping');
-      return;
+    console.log(`Message from ${source.userId}:`, message.type)
+
+    // Handle different message types
+    let messageText: string;
+    let mediaInfo: any = {};
+
+    if (message.type === 'text' && message.text) {
+      // Sanitize message text to prevent XSS
+      const sanitizedText = sanitizeTextInput(message.text);
+      if (!sanitizedText) {
+        console.warn('Message text failed sanitization, skipping');
+        return;
+      }
+      messageText = sanitizedText;
+    } else if (message.type === 'image') {
+      messageText = '[画像]';
+      mediaInfo = {
+        media_kind: 'image',
+        content_type: 'image/jpeg'
+      };
+    } else if (message.type === 'video') {
+      messageText = '[動画]';
+      mediaInfo = {
+        media_kind: 'video',
+        content_type: 'video/mp4'
+      };
+    } else if (message.type === 'audio') {
+      messageText = '[音声]';
+      mediaInfo = {
+        media_kind: 'audio',
+        content_type: 'audio/mp4'
+      };
+    } else if (message.type === 'file') {
+      messageText = '[ファイル]';
+      mediaInfo = {
+        media_kind: 'file',
+        file_name: 'unknown'
+      };
+    } else if (message.type === 'sticker') {
+      messageText = '[スタンプ]';
+      mediaInfo = {
+        media_kind: 'sticker',
+        sticker_id: (message as any).stickerId,
+        sticker_package_id: (message as any).packageId
+      };
+    } else {
+      console.log(`Unsupported message type: ${message.type}`);
+      messageText = `[${message.type}メッセージ]`;
     }
 
-    console.log(`Message from ${source.userId}: ${sanitizedText}`)
+    console.log(`Processed message: ${messageText}`)
 
-    // INVITE コマンドの判定: #INVITE <code>
-    const inviteMatch = sanitizedText.match(/^#INVITE\s+([A-Za-z0-9]{8,32})/i)
-    if (inviteMatch) {
+    // INVITE コマンドの判定: #INVITE <code> (text messages only)
+    if (message.type === 'text') {
+      const inviteMatch = messageText.match(/^#INVITE\s+([A-Za-z0-9]{8,32})/i)
+      if (inviteMatch) {
       const inviteCode = inviteMatch[1]
       if (!validateInviteCode(inviteCode)) {
         await sendReplyMessage(replyToken, '招待コードの形式が正しくありません。', supabase)
@@ -224,19 +268,24 @@ async function handleMessage(event: LineEvent, supabase: any, req: Request) {
         await sendReplyMessage(replyToken, '処理中にエラーが発生しました。', supabase)
         return
       }
+      }
     }
 
     // 通常メッセージ処理
     await ensureFriendExists(source.userId, supabase)
-    await saveIncomingMessage(source.userId, sanitizedText, supabase)
-    await sendReplyMessage(replyToken, `受信しました: ${sanitizedText}`, supabase)
+    await saveIncomingMessage(source.userId, messageText, mediaInfo, supabase)
+    
+    // Reply only to text messages 
+    if (message.type === 'text') {
+      await sendReplyMessage(replyToken, `受信しました: ${messageText}`, supabase)
+    }
 
   } catch (error) {
     console.error('Error handling message:', error)
   }
 }
 
-async function saveIncomingMessage(userId: string, messageText: string, supabase: any) {
+async function saveIncomingMessage(userId: string, messageText: string, mediaInfo: any, supabase: any) {
   try {
     // Find the profile that owns this LINE bot
     const { data: profiles, error: profileError } = await supabase
@@ -265,7 +314,7 @@ async function saveIncomingMessage(userId: string, messageText: string, supabase
       return
     }
 
-    // Save the message
+    // Save the message with media info
     const { error: messageError } = await supabase
       .from('chat_messages')
       .insert({
@@ -273,7 +322,8 @@ async function saveIncomingMessage(userId: string, messageText: string, supabase
         friend_id: friend.id,
         message_text: messageText,
         message_type: 'incoming',
-        sent_at: new Date().toISOString()
+        sent_at: new Date().toISOString(),
+        ...mediaInfo
       })
 
     if (messageError) {

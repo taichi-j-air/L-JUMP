@@ -49,38 +49,62 @@ export type Database = {
       }
       chat_messages: {
         Row: {
+          content_type: string | null
           created_at: string
+          file_name: string | null
+          file_size: number | null
           friend_id: string
           id: string
           line_message_id: string | null
+          media_kind: string | null
+          media_url: string | null
           message_text: string
           message_type: Database["public"]["Enums"]["message_kind"]
           read_at: string | null
           sent_at: string
+          sticker_id: string | null
+          sticker_package_id: string | null
+          thumbnail_url: string | null
           updated_at: string
           user_id: string
         }
         Insert: {
+          content_type?: string | null
           created_at?: string
+          file_name?: string | null
+          file_size?: number | null
           friend_id: string
           id?: string
           line_message_id?: string | null
+          media_kind?: string | null
+          media_url?: string | null
           message_text: string
           message_type?: Database["public"]["Enums"]["message_kind"]
           read_at?: string | null
           sent_at?: string
+          sticker_id?: string | null
+          sticker_package_id?: string | null
+          thumbnail_url?: string | null
           updated_at?: string
           user_id: string
         }
         Update: {
+          content_type?: string | null
           created_at?: string
+          file_name?: string | null
+          file_size?: number | null
           friend_id?: string
           id?: string
           line_message_id?: string | null
+          media_kind?: string | null
+          media_url?: string | null
           message_text?: string
           message_type?: Database["public"]["Enums"]["message_kind"]
           read_at?: string | null
           sent_at?: string
+          sticker_id?: string | null
+          sticker_package_id?: string | null
+          thumbnail_url?: string | null
           updated_at?: string
           user_id?: string
         }
