@@ -286,7 +286,7 @@ export function ChatWindow({ user, friend, onClose }: ChatWindowProps) {
                   className={`flex ${message.message_type === 'outgoing' ? 'justify-end' : 'justify-start'}`}
                 >
                   <div
-                     className={`max-w-[80%] rounded-lg px-3 py-2 word-wrap break-words ${
+                     className={`max-w-[80%] rounded-lg px-3 py-2 mx-2 word-wrap break-words ${
                        message.message_type === 'outgoing'
                          ? 'bg-primary text-primary-foreground'
                          : 'bg-muted'
