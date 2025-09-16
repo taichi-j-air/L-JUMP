@@ -73,6 +73,19 @@ const RichMenuSettings = () => {
     if (!confirm('このリッチメニューを削除しますか？')) return;
     
     try {
+      setLoading(true);
+
+      // Delete from LINE API first
+      const { error: lineError } = await supabase.functions.invoke('delete-rich-menu', {
+        body: { richMenuId: id }
+      });
+
+      if (lineError) {
+        console.error('LINE API error:', lineError);
+        // Continue with database deletion even if LINE API fails
+      }
+
+      // Delete from database
       const { error } = await supabase
         .from('rich_menus')
         .delete()
@@ -82,7 +95,7 @@ const RichMenuSettings = () => {
       
       toast({
         title: "削除完了",
-        description: "リッチメニューを削除しました",
+        description: lineError ? "データベースから削除されました（LINE API でエラーが発生）" : "データベースとLINE公式アカウントから削除されました",
       });
       loadRichMenus();
     } catch (error) {
@@ -92,11 +105,15 @@ const RichMenuSettings = () => {
         description: "削除に失敗しました",
         variant: "destructive",
       });
+    } finally {
+      setLoading(false);
     }
   };
 
   const setDefaultMenu = async (id: string) => {
     try {
+      setLoading(true);
+      
       // まず全てのデフォルトを解除
       await supabase
         .from('rich_menus')
@@ -110,11 +127,26 @@ const RichMenuSettings = () => {
         .eq('id', id);
 
       if (error) throw error;
-      
-      toast({
-        title: "設定完了",
-        description: "デフォルトリッチメニューを設定しました",
+
+      // Set default on LINE API
+      const { error: lineError } = await supabase.functions.invoke('set-default-rich-menu', {
+        body: { richMenuId: id }
       });
+
+      if (lineError) {
+        console.error('LINE API error:', lineError);
+        toast({
+          title: "警告",
+          description: "データベースは更新されましたが、LINE公式アカウントへの反映でエラーが発生しました。",
+          variant: "destructive"
+        });
+      } else {
+        toast({
+          title: "設定完了",
+          description: "デフォルトリッチメニューがLINE公式アカウントに反映されました",
+        });
+      }
+      
       loadRichMenus();
     } catch (error) {
       console.error('Error setting default menu:', error);
@@ -123,6 +155,8 @@ const RichMenuSettings = () => {
         description: "設定に失敗しました",
         variant: "destructive",
       });
+    } finally {
+      setLoading(false);
     }
   };
 

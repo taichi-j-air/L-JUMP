@@ -150,6 +150,33 @@ export const RichMenuEditor = ({ menu, onSave, onCancel }: RichMenuEditorProps) 
     };
   }, [handleMouseMove, handleMouseUp]);
 
+  const [availableRichMenus, setAvailableRichMenus] = useState<RichMenu[]>([]);
+
+  // Load available rich menus for selection
+  const loadAvailableRichMenus = async () => {
+    try {
+      const { data: userData } = await supabase.auth.getUser();
+      const { data, error } = await supabase
+        .from('rich_menus')
+        .select('*')
+        .eq('user_id', userData.user?.id!)
+        .order('name');
+
+      if (error) throw error;
+      const formattedData = (data || []).map(menu => ({
+        ...menu,
+        size: menu.size as 'full' | 'half',
+      }));
+      setAvailableRichMenus(formattedData);
+    } catch (error) {
+      console.error('Error loading rich menus:', error);
+    }
+  };
+
+  useEffect(() => {
+    loadAvailableRichMenus();
+  }, []);
+
   const handleSave = async () => {
     if (!name.trim()) {
       toast({
@@ -225,6 +252,48 @@ export const RichMenuEditor = ({ menu, onSave, onCancel }: RichMenuEditorProps) 
             );
 
           if (error) throw error;
+        }
+      }
+
+      // Create on LINE API if this is a new menu
+      if (!menu && backgroundImageUrl) {
+        try {
+          const { error: lineError } = await supabase.functions.invoke('create-rich-menu', {
+            body: {
+              richMenuData: {
+                name,
+                chat_bar_text: chatBarText,
+                size,
+                background_image_url: backgroundImageUrl,
+                areas: tapAreas.map(area => ({
+                  bounds: {
+                    x: Math.round((area.x_percent / 100) * (size === 'full' ? 2500 : 1200)),
+                    y: Math.round((area.y_percent / 100) * (size === 'full' ? 1686 : 810)),
+                    width: Math.round((area.width_percent / 100) * (size === 'full' ? 2500 : 1200)),
+                    height: Math.round((area.height_percent / 100) * (size === 'full' ? 1686 : 810))
+                  },
+                  action: {
+                    type: area.action_type === 'uri' ? 'uri' : area.action_type === 'message' ? 'message' : 'richmenuswitch',
+                    uri: area.action_type === 'uri' ? area.action_value : undefined,
+                    text: area.action_type === 'message' ? area.action_value : undefined,
+                    richMenuAliasId: area.action_type === 'richmenuswitch' ? area.action_value : undefined
+                  }
+                }))
+              },
+              imageFile: true
+            }
+          });
+
+          if (lineError) {
+            console.error('LINE API error:', lineError);
+            toast({
+              title: "警告",
+              description: "リッチメニューは保存されましたが、LINE公式アカウントへの作成でエラーが発生しました。",
+              variant: "destructive"
+            });
+          }
+        } catch (lineError) {
+          console.error('LINE API call failed:', lineError);
         }
       }
 
@@ -435,17 +504,35 @@ export const RichMenuEditor = ({ menu, onSave, onCancel }: RichMenuEditorProps) 
                             {area.action_type === 'message' && 'メッセージ'}
                             {area.action_type === 'richmenuswitch' && 'リッチメニューID'}
                           </Label>
-                          <Input
-                            value={area.action_value}
-                            onChange={(e) =>
-                              updateTapArea(area.id, { action_value: e.target.value })
-                            }
-                            placeholder={
-                              area.action_type === 'uri' ? 'https://example.com' :
-                              area.action_type === 'message' ? 'メッセージを入力' :
-                              'リッチメニューIDを入力'
-                            }
-                          />
+                          {area.action_type === 'richmenuswitch' ? (
+                            <Select
+                              value={area.action_value}
+                              onValueChange={(value) => updateTapArea(area.id, { action_value: value })}
+                            >
+                              <SelectTrigger>
+                                <SelectValue placeholder="リッチメニューを選択" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {availableRichMenus.map((richMenu) => (
+                                  <SelectItem key={richMenu.id} value={richMenu.id}>
+                                    {richMenu.name}
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          ) : (
+                            <Input
+                              value={area.action_value}
+                              onChange={(e) =>
+                                updateTapArea(area.id, { action_value: e.target.value })
+                              }
+                              placeholder={
+                                area.action_type === 'uri' ? 'https://example.com' :
+                                area.action_type === 'message' ? 'メッセージを入力' :
+                                'リッチメニューIDを入力'
+                              }
+                            />
+                          )}
                         </div>
                       </div>
                     )}
