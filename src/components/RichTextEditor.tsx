@@ -41,6 +41,7 @@ interface ButtonSettings {
   borderEnabled: boolean;
   borderWidth: number;
   borderColor: string;
+  hoverEffectEnabled: boolean;
 }
 
 const LINK_SELECTION_MESSAGE = "リンクにする文字列を選択してください。";
@@ -59,6 +60,7 @@ const BUTTON_DEFAULTS: ButtonSettings = {
   borderEnabled: false,
   borderWidth: 1,
   borderColor: "#2563eb",
+  hoverEffectEnabled: true,
 };
 
 const escapeHtml = (value: string) =>
@@ -85,6 +87,7 @@ export function RichTextEditor({ value, onChange, className }: RichTextEditorPro
   const [buttonDialogOpen, setButtonDialogOpen] = useState(false);
   const [buttonSettings, setButtonSettings] = useState<ButtonSettings>(BUTTON_DEFAULTS);
   const lastRangeRef = useRef<RangeStatic | null>(null);
+  const [isPreviewHovered, setIsPreviewHovered] = useState(false);
 
   const modules = useMemo(
     () => ({
@@ -308,7 +311,11 @@ export function RichTextEditor({ value, onChange, className }: RichTextEditorPro
 
     const url = buttonSettings.url.trim();
     const href = url ? normalizeUrl(url) : "#";
-    const targetAttr = url ? ' target="_blank" rel="noopener noreferrer"' : '';
+    let targetAttr = url ? ' target="_blank" rel="noopener noreferrer"' : '';
+
+    if (buttonSettings.hoverEffectEnabled) {
+      targetAttr += ` onmouseover="this.style.opacity='0.7'" onmouseout="this.style.opacity='1'"`;
+    }
 
     const textSize = clampNumber(Number(buttonSettings.textSize) || BUTTON_DEFAULTS.textSize, 8, 64);
     const borderRadius = clampNumber(Number(buttonSettings.borderRadius ?? BUTTON_DEFAULTS.borderRadius), 0, 96);
@@ -385,6 +392,7 @@ export function RichTextEditor({ value, onChange, className }: RichTextEditorPro
       fontSize: `${buttonSettings.textSize || BUTTON_DEFAULTS.textSize}px`,
       borderRadius: `${buttonSettings.borderRadius ?? BUTTON_DEFAULTS.borderRadius}px`,
       lineHeight: 1.3,
+      opacity: (isPreviewHovered && buttonSettings.hoverEffectEnabled) ? 0.7 : 1,
     };
     if (buttonSettings.width) {
       style.width = `${buttonSettings.width}px`;
@@ -401,7 +409,7 @@ export function RichTextEditor({ value, onChange, className }: RichTextEditorPro
       style.boxShadow = '0 6px 16px rgba(0,0,0,0.18)';
     }
     return style;
-  }, [buttonSettings]);
+  }, [buttonSettings, isPreviewHovered]);
 
   return (
     <div className={className}>
@@ -585,11 +593,15 @@ export function RichTextEditor({ value, onChange, className }: RichTextEditorPro
             <DialogTitle>ボタンを挿入</DialogTitle>
           </DialogHeader>
           <div className="my-4 p-4 rounded-md bg-muted flex items-center justify-center">
-            <a style={previewStyle}>
+            <a
+              style={previewStyle}
+              onMouseEnter={() => setIsPreviewHovered(true)}
+              onMouseLeave={() => setIsPreviewHovered(false)}
+            >
               {buttonSettings.text || BUTTON_DEFAULTS.text}
             </a>
           </div>
-          <div className="space-y-4">
+          <div className="space-y-3">
             <div className="space-y-2">
               <label className="text-xs font-medium text-muted-foreground">リンクURL</label>
               <Input
@@ -670,24 +682,37 @@ export function RichTextEditor({ value, onChange, className }: RichTextEditorPro
               </div>
             </div>
             <div className="flex items-center justify-between">
-              <label htmlFor="button-shadow" className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70">
+              <label htmlFor="button-shadow" className="text-xs text-muted-foreground">
                 影を付ける
               </label>
               <Switch
                 id="button-shadow"
                 checked={buttonSettings.shadow}
                 onCheckedChange={(checked) => handleButtonFieldChange("shadow", checked)}
+                className="transform scale-75 origin-right"
+              />
+            </div>
+            <div className="flex items-center justify-between">
+              <label htmlFor="button-hover" className="text-xs text-muted-foreground">
+                ホバー効果
+              </label>
+              <Switch
+                id="button-hover"
+                checked={buttonSettings.hoverEffectEnabled}
+                onCheckedChange={(checked) => handleButtonFieldChange("hoverEffectEnabled", checked)}
+                className="transform scale-75 origin-right"
               />
             </div>
             <div className="space-y-2">
               <div className="flex items-center justify-between">
-                <label htmlFor="button-border" className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70">
+                <label htmlFor="button-border" className="text-xs text-muted-foreground">
                   枠線を表示
                 </label>
                 <Switch
                   id="button-border"
                   checked={buttonSettings.borderEnabled}
                   onCheckedChange={(checked) => handleButtonFieldChange("borderEnabled", checked)}
+                  className="transform scale-75 origin-right"
                 />
               </div>
               {buttonSettings.borderEnabled && (
