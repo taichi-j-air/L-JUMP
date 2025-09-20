@@ -1,4 +1,4 @@
-﻿import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import ReactQuill from "react-quill";
 import Quill from "quill";
 import type { RangeStatic } from "quill";
@@ -7,6 +7,8 @@ import { Button } from "./ui/button";
 import { Input } from "./ui/input";
 import { Textarea } from "./ui/textarea";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "./ui/dialog";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "./ui/select";
+import { Switch } from "./ui/switch";
 import { MediaSelector } from "./MediaSelector";
 import { toast } from "sonner";
 import { Link as LinkIcon, Square } from "lucide-react";
@@ -48,11 +50,11 @@ const BUTTON_DEFAULTS: ButtonSettings = {
   url: "",
   text: "ボタン",
   textColor: "#ffffff",
-  textSize: 16,
+  textSize: 20,
   backgroundColor: "#2563eb",
-  width: "",
-  height: "",
-  borderRadius: 8,
+  width: "300",
+  height: "50",
+  borderRadius: 6,
   shadow: true,
   borderEnabled: false,
   borderWidth: 1,
@@ -304,14 +306,12 @@ export function RichTextEditor({ value, onChange, className }: RichTextEditorPro
     const editor = getQuill();
     if (!editor) return;
 
-    if (!buttonSettings.url.trim()) {
-      toast.warning(BUTTON_URL_MESSAGE);
-      return;
-    }
+    const url = buttonSettings.url.trim();
+    const href = url ? normalizeUrl(url) : "#";
+    const targetAttr = url ? ' target="_blank" rel="noopener noreferrer"' : '';
 
-    const href = normalizeUrl(buttonSettings.url.trim());
     const textSize = clampNumber(Number(buttonSettings.textSize) || BUTTON_DEFAULTS.textSize, 8, 64);
-    const borderRadius = clampNumber(Number(buttonSettings.borderRadius) || BUTTON_DEFAULTS.borderRadius, 0, 96);
+    const borderRadius = clampNumber(Number(buttonSettings.borderRadius ?? BUTTON_DEFAULTS.borderRadius), 0, 96);
     const borderWidth = clampNumber(Number(buttonSettings.borderWidth) || BUTTON_DEFAULTS.borderWidth, 0, 12);
     const widthValue = buttonSettings.width.trim() ? Number(buttonSettings.width) : NaN;
     const heightValue = buttonSettings.height.trim() ? Number(buttonSettings.height) : NaN;
@@ -352,7 +352,7 @@ export function RichTextEditor({ value, onChange, className }: RichTextEditorPro
 
     const style = styleParts.join("; ") + ";";
     const buttonHtml = "<a href=\"" + escapeHtml(href) +
-      "\" target=\"_blank\" rel=\"noopener noreferrer\" style=\"" + style + "\">" +
+      "\"" + targetAttr + " style=\"" + style + "\">" +
       escapeHtml(buttonSettings.text || BUTTON_DEFAULTS.text) + "</a>";
 
     const range = editor.getSelection(true) ?? lastRangeRef.current ?? { index: editor.getLength(), length: 0 };
@@ -368,6 +368,40 @@ export function RichTextEditor({ value, onChange, className }: RichTextEditorPro
     setButtonDialogOpen(false);
     setButtonSettings(BUTTON_DEFAULTS);
   };
+
+  const previewStyle = useMemo(() => {
+    const style: React.CSSProperties = {
+      display: 'inline-flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      textDecoration: 'none',
+      fontWeight: 600,
+      padding: '12px 24px',
+      cursor: 'pointer',
+      transition: 'all 0.2s ease',
+      whiteSpace: 'nowrap',
+      color: buttonSettings.textColor,
+      backgroundColor: buttonSettings.backgroundColor,
+      fontSize: `${buttonSettings.textSize || BUTTON_DEFAULTS.textSize}px`,
+      borderRadius: `${buttonSettings.borderRadius ?? BUTTON_DEFAULTS.borderRadius}px`,
+      lineHeight: 1.3,
+    };
+    if (buttonSettings.width) {
+      style.width = `${buttonSettings.width}px`;
+    }
+    if (buttonSettings.height) {
+      style.height = `${buttonSettings.height}px`;
+    }
+    if (buttonSettings.borderEnabled && buttonSettings.borderWidth > 0) {
+      style.border = `${buttonSettings.borderWidth}px solid ${buttonSettings.borderColor}`;
+    } else {
+      style.border = 'none';
+    }
+    if (buttonSettings.shadow) {
+      style.boxShadow = '0 6px 16px rgba(0,0,0,0.18)';
+    }
+    return style;
+  }, [buttonSettings]);
 
   return (
     <div className={className}>
@@ -550,6 +584,11 @@ export function RichTextEditor({ value, onChange, className }: RichTextEditorPro
           <DialogHeader>
             <DialogTitle>ボタンを挿入</DialogTitle>
           </DialogHeader>
+          <div className="my-4 p-4 rounded-md bg-muted flex items-center justify-center">
+            <a style={previewStyle}>
+              {buttonSettings.text || BUTTON_DEFAULTS.text}
+            </a>
+          </div>
           <div className="space-y-4">
             <div className="space-y-2">
               <label className="text-xs font-medium text-muted-foreground">リンクURL</label>
@@ -596,14 +635,20 @@ export function RichTextEditor({ value, onChange, className }: RichTextEditorPro
                 />
               </div>
               <div className="space-y-2">
-                <label className="text-xs font-medium text-muted-foreground">角丸 (px)</label>
-                <Input
-                  type="number"
-                  min={0}
-                  max={96}
-                  value={buttonSettings.borderRadius}
-                  onChange={(e) => handleButtonFieldChange("borderRadius", Number(e.target.value) || BUTTON_DEFAULTS.borderRadius)}
-                />
+                <label className="text-xs font-medium text-muted-foreground">角丸</label>
+                <Select
+                  value={String(buttonSettings.borderRadius)}
+                  onValueChange={(value) => handleButtonFieldChange("borderRadius", Number(value))}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="角丸を選択" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="0">通常 (四角)</SelectItem>
+                    <SelectItem value="6">角丸</SelectItem>
+                    <SelectItem value="50">丸</SelectItem>
+                  </SelectContent>
+                </Select>
               </div>
               <div className="space-y-2">
                 <label className="text-xs font-medium text-muted-foreground">ボタン幅 (px・空欄で自動)</label>
@@ -624,33 +669,29 @@ export function RichTextEditor({ value, onChange, className }: RichTextEditorPro
                 />
               </div>
             </div>
-            <div className="flex items-center gap-2">
-              <input
-                id="button-shadow"
-                type="checkbox"
-                className="h-4 w-4"
-                checked={buttonSettings.shadow}
-                onChange={(e) => handleButtonFieldChange("shadow", e.target.checked)}
-              />
-              <label htmlFor="button-shadow" className="text-xs text-muted-foreground">
+            <div className="flex items-center justify-between">
+              <label htmlFor="button-shadow" className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70">
                 影を付ける
               </label>
+              <Switch
+                id="button-shadow"
+                checked={buttonSettings.shadow}
+                onCheckedChange={(checked) => handleButtonFieldChange("shadow", checked)}
+              />
             </div>
             <div className="space-y-2">
-              <div className="flex items-center gap-2">
-                <input
-                  id="button-border"
-                  type="checkbox"
-                  className="h-4 w-4"
-                  checked={buttonSettings.borderEnabled}
-                  onChange={(e) => handleButtonFieldChange("borderEnabled", e.target.checked)}
-                />
-                <label htmlFor="button-border" className="text-xs text-muted-foreground">
+              <div className="flex items-center justify-between">
+                <label htmlFor="button-border" className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70">
                   枠線を表示
                 </label>
+                <Switch
+                  id="button-border"
+                  checked={buttonSettings.borderEnabled}
+                  onCheckedChange={(checked) => handleButtonFieldChange("borderEnabled", checked)}
+                />
               </div>
               {buttonSettings.borderEnabled && (
-                <div className="grid gap-3 sm:grid-cols-2">
+                <div className="grid gap-3 sm:grid-cols-2 mt-2">
                   <div className="space-y-2">
                     <label className="text-xs font-medium text-muted-foreground">枠線の太さ (px)</label>
                     <Input
@@ -729,4 +770,3 @@ export function RichTextEditor({ value, onChange, className }: RichTextEditorPro
 }
 
 export default RichTextEditor;
-
