@@ -396,13 +396,13 @@ export default function CMSFriendsPageBuilder() {
     });
   };
   return (
-    <div className="container mx-auto max-w-[1200px] space-y-4">
+    <div className="max-w-[1200px] w-full space-y-4 px-4 ml-0 mr-auto">
       <header>
         <h1 className="text-2xl font-bold tracking-tight">LINE友達ページ作成</h1>
         <p className="text-muted-foreground">3カラムでページ追加・編集・公開設定ができます。</p>
       </header>
 
-      <div className="grid grid-cols-12 gap-6">
+      <div className="grid grid-cols-12 gap-4">
         {/* Left: list and add */}
         <div className="col-span-12 md:col-span-3 space-y-3">
           <Card>
@@ -466,7 +466,7 @@ export default function CMSFriendsPageBuilder() {
         </div>
 
         {/* Center: edit panel */}
-        <div className="col-span-12 md:col-span-5 space-y-3">
+        <div className="col-span-12 md:col-span-6 space-y-3">
           <Card>
             <CardHeader className="flex flex-row items-center justify-between py-3">
               <CardTitle className="text-base">ページ編集</CardTitle>
@@ -546,7 +546,7 @@ export default function CMSFriendsPageBuilder() {
         </div>
 
         {/* Right: settings */}
-        <div className="col-span-12 md:col-span-4 space-y-3">
+        <div className="col-span-12 md:col-span-3 space-y-3">
           <Card>
             <CardHeader className="py-3">
               <CardTitle className="text-base">公開設定</CardTitle>

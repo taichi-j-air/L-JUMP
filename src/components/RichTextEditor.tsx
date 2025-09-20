@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import ReactQuill from "react-quill";
 import Quill from "quill";
+import type { RangeStatic } from "quill";
 import "react-quill/dist/quill.snow.css";
 import { Button } from "./ui/button";
 import { Textarea } from "./ui/textarea";
@@ -27,8 +28,10 @@ export function RichTextEditor({ value, onChange, className }: RichTextEditorPro
   const [draftHtml, setDraftHtml] = useState(value);
   const quillRef = useRef<ReactQuill | null>(null);
   const [currentSize, setCurrentSize] = useState<number>(16);
+  const [sizeInput, setSizeInput] = useState("16");
   const toolbarId = useRef(`rte-toolbar-${Math.random().toString(36).slice(2)}`).current;
   const [mediaOpen, setMediaOpen] = useState(false);
+  const lastRangeRef = useRef<RangeStatic | null>(null);
 
   // ReactQuill に渡すモジュール
   const modules = useMemo(
@@ -66,6 +69,48 @@ export function RichTextEditor({ value, onChange, className }: RichTextEditorPro
     if (!value) return null;
     const numeric = parseInt(value, 10);
     return Number.isNaN(numeric) ? null : numeric;
+  };
+
+  const parseSizeInput = (value: string): number | null => {
+    const trimmed = value.trim().toLowerCase();
+    if (!trimmed) return null;
+    const normalized = trimmed.endsWith("px") ? trimmed.slice(0, -2) : trimmed;
+    if (!/^\d+$/.test(normalized)) return null;
+    const parsed = parseInt(normalized, 10);
+    return Number.isNaN(parsed) ? null : parsed;
+  };
+
+  const clampSize = (value: number) => Math.max(8, Math.min(96, value));
+
+  const applySize = (size: number, context?: { editor?: any; range?: RangeStatic | null }) => {
+    const editor = context?.editor ?? getQuill();
+    const clamped = clampSize(size);
+
+    if (!editor) {
+      setCurrentSize(clamped);
+      setSizeInput(clamped.toString());
+      return;
+    }
+
+    const targetRange = context?.range ?? lastRangeRef.current ?? editor.getSelection();
+
+    if (targetRange) {
+      const length = targetRange.length ?? 0;
+
+      if (length > 0) {
+        editor.formatText(targetRange.index, length, "size", `${clamped}px`, "user");
+      } else {
+        editor.format("size", `${clamped}px`);
+      }
+
+      lastRangeRef.current = { index: targetRange.index, length };
+    } else {
+      editor.format("size", `${clamped}px`);
+      lastRangeRef.current = null;
+    }
+
+    setCurrentSize(clamped);
+    setSizeInput(clamped.toString());
   };
 
   const insertMedia = (url: string) => {
@@ -107,12 +152,7 @@ export function RichTextEditor({ value, onChange, className }: RichTextEditorPro
     const parsedCurrent = parseSizeValue(fmt.size as string | undefined);
     const baseSize = parsedCurrent ?? currentSize ?? 16;
 
-    const newSize = Math.max(8, Math.min(96, baseSize + delta));
-    editor.format("size", `${newSize}px`);
-
-    const fmtAfter = range ? editor.getFormat(range) : editor.getFormat();
-    const appliedSize = parseSizeValue(fmtAfter.size as string | undefined) ?? newSize;
-    setCurrentSize(appliedSize);
+    applySize(baseSize + delta, { editor, range });
   };
 
   const applyColor = (type: "color" | "background", color: string) => {
@@ -123,10 +163,14 @@ export function RichTextEditor({ value, onChange, className }: RichTextEditorPro
     editor.format(type, color);
   };
 
+  useEffect(() => {
+    setSizeInput(currentSize.toString());
+  }, [currentSize]);
+
   return (
     <div className={className}>
       {/* カスタムツールバー */}
-      <div id={toolbarId} className="ql-toolbar ql-snow">
+      <div id={toolbarId} className="ql-toolbar ql-snow flex flex-wrap items-center gap-2">
         <span className="ql-formats">
           <button className="ql-bold" />
           <button className="ql-italic" />
@@ -148,7 +192,34 @@ export function RichTextEditor({ value, onChange, className }: RichTextEditorPro
         <span className="ql-formats">
           <button type="button" onClick={() => applySizeDelta(-2)}>A-</button>
           <button type="button" onClick={() => applySizeDelta(2)}>A+</button>
-          <span className="text-xs text-muted-foreground tabular-nums">{currentSize}px</span>
+          <div className="flex items-center gap-1">
+            <input
+              type="text"
+              inputMode="numeric"
+              pattern="\\d*"
+              className="w-14 rounded border border-input bg-background px-2 py-1 text-xs tabular-nums focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              value={sizeInput}
+              onChange={(e) => setSizeInput(e.target.value)}
+              onBlur={(e) => {
+                const parsed = parseSizeInput(e.target.value);
+                if (parsed === null) {
+                  setSizeInput(currentSize.toString());
+                  return;
+                }
+                const editor = getQuill();
+                const storedRange = lastRangeRef.current ? { ...lastRangeRef.current } : null;
+                applySize(parsed, { editor, range: storedRange });
+              }}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  e.preventDefault();
+                  e.currentTarget.blur();
+                }
+              }}
+              aria-label="Font size"
+            />
+            <span className="text-xs text-muted-foreground">px</span>
+          </div>
         </span>
 
         <span className="ql-formats">
@@ -233,11 +304,15 @@ export function RichTextEditor({ value, onChange, className }: RichTextEditorPro
           modules={modules}
           formats={formats}
           style={{ minHeight: "200px" }}
-          className="[&_.ql-editor]:min-h-[180px] [&_.ql-toolbar]:flex [&_.ql-toolbar]:flex-wrap [&_.ql-toolbar]:gap-1 [&_.ql-toolbar_.ql-formats]:mr-2"
+          className="[&_.ql-editor]:min-h-[180px] [&>.ql-toolbar]:hidden"
           onChangeSelection={(range: any) => {
             try {
               const q = getQuill();
               if (!q) return;
+              if (range) {
+                lastRangeRef.current = { index: range.index, length: range.length ?? 0 };
+              }
+
               const fmt = range ? q.getFormat(range) : q.getFormat();
               const parsed = parseSizeValue(fmt.size as string | undefined);
               setCurrentSize(parsed ?? 16);
