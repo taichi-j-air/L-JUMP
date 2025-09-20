@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -79,6 +79,9 @@ export default function CMSFriendsPageBuilder() {
 
   const selected = pages.find(p => p.id === selectedId) || null;
   const hasLiffConfig = true; // Assume LIFF is configured
+
+  const shareUrlRef = useRef<HTMLDivElement>(null);
+  const [isShareUrlOverflowing, setIsShareUrlOverflowing] = useState(false);
 
   useEffect(() => {
     fetchPages();
@@ -352,8 +355,6 @@ export default function CMSFriendsPageBuilder() {
 
   const shareUrl = useMemo(() => {
     if (!selected) return "";
-    const baseUrl = `${window.location.origin}/cms/f/${selected.share_code}`;
-    
     const queryParams = [];
     if (hasLiffConfig) {
       queryParams.push('uid=[UID]');
@@ -361,13 +362,32 @@ export default function CMSFriendsPageBuilder() {
     if (forceExternalBrowser) {
       queryParams.push('openExternalBrowser=1');
     }
-
+    const baseUrl = `${window.location.origin}/cms/f/${selected.share_code}`;
     if (queryParams.length > 0) {
       return `${baseUrl}?${queryParams.join('&')}`;
     }
-
     return baseUrl;
   }, [selected, hasLiffConfig, forceExternalBrowser]);
+
+  useEffect(() => {
+    const checkOverflow = () => {
+      if (shareUrlRef.current) {
+        const el = shareUrlRef.current;
+        const isOverflowing = el.scrollWidth > el.clientWidth;
+        if (isOverflowing !== isShareUrlOverflowing) {
+          setIsShareUrlOverflowing(isOverflowing);
+        }
+      }
+    };
+
+    const timer = setTimeout(checkOverflow, 50);
+    window.addEventListener('resize', checkOverflow);
+
+    return () => {
+      clearTimeout(timer);
+      window.removeEventListener('resize', checkOverflow);
+    };
+  }, [shareUrl, selected, isShareUrlOverflowing]);
 
   const toggleAllowed = (id: string) => {
     setAllowedTags(prev => {
@@ -579,7 +599,23 @@ export default function CMSFriendsPageBuilder() {
                         <Copy className="h-3 w-3" />
                       </Button>
                     </Label>
-                    <div className="text-xs text-muted-foreground break-all p-2 bg-muted rounded">{shareUrl}</div>
+                    <div 
+                      className="bg-muted rounded-md border px-3 py-1 text-xs text-muted-foreground overflow-hidden whitespace-nowrap cursor-pointer"
+                      onClick={() => {
+                        navigator.clipboard.writeText(shareUrl);
+                        toast.success("URLをコピーしました");
+                      }}
+                      title="クリックしてURLをコピー"
+                    >
+                      {isShareUrlOverflowing ? (
+                        <div className="inline-block hover:animate-scroll-left">
+                          <span className="pr-16">{shareUrl}</span>
+                          <span>{shareUrl}</span>
+                        </div>
+                      ) : (
+                        <div ref={shareUrlRef}>{shareUrl}</div>
+                      )}
+                    </div>
                   </div>
 
                   <div className="space-y-2">
