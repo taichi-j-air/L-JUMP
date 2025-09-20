@@ -4,11 +4,14 @@ import Quill from "quill";
 import type { RangeStatic } from "quill";
 import "react-quill/dist/quill.snow.css";
 import { Button } from "./ui/button";
+import { Input } from "./ui/input";
 import { Textarea } from "./ui/textarea";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "./ui/dialog";
 import { MediaSelector } from "./MediaSelector";
+import { toast } from "sonner";
+import { Link as LinkIcon } from "lucide-react";
 
-// pxベースの size / color / background をstyleで使えるように
+// Allow px-based size/color/background styles to be used via inline styles
 const SizeStyle = (Quill as any).import("attributors/style/size");
 SizeStyle.whitelist = null;
 const ColorStyle = (Quill as any).import("attributors/style/color");
@@ -23,6 +26,8 @@ interface RichTextEditorProps {
   className?: string;
 }
 
+const LINK_SELECTION_MESSAGE = "Select the text you want to link.";
+
 export function RichTextEditor({ value, onChange, className }: RichTextEditorProps) {
   const [htmlMode, setHtmlMode] = useState(false);
   const [draftHtml, setDraftHtml] = useState(value);
@@ -31,9 +36,11 @@ export function RichTextEditor({ value, onChange, className }: RichTextEditorPro
   const [sizeInput, setSizeInput] = useState("16");
   const toolbarId = useRef(`rte-toolbar-${Math.random().toString(36).slice(2)}`).current;
   const [mediaOpen, setMediaOpen] = useState(false);
+  const [linkDialogOpen, setLinkDialogOpen] = useState(false);
+  const [linkInput, setLinkInput] = useState("");
   const lastRangeRef = useRef<RangeStatic | null>(null);
 
-  // ReactQuill に渡すモジュール
+  // ReactQuill modules configuration
   const modules = useMemo(
     () => ({
       toolbar: { container: `#${toolbarId}` },
@@ -42,32 +49,31 @@ export function RichTextEditor({ value, onChange, className }: RichTextEditorPro
     [toolbarId]
   );
 
-  // Quill が扱うフォーマットの whitelist
+  // Whitelist of formats handled by Quill
   const formats = [
     "bold",
     "italic",
     "underline",
     "align",
     "list",
-    "blockquote",
     "link",
     "size",
     "color",
     "background",
-    "image",   // 追加入
-    "video",   // 追加入
+    "image",
+    "video",
   ];
 
-  // 親の value 更新をHTML モード時にも追従
+  // Keep draftHtml in sync while HTML mode is open
   useEffect(() => {
     if (htmlMode) setDraftHtml(value);
   }, [value, htmlMode]);
 
   const getQuill = () => quillRef.current?.getEditor();
 
-  const parseSizeValue = (value?: string | null): number | null => {
-    if (!value) return null;
-    const numeric = parseInt(value, 10);
+  const parseSizeValue = (size?: string | null): number | null => {
+    if (!size) return null;
+    const numeric = parseInt(size, 10);
     return Number.isNaN(numeric) ? null : numeric;
   };
 
@@ -75,7 +81,7 @@ export function RichTextEditor({ value, onChange, className }: RichTextEditorPro
     const trimmed = value.trim().toLowerCase();
     if (!trimmed) return null;
     const normalized = trimmed.endsWith("px") ? trimmed.slice(0, -2) : trimmed;
-    if (!/^\d+$/.test(normalized)) return null;
+    if (!/^\\d+$/.test(normalized)) return null;
     const parsed = parseInt(normalized, 10);
     return Number.isNaN(parsed) ? null : parsed;
   };
@@ -94,20 +100,15 @@ export function RichTextEditor({ value, onChange, className }: RichTextEditorPro
 
     const targetRange = context?.range ?? lastRangeRef.current ?? editor.getSelection();
 
-    if (targetRange) {
-      const length = targetRange.length ?? 0;
-
-      if (length > 0) {
-        editor.formatText(targetRange.index, length, "size", `${clamped}px`, "user");
-      } else {
-        editor.format("size", `${clamped}px`);
-      }
-
-      lastRangeRef.current = { index: targetRange.index, length };
+    if (targetRange && (targetRange.length ?? 0) > 0) {
+      editor.formatText(targetRange.index, targetRange.length ?? 0, "size", `${clamped}px`, "user");
     } else {
       editor.format("size", `${clamped}px`);
-      lastRangeRef.current = null;
     }
+
+    lastRangeRef.current = targetRange
+      ? { index: targetRange.index, length: targetRange.length ?? 0 }
+      : null;
 
     setCurrentSize(clamped);
     setSizeInput(clamped.toString());
@@ -133,11 +134,9 @@ export function RichTextEditor({ value, onChange, className }: RichTextEditorPro
       editor.insertEmbed(range.index, "image", url, "user");
       editor.setSelection(range.index + 1, 0);
     } else if (isVideo) {
-      // 注意: Quill標準は <iframe> ベース。直リンクmp4はテーマによって表示されないことがあります。
       editor.insertEmbed(range.index, "video", url, "user");
       editor.setSelection(range.index + 1, 0);
     } else {
-      // 正しいAPIシグネチャに修正。Formats はオブジェクト、source は 'user'。
       editor.insertText(range.index, url, { link: url }, "user");
       editor.setSelection(range.index + url.length, 0);
     }
@@ -155,11 +154,79 @@ export function RichTextEditor({ value, onChange, className }: RichTextEditorPro
     applySize(baseSize + delta, { editor, range });
   };
 
+  const normalizeUrl = (value: string) => {
+    const trimmed = value.trim();
+    if (!trimmed) return "";
+    if (/^[a-zA-Z][a-zA-Z0-9+.-]*:/.test(trimmed)) {
+      return trimmed;
+    }
+    return `https://${trimmed}`;
+  };
+
+  const ensureSelection = () => {
+    const editor = getQuill();
+    if (!editor) return null;
+
+    const selection = editor.getSelection() ?? lastRangeRef.current;
+    if (!selection || (selection.length ?? 0) === 0) {
+      toast.warning(LINK_SELECTION_MESSAGE);
+      return null;
+    }
+
+    const normalizedRange: RangeStatic = {
+      index: selection.index,
+      length: selection.length ?? 0,
+    };
+
+    lastRangeRef.current = normalizedRange;
+    return { editor, range: normalizedRange };
+  };
+
+  const handleLinkButton = () => {
+    const context = ensureSelection();
+    if (!context) return;
+
+    const currentFormat = context.editor.getFormat(context.range);
+    const currentLink = (currentFormat.link as string | undefined) ?? "";
+    setLinkInput(currentLink);
+    setLinkDialogOpen(true);
+  };
+
+  const applyLink = () => {
+    const context = ensureSelection();
+    if (!context) {
+      setLinkDialogOpen(false);
+      return;
+    }
+
+    context.editor.setSelection(context.range.index, context.range.length ?? 0);
+    const value = normalizeUrl(linkInput);
+
+    if (!value) {
+      context.editor.formatText(context.range.index, context.range.length ?? 0, "link", false, "user");
+    } else {
+      context.editor.formatText(context.range.index, context.range.length ?? 0, "link", value, "user");
+    }
+
+    setLinkDialogOpen(false);
+  };
+
+  const removeLink = () => {
+    const context = ensureSelection();
+    if (!context) {
+      setLinkDialogOpen(false);
+      return;
+    }
+
+    context.editor.setSelection(context.range.index, context.range.length ?? 0);
+    context.editor.formatText(context.range.index, context.range.length ?? 0, "link", false, "user");
+    setLinkDialogOpen(false);
+  };
+
   const applyColor = (type: "color" | "background", color: string) => {
     const editor = getQuill();
     if (!editor) return;
 
-    // 選択が無くてもカーソル位置のフォーマットに適用される
     editor.format(type, color);
   };
 
@@ -169,7 +236,7 @@ export function RichTextEditor({ value, onChange, className }: RichTextEditorPro
 
   return (
     <div className={className}>
-      {/* カスタムツールバー */}
+      {/* Custom toolbar */}
       <div id={toolbarId} className="ql-toolbar ql-snow flex flex-wrap items-center gap-2">
         <span className="ql-formats">
           <button className="ql-bold" />
@@ -184,8 +251,6 @@ export function RichTextEditor({ value, onChange, className }: RichTextEditorPro
           <button className="ql-align" value="justify" />
           <button className="ql-list" value="ordered" />
           <button className="ql-list" value="bullet" />
-          <button className="ql-blockquote" />
-          <button className="ql-link" />
           <button className="ql-clean" />
         </span>
 
@@ -206,9 +271,7 @@ export function RichTextEditor({ value, onChange, className }: RichTextEditorPro
                   setSizeInput(currentSize.toString());
                   return;
                 }
-                const editor = getQuill();
-                const storedRange = lastRangeRef.current ? { ...lastRangeRef.current } : null;
-                applySize(parsed, { editor, range: storedRange });
+                applySize(parsed);
               }}
               onKeyDown={(e) => {
                 if (e.key === "Enter") {
@@ -224,7 +287,7 @@ export function RichTextEditor({ value, onChange, className }: RichTextEditorPro
 
         <span className="ql-formats">
           <label className="text-xs text-muted-foreground">
-            文字色
+            Text color
             <input
               type="color"
               className="ml-2 h-6 w-6 p-0 border rounded-none aspect-square"
@@ -232,7 +295,7 @@ export function RichTextEditor({ value, onChange, className }: RichTextEditorPro
             />
           </label>
           <label className="text-xs text-muted-foreground">
-            背景色
+            Background color
             <input
               type="color"
               className="ml-2 h-6 w-6 p-0 border rounded-none aspect-square"
@@ -241,16 +304,27 @@ export function RichTextEditor({ value, onChange, className }: RichTextEditorPro
           </label>
         </span>
 
-        <span className="ql-formats ml-auto flex gap-1">
+        <span className="ql-formats ml-auto flex gap-2 [&>button]:w-auto [&>button]:min-w-[4.5rem]">
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            onClick={handleLinkButton}
+            title="Add link"
+            className="flex items-center gap-1 text-xs px-2 py-1"
+          >
+            <LinkIcon className="h-3 w-3" />
+            Link
+          </Button>
           <Button
             type="button"
             size="sm"
             variant="outline"
             onClick={() => setMediaOpen(true)}
-            title="ライブラリ"
+            title="Media library"
             className="text-xs px-2 py-1"
           >
-            ライブラリ
+            Library
           </Button>
           <Button
             type="button"
@@ -261,18 +335,18 @@ export function RichTextEditor({ value, onChange, className }: RichTextEditorPro
               setHtmlMode(!htmlMode);
               if (!htmlMode) setDraftHtml(value);
             }}
-            title="HTML"
+            title="Toggle HTML"
           >
             HTML
           </Button>
         </span>
       </div>
 
-      {/* メディア選択ダイアログ */}
+      {/* Media selection dialog */}
       <Dialog open={mediaOpen} onOpenChange={setMediaOpen}>
         <DialogContent className="max-w-3xl">
           <DialogHeader>
-            <DialogTitle>メディアライブラリ</DialogTitle>
+            <DialogTitle>Media library</DialogTitle>
           </DialogHeader>
           <MediaSelector
             onSelect={(url) => {
@@ -283,7 +357,41 @@ export function RichTextEditor({ value, onChange, className }: RichTextEditorPro
         </DialogContent>
       </Dialog>
 
-      {/* 本体 */}
+      <Dialog
+        open={linkDialogOpen}
+        onOpenChange={(open) => {
+          setLinkDialogOpen(open);
+          if (!open) setLinkInput("");
+        }}
+      >
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Add link</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-2">
+            <Input
+              value={linkInput}
+              onChange={(e) => setLinkInput(e.target.value)}
+              placeholder="https://example.com"
+              autoFocus
+            />
+            <p className="text-xs text-muted-foreground">Leave blank to remove the link.</p>
+          </div>
+          <div className="mt-4 flex justify-end gap-2">
+            <Button variant="outline" onClick={() => setLinkDialogOpen(false)}>
+              Cancel
+            </Button>
+            <Button variant="secondary" onClick={removeLink}>
+              Remove link
+            </Button>
+            <Button onClick={applyLink}>
+              Save
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Editor body */}
       {htmlMode ? (
         <div className="space-y-2">
           <Textarea
