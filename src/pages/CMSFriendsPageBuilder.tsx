@@ -624,7 +624,7 @@ export default function CMSFriendsPageBuilder() {
                           />
                         </div>
                         <p className="text-xs text-muted-foreground">
-                          ONにすると、URL発行時に &openExternalBrowser=1 が自動で付与され、LINEアプリ内ブラウザではなく外部ブラウザで開きます。
+                          オンにするとLINE内ブラウザでは開かれず、safariなどの外部ブラウザで表示されます。
                         </p>
                       </AccordionContent>
                     </AccordionItem>
