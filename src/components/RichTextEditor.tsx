@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+﻿import { useEffect, useMemo, useRef, useState } from "react";
 import ReactQuill from "react-quill";
 import Quill from "quill";
 import type { RangeStatic } from "quill";
@@ -9,7 +9,7 @@ import { Textarea } from "./ui/textarea";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "./ui/dialog";
 import { MediaSelector } from "./MediaSelector";
 import { toast } from "sonner";
-import { Link as LinkIcon } from "lucide-react";
+import { Link as LinkIcon, Square } from "lucide-react";
 
 // Allow px-based size/color/background styles to be used via inline styles
 const SizeStyle = (Quill as any).import("attributors/style/size");
@@ -26,7 +26,49 @@ interface RichTextEditorProps {
   className?: string;
 }
 
-const LINK_SELECTION_MESSAGE = "Select the text you want to link.";
+interface ButtonSettings {
+  url: string;
+  text: string;
+  textColor: string;
+  textSize: number;
+  backgroundColor: string;
+  width: string;
+  height: string;
+  borderRadius: number;
+  shadow: boolean;
+  borderEnabled: boolean;
+  borderWidth: number;
+  borderColor: string;
+}
+
+const LINK_SELECTION_MESSAGE = "リンクにする文字列を選択してください。";
+const BUTTON_URL_MESSAGE = "ボタンのURLを入力してください。";
+
+const BUTTON_DEFAULTS: ButtonSettings = {
+  url: "",
+  text: "ボタン",
+  textColor: "#ffffff",
+  textSize: 16,
+  backgroundColor: "#2563eb",
+  width: "",
+  height: "",
+  borderRadius: 8,
+  shadow: true,
+  borderEnabled: false,
+  borderWidth: 1,
+  borderColor: "#2563eb",
+};
+
+const escapeHtml = (value: string) =>
+  value
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+
+const clampNumber = (value: number, min: number, max: number) =>
+  Math.min(Math.max(value, min), max);
 
 export function RichTextEditor({ value, onChange, className }: RichTextEditorProps) {
   const [htmlMode, setHtmlMode] = useState(false);
@@ -34,22 +76,22 @@ export function RichTextEditor({ value, onChange, className }: RichTextEditorPro
   const quillRef = useRef<ReactQuill | null>(null);
   const [currentSize, setCurrentSize] = useState<number>(16);
   const [sizeInput, setSizeInput] = useState("16");
-  const toolbarId = useRef(`rte-toolbar-${Math.random().toString(36).slice(2)}`).current;
+  const toolbarId = useRef("rte-toolbar-" + Math.random().toString(36).slice(2)).current;
   const [mediaOpen, setMediaOpen] = useState(false);
   const [linkDialogOpen, setLinkDialogOpen] = useState(false);
   const [linkInput, setLinkInput] = useState("");
+  const [buttonDialogOpen, setButtonDialogOpen] = useState(false);
+  const [buttonSettings, setButtonSettings] = useState<ButtonSettings>(BUTTON_DEFAULTS);
   const lastRangeRef = useRef<RangeStatic | null>(null);
 
-  // ReactQuill modules configuration
   const modules = useMemo(
     () => ({
-      toolbar: { container: `#${toolbarId}` },
+      toolbar: { container: "#" + toolbarId },
       clipboard: { matchVisual: false },
     }),
     [toolbarId]
   );
 
-  // Whitelist of formats handled by Quill
   const formats = [
     "bold",
     "italic",
@@ -64,7 +106,6 @@ export function RichTextEditor({ value, onChange, className }: RichTextEditorPro
     "video",
   ];
 
-  // Keep draftHtml in sync while HTML mode is open
   useEffect(() => {
     if (htmlMode) setDraftHtml(value);
   }, [value, htmlMode]);
@@ -77,11 +118,11 @@ export function RichTextEditor({ value, onChange, className }: RichTextEditorPro
     return Number.isNaN(numeric) ? null : numeric;
   };
 
-  const parseSizeInput = (value: string): number | null => {
-    const trimmed = value.trim().toLowerCase();
+  const parseSizeInput = (input: string): number | null => {
+    const trimmed = input.trim().toLowerCase();
     if (!trimmed) return null;
     const normalized = trimmed.endsWith("px") ? trimmed.slice(0, -2) : trimmed;
-    if (!/^\\d+$/.test(normalized)) return null;
+    if (!/^\d+$/.test(normalized)) return null;
     const parsed = parseInt(normalized, 10);
     return Number.isNaN(parsed) ? null : parsed;
   };
@@ -101,9 +142,9 @@ export function RichTextEditor({ value, onChange, className }: RichTextEditorPro
     const targetRange = context?.range ?? lastRangeRef.current ?? editor.getSelection();
 
     if (targetRange && (targetRange.length ?? 0) > 0) {
-      editor.formatText(targetRange.index, targetRange.length ?? 0, "size", `${clamped}px`, "user");
+      editor.formatText(targetRange.index, targetRange.length ?? 0, "size", clamped + "px", "user");
     } else {
-      editor.format("size", `${clamped}px`);
+      editor.format("size", clamped + "px");
     }
 
     lastRangeRef.current = targetRange
@@ -160,10 +201,10 @@ export function RichTextEditor({ value, onChange, className }: RichTextEditorPro
     if (/^[a-zA-Z][a-zA-Z0-9+.-]*:/.test(trimmed)) {
       return trimmed;
     }
-    return `https://${trimmed}`;
+    return "https://" + trimmed;
   };
 
-  const ensureSelection = () => {
+  const ensureSelection = (): { editor: any; range: RangeStatic } | null => {
     const editor = getQuill();
     if (!editor) return null;
 
@@ -234,9 +275,103 @@ export function RichTextEditor({ value, onChange, className }: RichTextEditorPro
     setSizeInput(currentSize.toString());
   }, [currentSize]);
 
+  const handleButtonDialogOpen = () => {
+    const editor = getQuill();
+    let initialSettings = { ...BUTTON_DEFAULTS };
+
+    if (editor) {
+      const selection = editor.getSelection();
+      if (selection && (selection.length ?? 0) > 0) {
+        const selectedText = editor.getText(selection.index, selection.length ?? 0).trim();
+        if (selectedText) {
+          initialSettings.text = selectedText;
+        }
+        lastRangeRef.current = { index: selection.index, length: selection.length ?? 0 };
+      } else {
+        lastRangeRef.current = selection ? { index: selection.index, length: selection.length ?? 0 } : null;
+      }
+    }
+
+    setButtonSettings(initialSettings);
+    setButtonDialogOpen(true);
+  };
+
+  const handleButtonFieldChange = <K extends keyof ButtonSettings>(key: K, value: ButtonSettings[K]) => {
+    setButtonSettings((prev) => ({ ...prev, [key]: value }));
+  };
+
+  const handleButtonSave = () => {
+    const editor = getQuill();
+    if (!editor) return;
+
+    if (!buttonSettings.url.trim()) {
+      toast.warning(BUTTON_URL_MESSAGE);
+      return;
+    }
+
+    const href = normalizeUrl(buttonSettings.url.trim());
+    const textSize = clampNumber(Number(buttonSettings.textSize) || BUTTON_DEFAULTS.textSize, 8, 64);
+    const borderRadius = clampNumber(Number(buttonSettings.borderRadius) || BUTTON_DEFAULTS.borderRadius, 0, 96);
+    const borderWidth = clampNumber(Number(buttonSettings.borderWidth) || BUTTON_DEFAULTS.borderWidth, 0, 12);
+    const widthValue = buttonSettings.width.trim() ? Number(buttonSettings.width) : NaN;
+    const heightValue = buttonSettings.height.trim() ? Number(buttonSettings.height) : NaN;
+
+    const styleParts: string[] = [
+      "display:inline-flex",
+      "align-items:center",
+      "justify-content:center",
+      "text-decoration:none",
+      "font-weight:600",
+      "padding:12px 24px",
+      "cursor:pointer",
+      "transition:all 0.2s ease",
+      "white-space:nowrap",
+      "color:" + buttonSettings.textColor,
+      "background-color:" + buttonSettings.backgroundColor,
+      "font-size:" + textSize + "px",
+      "border-radius:" + borderRadius + "px",
+      "line-height:1.3",
+    ];
+
+    if (!Number.isNaN(widthValue) && widthValue > 0) {
+      styleParts.push("width:" + widthValue + "px");
+    }
+    if (!Number.isNaN(heightValue) && heightValue > 0) {
+      styleParts.push("height:" + heightValue + "px");
+    }
+
+    if (buttonSettings.borderEnabled && borderWidth > 0) {
+      styleParts.push("border:" + borderWidth + "px solid " + buttonSettings.borderColor);
+    } else {
+      styleParts.push("border:none");
+    }
+
+    if (buttonSettings.shadow) {
+      styleParts.push("box-shadow:0 6px 16px rgba(0,0,0,0.18)");
+    }
+
+    const style = styleParts.join("; ") + ";";
+    const buttonHtml = "<a href=\"" + escapeHtml(href) +
+      "\" target=\"_blank\" rel=\"noopener noreferrer\" style=\"" + style + "\">" +
+      escapeHtml(buttonSettings.text || BUTTON_DEFAULTS.text) + "</a>";
+
+    const range = editor.getSelection(true) ?? lastRangeRef.current ?? { index: editor.getLength(), length: 0 };
+    const insertIndex = range.index;
+
+    if (range.length) {
+      editor.deleteText(range.index, range.length, "user");
+    }
+
+    editor.clipboard.dangerouslyPasteHTML(insertIndex, buttonHtml, "user");
+    editor.setSelection(insertIndex + 1, 0, "user");
+
+    setButtonDialogOpen(false);
+    setButtonSettings(BUTTON_DEFAULTS);
+  };
+
   return (
     <div className={className}>
-      {/* Custom toolbar */}
+      {/* カスタムツールバー */}
       <div id={toolbarId} className="ql-toolbar ql-snow flex flex-wrap items-center gap-2">
         <span className="ql-formats">
           <button className="ql-bold" />
@@ -261,7 +396,7 @@ export function RichTextEditor({ value, onChange, className }: RichTextEditorPro
             <input
               type="text"
               inputMode="numeric"
-              pattern="\\d*"
+              pattern="\d*"
               className="w-14 rounded border border-input bg-background px-2 py-1 text-xs tabular-nums focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
               value={sizeInput}
               onChange={(e) => setSizeInput(e.target.value)}
@@ -271,7 +406,7 @@ export function RichTextEditor({ value, onChange, className }: RichTextEditorPro
                   setSizeInput(currentSize.toString());
                   return;
                 }
-                applySize(parsed);
+                applySize(parsed, { editor: getQuill(), range: lastRangeRef.current });
               }}
               onKeyDown={(e) => {
                 if (e.key === "Enter") {
@@ -279,7 +414,7 @@ export function RichTextEditor({ value, onChange, className }: RichTextEditorPro
                   e.currentTarget.blur();
                 }
               }}
-              aria-label="Font size"
+              aria-label="文字サイズ"
             />
             <span className="text-xs text-muted-foreground">px</span>
           </div>
@@ -287,7 +422,7 @@ export function RichTextEditor({ value, onChange, className }: RichTextEditorPro
 
         <span className="ql-formats">
           <label className="text-xs text-muted-foreground">
-            Text color
+            文字色
             <input
               type="color"
               className="ml-2 h-6 w-6 p-0 border rounded-none aspect-square"
@@ -295,7 +430,7 @@ export function RichTextEditor({ value, onChange, className }: RichTextEditorPro
             />
           </label>
           <label className="text-xs text-muted-foreground">
-            Background color
+            背景色
             <input
               type="color"
               className="ml-2 h-6 w-6 p-0 border rounded-none aspect-square"
@@ -310,43 +445,54 @@ export function RichTextEditor({ value, onChange, className }: RichTextEditorPro
             size="sm"
             variant="outline"
             onClick={handleLinkButton}
-            title="Add link"
+            title="リンクを設定"
             className="flex items-center gap-1 text-xs px-2 py-1"
           >
             <LinkIcon className="h-3 w-3" />
-            Link
+            リンク
+          </Button>
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            onClick={handleButtonDialogOpen}
+            title="ボタンを挿入"
+            className="flex items-center gap-1 text-xs px-2 py-1"
+          >
+            <Square className="h-3 w-3" />
+            ボタン
           </Button>
           <Button
             type="button"
             size="sm"
             variant="outline"
             onClick={() => setMediaOpen(true)}
-            title="Media library"
+            title="メディアライブラリ"
             className="text-xs px-2 py-1"
           >
-            Library
+            ライブラリ
           </Button>
           <Button
             type="button"
             size="sm"
             variant="outline"
-            className={`text-xs px-2 py-1 ${htmlMode ? "bg-muted" : ""}`}
+            className={"text-xs px-2 py-1 " + (htmlMode ? "bg-muted" : "")}
             onClick={() => {
               setHtmlMode(!htmlMode);
               if (!htmlMode) setDraftHtml(value);
             }}
-            title="Toggle HTML"
+            title="HTML表示切り替え"
           >
             HTML
           </Button>
         </span>
       </div>
 
-      {/* Media selection dialog */}
+      {/* メディア選択ダイアログ */}
       <Dialog open={mediaOpen} onOpenChange={setMediaOpen}>
         <DialogContent className="max-w-3xl">
           <DialogHeader>
-            <DialogTitle>Media library</DialogTitle>
+            <DialogTitle>メディアライブラリ</DialogTitle>
           </DialogHeader>
           <MediaSelector
             onSelect={(url) => {
@@ -357,6 +503,7 @@ export function RichTextEditor({ value, onChange, className }: RichTextEditorPro
         </DialogContent>
       </Dialog>
 
+      {/* リンク設定ダイアログ */}
       <Dialog
         open={linkDialogOpen}
         onOpenChange={(open) => {
@@ -366,7 +513,7 @@ export function RichTextEditor({ value, onChange, className }: RichTextEditorPro
       >
         <DialogContent className="max-w-sm">
           <DialogHeader>
-            <DialogTitle>Add link</DialogTitle>
+            <DialogTitle>リンクを設定</DialogTitle>
           </DialogHeader>
           <div className="space-y-2">
             <Input
@@ -375,23 +522,170 @@ export function RichTextEditor({ value, onChange, className }: RichTextEditorPro
               placeholder="https://example.com"
               autoFocus
             />
-            <p className="text-xs text-muted-foreground">Leave blank to remove the link.</p>
+            <p className="text-xs text-muted-foreground">空欄にするとリンクを削除します。</p>
           </div>
           <div className="mt-4 flex justify-end gap-2">
             <Button variant="outline" onClick={() => setLinkDialogOpen(false)}>
-              Cancel
+              キャンセル
             </Button>
             <Button variant="secondary" onClick={removeLink}>
-              Remove link
+              リンク解除
             </Button>
             <Button onClick={applyLink}>
-              Save
+              保存
             </Button>
           </div>
         </DialogContent>
       </Dialog>
 
-      {/* Editor body */}
+      {/* ボタン挿入ダイアログ */}
+      <Dialog
+        open={buttonDialogOpen}
+        onOpenChange={(open) => {
+          setButtonDialogOpen(open);
+          if (!open) setButtonSettings(BUTTON_DEFAULTS);
+        }}
+      >
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle>ボタンを挿入</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <label className="text-xs font-medium text-muted-foreground">リンクURL</label>
+              <Input
+                value={buttonSettings.url}
+                onChange={(e) => handleButtonFieldChange("url", e.target.value)}
+                placeholder="https://example.com"
+              />
+            </div>
+            <div className="space-y-2">
+              <label className="text-xs font-medium text-muted-foreground">ボタンテキスト</label>
+              <Input
+                value={buttonSettings.text}
+                onChange={(e) => handleButtonFieldChange("text", e.target.value)}
+              />
+            </div>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <div className="space-y-2">
+                <label className="text-xs font-medium text-muted-foreground">文字色</label>
+                <input
+                  type="color"
+                  className="h-9 w-full rounded border"
+                  value={buttonSettings.textColor}
+                  onChange={(e) => handleButtonFieldChange("textColor", e.target.value)}
+                />
+              </div>
+              <div className="space-y-2">
+                <label className="text-xs font-medium text-muted-foreground">文字サイズ (px)</label>
+                <Input
+                  type="number"
+                  min={8}
+                  max={64}
+                  value={buttonSettings.textSize}
+                  onChange={(e) => handleButtonFieldChange("textSize", Number(e.target.value) || BUTTON_DEFAULTS.textSize)}
+                />
+              </div>
+              <div className="space-y-2">
+                <label className="text-xs font-medium text-muted-foreground">ボタンカラー</label>
+                <input
+                  type="color"
+                  className="h-9 w-full rounded border"
+                  value={buttonSettings.backgroundColor}
+                  onChange={(e) => handleButtonFieldChange("backgroundColor", e.target.value)}
+                />
+              </div>
+              <div className="space-y-2">
+                <label className="text-xs font-medium text-muted-foreground">角丸 (px)</label>
+                <Input
+                  type="number"
+                  min={0}
+                  max={96}
+                  value={buttonSettings.borderRadius}
+                  onChange={(e) => handleButtonFieldChange("borderRadius", Number(e.target.value) || BUTTON_DEFAULTS.borderRadius)}
+                />
+              </div>
+              <div className="space-y-2">
+                <label className="text-xs font-medium text-muted-foreground">ボタン幅 (px・空欄で自動)</label>
+                <Input
+                  type="number"
+                  min={0}
+                  value={buttonSettings.width}
+                  onChange={(e) => handleButtonFieldChange("width", e.target.value)}
+                />
+              </div>
+              <div className="space-y-2">
+                <label className="text-xs font-medium text-muted-foreground">ボタン高さ (px・空欄で自動)</label>
+                <Input
+                  type="number"
+                  min={0}
+                  value={buttonSettings.height}
+                  onChange={(e) => handleButtonFieldChange("height", e.target.value)}
+                />
+              </div>
+            </div>
+            <div className="flex items-center gap-2">
+              <input
+                id="button-shadow"
+                type="checkbox"
+                className="h-4 w-4"
+                checked={buttonSettings.shadow}
+                onChange={(e) => handleButtonFieldChange("shadow", e.target.checked)}
+              />
+              <label htmlFor="button-shadow" className="text-xs text-muted-foreground">
+                影を付ける
+              </label>
+            </div>
+            <div className="space-y-2">
+              <div className="flex items-center gap-2">
+                <input
+                  id="button-border"
+                  type="checkbox"
+                  className="h-4 w-4"
+                  checked={buttonSettings.borderEnabled}
+                  onChange={(e) => handleButtonFieldChange("borderEnabled", e.target.checked)}
+                />
+                <label htmlFor="button-border" className="text-xs text-muted-foreground">
+                  枠線を表示
+                </label>
+              </div>
+              {buttonSettings.borderEnabled && (
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <div className="space-y-2">
+                    <label className="text-xs font-medium text-muted-foreground">枠線の太さ (px)</label>
+                    <Input
+                      type="number"
+                      min={0}
+                      max={12}
+                      value={buttonSettings.borderWidth}
+                      onChange={(e) => handleButtonFieldChange("borderWidth", Number(e.target.value) || BUTTON_DEFAULTS.borderWidth)}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-xs font-medium text-muted-foreground">枠線のカラー</label>
+                    <input
+                      type="color"
+                      className="h-9 w-full rounded border"
+                      value={buttonSettings.borderColor}
+                      onChange={(e) => handleButtonFieldChange("borderColor", e.target.value)}
+                    />
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+          <div className="mt-4 flex justify-end gap-2">
+            <Button variant="outline" onClick={() => setButtonDialogOpen(false)}>
+              キャンセル
+            </Button>
+            <Button onClick={handleButtonSave}>
+              ボタンを挿入
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* 本文 */}
       {htmlMode ? (
         <div className="space-y-2">
           <Textarea
@@ -435,3 +729,4 @@ export function RichTextEditor({ value, onChange, className }: RichTextEditorPro
 }
 
 export default RichTextEditor;
+
