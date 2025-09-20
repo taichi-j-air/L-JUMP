@@ -353,12 +353,21 @@ export default function CMSFriendsPageBuilder() {
   const shareUrl = useMemo(() => {
     if (!selected) return "";
     const baseUrl = `${window.location.origin}/cms/f/${selected.share_code}`;
+    
+    const queryParams = [];
     if (hasLiffConfig) {
-      // LIFF認証対応のパラメーター付きURL（UIDパラメーター）
-      return `${baseUrl}?uid=[UID]`;
+      queryParams.push('uid=[UID]');
     }
+    if (forceExternalBrowser) {
+      queryParams.push('openExternalBrowser=1');
+    }
+
+    if (queryParams.length > 0) {
+      return `${baseUrl}?${queryParams.join('&')}`;
+    }
+
     return baseUrl;
-  }, [selected, hasLiffConfig]);
+  }, [selected, hasLiffConfig, forceExternalBrowser]);
 
   const toggleAllowed = (id: string) => {
     setAllowedTags(prev => {
