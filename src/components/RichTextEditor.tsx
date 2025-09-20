@@ -7,11 +7,13 @@ import { Textarea } from "./ui/textarea";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "./ui/dialog";
 import { MediaSelector } from "./MediaSelector";
 
-// pxベースの size / color / background を style で使えるように
+// pxベ�Eスの size / color / background めEstyle で使えるように
 const SizeStyle = (Quill as any).import("attributors/style/size");
+SizeStyle.whitelist = null;
 const ColorStyle = (Quill as any).import("attributors/style/color");
 const BackgroundStyle = (Quill as any).import("attributors/style/background");
 (Quill as any).register(SizeStyle, true);
+(Quill as any).register({ "formats/size": SizeStyle }, true);
 (Quill as any).register(ColorStyle, true);
 (Quill as any).register(BackgroundStyle, true);
 
@@ -38,7 +40,7 @@ export function RichTextEditor({ value, onChange, className }: RichTextEditorPro
     [toolbarId]
   );
 
-  // Quill が扱うフォーマットの whitelist
+  // Quill が扱ぁE��ォーマット�E whitelist
   const formats = [
     "bold",
     "italic",
@@ -50,16 +52,22 @@ export function RichTextEditor({ value, onChange, className }: RichTextEditorPro
     "size",
     "color",
     "background",
-    "image",   // ★ 追加
-    "video",   // ★ 追加
+    "image",   // ☁E追加
+    "video",   // ☁E追加
   ];
 
-  // 親の value 更新を HTML モード側にも追従
+  // 親の value 更新めEHTML モード�Eにも追征E
   useEffect(() => {
     if (htmlMode) setDraftHtml(value);
   }, [value, htmlMode]);
 
   const getQuill = () => quillRef.current?.getEditor();
+
+  const parseSizeValue = (value?: string | null): number | null => {
+    if (!value) return null;
+    const numeric = parseInt(value, 10);
+    return Number.isNaN(numeric) ? null : numeric;
+  };
 
   const insertMedia = (url: string) => {
     if (!url) return;
@@ -81,11 +89,11 @@ export function RichTextEditor({ value, onChange, className }: RichTextEditorPro
       editor.insertEmbed(range.index, "image", url, "user");
       editor.setSelection(range.index + 1, 0);
     } else if (isVideo) {
-      // 注意: Quill標準は <iframe> ベース。直リンクmp4はテーマによって表示されないことがあります。
+      // 注愁E Quill標準�E <iframe> ベ�Eス。直リンクmp4はチE�Eマによって表示されなぁE��とがあります、E
       editor.insertEmbed(range.index, "video", url, "user");
       editor.setSelection(range.index + 1, 0);
     } else {
-      // ★ 正しいAPIシグネチャに修正（formats はオブジェクト、source は 'user'）
+      // ☁E正しいAPIシグネチャに修正�E�Eormats はオブジェクト、source は 'user'�E�E
       editor.insertText(range.index, url, { link: url }, "user");
       editor.setSelection(range.index + url.length, 0);
     }
@@ -95,30 +103,30 @@ export function RichTextEditor({ value, onChange, className }: RichTextEditorPro
     const editor = getQuill();
     if (!editor) return;
 
-    let range = editor.getSelection(true);
-    // 選択が無ければ、カーソル位置の将来書式だけ更新（全選択はしない）
+    const range = editor.getSelection(true);
     const fmt = range ? editor.getFormat(range) : editor.getFormat();
-    const currentSizeStr = (fmt.size as string | undefined) || "16px";
-    const cur = currentSizeStr.endsWith("px")
-      ? parseInt(currentSizeStr, 10)
-      : parseInt(currentSizeStr, 10) || 16;
+    const parsedCurrent = parseSizeValue(fmt.size as string | undefined);
+    const baseSize = parsedCurrent ?? currentSize ?? 16;
 
-    const newSize = Math.max(8, Math.min(96, cur + delta));
-    editor.format("size", `${newSize}px`); // 現在の選択 or カーソル位置へ適用
-    setCurrentSize(newSize);
+    const newSize = Math.max(8, Math.min(96, baseSize + delta));
+    editor.format("size", `${newSize}px`);
+
+    const fmtAfter = range ? editor.getFormat(range) : editor.getFormat();
+    const appliedSize = parseSizeValue(fmtAfter.size as string | undefined) ?? newSize;
+    setCurrentSize(appliedSize);
   };
 
   const applyColor = (type: "color" | "background", color: string) => {
     const editor = getQuill();
     if (!editor) return;
 
-    // 選択が無くてもカーソル位置の将来書式に適用される
+    // 選択が無くてもカーソル位置の封E��書式に適用されめE
     editor.format(type, color);
   };
 
   return (
     <div className={className}>
-      {/* カスタムツールバー */}
+      {/* カスタムチE�Eルバ�E */}
       <div id={toolbarId} className="ql-toolbar ql-snow">
         <span className="ql-formats">
           <button className="ql-bold" />
@@ -146,7 +154,7 @@ export function RichTextEditor({ value, onChange, className }: RichTextEditorPro
 
         <span className="ql-formats">
           <label className="text-xs text-muted-foreground">
-            文字色
+            斁E��色
             <input
               type="color"
               className="ml-2 h-6 w-6 p-0 border rounded-none aspect-square"
@@ -190,11 +198,11 @@ export function RichTextEditor({ value, onChange, className }: RichTextEditorPro
         </span>
       </div>
 
-      {/* メディア選択ダイアログ */}
+      {/* メチE��ア選択ダイアログ */}
       <Dialog open={mediaOpen} onOpenChange={setMediaOpen}>
         <DialogContent className="max-w-3xl">
           <DialogHeader>
-            <DialogTitle>メディアライブラリ</DialogTitle>
+            <DialogTitle>メチE��アライブラリ</DialogTitle>
           </DialogHeader>
           <MediaSelector
             onSelect={(url) => {
@@ -205,7 +213,7 @@ export function RichTextEditor({ value, onChange, className }: RichTextEditorPro
         </DialogContent>
       </Dialog>
 
-      {/* 本体 */}
+      {/* 本佁E*/}
       {htmlMode ? (
         <div className="space-y-2">
           <Textarea
@@ -232,9 +240,8 @@ export function RichTextEditor({ value, onChange, className }: RichTextEditorPro
               const q = getQuill();
               if (!q) return;
               const fmt = range ? q.getFormat(range) : q.getFormat();
-              const s = (fmt.size as string | undefined) || "16px";
-              const px = s.endsWith("px") ? parseInt(s, 10) : parseInt(s, 10) || 16;
-              setCurrentSize(px);
+              const parsed = parseSizeValue(fmt.size as string | undefined);
+              setCurrentSize(parsed ?? 16);
             } catch {
               /* noop */
             }
