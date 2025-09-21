@@ -6,20 +6,19 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { TimerPreview } from "@/components/TimerPreview";
-import FormEmbedComponent from "@/components/FormEmbedComponent";
-import { X } from "lucide-react";
+import { Block } from "@/components/EnhancedBlockEditor";
 
 interface PagePayload {
   title: string;
   tag_label?: string | null;
   content?: string | null;
-  content_blocks?: string[];
+  content_blocks?: Block[];
   timer_enabled?: boolean;
   timer_mode?: "absolute" | "per_access" | "step_delivery";
   timer_deadline?: string | null;
   timer_duration_seconds?: number | null;
   show_milliseconds?: boolean;
-  timer_style?: "solid" | "glass" | "outline";
+  timer_style?: "solid" | "glass" | "outline" | "minimal";
   timer_bg_color?: string;
   timer_text_color?: string;
   internal_timer?: boolean;
@@ -49,6 +48,148 @@ type KnownErrors =
   | "tag_blocked"
   | "tag_required";
 
+// Block renderer function
+const renderBlock = (block: Block) => {
+  const { type, content } = block;
+
+  const textStyle = (block.type === 'paragraph' || block.type === 'heading' || block.type === 'note') ? {
+    fontSize: content.fontSize,
+    color: content.color,
+    fontWeight: content.bold ? 'bold' : 'normal',
+    fontStyle: content.italic ? 'italic' : 'normal',
+    textDecoration: content.underline ? 'underline' : 'none',
+    textAlign: content.alignment || 'left',
+    whiteSpace: 'pre-wrap',
+    wordBreak: 'break-word',
+  } as React.CSSProperties : {};
+
+  switch (type) {
+    case 'paragraph':
+      return <p style={textStyle}>{content.text}</p>;
+
+    case 'heading':
+      const Tag = `h${content.level || 1}` as keyof JSX.IntrinsicElements;
+      const headingStyle = {
+        '--heading-color-1': content.color1,
+        '--heading-color-2': content.color2,
+        '--heading-color-3': content.color3,
+        ...textStyle
+      } as React.CSSProperties;
+      return (
+        <Tag
+          className={`heading-style-${content.design_style || 1}`}
+          style={headingStyle}
+        >
+          {content.text}
+        </Tag>
+      );
+
+    case 'image':
+      const sizeClasses: { [key: string]: string } = {
+        small: 'w-1/4',
+        medium: 'w-1/2',
+        large: 'w-3/4',
+        full: 'w-full'
+      };
+      const alignClasses: { [key: string]: string } = {
+        left: 'mx-0',
+        center: 'mx-auto',
+        right: 'ml-auto mr-0'
+      }
+      const image = (
+        <img
+          src={content.url}
+          alt={content.alt}
+          className={`${sizeClasses[content.size] || 'w-1/2'} ${alignClasses[content.alignment] || 'mx-auto'} ${content.rounded ? 'rounded-lg' : ''} ${content.hoverEffect ? 'transition-transform duration-300 hover:scale-105' : ''}`}
+        />
+      );
+      return (
+        <figure className="my-4">
+          {content.linkUrl ? <a href={content.linkUrl} target="_blank" rel="noopener noreferrer">{image}</a> : image}
+          {content.caption && <figcaption className="text-center text-sm text-gray-600 mt-2">{content.caption}</figcaption>}
+        </figure>
+      );
+
+    case 'video':
+        const convertYouTubeUrl = (url: string) => {
+          const youtubeRegex = /(?:youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/embed\/)([^&?#]+)/;
+          const match = url.match(youtubeRegex);
+          if (match) return `https://www.youtube.com/embed/${match[1]}`;
+          return url;
+        };
+      return (
+        <figure className="my-4 aspect-video">
+          <iframe
+            src={convertYouTubeUrl(content.url)}
+            className={`w-full h-full ${content.rounded ? 'rounded-lg' : ''}`}
+            style={{ border: `3px solid ${content.borderColor || '#000000'}` }}
+            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+            allowFullScreen
+          ></iframe>
+          {content.caption && <figcaption className="text-center text-sm text-gray-600 mt-2">{content.caption}</figcaption>}
+        </figure>
+      );
+
+    case 'list':
+      const ListTag = content.type === 'numbered' ? 'ol' : 'ul';
+      return (
+        <ListTag className={content.type === 'numbered' ? 'list-decimal pl-6' : 'list-disc pl-6'}>
+          {content.items.map((item: string, index: number) => <li key={index}>{item}</li>)}
+        </ListTag>
+      );
+
+    case 'quote':
+      return (
+        <blockquote className="border-l-4 border-gray-300 pl-4 py-2 my-4" style={{ backgroundColor: content.backgroundColor || '#f3f4f6' }}>
+          <p className="italic">{content.text}</p>
+          {content.author && <footer className="text-right mt-2">- {content.author}</footer>}
+        </blockquote>
+      );
+
+    case 'code':
+      return (
+        <pre className="bg-gray-900 text-white p-4 rounded-md my-4 overflow-x-auto">
+          <code>{content.code}</code>
+        </pre>
+      );
+
+    case 'separator':
+      return <hr className="my-6" />;
+
+    case 'note':
+      return (
+        <div className="note-box" style={textStyle}>
+          <p>{content.text}</p>
+        </div>
+      );
+
+    case 'dialogue':
+      return (
+        <div className="space-y-4 my-4">
+          {content.items.map((item: any, index: number) => (
+            <div key={index} className={`flex items-start gap-3 ${item.alignment === 'right' ? 'flex-row-reverse' : ''}`}>
+              <img src={item.alignment === 'left' ? content.leftIcon : content.rightIcon} alt="icon" className="w-12 h-12 rounded-full object-cover" />
+              <div className="flex-1">
+                <p className={`text-sm mb-1 ${item.alignment === 'right' ? 'text-right' : ''}`}>
+                  {item.alignment === 'left' ? content.leftName : content.rightName}
+                </p>
+                <div 
+                  className={`relative inline-block p-3 rounded-lg max-w-xs md:max-w-md ${item.alignment === 'right' ? 'float-right' : ''}`}
+                  style={{ backgroundColor: content.bubbleBackgroundColor || '#f2f2f2' }}
+                >
+                  <p className="text-sm whitespace-pre-wrap break-words">{item.text}</p>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      );
+
+    default:
+      return null;
+  }
+};
+
 export default function CMSFriendsPublicView() {
   const params = useParams();
   const [search] = useSearchParams();
@@ -66,53 +207,14 @@ export default function CMSFriendsPublicView() {
 
   const isPreview = window.location.pathname.includes("/preview/") && !!pageId;
 
-  // ====== 公開側で折返し＆アラインを効かせるCSS ======
-  // ※ CSPでインラインstyleが禁止の場合は、この内容をグローバルCSSに移してください
-  const AlignAndWrapCSS = (
-    <style>{`
-      .ql-content { 
-        white-space: pre-wrap;
-        overflow-wrap: break-word;
-        word-break: break-word;
-      }
-      .ql-content img, .ql-content video, .ql-content iframe {
-        max-width: 100%;
-        height: auto;
-      }
-      .ql-align-center { text-align: center; }
-      .ql-align-right  { text-align: right; }
-      .ql-align-justify{ text-align: justify; }
-    `}</style>
-  );
-
-  // ====== DOMPurify 設定（型安全） ======
-  const sanitizeOptions: DOMPurifyConfig = {
-    ALLOW_DATA_ATTR: true,
-    ALLOWED_TAGS: [
-      "p","div","span","a","img","br","strong","em","u","ol","ul","li","blockquote",
-      "h1","h2","h3","h4","h5","h6","iframe","video","source"
-    ],
-    ALLOWED_ATTR: [
-      "class","style","id",
-      "href","target","rel","title",
-      "src","alt","width","height","controls","allow","allowfullscreen","frameborder",
-      "data-form-id","data-*"
-    ],
-    // 危険なタグ（script, style内の危険等）はデフォルトで除去されます
-  };
-
-  // aタグに rel を補強
-  const secureLinks = (html: string) =>
-    html.replace(/<a\s+([^>]*href=['"][^'"]+['"][^>]*)>/gi, (m, attrs) => {
+  const sanitizeHtml = (raw: string) => {
+    const clean = DOMPurify.sanitize(raw, { USE_PROFILES: { html: true } });
+    return clean.replace(/<a\s+([^>]*href=['"][^'"]+['"][^>]*)>/gi, (m, attrs) => {
       if (!/rel=/.test(attrs)) {
         return `<a ${attrs} rel="noopener noreferrer">`;
       }
       return m;
     });
-
-  const sanitizeHtml = (raw: string) => {
-    const clean = DOMPurify.sanitize(raw, sanitizeOptions);
-    return secureLinks(clean);
   };
 
   useEffect(() => {
@@ -137,11 +239,8 @@ export default function CMSFriendsPublicView() {
       else if (m.includes("423") || m.includes("locked")) status = 423;
       else if (m.includes("404") || m.includes("not found")) {
         status = 404;
-        console.log("✅ Detected 404 from message");
       }
     }
-
-    console.log("🔍 Final result:", { status: status ?? 0, code, message });
     return { status: status ?? 0, code, message };
   };
 
@@ -152,7 +251,6 @@ export default function CMSFriendsPublicView() {
     setRequirePass(false);
 
     try {
-      // -------- Preview mode --------
       if (isPreview) {
         const { data: page, error: pageError } = await supabase
           .from("cms_pages")
@@ -200,7 +298,6 @@ export default function CMSFriendsPublicView() {
         return;
       }
 
-      // -------- Public mode (Edge Function) --------
       if (!shareCode) {
         setError("not_found");
         setLoading(false);
@@ -263,10 +360,8 @@ export default function CMSFriendsPublicView() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [shareCode, pageId, uid]);
 
-  // -------- Loading --------
   if (loading) return <div className="container mx-auto p-6">読み込み中…</div>;
 
-  // -------- Error screens --------
   if (error === "not_published") {
     return (
       <div className="min-h-screen bg-background flex flex-col">
@@ -274,13 +369,13 @@ export default function CMSFriendsPublicView() {
           <div className="w-full max-w-md p-6 rounded-lg" style={{ backgroundColor: "#999999" }}>
             <div className="text-center space-y-4">
               <h3 className="text-2xl font-semibold text-white">非公開ページ</h3>
-              <p className="text-white">このページは現在非公開に設定されています</p>
+              <p className="text-white">このページは現在非公開に設定されています。</p>
             </div>
           </div>
         </div>
         <div className="py-2 text-center" style={{ backgroundColor: "rgb(12, 179, 134)" }}>
           <div className="flex flex-col items-center justify-center">
-            <span className="font-bold text-lg text-white">L！JUMP</span>
+            <span className="font-bold text-lg text-white">L-JUMP</span>
             <span className="text-xs text-white opacity-90">LINE公式アカウント拡張ツール</span>
           </div>
         </div>
@@ -294,16 +389,18 @@ export default function CMSFriendsPublicView() {
         <div className="flex-1 flex items-center justify-center px-4">
           <div className="w-full max-w-md p-6 rounded-lg" style={{ backgroundColor: "#999999" }}>
             <div className="text-center space-y-4">
-              <h3 className="text-2xl font-semibold text白">LINE友だち限定WEBページ</h3>
+              <h3 className="text-2xl font-semibold text-white">LINE友だち限定WEBページ</h3>
               <p className="text-white">
-                このページはLINE友だち限定です。<br />正しいリンクから開いてください。
+                このページはLINE友だち限定です。
+                <br />
+                正しいリンクから開いてください。
               </p>
             </div>
           </div>
         </div>
         <div className="py-2 text-center" style={{ backgroundColor: "rgb(12, 179, 134)" }}>
           <div className="flex flex-col items-center justify-center">
-            <span className="font-bold text-lg text-white">L！JUMP</span>
+            <span className="font-bold text-lg text-white">L-JUMP</span>
             <span className="text-xs text-white opacity-90">LINE公式アカウント拡張ツール</span>
           </div>
         </div>
@@ -324,7 +421,7 @@ export default function CMSFriendsPublicView() {
         </div>
         <div className="py-2 text-center" style={{ backgroundColor: "rgb(12, 179, 134)" }}>
           <div className="flex flex-col items-center justify-center">
-            <span className="font-bold text-lg text-white">L！JUMP</span>
+            <span className="font-bold text-lg text-white">L-JUMP</span>
             <span className="text-xs text-white opacity-90">LINE公式アカウント拡張ツール</span>
           </div>
         </div>
@@ -345,7 +442,7 @@ export default function CMSFriendsPublicView() {
         </div>
         <div className="py-2 text-center" style={{ backgroundColor: "rgb(12, 179, 134)" }}>
           <div className="flex flex-col items-center justify-center">
-            <span className="font-bold text-lg text-white">L！JUMP</span>
+            <span className="font-bold text-lg text-white">L-JUMP</span>
             <span className="text-xs text-white opacity-90">LINE公式アカウント拡張ツール</span>
           </div>
         </div>
@@ -366,7 +463,7 @@ export default function CMSFriendsPublicView() {
         </div>
         <div className="py-2 text-center" style={{ backgroundColor: "rgb(12, 179, 134)" }}>
           <div className="flex flex-col items-center justify-center">
-            <span className="font-bold text-lg text-white">L！JUMP</span>
+            <span className="font-bold text-lg text-white">L-JUMP</span>
             <span className="text-xs text-white opacity-90">LINE公式アカウント拡張ツール</span>
           </div>
         </div>
@@ -374,7 +471,6 @@ export default function CMSFriendsPublicView() {
     );
   }
 
-  // -------- Passcode UI --------
   if (requirePass) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center px-4">
@@ -403,7 +499,6 @@ export default function CMSFriendsPublicView() {
     );
   }
 
-  // -------- Friend info (未使用想定) --------
   if (friendInfo) {
     return (
       <div className="container mx-auto max-w-3xl p-4 space-y-4">
@@ -437,11 +532,7 @@ export default function CMSFriendsPublicView() {
 
   return (
     <div className="min-h-screen bg-gray-100 flex justify-center">
-      {/* 中央の白い部分 */}
       <div className="w-full max-w-3xl bg-white border-x border-gray-200 flex flex-col">
-        {AlignAndWrapCSS}
-
-        {/* タイマー */}
         {data.timer_enabled && (
           <TimerPreview
             mode={data.timer_mode || "absolute"}
@@ -470,64 +561,13 @@ export default function CMSFriendsPublicView() {
           />
         )}
 
-        {/* コンテンツ本文 */}
-        <article className="prose max-w-none dark:prose-invert flex-1 p-4 ql-content">
+        <article className="prose max-w-none dark:prose-invert flex-1 p-4">
           {Array.isArray(data.content_blocks) && data.content_blocks.length > 0 ? (
-            data.content_blocks.map((block, idx) => {
-              const raw = block || "";
-
-              // --- 生HTMLでFormEmbed検出（サニタイズ前） ---
-              if (raw.includes("<FormEmbed") && raw.includes("formId=")) {
-                const formIdMatch = raw.match(/formId="([^"]+)"/);
-                const uidMatch = raw.match(/uid="([^"]+)"/);
-                if (formIdMatch) {
-                  const formId = formIdMatch[1];
-                  const embedUid = uidMatch && uidMatch[1] === "[UID]" ? uid : uidMatch ? uidMatch[1] : "";
-                  return (
-                    <div key={idx} className="mt-4 first:mt-0">
-                      <FormEmbedComponent formId={formId} uid={embedUid} className="my-6" />
-                    </div>
-                  );
-                }
-              }
-              if (raw.includes('class="form-embed-container"') && raw.includes("data-form-id=")) {
-                const formIdMatch = raw.match(/data-form-id="([^"]+)"/);
-                if (formIdMatch) {
-                  const formId = formIdMatch[1];
-                  return (
-                    <div key={idx} className="mt-4 first:mt-0">
-                      <FormEmbedComponent formId={formId} uid={uid} className="my-6" />
-                    </div>
-                  );
-                }
-              }
-              if (raw.includes('class="form-embed"') && raw.includes("data-form-id=")) {
-                const formIdMatch = raw.match(/data-form-id="([^"]+)"/);
-                if (formIdMatch) {
-                  const formId = formIdMatch[1];
-                  return (
-                    <div key={idx} className="mt-4 first:mt-0">
-                      <FormEmbedComponent formId={formId} uid={uid} className="my-6" />
-                    </div>
-                  );
-                }
-              }
-
-              // --- フォーム以外はサニタイズして表示 ---
-              const html = sanitizeHtml(raw);
-              return (
-                <div
-                  key={idx}
-                  className="mt-4 first:mt-0"
-                  dangerouslySetInnerHTML={{ __html: html }}
-                />
-              );
-            })
+            data.content_blocks.sort((a, b) => a.order - b.order).map((block) => (
+              <div key={block.id}>{renderBlock(block)}</div>
+            ))
           ) : (
-            <div
-              className="mt-4 first:mt-0"
-              dangerouslySetInnerHTML={{ __html: sanitizeHtml(data.content || "") }}
-            />
+            <div dangerouslySetInnerHTML={{ __html: sanitizeHtml(data.content || "") }} />
           )}
         </article>
       </div>

@@ -127,3 +127,117 @@ All colors MUST be HSL.
     text-rendering: optimizeLegibility;
   }
 }
+
+@layer components {
+  /* Custom Heading Styles */
+  .heading-style-1 {
+    padding: .5em .7em;
+    border-left: 5px solid var(--heading-color-1, #2589d0);
+    background-color: var(--heading-color-2, #f2f2f2);
+    color: var(--heading-color-3, #333333);
+    margin: 1.5em 0;
+  }
+
+  .heading-style-2 {
+    position: relative;
+    border-top: solid 2px var(--heading-color-1, #80c8d1);
+    border-bottom: solid 2px var(--heading-color-1, #80c8d1);
+    background: var(--heading-color-2, #f4f4f4);
+    line-height: 1.4;
+    padding: 0.4em 0.5em;
+    margin: 1.5em 0;
+  }
+
+  .heading-style-2::after {
+    position: absolute;
+    content: 'POINT';
+    background: var(--heading-color-1, #80c8d1);
+    color: var(--heading-color-3, #fff);
+    left: 0px;
+    bottom: 100%;
+    border-radius: 5px 5px 0 0;
+    padding: 5px 7px 3px;
+    font-size: 0.7em;
+    line-height: 1;
+    letter-spacing: 0.05em;
+  }
+
+  .heading-style-3 {
+    position: relative;
+    padding-left: 35px;
+    margin: 1.5em 0;
+  }
+  .heading-style-3::before {
+    position: absolute;
+    /* Font Awesome 5 Free is not available, using a placeholder */
+    content: "💡";
+    background: var(--heading-color-1, #ffca2c);
+    color: var(--heading-color-2, white);
+    font-weight: 900;
+    font-size: 15px;
+    border-radius: 50%;
+    left: 0;
+    width: 25px;
+    height: 25px;
+    line-height: 25px;
+    text-align: center;
+    top: 50%;
+    transform: translateY(-50%);
+  }
+  .heading-style-3::after {
+    content: '';
+    display: block;
+    position: absolute;
+    left: 20px;
+    height: 0;
+    width: 0;
+    border-top: 7px solid transparent;
+    border-bottom: 7px solid transparent;
+    border-left: 12px solid var(--heading-color-1, #ffca2c);
+    top: 50%;
+    transform: translateY(-50%);
+  }
+
+  .heading-style-4 {
+    position: relative;
+    padding: 0.25em 0.5em 0.25em 1.2em;
+    color: var(--heading-color-1, #494949);
+    background: transparent;
+    margin: 1.5em 0;
+  }
+  .heading-style-4::before {
+    content: '';
+    position: absolute;
+    left: 0.25em;
+    top: 0;
+    bottom: 0;
+    width: 5px;
+    background-color: var(--heading-color-2, #7db4e6);
+    border-radius: 9999px;
+  }
+
+  /* Note Box Style */
+  .note-box {
+      display: flex;
+      grid-gap: 0 .7em;
+      margin: 1.5em auto;
+      padding: 1em;
+      border-radius: 5px;
+      background-color: #ffebee;
+      color: #333333;
+  }
+
+  .note-box::before {
+      width: 24px;
+      height: 24px;
+      content: '';
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M12.8659 3.00017L22.3922 19.5002C22.6684 19.9785 22.5045 20.5901 22.0262 20.8662C21.8742 20.954 21.7017 21.0002 21.5262 21.0002H2.47363C1.92135 21.0002 1.47363 20.5525 1.47363 20.0002C1.47363 19.8246 1.51984 19.6522 1.60761 19.5002L11.1339 3.00017C11.41 2.52187 12.0216 2.358 12.4999 2.63414C12.6519 2.72191 12.7782 2.84815 12.8659 3.00017ZM10.9999 16.0002V18.0002H12.9999V16.0002H10.9999ZM10.9999 9.00017V14.0002H12.9999V9.00017H10.9999Z' fill='%23f06060'%3E%3C/path%3E%3C/svg%3E");
+  }
+
+  .note-box p, .note-box textarea {
+      margin: 0;
+      padding: 0 0 0 .7em;
+      border-left: 1px solid #f06060;
+      flex: 1;
+  }
+}

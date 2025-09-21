@@ -8,14 +8,11 @@ import { Switch } from "@/components/ui/switch";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
-import { Textarea } from "@/components/ui/textarea";
-import { X, Eye, Link, Copy, ExternalLink, Trash2 } from "lucide-react";
+import { X, Eye, Link, Copy, Trash2 } from "lucide-react";
 import { TimerPreview } from "@/components/TimerPreview";
-import FormAccessSelector from "@/components/FormAccessSelector";
-import { FormEmbedSelector } from "@/components/FormEmbedSelector";
 import { supabase } from "@/integrations/supabase/client";
-import RichTextBlocksEditor from "@/components/RichTextBlocksEditor";
 import { toast } from "sonner";
+import { EnhancedBlockEditor, Block } from "@/components/EnhancedBlockEditor";
 
 export default function CMSFriendsPageBuilder() {
   const navigate = useNavigate();
@@ -30,8 +27,7 @@ export default function CMSFriendsPageBuilder() {
   // Form states
   const [slug, setSlug] = useState("");
   const [title, setTitle] = useState("");
-  const [contentHtml, setContentHtml] = useState("");
-  const [contentBlocks, setContentBlocks] = useState<string[]>([]);
+  const [contentBlocks, setContentBlocks] = useState<Block[]>([]);
   const [allowedTags, setAllowedTags] = useState<string[]>([]);
   const [blockedTags, setBlockedTags] = useState<string[]>([]);
   const [requirePass, setRequirePass] = useState(false);
@@ -74,8 +70,6 @@ export default function CMSFriendsPageBuilder() {
   const toSeconds = (d: number, h: number, m: number, s: number) => d * 86400 + h * 3600 + m * 60 + s;
 
   const [saving, setSaving] = useState(false);
-  const [showFormInsert, setShowFormInsert] = useState(false);
-  const [showFormEmbed, setShowFormEmbed] = useState(false);
 
   const selected = pages.find(p => p.id === selectedId) || null;
   const hasLiffConfig = true; // Assume LIFF is configured
@@ -138,7 +132,6 @@ export default function CMSFriendsPageBuilder() {
   const resetForm = () => {
     setSlug("");
     setTitle("");
-    setContentHtml("");
     setContentBlocks([]);
     setAllowedTags([]);
     setBlockedTags([]);
@@ -174,9 +167,19 @@ export default function CMSFriendsPageBuilder() {
     if (!selected) return;
     setSlug(selected.slug || "");
     setTitle(selected.title || "");
-    setContentHtml((selected as any).content || "");
-    setContentBlocks(Array.isArray((selected as any).content_blocks) ? 
-      (selected as any).content_blocks.filter((block: any) => typeof block === 'string') : []);
+    
+    if (Array.isArray(selected.content_blocks)) {
+      setContentBlocks(selected.content_blocks);
+    } else if (typeof selected.content_blocks === 'string') {
+      try {
+        setContentBlocks(JSON.parse(selected.content_blocks));
+      } catch (e) {
+        setContentBlocks([]);
+      }
+    } else {
+      setContentBlocks([]);
+    }
+
     setAllowedTags(selected.allowed_tag_ids || []);
     setBlockedTags(selected.blocked_tag_ids || []);
     setRequirePass(!!selected.require_passcode);
@@ -187,7 +190,6 @@ export default function CMSFriendsPageBuilder() {
     setDurationSeconds((selected as any).timer_duration_seconds || 0);
     setShowMilliseconds(!!(selected as any).show_milliseconds);
 
-    // ▼ minimal を含む union で受ける
     setTimerStyle(((selected as any).timer_style as "solid" | "glass" | "outline" | "minimal") || "solid");
 
     setTimerBgColor((selected as any).timer_bg_color || "#0cb386");
@@ -202,7 +204,6 @@ export default function CMSFriendsPageBuilder() {
     setSelectedScenario((selected as any).timer_scenario_id || "");
     setSelectedStep((selected as any).timer_step_id || "");
     
-    // Convert duration back to D/H/M/S
     const dur = (selected as any).timer_duration_seconds || 0;
     const days = Math.floor(dur / 86400);
     const hours = Math.floor((dur % 86400) / 3600);
@@ -213,7 +214,6 @@ export default function CMSFriendsPageBuilder() {
     setDurMinutes(minutes);
     setDurSecs(seconds);
     
-    // Set toggle states
     setShowRemainingText((selected as any).show_remaining_text ?? true);
     setShowEndDate((selected as any).show_end_date ?? true);
     setForceExternalBrowser((selected as any).force_external_browser ?? false);
@@ -231,7 +231,6 @@ export default function CMSFriendsPageBuilder() {
         user_id: user.id,
         title: "新しいページ",
         slug: `page-${Date.now()}`,
-        content: "",
         content_blocks: [],
         visibility: "friends_only" as const,
         allowed_tag_ids: [],
@@ -273,17 +272,14 @@ export default function CMSFriendsPageBuilder() {
     if (!selected) return;
     setSaving(true);
     try {
-      // 認証状態の確認
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) {
         toast.error("認証が必要です");
         return;
       }
 
-      // Calculate current durationSeconds from form inputs
       const currentDurationSeconds = toSeconds(durDays, durHours, durMinutes, durSecs);
 
-      // Validate timer_deadline for absolute mode
       let validatedTimerDeadline = null;
       if (timerMode === "absolute" && timerDeadline) {
         const deadlineDate = new Date(timerDeadline);
@@ -297,7 +293,6 @@ export default function CMSFriendsPageBuilder() {
       const payload = {
         title,
         slug,
-        content: contentHtml,
         content_blocks: contentBlocks,
         allowed_tag_ids: allowedTags,
         blocked_tag_ids: blockedTags,
@@ -308,10 +303,7 @@ export default function CMSFriendsPageBuilder() {
         timer_deadline: validatedTimerDeadline,
         timer_duration_seconds: (timerMode === "per_access" || timerMode === "step_delivery") ? currentDurationSeconds : null,
         show_milliseconds: showMilliseconds,
-
-        // ▼ minimal をそのまま保存
         timer_style: timerStyle,
-
         timer_bg_color: timerBgColor,
         timer_text_color: timerTextColor,
         internal_timer: internalTimer,
@@ -328,7 +320,6 @@ export default function CMSFriendsPageBuilder() {
         force_external_browser: forceExternalBrowser,
       };
 
-      console.log("Saving page with payload:", payload);
       const { data, error } = await supabase
         .from('cms_pages')
         .update(payload)
@@ -392,7 +383,6 @@ export default function CMSFriendsPageBuilder() {
   const toggleAllowed = (id: string) => {
     setAllowedTags(prev => {
       const next = prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id];
-      // remove from blocked if added to allowed
       setBlockedTags(b => b.filter(x => x !== id));
       return next;
     });
@@ -400,24 +390,19 @@ export default function CMSFriendsPageBuilder() {
   const toggleBlocked = (id: string) => {
     setBlockedTags(prev => {
       const next = prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id];
-      // remove from allowed if added to blocked
       setAllowedTags(a => a.filter(x => x !== id));
       return next;
     });
   };
 
-  // Preview open
   const openPreview = () => {
     if (!selected) return;
-    // まず保存してからプレビューを開く
     handleSave().then(() => {
-      // Check if passcode is required
       const url = requirePass 
         ? `/cms/preview/${selected.id}?passcode=${passcode}`
         : `/cms/preview/${selected.id}`;
       window.open(url, '_blank');
     }).catch(() => {
-      // If save fails, still open preview with current data
       const url = requirePass 
         ? `/cms/preview/${selected.id}?passcode=${passcode}`
         : `/cms/preview/${selected.id}`;
@@ -432,7 +417,6 @@ export default function CMSFriendsPageBuilder() {
       </header>
 
       <div className="grid grid-cols-12 gap-4">
-        {/* Left: list and add */}
         <div className="col-span-12 md:col-span-3 space-y-3">
           <Card>
             <CardHeader className="flex flex-row items-center justify-between py-3">
@@ -494,7 +478,6 @@ export default function CMSFriendsPageBuilder() {
           </Card>
         </div>
 
-        {/* Center: edit panel */}
         <div className="col-span-12 md:col-span-6 space-y-3">
           <Card>
             <CardHeader className="flex flex-row items-center justify-between py-3">
@@ -521,7 +504,6 @@ export default function CMSFriendsPageBuilder() {
                     <Input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="ページタイトル" />
                   </div>
 
-                  {/* Timer Preview in center column */}
                   {timerEnabled && (
                     <div className="space-y-2">
                       <Label>タイマープレビュー</Label>
@@ -548,24 +530,9 @@ export default function CMSFriendsPageBuilder() {
 
                   <div className="space-y-2">
                     <Label>コンテンツ</Label>
-                    <RichTextBlocksEditor
-                      value={contentBlocks}
+                    <EnhancedBlockEditor
+                      blocks={contentBlocks}
                       onChange={setContentBlocks}
-                    />
-                    <div className="flex gap-2 flex-wrap">
-                      <Button size="sm" onClick={() => setShowFormEmbed(true)}>
-                        フォーム埋め込み
-                      </Button>
-                    </div>
-                  </div>
-
-                  <div className="space-y-2">
-                    <Label>従来HTMLコンテンツ</Label>
-                    <Textarea 
-                      value={contentHtml} 
-                      onChange={(e) => setContentHtml(e.target.value)} 
-                      placeholder="HTMLコンテンツ（廃止予定）"
-                      rows={4}
                     />
                   </div>
                 </>
@@ -574,7 +541,6 @@ export default function CMSFriendsPageBuilder() {
           </Card>
         </div>
 
-        {/* Right: settings */}
         <div className="col-span-12 md:col-span-3 space-y-3">
           <Card>
             <CardHeader className="py-3">
@@ -859,7 +825,6 @@ export default function CMSFriendsPageBuilder() {
                         </div>
                       ) : null}
 
-                      {/* Timer Customization */}
                       <Accordion type="multiple" className="w-full">
                         <AccordionItem value="timer-settings">
                           <AccordionTrigger className="text-sm">タイマー詳細設定</AccordionTrigger>
@@ -867,9 +832,7 @@ export default function CMSFriendsPageBuilder() {
                             <div className="space-y-2">
                               <Label>期限切れ後の動作</Label>
                               <Select value={expireAction} onValueChange={(v) => setExpireAction(v as any)}>
-                                <SelectTrigger>
-                                  <SelectValue />
-                                </SelectTrigger>
+                                <SelectTrigger><SelectValue /></SelectTrigger>
                                 <SelectContent>
                                   <SelectItem value="keep_public">そのまま表示</SelectItem>
                                   <SelectItem value="hide">ページを非表示</SelectItem>
@@ -880,9 +843,7 @@ export default function CMSFriendsPageBuilder() {
                             <div className="space-y-2">
                               <Label>スタイル</Label>
                               <Select value={timerStyle} onValueChange={(v) => setTimerStyle(v as any)}>
-                                <SelectTrigger>
-                                  <SelectValue />
-                                </SelectTrigger>
+                                <SelectTrigger><SelectValue /></SelectTrigger>
                                 <SelectContent className="bg-background">
                                   <SelectItem value="solid">ソリッド</SelectItem>
                                   <SelectItem value="glass">画像①（横ラベル）</SelectItem>
@@ -942,27 +903,19 @@ export default function CMSFriendsPageBuilder() {
                               </Label>
                             </div>
 
-                            {/* 終了まで残りテキスト表示制御 - outline/minimal スタイル時のみ表示 */}
                             {(timerStyle === 'outline' || timerStyle === 'minimal') && (
                               <div className="space-y-2">
                                 <Label className="flex items-center justify-between">
                                   「終了まで残り」テキスト表示
-                                  <Switch
-                                    checked={showRemainingText}
-                                    onCheckedChange={setShowRemainingText}
-                                  />
+                                  <Switch checked={showRemainingText} onCheckedChange={setShowRemainingText} />
                                 </Label>
                               </div>
                             )}
 
-                            {/* 終了日時表示制御 - 全スタイルに適用 */}
                             <div className="space-y-2">
                               <Label className="flex items-center justify-between">
                                 終了日時表示
-                                <Switch
-                                  checked={showEndDate}
-                                  onCheckedChange={setShowEndDate}
-                                />
+                                <Switch checked={showEndDate} onCheckedChange={setShowEndDate} />
                               </Label>
                             </div>
                           </AccordionContent>
@@ -977,24 +930,6 @@ export default function CMSFriendsPageBuilder() {
           </Card>
         </div>
       </div>
-
-      {/* Modals */}
-      {showFormEmbed && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <FormEmbedSelector
-            onInsert={(formHtml) => {
-              console.log("Form embed HTML:", formHtml);
-              setContentBlocks(prev => {
-                const updated = [...prev, formHtml];
-                console.log("Updated content blocks:", updated);
-                return updated;
-              });
-              setShowFormEmbed(false);
-            }}
-            onClose={() => setShowFormEmbed(false)}
-          />
-        </div>
-      )}
     </div>
   );
 }
