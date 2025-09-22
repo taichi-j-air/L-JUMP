@@ -1,4 +1,4 @@
-﻿import React, { useState, useRef, useEffect, useMemo } from 'react';
+import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -7,6 +7,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { MediaLibrarySelector } from '@/components/MediaLibrarySelector';
 import { 
   Plus, 
@@ -49,6 +50,189 @@ interface EnhancedBlockEditorProps {
   onChange: (blocks: Block[]) => void;
 }
 
+const buttonTemplates = [
+  {
+    name: 'テンプレート1',
+    styles: {
+      width: 'medium',
+      alignment: 'center',
+      height: 50,
+      textSize: 16,
+      textColor: '#212121',
+      backgroundColor: '#FFF824',
+      borderRadius: 50,
+      shadow: false,
+      borderEnabled: true,
+      borderWidth: 2,
+      borderColor: '#212121',
+    }
+  },
+  {
+    name: 'テンプレート2',
+    styles: {
+      width: 'medium',
+      alignment: 'center',
+      height: 50,
+      textSize: 18,
+      textColor: '#ffffff',
+      backgroundColor: '#F07400',
+      borderRadius: 6,
+      shadow: true,
+      borderEnabled: false,
+    }
+  },
+  {
+    name: 'テンプレート3',
+    styles: {
+      width: 'medium',
+      alignment: 'center',
+      height: 50,
+      textSize: 18,
+      textColor: '#000000',
+      backgroundColor: '#ffffff',
+      borderRadius: 0,
+      shadow: false,
+      borderEnabled: true,
+      borderWidth: 2,
+      borderColor: '#000000',
+    }
+  },
+  {
+    name: 'テンプレート4',
+    styles: {
+      width: 'medium',
+      alignment: 'center',
+      height: 50,
+      textSize: 16,
+      textColor: '#009DFF',
+      backgroundColor: '#ffffff',
+      borderRadius: 6,
+      shadow: true,
+      borderEnabled: true,
+      borderWidth: 1,
+      borderColor: '#009DFF',
+    }
+  },
+  {
+    name: 'テンプレート5',
+    styles: {
+      width: 'medium',
+      alignment: 'center',
+      height: 50,
+      textSize: 18,
+      textColor: '#ffffff',
+      backgroundColor: '#0CB386',
+      borderRadius: 0,
+      shadow: true,
+      borderEnabled: false,
+    }
+  },
+  {
+    name: 'テンプレート6',
+    styles: {
+      width: 'medium',
+      alignment: 'center',
+      height: 50,
+      textSize: 18,
+      textColor: '#ffffff',
+      backgroundColor: '#EE4F4F',
+      borderRadius: 6,
+      shadow: true,
+      borderEnabled: false,
+    }
+  },
+  {
+    name: 'テンプレート7',
+    styles: {
+      width: 'medium',
+      alignment: 'center',
+      height: 50,
+      textSize: 16,
+      textColor: '#85B7FD',
+      backgroundColor: '#F1FCFE',
+      borderRadius: 0,
+      shadow: true,
+      borderEnabled: true,
+      borderWidth: 2,
+      borderColor: '#85B7FD',
+    }
+  },
+  {
+    name: 'テンプレート8',
+    styles: {
+      width: 'medium',
+      alignment: 'center',
+      height: 50,
+      textSize: 16,
+      textColor: '#ffffff',
+      backgroundColor: '#242424',
+      borderRadius: 50,
+      shadow: false,
+      borderEnabled: false,
+    }
+  },
+  {
+    name: 'テンプレート9',
+    styles: {
+      width: 'medium',
+      alignment: 'center',
+      height: 50,
+      textSize: 16,
+      textColor: '#ffffff',
+      backgroundColor: '#EF8383',
+      borderRadius: 50,
+      shadow: false,
+      borderEnabled: false,
+    }
+  },
+  {
+    name: 'テンプレート10',
+    styles: {
+      width: 'medium',
+      alignment: 'center',
+      height: 50,
+      textSize: 16,
+      textColor: '#242424',
+      backgroundColor: '#F0F0F0',
+      borderRadius: 0,
+      shadow: false,
+      borderEnabled: true,
+      borderWidth: 1,
+      borderColor: '#242424',
+    }
+  },
+  {
+    name: 'テンプレート11',
+    styles: {
+      width: 'medium',
+      alignment: 'center',
+      height: 50,
+      textSize: 18,
+      textColor: '#FF9300',
+      backgroundColor: '#ffffff',
+      borderRadius: 50,
+      shadow: false,
+      borderEnabled: true,
+      borderWidth: 1,
+      borderColor: '#FF9300',
+    }
+  },
+  {
+    name: 'テンプレート12',
+    styles: {
+      width: 'medium',
+      alignment: 'center',
+      height: 50,
+      textSize: 16,
+      textColor: '#ffffff',
+      backgroundColor: '#C3AE88',
+      borderRadius: 6,
+      shadow: true,
+      borderEnabled: false,
+    }
+  }
+];
+
 const getHeadingDefaults = (style: number) => {
   switch (style) {
     case 1:
@@ -66,19 +250,15 @@ const getHeadingDefaults = (style: number) => {
 
 export const EnhancedBlockEditor: React.FC<EnhancedBlockEditorProps> = ({ blocks, onChange }) => {
   const [expandedBlocks, setExpandedBlocks] = useState<string[]>([]);
+  const [templateDialogOpenFor, setTemplateDialogOpenFor] = useState<string | null>(null);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const blockIds = useMemo(() => blocks.map(block => block.id), [blocks]);
 
   useEffect(() => {
-    // Drop expanded IDs that no longer exist when the block set changes
     setExpandedBlocks(prev => {
-      if (prev.length === 0) {
-        return prev;
-      }
+      if (prev.length === 0) return prev;
       const filtered = prev.filter(id => blockIds.includes(id));
-      if (filtered.length === prev.length && filtered.every((id, index) => id === prev[index])) {
-        return prev;
-      }
+      if (filtered.length === prev.length && filtered.every((id, index) => id === prev[index])) return prev;
       return filtered;
     });
   }, [blockIds]);
@@ -138,7 +318,6 @@ export const EnhancedBlockEditor: React.FC<EnhancedBlockEditorProps> = ({ blocks
       const newBlocks = [...blocks];
       const targetIndex = direction === 'up' ? blockIndex - 1 : blockIndex + 1;
       
-      // Swap orders
       const tempOrder = newBlocks[blockIndex].order;
       newBlocks[blockIndex].order = newBlocks[targetIndex].order;
       newBlocks[targetIndex].order = tempOrder;
@@ -579,8 +758,8 @@ export const EnhancedBlockEditor: React.FC<EnhancedBlockEditorProps> = ({ blocks
                         <TooltipContent side="right" className="max-w-xs text-[11px] text-gray-600">
                           <ul className="list-disc pl-4 space-y-1 text-left">
                             <li><b>角丸:</b> 画像の四隅を丸くします。</li>
-                            <li><b>ホバー:</b> マウスカーソルを画像に重ねた際に画像の色が薄くなります。これによりPCの場合は選択できるように見えます。スマホの場合はキャプションで[画像をタップしてください]の様に入力するとわかりやすいです。</li>
-                            <li><b>余白をなくす:</b> ページの左右の余白を無視して、画像を画面幅いっぱいに表示します。※スイッチオン時：画像のサイズ調整で75%以下を選択している場合はサイズ変更は無視されて最大幅で表示されます</li>
+                            <li><b>ホバー:</b> マウスカーソルを画像に重ねた際に透明度を変更するエフェクトを追加します。</li>
+                            <li><b>余白をなくす:</b> ページの左右の余白を無視して、画像を画面幅いっぱいに表示します。</li>
                           </ul>
                         </TooltipContent>
                       </Tooltip>
@@ -616,8 +795,8 @@ export const EnhancedBlockEditor: React.FC<EnhancedBlockEditorProps> = ({ blocks
                       </TooltipTrigger>
                       <TooltipContent side="right" className="max-w-xs text-[11px] text-gray-600">
                         <ul className="list-disc pl-4 space-y-1 text-left">
-                          <li><b>リンクURL:</b> 画像全体をクリックしたときの遷移先URLです。※画像がバナーになります</li>
-                          <li><b>代替テキスト:</b> 画像が表示されない場合に代わりに表示されるテキストです。</li>
+                          <li><b>リンクURL:</b> 画像全体をクリックしたときの遷移先URLです。</li>
+                          <li><b>代替テキスト:</b> 画像が表示されない場合に代わりに表示されるテキストです。SEOにも影響します。</li>
                           <li><b>キャプション:</b> 画像の下に表示される説明文です。</li>
                         </ul>
                       </TooltipContent>
@@ -894,15 +1073,20 @@ export const EnhancedBlockEditor: React.FC<EnhancedBlockEditorProps> = ({ blocks
           textDecoration: 'none',
           fontWeight: 600,
           color: block.content.textColor || '#ffffff',
-          backgroundColor: block.content.backgroundColor || '#2563eb',
+          backgroundColor: block.content.backgroundColor,
           borderRadius: `${block.content.borderRadius ?? 6}px`,
           fontSize: `${block.content.textSize || 16}px`,
           height: `${block.content.height || 40}px`,
           transition: 'opacity 0.2s',
         };
+        if (block.content.template === 'グラデーション (紫)') {
+          buttonStyle.background = 'linear-gradient(to right, #9333ea, #4f46e5)';
+        } else {
+          buttonStyle.backgroundColor = block.content.backgroundColor || '#2563eb';
+        }
 
         if (block.content.shadow) {
-          buttonStyle.boxShadow = '0 4px 14px 0 rgba(0, 0, 0, 0.1)';
+          buttonStyle.boxShadow = '0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1)';
         }
         
         if (block.content.width === 'full') {
@@ -917,6 +1101,60 @@ export const EnhancedBlockEditor: React.FC<EnhancedBlockEditorProps> = ({ blocks
 
         return (
           <div className="space-y-3">
+            <Dialog open={templateDialogOpenFor === block.id} onOpenChange={(isOpen) => setTemplateDialogOpenFor(isOpen ? block.id : null)}>
+              <DialogTrigger asChild>
+                <Button variant="outline" className="w-full">テンプレートからデザインを選択</Button>
+              </DialogTrigger>
+              <DialogContent className="max-w-3xl">
+                <DialogHeader>
+                  <DialogTitle>デザインテンプレートを選択</DialogTitle>
+                </DialogHeader>
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4 p-4">
+                  {buttonTemplates.map((template) => {
+                    const templateStyle: React.CSSProperties = {
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      padding: '0 1.5rem',
+                      textDecoration: 'none',
+                      fontWeight: 600,
+                      color: template.styles.textColor,
+                      borderRadius: `${template.styles.borderRadius ?? 6}px`,
+                      fontSize: `16px`,
+                      height: `40px`,
+                      width: '100%',
+                    };
+                    if (template.name === 'グラデーション (紫)') {
+                      templateStyle.background = 'linear-gradient(to right, #9333ea, #4f46e5)';
+                    } else {
+                      templateStyle.backgroundColor = template.styles.backgroundColor;
+                    }
+                    if (template.styles.shadow) {
+                      templateStyle.boxShadow = '0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1)';
+                    }
+                    if (template.styles.borderEnabled) {
+                      templateStyle.border = `${template.styles.borderWidth || 1}px solid ${template.styles.borderColor || '#000000'}`;
+                    }
+
+                    return (
+                      <div key={template.name} className="space-y-2">
+                        <button 
+                          style={templateStyle} 
+                          onClick={() => {
+                            updateBlock(block.id, { ...block.content, ...template.styles, template: template.name });
+                            setTemplateDialogOpenFor(null);
+                          }}
+                        >
+                          {block.content.text || 'ボタン'}
+                        </button>
+                        <p className="text-center text-xs text-muted-foreground">{template.name}</p>
+                      </div>
+                    )
+                  })}
+                </div>
+              </DialogContent>
+            </Dialog>
+
             {/* Preview */}
             <div className="my-3 p-3 rounded-md bg-muted flex items-center justify-center">
                 <div style={buttonStyle}>
