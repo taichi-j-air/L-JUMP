@@ -472,7 +472,7 @@ export const EnhancedBlockEditor: React.FC<EnhancedBlockEditorProps> = ({ blocks
 
   const renderCollapsedPreview = (block: Block) => {
     const blockTypeMap: { [key: string]: string } = {
-      paragraph: '段落',
+      paragraph: 'テキスト',
       heading: '見出し',
       image: '画像',
       video: '動画',
@@ -527,7 +527,7 @@ export const EnhancedBlockEditor: React.FC<EnhancedBlockEditorProps> = ({ blocks
           previewContent = '...';
       }
     }
-    return <p className="text-sm text-muted-foreground truncate font-mono">{prefix}{previewContent}</p>;
+    return <p className="flex-1 text-sm text-muted-foreground truncate font-mono">{prefix}{previewContent}</p>;
   };
 
   const renderBlock = (block: Block) => {
