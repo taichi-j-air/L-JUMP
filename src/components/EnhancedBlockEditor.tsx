@@ -136,8 +136,10 @@ export const EnhancedBlockEditor: React.FC<EnhancedBlockEditorProps> = ({ blocks
   };
 
   const getDefaultContent = (type: Block['type']) => {
+    const baseContent = { title: '' };
     switch (type) {
       case 'paragraph': return { 
+        ...baseContent,
         text: '', 
         fontSize: '16px', 
         color: '#454545', 
@@ -148,6 +150,7 @@ export const EnhancedBlockEditor: React.FC<EnhancedBlockEditorProps> = ({ blocks
         alignment: 'left'
       };
       case 'heading': return { 
+        ...baseContent,
         text: '', 
         level: 1, 
         design_style: 1,
@@ -162,6 +165,7 @@ export const EnhancedBlockEditor: React.FC<EnhancedBlockEditorProps> = ({ blocks
         alignment: 'left'
       };
       case 'image': return { 
+        ...baseContent,
         url: '', 
         alt: '', 
         caption: '', 
@@ -172,17 +176,19 @@ export const EnhancedBlockEditor: React.FC<EnhancedBlockEditorProps> = ({ blocks
         hoverEffect: false
       };
       case 'video': return { 
+        ...baseContent,
         url: '', 
         caption: '', 
         borderColor: '#000000',
         rounded: true,
         size: 'medium'
       };
-      case 'list': return { items: [''], type: 'bullet' };
-      case 'quote': return { text: '', author: '', backgroundColor: '#f3f4f6' };
-      case 'code': return { code: '', language: 'javascript' };
-      case 'separator': return {};
+      case 'list': return { ...baseContent, items: [''], type: 'bullet' };
+      case 'quote': return { ...baseContent, text: '', author: '', backgroundColor: '#f3f4f6' };
+      case 'code': return { ...baseContent, code: '', language: 'javascript' };
+      case 'separator': return { ...baseContent };
       case 'note': return {
+        ...baseContent,
         text: '', 
         fontSize: '16px', 
         color: '#454545', 
@@ -192,6 +198,7 @@ export const EnhancedBlockEditor: React.FC<EnhancedBlockEditorProps> = ({ blocks
         alignment: 'left'
       };
       case 'dialogue': return {
+        ...baseContent,
         leftIcon: '/placeholder.svg',
         rightIcon: '/placeholder.svg',
         leftName: '左の名前',
@@ -201,42 +208,58 @@ export const EnhancedBlockEditor: React.FC<EnhancedBlockEditorProps> = ({ blocks
           { alignment: 'left', text: 'これは会話風の吹き出しです。' }
         ]
       };
-      default: return {};
+      default: return { ...baseContent };
     }
   };
 
   const renderCollapsedPreview = (block: Block) => {
-    let previewText: string = block.type;
-    switch (block.type) {
-      case 'heading':
-        previewText = `見出し: ${block.content.text?.substring(0, 30)}...`;
-        break;
-      case 'paragraph':
-        previewText = `段落: ${block.content.text?.substring(0, 30)}...`;
-        break;
-      case 'image':
-        previewText = `画像: ${block.content.alt || block.content.url?.substring(block.content.url.lastIndexOf('/') + 1)}`;
-        break;
-      case 'video':
-        previewText = `動画: ${block.content.url}`;
-        break;
-      case 'list':
-        previewText = `リスト: ${block.content.items[0]?.substring(0, 20)}...`;
-        break;
-      case 'quote':
-        previewText = `引用: ${block.content.text?.substring(0, 30)}...`;
-        break;
-      case 'separator':
-        previewText = '区切り線';
-        break;
-      case 'note':
-        previewText = `注意事項: ${block.content.text?.substring(0, 30)}...`;
-        break;
-      case 'dialogue':
-        previewText = `対話: ${block.content.items[0]?.text?.substring(0, 20)}...`;
-        break;
+    const blockTypeMap: { [key: string]: string } = {
+      paragraph: '段落',
+      heading: '見出し',
+      image: '画像',
+      video: '動画',
+      list: 'リスト',
+      quote: '引用',
+      code: 'コード',
+      separator: '区切り線',
+      note: '注意事項',
+      dialogue: '対話',
+    };
+    const typeName = blockTypeMap[block.type] || 'ブロック';
+    const prefix = `${typeName}：`;
+
+    let previewContent: string;
+
+    if (block.content.title) {
+      previewContent = block.content.title;
+    } else {
+      switch (block.type) {
+        case 'heading':
+        case 'paragraph':
+        case 'quote':
+        case 'note':
+          previewContent = block.content.text ? (block.content.text.substring(0, 50) + (block.content.text.length > 50 ? '...' : '')) : '';
+          break;
+        case 'image':
+          previewContent = block.content.alt || block.content.url?.substring(block.content.url.lastIndexOf('/') + 1) || '';
+          break;
+        case 'video':
+          previewContent = block.content.url || '';
+          break;
+        case 'list':
+          previewContent = block.content.items[0] ? (block.content.items[0].substring(0, 40) + (block.content.items[0].length > 40 ? '...' : '')) : '';
+          break;
+        case 'separator':
+          previewContent = '区切り線';
+          break;
+        case 'dialogue':
+          previewContent = block.content.items[0]?.text ? (block.content.items[0].text.substring(0, 40) + (block.content.items[0].text.length > 40 ? '...' : '')) : '';
+          break;
+        default:
+          previewContent = '...';
+      }
     }
-    return <p className="text-sm text-muted-foreground truncate font-mono">{previewText}</p>;
+    return <p className="text-sm text-muted-foreground truncate font-mono">{prefix}{previewContent}</p>;
   };
 
   const renderBlock = (block: Block) => {
@@ -266,7 +289,13 @@ export const EnhancedBlockEditor: React.FC<EnhancedBlockEditorProps> = ({ blocks
                 </div>
               </div>
               {!isCollapsed && (
-                <div className="mt-2">
+                <div className="mt-2 space-y-4">
+                  <Input
+                    placeholder="ブロックタイトル（任意）"
+                    value={block.content.title || ''}
+                    onChange={(e) => updateBlock(block.id, { ...block.content, title: e.target.value })}
+                    className="text-xs h-8 bg-slate-50"
+                  />
                   {renderBlockContent(block)}
                 </div>
               )}
