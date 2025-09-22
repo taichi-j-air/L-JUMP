@@ -67,7 +67,8 @@ const renderBlock = (block: Block) => {
     case 'paragraph':
       return <p style={textStyle}>{content.text}</p>;
 
-    case 'heading':
+    case 'heading': {
+      const designStyle = content.design_style ?? content.designStyle ?? 1;
       const Tag = `h${content.level || 1}` as keyof JSX.IntrinsicElements;
       const headingStyle = {
         '--heading-color-1': content.color1,
@@ -77,12 +78,13 @@ const renderBlock = (block: Block) => {
       } as React.CSSProperties;
       return (
         <Tag
-          className={`heading-style-${content.design_style || 1}`}
+          className={`heading-style-${designStyle}`}
           style={headingStyle}
         >
           {content.text}
         </Tag>
       );
+    }
 
     case 'image':
       const sizeClasses: { [key: string]: string } = {
@@ -170,7 +172,10 @@ const renderBlock = (block: Block) => {
             <div key={index} className={`flex items-start gap-3 ${item.alignment === 'right' ? 'flex-row-reverse' : ''}`}>
               <img src={item.alignment === 'left' ? content.leftIcon : content.rightIcon} alt="icon" className="w-12 h-12 rounded-full object-cover" />
               <div className="flex-1">
-                <p className={`text-sm mb-1 ${item.alignment === 'right' ? 'text-right' : ''}`}>
+                <p
+                  className={`text-xs mb-1 ${item.alignment === 'right' ? 'text-right' : ''}`}
+                  style={{ color: 'rgb(69, 69, 69)' }}
+                >
                   {item.alignment === 'left' ? content.leftName : content.rightName}
                 </p>
                 <div 
@@ -189,6 +194,98 @@ const renderBlock = (block: Block) => {
       return null;
   }
 };
+
+const HeadingDesignStyles = (
+  <style>{`
+    .heading-style-1 {
+      padding: 0.5em 0.7em;
+      border-left: 5px solid var(--heading-color-1, #2589d0);
+      background-color: var(--heading-color-2, #f2f2f2);
+      color: var(--heading-color-3, #333333);
+      margin: 1.5em 0;
+    }
+
+    .heading-style-2 {
+      position: relative;
+      border-top: 2px solid var(--heading-color-1, #80c8d1);
+      border-bottom: 2px solid var(--heading-color-1, #80c8d1);
+      background: var(--heading-color-2, #f4f4f4);
+      line-height: 1.4;
+      padding: 0.4em 0.5em;
+      margin: 1.5em 0;
+    }
+
+    .heading-style-2::after {
+      position: absolute;
+      content: 'POINT';
+      background: var(--heading-color-1, #80c8d1);
+      color: var(--heading-color-3, #fff);
+      left: 0;
+      bottom: 100%;
+      border-radius: 5px 5px 0 0;
+      padding: 5px 7px 3px;
+      font-size: 0.7em;
+      line-height: 1;
+      letter-spacing: 0.05em;
+    }
+
+    .heading-style-3 {
+      position: relative;
+      padding-left: 35px;
+      margin: 1.5em 0;
+    }
+
+    .heading-style-3::before {
+      position: absolute;
+      content: '💡';
+      background: var(--heading-color-1, #ffca2c);
+      color: var(--heading-color-2, #fff);
+      font-weight: 900;
+      font-size: 15px;
+      border-radius: 50%;
+      left: 0;
+      width: 25px;
+      height: 25px;
+      line-height: 25px;
+      text-align: center;
+      top: 50%;
+      transform: translateY(-50%);
+    }
+
+    .heading-style-3::after {
+      content: '';
+      display: block;
+      position: absolute;
+      left: 20px;
+      height: 0;
+      width: 0;
+      border-top: 7px solid transparent;
+      border-bottom: 7px solid transparent;
+      border-left: 12px solid var(--heading-color-1, #ffca2c);
+      top: 50%;
+      transform: translateY(-50%);
+    }
+
+    .heading-style-4 {
+      position: relative;
+      padding: 0.25em 0.5em 0.25em 1.2em;
+      color: var(--heading-color-1, #494949);
+      background: transparent;
+      margin: 1.5em 0;
+    }
+
+    .heading-style-4::before {
+      content: '';
+      position: absolute;
+      left: 0.25em;
+      top: 0;
+      bottom: 0;
+      width: 5px;
+      background-color: var(--heading-color-2, #7db4e6);
+      border-radius: 9999px;
+    }
+  `}</style>
+);
 
 export default function CMSFriendsPublicView() {
   const params = useParams();
@@ -532,6 +629,7 @@ export default function CMSFriendsPublicView() {
 
   return (
     <div className="min-h-screen bg-gray-100 flex justify-center">
+      {HeadingDesignStyles}
       <div className="w-full max-w-3xl bg-white border-x border-gray-200 flex flex-col">
         {data.timer_enabled && (
           <TimerPreview
@@ -561,7 +659,7 @@ export default function CMSFriendsPublicView() {
           />
         )}
 
-        <article className="prose max-w-none dark:prose-invert flex-1 p-4">
+        <article className="prose max-w-none dark:prose-invert flex-1 p-4 ql-content">
           {Array.isArray(data.content_blocks) && data.content_blocks.length > 0 ? (
             data.content_blocks.sort((a, b) => a.order - b.order).map((block) => (
               <div key={block.id}>{renderBlock(block)}</div>

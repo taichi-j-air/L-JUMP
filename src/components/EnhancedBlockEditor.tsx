@@ -363,7 +363,7 @@ export const EnhancedBlockEditor: React.FC<EnhancedBlockEditorProps> = ({ blocks
               </Select>
             </div>
             <div
-              className={`heading-style-${block.content.design_style || 1}`}
+              className={`heading-style-${(block.content.design_style ?? block.content.designStyle ?? 1)}`}
               style={headingStyle}
             >
               <input
@@ -609,7 +609,12 @@ export const EnhancedBlockEditor: React.FC<EnhancedBlockEditorProps> = ({ blocks
                     selectedUrl={block.content.leftIcon}
                 />
                 {block.content.leftIcon && <img src={block.content.leftIcon} alt="left icon" className="w-16 h-16 rounded-full object-cover mx-auto" />}
-                <Textarea placeholder="名前 (改行可)" value={block.content.leftName || ''} onChange={(e) => updateBlock(block.id, { ...block.content, leftName: e.target.value })} className="mt-2 text-xs" rows={2} />
+                <Input
+                  placeholder="名前"
+                  value={block.content.leftName || ''}
+                  onChange={(e) => updateBlock(block.id, { ...block.content, leftName: e.target.value })}
+                  className="mt-2 text-xs"
+                />
               </div>
               <div className="space-y-2">
                 <label className="text-sm font-semibold text-gray-700 dark:text-gray-300">右キャラクター</label>
@@ -624,7 +629,12 @@ export const EnhancedBlockEditor: React.FC<EnhancedBlockEditorProps> = ({ blocks
                     selectedUrl={block.content.rightIcon}
                 />
                 {block.content.rightIcon && <img src={block.content.rightIcon} alt="right icon" className="w-16 h-16 rounded-full object-cover mx-auto" />}
-                <Textarea placeholder="名前 (改行可)" value={block.content.rightName || ''} onChange={(e) => updateBlock(block.id, { ...block.content, rightName: e.target.value })} className="mt-2 text-xs" rows={2} />
+                <Input
+                  placeholder="名前"
+                  value={block.content.rightName || ''}
+                  onChange={(e) => updateBlock(block.id, { ...block.content, rightName: e.target.value })}
+                  className="mt-2 text-xs"
+                />
               </div>
             </div>
 
