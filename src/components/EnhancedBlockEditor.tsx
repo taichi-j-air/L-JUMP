@@ -53,6 +53,7 @@ interface EnhancedBlockEditorProps {
 const buttonTemplates = [
   {
     name: 'テンプレート1',
+    text: '申し込みはこちら',
     styles: {
       width: 'medium',
       alignment: 'center',
@@ -69,6 +70,7 @@ const buttonTemplates = [
   },
   {
     name: 'テンプレート2',
+    text: '申し込みはこちら >',
     styles: {
       width: 'medium',
       alignment: 'center',
@@ -83,6 +85,7 @@ const buttonTemplates = [
   },
   {
     name: 'テンプレート3',
+    text: '申し込みはこちら',
     styles: {
       width: 'medium',
       alignment: 'center',
@@ -99,6 +102,7 @@ const buttonTemplates = [
   },
   {
     name: 'テンプレート4',
+    text: '申し込みはこちら',
     styles: {
       width: 'medium',
       alignment: 'center',
@@ -115,6 +119,7 @@ const buttonTemplates = [
   },
   {
     name: 'テンプレート5',
+    text: '申し込みはこちら',
     styles: {
       width: 'medium',
       alignment: 'center',
@@ -129,6 +134,7 @@ const buttonTemplates = [
   },
   {
     name: 'テンプレート6',
+    text: '申し込みはこちら',
     styles: {
       width: 'medium',
       alignment: 'center',
@@ -143,6 +149,7 @@ const buttonTemplates = [
   },
   {
     name: 'テンプレート7',
+    text: '申し込みはこちら',
     styles: {
       width: 'medium',
       alignment: 'center',
@@ -159,6 +166,7 @@ const buttonTemplates = [
   },
   {
     name: 'テンプレート8',
+    text: '申し込みはこちら',
     styles: {
       width: 'medium',
       alignment: 'center',
@@ -173,6 +181,7 @@ const buttonTemplates = [
   },
   {
     name: 'テンプレート9',
+    text: '申し込みはこちら',
     styles: {
       width: 'medium',
       alignment: 'center',
@@ -187,6 +196,7 @@ const buttonTemplates = [
   },
   {
     name: 'テンプレート10',
+    text: '申し込みはこちら',
     styles: {
       width: 'medium',
       alignment: 'center',
@@ -203,6 +213,7 @@ const buttonTemplates = [
   },
   {
     name: 'テンプレート11',
+    text: '申し込みはこちら',
     styles: {
       width: 'medium',
       alignment: 'center',
@@ -219,6 +230,7 @@ const buttonTemplates = [
   },
   {
     name: 'テンプレート12',
+    text: '申し込みはこちら',
     styles: {
       width: 'medium',
       alignment: 'center',
@@ -1105,11 +1117,11 @@ export const EnhancedBlockEditor: React.FC<EnhancedBlockEditorProps> = ({ blocks
               <DialogTrigger asChild>
                 <Button variant="outline" className="w-full">テンプレートからデザインを選択</Button>
               </DialogTrigger>
-              <DialogContent className="max-w-3xl">
+              <DialogContent className="max-w-5xl">
                 <DialogHeader>
                   <DialogTitle>デザインテンプレートを選択</DialogTitle>
                 </DialogHeader>
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-4 p-4">
+                <div className="grid grid-cols-2 md:grid-cols-3 gap-4 p-4">
                   {buttonTemplates.map((template) => {
                     const templateStyle: React.CSSProperties = {
                       display: 'inline-flex',
@@ -1120,8 +1132,8 @@ export const EnhancedBlockEditor: React.FC<EnhancedBlockEditorProps> = ({ blocks
                       fontWeight: 600,
                       color: template.styles.textColor,
                       borderRadius: `${template.styles.borderRadius ?? 6}px`,
-                      fontSize: `16px`,
-                      height: `40px`,
+                      fontSize: `${template.styles.textSize || 16}px`,
+                      height: `${template.styles.height || 40}px`,
                       width: '100%',
                     };
                     if (template.name === 'グラデーション (紫)') {
@@ -1141,11 +1153,11 @@ export const EnhancedBlockEditor: React.FC<EnhancedBlockEditorProps> = ({ blocks
                         <button 
                           style={templateStyle} 
                           onClick={() => {
-                            updateBlock(block.id, { ...block.content, ...template.styles, template: template.name });
+                            updateBlock(block.id, { ...block.content, ...template.styles, text: template.text, template: template.name });
                             setTemplateDialogOpenFor(null);
                           }}
                         >
-                          {block.content.text || 'ボタン'}
+                          {template.text}
                         </button>
                         <p className="text-center text-xs text-muted-foreground">{template.name}</p>
                       </div>
