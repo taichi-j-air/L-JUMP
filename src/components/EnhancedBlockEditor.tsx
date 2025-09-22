@@ -809,7 +809,7 @@ export const EnhancedBlockEditor: React.FC<EnhancedBlockEditorProps> = ({ blocks
 
   return (
     <div className="relative h-[70vh] flex flex-col border rounded-md bg-white">
-      <div ref={scrollContainerRef} className="flex-grow overflow-y-auto p-4" style={{ backgroundColor: '#ffffe0' }}>
+      <div ref={scrollContainerRef} className="flex-grow overflow-y-auto p-4 border border-gray-300" style={{ backgroundColor: '#ffffe0' }}>
         {blocks.length === 0 && (
           <div className="flex items-center justify-center h-full">
             <div className="text-center">
@@ -825,7 +825,7 @@ export const EnhancedBlockEditor: React.FC<EnhancedBlockEditorProps> = ({ blocks
         {blocks.sort((a, b) => a.order - b.order).map(renderBlock)}
       </div>
 
-      <div className="sticky bottom-0 bg-background/95 backdrop-blur-sm border-t z-10">
+      <div className="sticky bottom-0 bg-background/95 backdrop-blur-sm border border-gray-300 z-10">
         <div className="p-2">
           <div className="grid grid-cols-5 gap-1">
             <Button variant="ghost" className="flex flex-col h-auto py-2" onClick={() => addBlock('paragraph')}><Type className="h-5 w-5 mb-1" /><span className="text-xs">段落</span></Button>
