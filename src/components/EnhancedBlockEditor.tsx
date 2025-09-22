@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect, useMemo } from 'react';
+﻿import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -191,7 +191,8 @@ export const EnhancedBlockEditor: React.FC<EnhancedBlockEditorProps> = ({ blocks
         linkUrl: '', 
         alignment: 'center',
         rounded: true,
-        hoverEffect: false
+        hoverEffect: false,
+        removeMargins: false,
       };
       case 'video': return { 
         ...baseContent,
@@ -566,7 +567,25 @@ export const EnhancedBlockEditor: React.FC<EnhancedBlockEditorProps> = ({ blocks
                 </div>
 
                 <div className="space-y-2 col-span-2">
-                  <label className="text-sm font-medium">オプション</label>
+                  <label className="text-sm font-medium flex items-center gap-1">
+                    オプション
+                    <TooltipProvider delayDuration={0}>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <button type="button" className="p-0 flex items-center justify-center" onClick={(e) => e.preventDefault()}>
+                            <AlertCircle className="h-4 w-4 text-white fill-gray-500" />
+                          </button>
+                        </TooltipTrigger>
+                        <TooltipContent side="right" className="max-w-xs text-[11px] text-gray-600">
+                          <ul className="list-disc pl-4 space-y-1 text-left">
+                            <li><b>角丸:</b> 画像の四隅を丸くします。</li>
+                            <li><b>ホバー:</b> マウスカーソルを画像に重ねた際に画像の色が薄くなります。これによりPCの場合は選択できるように見えます。スマホの場合はキャプションで[画像をタップしてください]の様に入力するとわかりやすいです。</li>
+                            <li><b>余白をなくす:</b> ページの左右の余白を無視して、画像を画面幅いっぱいに表示します。※スイッチオン時：画像のサイズ調整で75%以下を選択している場合はサイズ変更は無視されて最大幅で表示されます</li>
+                          </ul>
+                        </TooltipContent>
+                      </Tooltip>
+                    </TooltipProvider>
+                  </label>
                   <div className="flex items-center space-x-4">
                     <div className="flex items-center space-x-2">
                       <Switch id={`rounded-image-${block.id}`} checked={block.content.rounded !== false} onCheckedChange={(checked) => updateBlock(block.id, { ...block.content, rounded: checked })} />
@@ -575,6 +594,10 @@ export const EnhancedBlockEditor: React.FC<EnhancedBlockEditorProps> = ({ blocks
                     <div className="flex items-center space-x-2">
                       <Switch id={`hover-effect-${block.id}`} checked={!!block.content.hoverEffect} onCheckedChange={(checked) => updateBlock(block.id, { ...block.content, hoverEffect: checked })} />
                       <Label htmlFor={`hover-effect-${block.id}`} className="text-sm font-normal">ホバー</Label>
+                    </div>
+                    <div className="flex items-center space-x-2">
+                      <Switch id={`remove-margins-${block.id}`} checked={!!block.content.removeMargins} onCheckedChange={(checked) => updateBlock(block.id, { ...block.content, removeMargins: checked })} />
+                      <Label htmlFor={`remove-margins-${block.id}`} className="text-sm font-normal">余白をなくす</Label>
                     </div>
                   </div>
                 </div>
@@ -593,8 +616,8 @@ export const EnhancedBlockEditor: React.FC<EnhancedBlockEditorProps> = ({ blocks
                       </TooltipTrigger>
                       <TooltipContent side="right" className="max-w-xs text-[11px] text-gray-600">
                         <ul className="list-disc pl-4 space-y-1 text-left">
-                          <li><b>リンクURL:</b> 画像全体をクリックしたときの遷移先URLです。</li>
-                          <li><b>代替テキスト:</b> 画像が表示されない場合に代わりに表示されるテキストです。SEOにも影響します。</li>
+                          <li><b>リンクURL:</b> 画像全体をクリックしたときの遷移先URLです。※画像がバナーになります</li>
+                          <li><b>代替テキスト:</b> 画像が表示されない場合に代わりに表示されるテキストです。</li>
                           <li><b>キャプション:</b> 画像の下に表示される説明文です。</li>
                         </ul>
                       </TooltipContent>

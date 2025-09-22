@@ -107,7 +107,22 @@ const renderBlock = (block: Block) => {
       );
     }
 
-    case 'image':
+    case 'image': {
+      if (content.removeMargins) {
+        const fullWidthImage = (
+          <img
+            src={content.url}
+            alt={content.alt}
+            className="w-full"
+          />
+        );
+        return (
+          <div className="-mx-4">
+            {content.linkUrl ? <a href={content.linkUrl} target="_blank" rel="noopener noreferrer">{fullWidthImage}</a> : fullWidthImage}
+          </div>
+        );
+      }
+
       const sizeClasses: { [key: string]: string } = {
         small: 'w-1/4',
         medium: 'w-1/2',
@@ -132,6 +147,7 @@ const renderBlock = (block: Block) => {
           {content.caption && <figcaption className="text-center text-sm text-gray-600 mt-2">{content.caption}</figcaption>}
         </figure>
       );
+    }
 
     case 'video':
         const convertYouTubeUrl = (url: string) => {
