@@ -40,7 +40,7 @@ import {
 
 export interface Block {
   id: string;
-  type: 'paragraph' | 'heading' | 'image' | 'video' | 'list' | 'quote' | 'code' | 'separator' | 'note' | 'dialogue' | 'button';
+  type: 'paragraph' | 'heading' | 'image' | 'video' | 'list' | 'quote' | 'code' | 'separator' | 'note' | 'dialogue' | 'button' | 'background';
   content: any;
   order: number;
 }
@@ -264,7 +264,9 @@ export const EnhancedBlockEditor: React.FC<EnhancedBlockEditorProps> = ({ blocks
   const [expandedBlocks, setExpandedBlocks] = useState<string[]>([]);
   const [templateDialogOpenFor, setTemplateDialogOpenFor] = useState<string | null>(null);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
+  const lastAddedBlockTypeRef = useRef<Block['type'] | null>(null);
   const blockIds = useMemo(() => blocks.map(block => block.id), [blocks]);
+  const hasBackgroundBlock = useMemo(() => blocks.some(block => block.type === 'background'), [blocks]);
 
   useEffect(() => {
     setExpandedBlocks(prev => {
@@ -276,12 +278,21 @@ export const EnhancedBlockEditor: React.FC<EnhancedBlockEditorProps> = ({ blocks
   }, [blockIds]);
 
   useEffect(() => {
-    if (scrollContainerRef.current) {
+    if (!scrollContainerRef.current) return;
+
+    if (lastAddedBlockTypeRef.current === 'background') {
+      scrollContainerRef.current.scrollTo({
+        top: 0,
+        behavior: 'smooth'
+      });
+    } else {
       scrollContainerRef.current.scrollTo({
         top: scrollContainerRef.current.scrollHeight,
         behavior: 'smooth'
       });
     }
+
+    lastAddedBlockTypeRef.current = null;
   }, [blocks.length]);
 
   const addBlock = (type: Block['type']) => {
@@ -434,6 +445,10 @@ export const EnhancedBlockEditor: React.FC<EnhancedBlockEditorProps> = ({ blocks
         borderWidth: 1,
         borderColor: '#000000',
       };
+      case 'background': return {
+        ...baseContent,
+        color: '#f5f5f5'
+      };
       default: return { ...baseContent };
     }
   };
@@ -451,6 +466,8 @@ export const EnhancedBlockEditor: React.FC<EnhancedBlockEditorProps> = ({ blocks
       note: '注意事項',
       dialogue: '対話',
       button: 'ボタン',
+      background: '背景色',
+      background: '背景色',
     };
     const typeName = blockTypeMap[block.type] || 'ブロック';
     const prefix = `${typeName}：`;
@@ -485,6 +502,9 @@ export const EnhancedBlockEditor: React.FC<EnhancedBlockEditorProps> = ({ blocks
         case 'button':
           previewContent = block.content?.text || '';
           break;
+        case 'background':
+          previewContent = block.content?.color || '';
+          break;
         default:
           previewContent = '...';
       }
@@ -495,14 +515,21 @@ export const EnhancedBlockEditor: React.FC<EnhancedBlockEditorProps> = ({ blocks
   const renderBlock = (block: Block) => {
     const isCollapsed = !expandedBlocks.includes(block.id);
 
+    const blockIndex = blocks.findIndex(b => b.id === block.id);
+    const isBackgroundBlock = block.type === 'background';
+    const previousBlock = blockIndex > 0 ? blocks[blockIndex - 1] : undefined;
+    const nextBlock = blockIndex >= 0 && blockIndex < blocks.length - 1 ? blocks[blockIndex + 1] : undefined;
+    const canMoveUp = !isBackgroundBlock && blockIndex > 0 && previousBlock?.type !== 'background';
+    const canMoveDown = !isBackgroundBlock && blockIndex < blocks.length - 1 && nextBlock?.type !== 'background';
+
     return (
       <Card key={block.id} className="mb-4 group bg-white dark:bg-gray-800 shadow-md border border-gray-300 rounded-sm">
         <CardContent className={isCollapsed ? "p-0" : "p-2"}>
           <div className="flex items-start space-x-2">
             <div className={`flex flex-col items-center space-y-1 ${isCollapsed ? 'pt-1' : 'pt-2'}`}>
-              <Button size="sm" variant="ghost" className="h-6 w-6 p-0" onClick={() => moveBlock(block.id, 'up')}><ChevronUp className="h-4 w-4" /></Button>
+              <Button size="sm" variant="ghost" className="h-6 w-6 p-0" onClick={() => moveBlock(block.id, 'up')} disabled={!canMoveUp}><ChevronUp className="h-4 w-4" /></Button>
               <GripVertical className="h-5 w-5 text-muted-foreground cursor-grab" />
-              <Button size="sm" variant="ghost" className="h-6 w-6 p-0" onClick={() => moveBlock(block.id, 'down')}><ChevronDown className="h-4 w-4" /></Button>
+              <Button size="sm" variant="ghost" className="h-6 w-6 p-0" onClick={() => moveBlock(block.id, 'down')} disabled={!canMoveDown}><ChevronDown className="h-4 w-4" /></Button>
             </div>
             
             <div className={`flex-1 ${isCollapsed ? 'py-1' : 'p-2'}`}>
@@ -518,7 +545,7 @@ export const EnhancedBlockEditor: React.FC<EnhancedBlockEditorProps> = ({ blocks
                   <TooltipProvider delayDuration={0}>
                     <Tooltip>
                       <TooltipTrigger asChild>
-                        <Button size="sm" variant="ghost" className="h-8 w-8 p-0" onClick={() => duplicateBlock(block.id)}><Copy className="h-4 w-4" /></Button>
+                        <Button size="sm" variant="ghost" className="h-8 w-8 p-0" onClick={() => duplicateBlock(block.id)} disabled={isBackgroundBlock}><Copy className="h-4 w-4" /></Button>
                       </TooltipTrigger>
                       <TooltipContent className="text-xs text-gray-500">
                         <p>複製</p>
@@ -538,12 +565,14 @@ export const EnhancedBlockEditor: React.FC<EnhancedBlockEditorProps> = ({ blocks
               </div>
               {!isCollapsed && (
                 <div className="mt-2 space-y-4">
-                  <Input
+                  {block.type !== 'background' && (
+                    <Input
                     placeholder="ブロックタイトル（任意）"
                     value={block.content?.title || ''}
                     onChange={(e) => updateBlock(block.id, { ...(block.content || {}), title: e.target.value })}
                     className="text-xs h-8 bg-slate-50"
-                  />
+                    />
+                  )}
                   {renderBlockContent(block)}
                 </div>
               )}
@@ -610,6 +639,40 @@ export const EnhancedBlockEditor: React.FC<EnhancedBlockEditorProps> = ({ blocks
     } as React.CSSProperties : {};
 
     switch (block.type) {
+      case 'background': {
+        const colorValue = typeof block.content?.color === 'string' ? block.content.color : '#f5f5f5';
+        const sanitizedColor = colorValue.startsWith('#') ? colorValue : `#${colorValue}`;
+        const safeColor = /^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/.test(sanitizedColor) ? sanitizedColor : '#f5f5f5';
+
+        return (
+          <div className="space-y-3">
+            <div className="space-y-1">
+              <Label>背景色</Label>
+              <input
+                type="color"
+                value={safeColor}
+                onChange={(e) => updateBlock(block.id, { ...(block.content || {}), color: e.target.value })}
+                className="w-full h-16 rounded border"
+              />
+            </div>
+            <div className="space-y-1">
+              <Label>カラーコード</Label>
+              <Input
+                value={sanitizedColor}
+                onChange={(e) => {
+                  let value = e.target.value.trim();
+                  value = value.startsWith('#') ? `#${value.slice(1).replace(/[^0-9a-fA-F]/g, '')}` : `#${value.replace(/[^0-9a-fA-F]/g, '')}`;
+                  if (value.length > 7) {
+                    value = value.slice(0, 7);
+                  }
+                  updateBlock(block.id, { ...(block.content || {}), color: value });
+                }}
+              />
+            </div>
+          </div>
+        );
+      }
+
       case 'paragraph':
         return (
           <div>
@@ -1306,6 +1369,10 @@ export const EnhancedBlockEditor: React.FC<EnhancedBlockEditorProps> = ({ blocks
       <div className="flex-none border-t border-gray-300 bg-background/95">
         <div className="p-2">
           <div className="grid grid-cols-6 gap-1">
+            <Button variant="ghost" className="flex flex-col h-auto py-2" onClick={() => addBlock('background')} disabled={hasBackgroundBlock}>
+              <Palette className="h-5 w-5 mb-1" />
+              <span className="text-xs">背景色</span>
+            </Button>
             <Button variant="ghost" className="flex flex-col h-auto py-2" onClick={() => addBlock('paragraph')}><Type className="h-5 w-5 mb-1" /><span className="text-xs">段落</span></Button>
             <Button variant="ghost" className="flex flex-col h-auto py-2" onClick={() => addBlock('heading')}><Type className="h-5 w-5 mb-1" /><span className="text-xs">見出し</span></Button>
             <Button variant="ghost" className="flex flex-col h-auto py-2" onClick={() => addBlock('image')}><Image className="h-5 w-5 mb-1" /><span className="text-xs">画像</span></Button>

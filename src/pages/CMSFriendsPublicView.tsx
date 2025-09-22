@@ -65,6 +65,9 @@ const renderBlock = (block: Block) => {
   } as React.CSSProperties : {};
 
   switch (type) {
+    case 'background':
+      return null;
+
     case 'paragraph':
       return <p style={textStyle}>{content.text}</p>;
 
@@ -108,12 +111,16 @@ const renderBlock = (block: Block) => {
     }
 
     case 'image': {
+      const sharedImageClasses = [
+        content.rounded ? 'rounded-lg' : '',
+        content.hoverEffect ? 'transition-opacity duration-300 hover:opacity-70' : ''
+      ].filter(Boolean).join(' ');
       if (content.removeMargins) {
         const fullWidthImage = (
           <img
             src={content.url}
             alt={content.alt}
-            className="w-full"
+            className={['w-full', sharedImageClasses].filter(Boolean).join(' ')}
           />
         );
         return (
@@ -138,7 +145,7 @@ const renderBlock = (block: Block) => {
         <img
           src={content.url}
           alt={content.alt}
-          className={`${sizeClasses[content.size] || 'w-1/2'} ${alignClasses[content.alignment] || 'mx-auto'} ${content.rounded ? 'rounded-lg' : ''} ${content.hoverEffect ? 'transition-opacity duration-300 hover:opacity-70' : ''}`}
+          className={[sizeClasses[content.size] || 'w-1/2', alignClasses[content.alignment] || 'mx-auto', sharedImageClasses].filter(Boolean).join(' ')}
         />
       );
       return (
@@ -716,10 +723,24 @@ export default function CMSFriendsPublicView() {
 
   if (!data) return null;
 
+  const sortedBlocks = Array.isArray(data.content_blocks)
+    ? [...data.content_blocks].sort((a, b) => a.order - b.order)
+    : [];
+  const backgroundBlock = sortedBlocks.find((block) => block.type === 'background');
+  const filteredBlocks = sortedBlocks.filter((block) => block.type !== 'background');
+  const resolveBackgroundColor = (value?: string | null) => {
+    if (typeof value !== 'string') return undefined;
+    const trimmed = value.trim();
+    if (!trimmed) return undefined;
+    const normalized = trimmed.startsWith('#') ? trimmed : `#${trimmed}`;
+    return /^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/.test(normalized) ? normalized : undefined;
+  };
+  const pageBackgroundColor = resolveBackgroundColor((backgroundBlock?.content as any)?.color);
+
   return (
     <div className="min-h-screen bg-gray-100 flex justify-center">
       {HeadingDesignStyles}
-      <div className="w-full max-w-3xl bg-white border-x border-gray-200 flex flex-col">
+      <div className="w-full max-w-3xl bg-white border-x border-gray-200 flex flex-col" style={pageBackgroundColor ? { backgroundColor: pageBackgroundColor } : undefined}>
         {data.timer_enabled && (
           <TimerPreview
             mode={data.timer_mode || "absolute"}
@@ -749,8 +770,8 @@ export default function CMSFriendsPublicView() {
         )}
 
         <article className="prose max-w-none dark:prose-invert flex-1 p-4 ql-content">
-          {Array.isArray(data.content_blocks) && data.content_blocks.length > 0 ? (
-            data.content_blocks.sort((a, b) => a.order - b.order).map((block) => (
+          {filteredBlocks.length > 0 ? (
+            filteredBlocks.map((block) => (
               <div key={block.id} className="not-prose">{renderBlock(block)}</div>
             ))
           ) : (
