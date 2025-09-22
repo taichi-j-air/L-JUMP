@@ -223,7 +223,7 @@ const renderBlock = (block: Block) => {
                   {item.alignment === 'left' ? content.leftName : content.rightName}
                 </p>
                 <div 
-                  className={`relative inline-block p-3 rounded-lg max-w-xs md:max-w-md ${item.alignment === 'right' ? 'float-right' : ''}`}
+                  className={`relative inline-block p-3 rounded-lg w-64 ${item.alignment === 'right' ? 'float-right' : ''}`}
                   style={{ backgroundColor: content.bubbleBackgroundColor || '#f2f2f2' }}
                 >
                   <p className="text-sm whitespace-pre-wrap break-words">{item.text}</p>
