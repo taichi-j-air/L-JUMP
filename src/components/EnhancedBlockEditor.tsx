@@ -230,7 +230,7 @@ export const EnhancedBlockEditor: React.FC<EnhancedBlockEditorProps> = ({ blocks
 
     let previewContent: string;
 
-    if (block.content.title) {
+    if (block.content?.title) {
       previewContent = block.content.title;
     } else {
       switch (block.type) {
@@ -238,22 +238,22 @@ export const EnhancedBlockEditor: React.FC<EnhancedBlockEditorProps> = ({ blocks
         case 'paragraph':
         case 'quote':
         case 'note':
-          previewContent = block.content.text ? (block.content.text.substring(0, 50) + (block.content.text.length > 50 ? '...' : '')) : '';
+          previewContent = block.content?.text ? (block.content.text.substring(0, 50) + (block.content.text.length > 50 ? '...' : '')) : '';
           break;
         case 'image':
-          previewContent = block.content.alt || block.content.url?.substring(block.content.url.lastIndexOf('/') + 1) || '';
+          previewContent = block.content?.alt || block.content?.url?.substring(block.content.url.lastIndexOf('/') + 1) || '';
           break;
         case 'video':
-          previewContent = block.content.url || '';
+          previewContent = block.content?.url || '';
           break;
         case 'list':
-          previewContent = block.content.items[0] ? (block.content.items[0].substring(0, 40) + (block.content.items[0].length > 40 ? '...' : '')) : '';
+          previewContent = block.content?.items?.[0] ? (block.content.items[0].substring(0, 40) + (block.content.items[0].length > 40 ? '...' : '')) : '';
           break;
         case 'separator':
           previewContent = '区切り線';
           break;
         case 'dialogue':
-          previewContent = block.content.items[0]?.text ? (block.content.items[0].text.substring(0, 40) + (block.content.items[0].text.length > 40 ? '...' : '')) : '';
+          previewContent = block.content?.items?.[0]?.text ? (block.content.items[0].text.substring(0, 40) + (block.content.items[0].text.length > 40 ? '...' : '')) : '';
           break;
         default:
           previewContent = '...';
@@ -292,8 +292,8 @@ export const EnhancedBlockEditor: React.FC<EnhancedBlockEditorProps> = ({ blocks
                 <div className="mt-2 space-y-4">
                   <Input
                     placeholder="ブロックタイトル（任意）"
-                    value={block.content.title || ''}
-                    onChange={(e) => updateBlock(block.id, { ...block.content, title: e.target.value })}
+                    value={block.content?.title || ''}
+                    onChange={(e) => updateBlock(block.id, { ...(block.content || {}), title: e.target.value })}
                     className="text-xs h-8 bg-slate-50"
                   />
                   {renderBlockContent(block)}
