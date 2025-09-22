@@ -527,7 +527,7 @@ export const EnhancedBlockEditor: React.FC<EnhancedBlockEditorProps> = ({ blocks
           previewContent = '...';
       }
     }
-    return <p className="flex-1 text-sm text-muted-foreground truncate font-mono">{prefix}{previewContent}</p>;
+    return <p className="w-full truncate text-sm text-muted-foreground font-mono">{prefix}{previewContent}</p>;
   };
 
   const renderBlock = (block: Block) => {
@@ -550,13 +550,17 @@ export const EnhancedBlockEditor: React.FC<EnhancedBlockEditorProps> = ({ blocks
               <Button size="sm" variant="ghost" className="h-6 w-6 p-0" onClick={() => moveBlock(block.id, 'down')} disabled={!canMoveDown}><ChevronDown className="h-4 w-4" /></Button>
             </div>
             
-            <div className={`flex-1 ${isCollapsed ? 'py-1' : 'p-2'}`}>
+            <div className={`flex-1 min-w-0 ${isCollapsed ? 'py-1' : 'p-2'}`}>
               <div className="flex items-center justify-between">
-                <div className="flex items-center">
+                <div className="flex items-center flex-1 min-w-0 overflow-hidden">
                   <Button size="sm" variant="ghost" className="h-6 w-6 p-0 mr-2" onClick={() => toggleCollapse(block.id)}>
                     {isCollapsed ? <ChevronRight className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
                   </Button>
-                  {isCollapsed && renderCollapsedPreview(block)}
+                  {isCollapsed && (
+                    <div className="flex-1 min-w-0 overflow-hidden">
+                      {renderCollapsedPreview(block)}
+                    </div>
+                  )}
                 </div>
                 <div className="flex space-x-1">
                   <div className="flex space-x-1">
