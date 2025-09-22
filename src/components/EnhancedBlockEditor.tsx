@@ -1198,7 +1198,7 @@ export const EnhancedBlockEditor: React.FC<EnhancedBlockEditorProps> = ({ blocks
         if (block.content.width === 'full') {
           buttonStyle.width = '100%';
         } else if (block.content.width === 'medium') {
-          buttonStyle.width = '50%';
+          buttonStyle.width = '75%';
         }
 
         if (block.content.borderEnabled) {
@@ -1209,7 +1209,7 @@ export const EnhancedBlockEditor: React.FC<EnhancedBlockEditorProps> = ({ blocks
           <div className="space-y-3">
             <Dialog open={templateDialogOpenFor === block.id} onOpenChange={(isOpen) => setTemplateDialogOpenFor(isOpen ? block.id : null)}>
               <DialogTrigger asChild>
-                <Button variant="outline" className="w-full">テンプレートからデザインを選択</Button>
+                <Button variant="default" className="w-full">テンプレートからデザインを選択</Button>
               </DialogTrigger>
               <DialogContent className="max-w-5xl">
                 <DialogHeader>
