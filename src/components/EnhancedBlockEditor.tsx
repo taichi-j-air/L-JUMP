@@ -6,6 +6,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { MediaLibrarySelector } from '@/components/MediaLibrarySelector';
 import { 
   Plus, 
@@ -284,8 +285,26 @@ export const EnhancedBlockEditor: React.FC<EnhancedBlockEditorProps> = ({ blocks
                   {isCollapsed && renderCollapsedPreview(block)}
                 </div>
                 <div className="flex space-x-1">
-                  <Button size="sm" variant="ghost" className="h-8 w-8 p-0" onClick={() => duplicateBlock(block.id)}><Copy className="h-4 w-4" /></Button>
-                  <Button size="sm" variant="ghost" className="h-8 w-8 p-0 text-destructive" onClick={() => deleteBlock(block.id)}><Trash2 className="h-4 w-4" /></Button>
+                  <div className="flex space-x-1">
+                  <TooltipProvider delayDuration={0}>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Button size="sm" variant="ghost" className="h-8 w-8 p-0" onClick={() => duplicateBlock(block.id)}><Copy className="h-4 w-4" /></Button>
+                      </TooltipTrigger>
+                      <TooltipContent className="text-xs text-gray-500">
+                        <p>複製</p>
+                      </TooltipContent>
+                    </Tooltip>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Button size="sm" variant="ghost" className="h-8 w-8 p-0 text-destructive hover:bg-destructive hover:text-white" onClick={() => deleteBlock(block.id)}><Trash2 className="h-4 w-4" /></Button>
+                      </TooltipTrigger>
+                      <TooltipContent className="text-xs text-gray-500">
+                        <p>削除</p>
+                      </TooltipContent>
+                    </Tooltip>
+                  </TooltipProvider>
+                </div>
                 </div>
               </div>
               {!isCollapsed && (
