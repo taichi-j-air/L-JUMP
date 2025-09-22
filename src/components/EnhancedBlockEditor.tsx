@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -64,6 +64,16 @@ const getHeadingDefaults = (style: number) => {
 
 export const EnhancedBlockEditor: React.FC<EnhancedBlockEditorProps> = ({ blocks, onChange }) => {
   const [collapsedBlocks, setCollapsedBlocks] = useState<string[]>([]);
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (scrollContainerRef.current) {
+      scrollContainerRef.current.scrollTo({
+        top: scrollContainerRef.current.scrollHeight,
+        behavior: 'smooth'
+      });
+    }
+  }, [blocks.length]);
 
   const addBlock = (type: Block['type']) => {
     const newBlock: Block = {
@@ -233,7 +243,7 @@ export const EnhancedBlockEditor: React.FC<EnhancedBlockEditorProps> = ({ blocks
     const isCollapsed = collapsedBlocks.includes(block.id);
 
     return (
-      <Card key={block.id} className="mb-4 group bg-white dark:bg-gray-800">
+      <Card key={block.id} className="mb-4 group bg-white dark:bg-gray-800 shadow-md">
         <CardContent className={isCollapsed ? "p-0" : "p-2"}>
           <div className="flex items-start space-x-2">
             <div className={`flex flex-col items-center space-y-1 ${isCollapsed ? 'pt-1' : 'pt-2'}`}>
@@ -750,40 +760,39 @@ export const EnhancedBlockEditor: React.FC<EnhancedBlockEditorProps> = ({ blocks
   };
 
   return (
-    <div className="space-y-4">
-      <Card>
-        <CardContent className="p-4">
-          <div className="flex items-center space-x-2 mb-4">
-            <span className="text-sm font-medium">ブロックを追加:</span>
-            <div className="flex flex-wrap gap-2">
-              <Button size="sm" variant="outline" onClick={() => addBlock('paragraph')}><Type className="h-4 w-4 mr-1" />段落</Button>
-              <Button size="sm" variant="outline" onClick={() => addBlock('heading')}><Type className="h-4 w-4 mr-1" />見出し</Button>
-              <Button size="sm" variant="outline" onClick={() => addBlock('image')}><Image className="h-4 w-4 mr-1" />画像</Button>
-              <Button size="sm" variant="outline" onClick={() => addBlock('video')}><Video className="h-4 w-4 mr-1" />動画</Button>
-              <Button size="sm" variant="outline" onClick={() => addBlock('list')}><List className="h-4 w-4 mr-1" />リスト</Button>
-              <Button size="sm" variant="outline" onClick={() => addBlock('quote')}><Quote className="h-4 w-4 mr-1" />引用</Button>
-              <Button size="sm" variant="outline" onClick={() => addBlock('code')}><Code2 className="h-4 w-4 mr-1" />コード</Button>
-              <Button size="sm" variant="outline" onClick={() => addBlock('separator')}><Minus className="h-4 w-4 mr-1" />区切り線</Button>
-              <Button size="sm" variant="outline" onClick={() => addBlock('note')}><AlertTriangle className="h-4 w-4 mr-1" />注意事項</Button>
-              <Button size="sm" variant="outline" onClick={() => addBlock('dialogue')}><MessageSquare className="h-4 w-4 mr-1" />対話</Button>
+    <div className="relative h-[70vh] flex flex-col border rounded-md bg-white">
+      <div ref={scrollContainerRef} className="flex-grow overflow-y-auto p-4" style={{ backgroundColor: '#ffffe0' }}>
+        {blocks.length === 0 && (
+          <div className="flex items-center justify-center h-full">
+            <div className="text-center">
+              <p className="text-muted-foreground mb-4">ブロックを追加して記事を作成しましょう</p>
+              <Button onClick={() => addBlock('paragraph')} >
+                <Plus className="h-4 w-4 mr-2" />
+                最初のブロックを追加
+              </Button>
             </div>
           </div>
-        </CardContent>
-      </Card>
+        )}
 
-      {blocks.sort((a, b) => a.order - b.order).map(renderBlock)}
+        {blocks.sort((a, b) => a.order - b.order).map(renderBlock)}
+      </div>
 
-      {blocks.length === 0 && (
-        <Card>
-          <CardContent className="p-8 text-center">
-            <p className="text-muted-foreground mb-4">ブロックを追加して記事を作成しましょう</p>
-            <Button onClick={() => addBlock('paragraph')} >
-              <Plus className="h-4 w-4 mr-2" />
-              最初のブロックを追加
-            </Button>
-          </CardContent>
-        </Card>
-      )}
+      <div className="sticky bottom-0 bg-background/95 backdrop-blur-sm border-t z-10">
+        <div className="p-2">
+          <div className="grid grid-cols-5 gap-1">
+            <Button variant="ghost" className="flex flex-col h-auto py-2" onClick={() => addBlock('paragraph')}><Type className="h-5 w-5 mb-1" /><span className="text-xs">段落</span></Button>
+            <Button variant="ghost" className="flex flex-col h-auto py-2" onClick={() => addBlock('heading')}><Type className="h-5 w-5 mb-1" /><span className="text-xs">見出し</span></Button>
+            <Button variant="ghost" className="flex flex-col h-auto py-2" onClick={() => addBlock('image')}><Image className="h-5 w-5 mb-1" /><span className="text-xs">画像</span></Button>
+            <Button variant="ghost" className="flex flex-col h-auto py-2" onClick={() => addBlock('video')}><Video className="h-5 w-5 mb-1" /><span className="text-xs">動画</span></Button>
+            <Button variant="ghost" className="flex flex-col h-auto py-2" onClick={() => addBlock('list')}><List className="h-5 w-5 mb-1" /><span className="text-xs">リスト</span></Button>
+            <Button variant="ghost" className="flex flex-col h-auto py-2" onClick={() => addBlock('quote')}><Quote className="h-5 w-5 mb-1" /><span className="text-xs">引用</span></Button>
+            <Button variant="ghost" className="flex flex-col h-auto py-2" onClick={() => addBlock('code')}><Code2 className="h-5 w-5 mb-1" /><span className="text-xs">コード</span></Button>
+            <Button variant="ghost" className="flex flex-col h-auto py-2" onClick={() => addBlock('separator')}><Minus className="h-5 w-5 mb-1" /><span className="text-xs">区切り線</span></Button>
+            <Button variant="ghost" className="flex flex-col h-auto py-2" onClick={() => addBlock('note')}><AlertTriangle className="h-5 w-5 mb-1" /><span className="text-xs">注意事項</span></Button>
+            <Button variant="ghost" className="flex flex-col h-auto py-2" onClick={() => addBlock('dialogue')}><MessageSquare className="h-5 w-5 mb-1" /><span className="text-xs">対話</span></Button>
+          </div>
+        </div>
+      </div>
     </div>
   );
 };
