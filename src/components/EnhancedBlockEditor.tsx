@@ -1,12 +1,12 @@
-﻿import React, { useState, useRef, useEffect, useMemo } from 'react';
+import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Switch } from "@/components/ui/switch";
-import { Label } from "@/components/ui/label";
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import { Switch } from '@/components/ui/switch';
+import { Label } from '@/components/ui/label';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { MediaLibrarySelector } from '@/components/MediaLibrarySelector';
 import { 
   Plus, 
@@ -231,11 +231,16 @@ export const EnhancedBlockEditor: React.FC<EnhancedBlockEditorProps> = ({ blocks
         text: 'ボタンテキスト',
         url: '',
         alignment: 'center',
+        width: 'auto',
+        height: 40,
         textColor: '#ffffff',
+        textSize: 16,
         backgroundColor: '#2563eb',
         borderRadius: 6,
         shadow: true,
-        width: 'auto',
+        borderEnabled: false,
+        borderWidth: 1,
+        borderColor: '#000000',
       };
       default: return { ...baseContent };
     }
@@ -519,7 +524,7 @@ export const EnhancedBlockEditor: React.FC<EnhancedBlockEditorProps> = ({ blocks
       
       case 'image':
         return (
-          <div className="space-y-4">
+          <div className="space-y-3">
             <MediaLibrarySelector
                 trigger={<Button variant="outline">メディアライブラリから画像を選択</Button>}
                 onSelect={(url) => updateBlock(block.id, { ...block.content, url })}
@@ -527,7 +532,7 @@ export const EnhancedBlockEditor: React.FC<EnhancedBlockEditorProps> = ({ blocks
             />
             
             {block.content.url && (
-              <div className="bg-gray-100 dark:bg-gray-800/50 p-4 rounded-md flex justify-center">
+              <div className="bg-gray-100 dark:bg-gray-800/50 p-3 rounded-md flex justify-center">
                 <img 
                   src={block.content.url} 
                   alt={block.content.alt || 'preview'} 
@@ -536,9 +541,9 @@ export const EnhancedBlockEditor: React.FC<EnhancedBlockEditorProps> = ({ blocks
               </div>
             )}
             
-            <div className="space-y-4 pt-2 border-t">
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
+            <div className="space-y-3 pt-3 border-t mt-3">
+              <div className="grid grid-cols-2 gap-x-4 gap-y-3">
+                <div className="space-y-1">
                   <label className="text-sm font-medium">配置</label>
                   <div className="flex items-center gap-1 rounded-md bg-muted p-1 w-fit">
                     <Button size="sm" variant={block.content.alignment === 'left' ? 'default' : 'ghost'} onClick={() => updateBlock(block.id, { ...block.content, alignment: 'left' })} className="h-8"><AlignLeft className="h-4 w-4" /></Button>
@@ -547,7 +552,7 @@ export const EnhancedBlockEditor: React.FC<EnhancedBlockEditorProps> = ({ blocks
                   </div>
                 </div>
 
-                <div className="space-y-2">
+                <div className="space-y-1">
                   <label className="text-sm font-medium">サイズ</label>
                   <Select value={block.content.size || 'medium'} onValueChange={(value) => updateBlock(block.id, { ...block.content, size: value })}>
                     <SelectTrigger className="w-full md:w-40"><SelectValue placeholder="サイズ" /></SelectTrigger>
@@ -560,7 +565,7 @@ export const EnhancedBlockEditor: React.FC<EnhancedBlockEditorProps> = ({ blocks
                   </Select>
                 </div>
 
-                <div className="space-y-2 col-span-2">
+                <div className="space-y-1 col-span-2">
                   <label className="text-sm font-medium">オプション</label>
                   <div className="flex items-center space-x-4">
                     <div className="flex items-center space-x-2">
@@ -576,7 +581,7 @@ export const EnhancedBlockEditor: React.FC<EnhancedBlockEditorProps> = ({ blocks
               </div>
             </div>
 
-            <div className="space-y-2 pt-4 border-t">
+            <div className="space-y-2 pt-3 border-t mt-3">
                 <label className="text-sm font-medium flex items-center gap-1">
                   リンクとテキスト
                   <TooltipProvider delayDuration={0}>
@@ -588,8 +593,8 @@ export const EnhancedBlockEditor: React.FC<EnhancedBlockEditorProps> = ({ blocks
                       </TooltipTrigger>
                       <TooltipContent side="right" className="max-w-xs text-[11px] text-gray-600">
                         <ul className="list-disc pl-4 space-y-1 text-left">
-                          <li><b>リンクURL:</b> 画像全体をクリックしたときの遷移先URLです。※URLを埋め込んだら画像をバナー(ボタン)として使用できます</li>
-                          <li><b>代替テキスト:</b> 画像が表示されない場合に代わりに表示されるテキストです。</li>
+                          <li><b>リンクURL:</b> 画像全体をクリックしたときの遷移先URLです。</li>
+                          <li><b>代替テキスト:</b> 画像が表示されない場合に代わりに表示されるテキストです。SEOにも影響します。</li>
                           <li><b>キャプション:</b> 画像の下に表示される説明文です。</li>
                         </ul>
                       </TooltipContent>
@@ -857,9 +862,46 @@ export const EnhancedBlockEditor: React.FC<EnhancedBlockEditorProps> = ({ blocks
           </div>
         );
       
-      case 'button':
+      case 'button': {
+        const buttonStyle: React.CSSProperties = {
+          display: 'inline-flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          padding: '0 1.5rem',
+          textDecoration: 'none',
+          fontWeight: 600,
+          color: block.content.textColor || '#ffffff',
+          backgroundColor: block.content.backgroundColor || '#2563eb',
+          borderRadius: `${block.content.borderRadius ?? 6}px`,
+          fontSize: `${block.content.textSize || 16}px`,
+          height: `${block.content.height || 40}px`,
+          transition: 'opacity 0.2s',
+        };
+
+        if (block.content.shadow) {
+          buttonStyle.boxShadow = '0 4px 14px 0 rgba(0, 0, 0, 0.1)';
+        }
+        
+        if (block.content.width === 'full') {
+          buttonStyle.width = '100%';
+        } else if (block.content.width === 'medium') {
+          buttonStyle.width = '50%';
+        }
+
+        if (block.content.borderEnabled) {
+            buttonStyle.border = `${block.content.borderWidth || 1}px solid ${block.content.borderColor || '#000000'}`;
+        }
+
         return (
           <div className="space-y-4">
+            {/* Preview */}
+            <div className="my-4 p-4 rounded-md bg-muted flex items-center justify-center">
+                <div style={buttonStyle}>
+                    {block.content.text || 'ボタンテキスト'}
+                </div>
+            </div>
+
+            {/* Settings */}
             <div className="space-y-2">
               <Label>ボタンテキスト</Label>
               <Input
@@ -877,6 +919,7 @@ export const EnhancedBlockEditor: React.FC<EnhancedBlockEditorProps> = ({ blocks
                 onChange={(e) => updateBlock(block.id, { ...block.content, url: e.target.value })}
               />
             </div>
+            
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label>配置</Label>
@@ -895,11 +938,24 @@ export const EnhancedBlockEditor: React.FC<EnhancedBlockEditorProps> = ({ blocks
                   <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="auto">自動</SelectItem>
+                    <SelectItem value="medium">中間</SelectItem>
                     <SelectItem value="full">最大幅</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
             </div>
+
+            <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                    <Label>高さ (px)</Label>
+                    <Input type="number" value={block.content.height ?? 40} onChange={(e) => updateBlock(block.id, { ...block.content, height: Number(e.target.value) })} />
+                </div>
+                <div className="space-y-2">
+                    <Label>文字サイズ (px)</Label>
+                    <Input type="number" value={block.content.textSize ?? 16} onChange={(e) => updateBlock(block.id, { ...block.content, textSize: Number(e.target.value) })} />
+                </div>
+            </div>
+
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label>文字色</Label>
@@ -910,18 +966,46 @@ export const EnhancedBlockEditor: React.FC<EnhancedBlockEditorProps> = ({ blocks
                 <input type="color" value={block.content.backgroundColor || '#2563eb'} onChange={(e) => updateBlock(block.id, { ...block.content, backgroundColor: e.target.value })} className="w-full h-10 rounded border" />
               </div>
             </div>
-            <div className="grid grid-cols-2 gap-4">
+
+            <div className="grid grid-cols-2 gap-4 items-center">
                 <div className="space-y-2">
-                    <Label>角丸 (px)</Label>
-                    <Input type="number" value={block.content.borderRadius ?? 6} onChange={(e) => updateBlock(block.id, { ...block.content, borderRadius: Number(e.target.value) })} />
+                    <Label>角丸</Label>
+                    <Select value={String(block.content.borderRadius ?? 6)} onValueChange={(value) => updateBlock(block.id, { ...block.content, borderRadius: Number(value) })}>
+                        <SelectTrigger><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                            <SelectItem value="0">なし (0px)</SelectItem>
+                            <SelectItem value="6">標準 (6px)</SelectItem>
+                            <SelectItem value="50">丸 (50px)</SelectItem>
+                        </SelectContent>
+                    </Select>
                 </div>
                 <div className="flex items-center space-x-2 pt-6">
                     <Switch id={`shadow-${block.id}`} checked={block.content.shadow !== false} onCheckedChange={(checked) => updateBlock(block.id, { ...block.content, shadow: checked })} />
                     <Label htmlFor={`shadow-${block.id}`}>影</Label>
                 </div>
             </div>
+
+            <div className="space-y-2 pt-4 border-t">
+                <div className="flex items-center justify-between">
+                    <Label htmlFor={`border-${block.id}`}>枠線</Label>
+                    <Switch id={`border-${block.id}`} checked={!!block.content.borderEnabled} onCheckedChange={(checked) => updateBlock(block.id, { ...block.content, borderEnabled: checked })} />
+                </div>
+                {block.content.borderEnabled && (
+                    <div className="grid grid-cols-2 gap-4 pt-2">
+                        <div className="space-y-2">
+                            <Label>枠線 太さ (px)</Label>
+                            <Input type="number" value={block.content.borderWidth ?? 1} onChange={(e) => updateBlock(block.id, { ...block.content, borderWidth: Number(e.target.value) })} />
+                        </div>
+                        <div className="space-y-2">
+                            <Label>枠線 色</Label>
+                            <input type="color" value={block.content.borderColor || '#000000'} onChange={(e) => updateBlock(block.id, { ...block.content, borderColor: e.target.value })} className="w-full h-10 rounded border" />
+                        </div>
+                    </div>
+                )}
+            </div>
           </div>
         );
+      }
 
       default:
         return <div>Unknown block type</div>;

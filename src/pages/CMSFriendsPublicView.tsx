@@ -213,13 +213,17 @@ const renderBlock = (block: Block) => {
 
     case 'button': {
       const buttonStyle: React.CSSProperties = {
-        display: 'inline-block',
-        padding: '0.75rem 1.5rem',
+        display: 'inline-flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        padding: '0 1.5rem',
         textDecoration: 'none',
         fontWeight: 600,
         color: content.textColor || '#ffffff',
         backgroundColor: content.backgroundColor || '#2563eb',
         borderRadius: `${content.borderRadius ?? 6}px`,
+        fontSize: `${content.textSize || 16}px`,
+        height: `${content.height || 40}px`,
         transition: 'opacity 0.2s',
       };
 
@@ -229,7 +233,12 @@ const renderBlock = (block: Block) => {
       
       if (content.width === 'full') {
         buttonStyle.width = '100%';
-        buttonStyle.textAlign = 'center';
+      } else if (content.width === 'medium') {
+        buttonStyle.width = '50%';
+      }
+
+      if (content.borderEnabled) {
+        buttonStyle.border = `${content.borderWidth || 1}px solid ${content.borderColor || '#000000'}`;
       }
 
       const alignClasses: { [key: string]: string } = {
