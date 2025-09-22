@@ -531,6 +531,7 @@ export default function CMSFriendsPageBuilder() {
                   <div className="space-y-2">
                     <Label>コンテンツ</Label>
                     <EnhancedBlockEditor
+                      key={selected?.id || 'no-selection'}
                       blocks={contentBlocks}
                       onChange={setContentBlocks}
                     />

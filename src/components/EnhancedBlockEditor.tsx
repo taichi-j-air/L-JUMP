@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -64,8 +64,23 @@ const getHeadingDefaults = (style: number) => {
 }
 
 export const EnhancedBlockEditor: React.FC<EnhancedBlockEditorProps> = ({ blocks, onChange }) => {
-  const [collapsedBlocks, setCollapsedBlocks] = useState<string[]>([]);
+  const [expandedBlocks, setExpandedBlocks] = useState<string[]>([]);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
+  const blockIds = useMemo(() => blocks.map(block => block.id), [blocks]);
+
+  useEffect(() => {
+    // Drop expanded IDs that no longer exist when the block set changes
+    setExpandedBlocks(prev => {
+      if (prev.length === 0) {
+        return prev;
+      }
+      const filtered = prev.filter(id => blockIds.includes(id));
+      if (filtered.length === prev.length && filtered.every((id, index) => id === prev[index])) {
+        return prev;
+      }
+      return filtered;
+    });
+  }, [blockIds]);
 
   useEffect(() => {
     if (scrollContainerRef.current) {
@@ -84,6 +99,7 @@ export const EnhancedBlockEditor: React.FC<EnhancedBlockEditorProps> = ({ blocks
       order: blocks.length
     };
     onChange([...blocks, newBlock]);
+    setExpandedBlocks(prev => (prev.includes(newBlock.id) ? prev : [...prev, newBlock.id]));
   };
 
   const updateBlock = (id: string, content: any) => {
@@ -131,8 +147,8 @@ export const EnhancedBlockEditor: React.FC<EnhancedBlockEditorProps> = ({ blocks
   };
 
   const toggleCollapse = (id: string) => {
-    setCollapsedBlocks(prev =>
-      prev.includes(id) ? prev.filter(bId => bId !== id) : [...prev, id]
+    setExpandedBlocks(prev =>
+      prev.includes(id) ? prev.filter(blockId => blockId !== id) : [...prev, id]
     );
   };
 
@@ -264,7 +280,7 @@ export const EnhancedBlockEditor: React.FC<EnhancedBlockEditorProps> = ({ blocks
   };
 
   const renderBlock = (block: Block) => {
-    const isCollapsed = collapsedBlocks.includes(block.id);
+    const isCollapsed = !expandedBlocks.includes(block.id);
 
     return (
       <Card key={block.id} className="mb-4 group bg-white dark:bg-gray-800 shadow-md border border-gray-300 rounded-sm">
@@ -389,7 +405,7 @@ export const EnhancedBlockEditor: React.FC<EnhancedBlockEditorProps> = ({ blocks
               placeholder="段落テキストを入力..."
               value={block.content.text}
               onChange={(e) => updateBlock(block.id, { ...block.content, text: e.target.value })}
-              rows={3}
+              rows={6}
               style={textStyle}
               data-block-id={block.id}
             />
@@ -808,8 +824,8 @@ export const EnhancedBlockEditor: React.FC<EnhancedBlockEditorProps> = ({ blocks
   };
 
   return (
-    <div className="relative h-[70vh] flex flex-col border rounded-md bg-white">
-      <div ref={scrollContainerRef} className="flex-grow overflow-y-auto p-4 border border-gray-300" style={{ backgroundColor: '#ffffe0' }}>
+    <div className="relative min-h-[600px] h-[600px] max-h-[600px] flex flex-col border rounded-md bg-white">
+      <div ref={scrollContainerRef} className="flex-1 overflow-y-auto p-4 border border-gray-300" style={{ backgroundColor: '#ffffe0' }}>
         {blocks.length === 0 && (
           <div className="flex items-center justify-center h-full">
             <div className="text-center">
@@ -825,7 +841,7 @@ export const EnhancedBlockEditor: React.FC<EnhancedBlockEditorProps> = ({ blocks
         {blocks.sort((a, b) => a.order - b.order).map(renderBlock)}
       </div>
 
-      <div className="sticky bottom-0 bg-background/95 backdrop-blur-sm border border-gray-300 z-10">
+      <div className="flex-none border-t border-gray-300 bg-background/95">
         <div className="p-2">
           <div className="grid grid-cols-5 gap-1">
             <Button variant="ghost" className="flex flex-col h-auto py-2" onClick={() => addBlock('paragraph')}><Type className="h-5 w-5 mb-1" /><span className="text-xs">段落</span></Button>
