@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect, useMemo } from 'react';
+﻿import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -33,7 +33,8 @@ import {
   AlertTriangle,
   MessageSquare,
   Link,
-  Lightbulb
+  Lightbulb,
+  AlertCircle
 } from 'lucide-react';
 
 export interface Block {
@@ -559,31 +560,54 @@ export const EnhancedBlockEditor: React.FC<EnhancedBlockEditorProps> = ({ blocks
                   </Select>
                 </div>
 
-                <div className="space-y-2">
+                <div className="space-y-2 col-span-2">
                   <label className="text-sm font-medium">オプション</label>
-                  <div className="flex items-center space-x-2">
-                    <Switch id={`rounded-image-${block.id}`} checked={block.content.rounded !== false} onCheckedChange={(checked) => updateBlock(block.id, { ...block.content, rounded: checked })} />
-                    <Label htmlFor={`rounded-image-${block.id}`} className="text-sm font-normal">角丸</Label>
+                  <div className="flex items-center space-x-4">
+                    <div className="flex items-center space-x-2">
+                      <Switch id={`rounded-image-${block.id}`} checked={block.content.rounded !== false} onCheckedChange={(checked) => updateBlock(block.id, { ...block.content, rounded: checked })} />
+                      <Label htmlFor={`rounded-image-${block.id}`} className="text-sm font-normal">角丸</Label>
+                    </div>
+                    <div className="flex items-center space-x-2">
+                      <Switch id={`hover-effect-${block.id}`} checked={!!block.content.hoverEffect} onCheckedChange={(checked) => updateBlock(block.id, { ...block.content, hoverEffect: checked })} />
+                      <Label htmlFor={`hover-effect-${block.id}`} className="text-sm font-normal">ホバー</Label>
+                    </div>
                   </div>
-                  <div className="flex items-center space-x-2">
-                    <Switch id={`hover-effect-${block.id}`} checked={!!block.content.hoverEffect} onCheckedChange={(checked) => updateBlock(block.id, { ...block.content, hoverEffect: checked })} />
-                    <Label htmlFor={`hover-effect-${block.id}`} className="text-sm font-normal">ホバー</Label>
-                  </div>
-                </div>
-              </div>
-
-              <div className="space-y-2">
-                <label className="text-sm font-medium">リンクURL (任意)</label>
-                <div className="flex items-center gap-2">
-                  <Link className="h-5 w-5 text-muted-foreground" />
-                  <Input type="url" placeholder="https://example.com" value={block.content.linkUrl || ''} onChange={(e) => updateBlock(block.id, { ...block.content, linkUrl: e.target.value })} />
                 </div>
               </div>
             </div>
 
-            <div className="space-y-4">
-              <Input placeholder="代替テキスト (画像の簡単な説明)" value={block.content.alt || ''} onChange={(e) => updateBlock(block.id, { ...block.content, alt: e.target.value })} />
-              <Input placeholder="キャプション (画像の下に表示されるテキスト)" value={block.content.caption || ''} onChange={(e) => updateBlock(block.id, { ...block.content, caption: e.target.value })} />
+            <div className="space-y-2 pt-4 border-t">
+                <label className="text-sm font-medium flex items-center gap-1">
+                  リンクとテキスト
+                  <TooltipProvider delayDuration={0}>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <button type="button" className="p-0 flex items-center justify-center" onClick={(e) => e.preventDefault()}>
+                          <AlertCircle className="h-4 w-4 text-white fill-gray-500" />
+                        </button>
+                      </TooltipTrigger>
+                      <TooltipContent side="right" className="max-w-xs text-[11px] text-gray-600">
+                        <ul className="list-disc pl-4 space-y-1 text-left">
+                          <li><b>リンクURL:</b> 画像全体をクリックしたときの遷移先URLです。※URLを埋め込んだら画像をバナー(ボタン)として使用できます</li>
+                          <li><b>代替テキスト:</b> 画像が表示されない場合に代わりに表示されるテキストです。</li>
+                          <li><b>キャプション:</b> 画像の下に表示される説明文です。</li>
+                        </ul>
+                      </TooltipContent>
+                    </Tooltip>
+                  </TooltipProvider>
+                </label>
+                <div className="flex items-center gap-2">
+                  <Link className="h-5 w-5 text-muted-foreground flex-shrink-0" />
+                  <Input type="url" placeholder="リンクURL (任意)" value={block.content.linkUrl || ''} onChange={(e) => updateBlock(block.id, { ...block.content, linkUrl: e.target.value })} />
+                </div>
+                <div className="flex items-center gap-2">
+                  <div className="w-5 h-5 flex-shrink-0"></div> {/* Spacer */}
+                  <Input placeholder="代替テキスト (画像の簡単な説明)" value={block.content.alt || ''} onChange={(e) => updateBlock(block.id, { ...block.content, alt: e.target.value })} />
+                </div>
+                <div className="flex items-center gap-2">
+                  <div className="w-5 h-5 flex-shrink-0"></div> {/* Spacer */}
+                  <Input placeholder="キャプション (画像の下に表示されるテキスト)" value={block.content.caption || ''} onChange={(e) => updateBlock(block.id, { ...block.content, caption: e.target.value })} />
+                </div>
             </div>
           </div>
         );
