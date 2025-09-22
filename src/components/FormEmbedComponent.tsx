@@ -287,7 +287,7 @@ export default function FormEmbedComponent({ formId, uid, className }: FormEmbed
   }
 
   return (
-    <Card className={className} style={{ ['--form-accent' as any]: formData.accent_color || '#0cb386' }}>
+    <Card className={`${className} border-gray-300`} style={{ ['--form-accent' as any]: formData.accent_color || '#0cb386' }}>
       <CardContent className="p-6">
         <form onSubmit={handleSubmit} className="space-y-6" noValidate>
           <div className="space-y-2">

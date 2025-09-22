@@ -9,6 +9,7 @@ import { Label } from "@/components/ui/label";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { MediaLibrarySelector } from '@/components/MediaLibrarySelector';
+import { supabase } from '@/integrations/supabase/client';
 import { 
   Plus, 
   Type, 
@@ -35,12 +36,13 @@ import {
   MessageSquare,
   Link,
   Lightbulb,
-  AlertCircle
+  AlertCircle,
+  FileText
 } from 'lucide-react';
 
 export interface Block {
   id: string;
-  type: 'paragraph' | 'heading' | 'image' | 'video' | 'list' | 'quote' | 'code' | 'separator' | 'note' | 'dialogue' | 'button' | 'background';
+  type: 'paragraph' | 'heading' | 'image' | 'video' | 'list' | 'code' | 'separator' | 'note' | 'dialogue' | 'button' | 'background' | 'form_embed';
   content: any;
   order: number;
 }
@@ -268,6 +270,21 @@ export const EnhancedBlockEditor: React.FC<EnhancedBlockEditorProps> = ({ blocks
   const blockIds = useMemo(() => blocks.map(block => block.id), [blocks]);
   const hasBackgroundBlock = useMemo(() => blocks.some(block => block.type === 'background'), [blocks]);
 
+  const [forms, setForms] = useState<any[]>([]);
+
+  useEffect(() => {
+    const fetchForms = async () => {
+      const { data, error } = await supabase.from('forms').select('id, name');
+      if (error) {
+        console.error('Error fetching forms:', error);
+      }
+ else {
+        setForms(data || []);
+      }
+    };
+    fetchForms();
+  }, []);
+
   useEffect(() => {
     setExpandedBlocks(prev => {
       if (prev.length === 0) return prev;
@@ -405,9 +422,9 @@ export const EnhancedBlockEditor: React.FC<EnhancedBlockEditorProps> = ({ blocks
         size: 'medium'
       };
       case 'list': return { ...baseContent, items: [''], type: 'bullet' };
-      case 'quote': return { ...baseContent, text: '', author: '', backgroundColor: '#f3f4f6' };
       case 'code': return { ...baseContent, code: '', language: 'javascript' };
       case 'separator': return { ...baseContent };
+      case 'form_embed': return { ...baseContent, formId: '', title: 'フォーム埋め込み', description: 'ここにフォームが埋め込まれます。' };
       case 'note': return {
         ...baseContent,
         text: '', 
@@ -460,14 +477,13 @@ export const EnhancedBlockEditor: React.FC<EnhancedBlockEditorProps> = ({ blocks
       image: '画像',
       video: '動画',
       list: 'リスト',
-      quote: '引用',
       code: 'コード',
       separator: '区切り線',
       note: '注意事項',
       dialogue: '対話',
       button: 'ボタン',
-      background: '背景色',
       background: '背景色',
+      form_embed: 'フォーム埋め込み',
     };
     const typeName = blockTypeMap[block.type] || 'ブロック';
     const prefix = `${typeName}：`;
@@ -480,7 +496,6 @@ export const EnhancedBlockEditor: React.FC<EnhancedBlockEditorProps> = ({ blocks
       switch (block.type) {
         case 'heading':
         case 'paragraph':
-        case 'quote':
         case 'note':
           previewContent = block.content?.text ? (block.content.text.substring(0, 50) + (block.content.text.length > 50 ? '...' : '')) : '';
           break;
@@ -504,6 +519,9 @@ export const EnhancedBlockEditor: React.FC<EnhancedBlockEditorProps> = ({ blocks
           break;
         case 'background':
           previewContent = block.content?.color || '';
+          break;
+        case 'form_embed':
+          previewContent = block.content?.formId || '';
           break;
         default:
           previewContent = '...';
@@ -947,24 +965,6 @@ export const EnhancedBlockEditor: React.FC<EnhancedBlockEditorProps> = ({ blocks
           </div>
         );
       
-      case 'quote':
-        return (
-          <div className="space-y-2">
-            <div className="flex items-center space-x-2 mb-2">
-              <span className="text-sm">背景色:</span>
-              <input type="color" value={block.content.backgroundColor || '#f3f4f6'} onChange={(e) => updateBlock(block.id, { ...block.content, backgroundColor: e.target.value })} className="w-8 h-8 rounded border" />
-            </div>
-            <Textarea
-              placeholder="引用テキスト"
-              value={block.content.text}
-              onChange={(e) => updateBlock(block.id, { ...block.content, text: e.target.value })}
-              rows={3}
-              style={{ backgroundColor: block.content.backgroundColor || '#f3f4f6' }}
-            />
-            <Input placeholder="引用元（オプション）" value={block.content.author} onChange={(e) => updateBlock(block.id, { ...block.content, author: e.target.value })} />
-          </div>
-        );
-      
       case 'code':
         return (
           <div className="space-y-2">
@@ -986,6 +986,37 @@ export const EnhancedBlockEditor: React.FC<EnhancedBlockEditorProps> = ({ blocks
               rows={8}
               className="font-mono"
             />
+          </div>
+        );
+
+      case 'form_embed':
+        return (
+          <div className="space-y-2">
+            <Label>埋め込むフォームを選択</Label>
+            <Select
+              value={block.content.formId || ''}
+              onValueChange={(value) => {
+                const selectedForm = forms.find(f => f.id === value);
+                updateBlock(block.id, { ...block.content, formId: value, title: selectedForm?.name || 'フォーム埋め込み' });
+              }}
+            >
+              <SelectTrigger>
+                <SelectValue placeholder="フォームを選択" />
+              </SelectTrigger>
+              <SelectContent>
+                {forms.map((form) => (
+                  <SelectItem key={form.id} value={form.id}>
+                    {form.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            {block.content.formId && (
+              <p className="text-sm text-muted-foreground">選択されたフォーム: {forms.find(f => f.id === block.content.formId)?.name || block.content.formId}</p>
+            )}
+            {!block.content.formId && (
+              <p className="text-sm text-muted-foreground">フォームを選択してください。</p>
+            )}
           </div>
         );
       
@@ -1378,9 +1409,9 @@ export const EnhancedBlockEditor: React.FC<EnhancedBlockEditorProps> = ({ blocks
             <Button variant="ghost" className="flex flex-col h-auto py-2" onClick={() => addBlock('image')}><Image className="h-5 w-5 mb-1" /><span className="text-xs">画像</span></Button>
             <Button variant="ghost" className="flex flex-col h-auto py-2" onClick={() => addBlock('video')}><Video className="h-5 w-5 mb-1" /><span className="text-xs">動画</span></Button>
             <Button variant="ghost" className="flex flex-col h-auto py-2" onClick={() => addBlock('list')}><List className="h-5 w-5 mb-1" /><span className="text-xs">リスト</span></Button>
-            <Button variant="ghost" className="flex flex-col h-auto py-2" onClick={() => addBlock('quote')}><Quote className="h-5 w-5 mb-1" /><span className="text-xs">引用</span></Button>
             <Button variant="ghost" className="flex flex-col h-auto py-2" onClick={() => addBlock('code')}><Code2 className="h-5 w-5 mb-1" /><span className="text-xs">コード</span></Button>
             <Button variant="ghost" className="flex flex-col h-auto py-2" onClick={() => addBlock('separator')}><Minus className="h-5 w-5 mb-1" /><span className="text-xs">区切り線</span></Button>
+            <Button variant="ghost" className="flex flex-col h-auto py-2" onClick={() => addBlock('form_embed')}><FileText className="h-5 w-5 mb-1" /><span className="text-xs">フォーム</span></Button>
             <Button variant="ghost" className="flex flex-col h-auto py-2" onClick={() => addBlock('note')}><AlertTriangle className="h-5 w-5 mb-1" /><span className="text-xs">注意事項</span></Button>
             <Button variant="ghost" className="flex flex-col h-auto py-2" onClick={() => addBlock('dialogue')}><MessageSquare className="h-5 w-5 mb-1" /><span className="text-xs">対話</span></Button>
             <Button variant="ghost" className="flex flex-col h-auto py-2" onClick={() => addBlock('button')}><Link className="h-5 w-5 mb-1" /><span className="text-xs">ボタン</span></Button>

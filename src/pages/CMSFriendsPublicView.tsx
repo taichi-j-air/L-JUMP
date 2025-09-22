@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { TimerPreview } from "@/components/TimerPreview";
 import { Block } from "@/components/EnhancedBlockEditor";
+import FormEmbedComponent from "@/components/FormEmbedComponent";
 import { Lightbulb } from "lucide-react";
 
 interface PagePayload {
@@ -184,19 +185,18 @@ const renderBlock = (block: Block) => {
         </ListTag>
       );
 
-    case 'quote':
-      return (
-        <blockquote className="border-l-4 border-gray-300 pl-4 py-2 my-4" style={{ backgroundColor: content.backgroundColor || '#f3f4f6' }}>
-          <p className="italic">{content.text}</p>
-          {content.author && <footer className="text-right mt-2">- {content.author}</footer>}
-        </blockquote>
-      );
-
     case 'code':
       return (
         <pre className="bg-gray-900 text-white p-4 rounded-md my-4 overflow-x-auto">
           <code>{content.code}</code>
         </pre>
+      );
+
+    case 'form_embed':
+      return (
+        <div className="my-4">
+          <FormEmbedComponent formId={content.formId} />
+        </div>
       );
 
     case 'separator':
