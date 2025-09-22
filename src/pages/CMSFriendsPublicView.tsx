@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { TimerPreview } from "@/components/TimerPreview";
 import { Block } from "@/components/EnhancedBlockEditor";
+import { Lightbulb } from "lucide-react";
 
 interface PagePayload {
   title: string;
@@ -68,7 +69,6 @@ const renderBlock = (block: Block) => {
       return <p style={textStyle}>{content.text}</p>;
 
     case 'heading': {
-      const designStyle = content.design_style ?? content.designStyle ?? 1;
       const Tag = `h${content.level || 1}` as keyof JSX.IntrinsicElements;
       const headingStyle = {
         '--heading-color-1': content.color1,
@@ -76,9 +76,30 @@ const renderBlock = (block: Block) => {
         '--heading-color-3': content.color3,
         ...textStyle
       } as React.CSSProperties;
+
+      if (content.design_style === 3) {
+        return (
+          <div className="flex items-center my-6" style={{ color: content.color3 || '#333333' }}>
+            <div className="relative mr-4 flex-shrink-0">
+              <div 
+                className="flex items-center justify-center rounded-full w-[25px] h-[25px]"
+                style={{ backgroundColor: content.color1 || '#ffca2c' }}
+              >
+                <Lightbulb size={15} color={content.color2 || 'white'} />
+              </div>
+              <div 
+                className="absolute top-1/2 -translate-y-1/2 left-[20px] w-0 h-0 border-t-[7px] border-t-transparent border-b-[7px] border-b-transparent border-l-[12px]"
+                style={{ borderLeftColor: content.color1 || '#ffca2c' }}
+              ></div>
+            </div>
+            <Tag style={textStyle}>{content.text}</Tag>
+          </div>
+        );
+      }
+
       return (
         <Tag
-          className={`heading-style-${designStyle}`}
+          className={`heading-style-${content.design_style || 1}`}
           style={headingStyle}
         >
           {content.text}
@@ -662,7 +683,7 @@ export default function CMSFriendsPublicView() {
         <article className="prose max-w-none dark:prose-invert flex-1 p-4 ql-content">
           {Array.isArray(data.content_blocks) && data.content_blocks.length > 0 ? (
             data.content_blocks.sort((a, b) => a.order - b.order).map((block) => (
-              <div key={block.id}>{renderBlock(block)}</div>
+              <div key={block.id} className="not-prose">{renderBlock(block)}</div>
             ))
           ) : (
             <div dangerouslySetInnerHTML={{ __html: sanitizeHtml(data.content || "") }} />

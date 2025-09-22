@@ -31,7 +31,8 @@ import {
   ChevronRight,
   AlertTriangle,
   MessageSquare,
-  Link
+  Link,
+  Lightbulb
 } from 'lucide-react';
 
 export interface Block {
@@ -44,6 +45,21 @@ export interface Block {
 interface EnhancedBlockEditorProps {
   blocks: Block[];
   onChange: (blocks: Block[]) => void;
+}
+
+const getHeadingDefaults = (style: number) => {
+  switch (style) {
+    case 1:
+      return { color1: '#2589d0', color2: '#f2f2f2', color3: '#333333' };
+    case 2:
+      return { color1: '#80c8d1', color2: '#f4f4f4', color3: '#ffffff' };
+    case 3:
+      return { color1: '#ffca2c', color2: '#ffffff', color3: '#333333' };
+    case 4:
+      return { color1: '#494949', color2: '#7db4e6', color3: '#494949' };
+    default:
+      return { color1: '#2589d0', color2: '#f2f2f2', color3: '#333333' };
+  }
 }
 
 export const EnhancedBlockEditor: React.FC<EnhancedBlockEditorProps> = ({ blocks, onChange }) => {
@@ -322,7 +338,7 @@ export const EnhancedBlockEditor: React.FC<EnhancedBlockEditorProps> = ({ blocks
           </div>
         );
       
-      case 'heading':
+      case 'heading': {
         const headingStyle = {
           '--heading-color-1': block.content.color1,
           '--heading-color-2': block.content.color2,
@@ -349,7 +365,15 @@ export const EnhancedBlockEditor: React.FC<EnhancedBlockEditorProps> = ({ blocks
               </Select>
               <Select
                 value={block.content.design_style?.toString() || '1'}
-                onValueChange={(value) => updateBlock(block.id, { ...block.content, design_style: parseInt(value) })}
+                onValueChange={(value) => {
+                  const style = parseInt(value);
+                  const defaults = getHeadingDefaults(style);
+                  updateBlock(block.id, { 
+                    ...block.content, 
+                    design_style: style,
+                    ...defaults 
+                  });
+                }}
               >
                 <SelectTrigger className="w-40">
                   <SelectValue placeholder="デザインを選択" />
@@ -362,21 +386,46 @@ export const EnhancedBlockEditor: React.FC<EnhancedBlockEditorProps> = ({ blocks
                 </SelectContent>
               </Select>
             </div>
-            <div
-              className={`heading-style-${(block.content.design_style ?? block.content.designStyle ?? 1)}`}
-              style={headingStyle}
-            >
-              <input
-                type="text"
-                placeholder="見出しテキスト"
-                value={block.content.text}
-                onChange={(e) => updateBlock(block.id, { ...block.content, text: e.target.value })}
-                className="block w-full bg-transparent border-none focus:ring-0 p-0 m-0"
-                style={textStyle}
-              />
-            </div>
+            
+            {(block.content.design_style || 1) === 3 ? (
+              <div className="flex items-center my-6" style={{ color: block.content.color3 || '#333333' }}>
+                <div className="relative mr-4 flex-shrink-0">
+                  <div 
+                    className="flex items-center justify-center rounded-full w-[25px] h-[25px]"
+                    style={{ backgroundColor: block.content.color1 || '#ffca2c' }}
+                  >
+                    <Lightbulb size={15} color={block.content.color2 || 'white'} />
+                  </div>
+                  <div 
+                    className="absolute top-1/2 -translate-y-1/2 left-[20px] w-0 h-0 border-t-[7px] border-t-transparent border-b-[7px] border-b-transparent border-l-[12px]"
+                    style={{ borderLeftColor: block.content.color1 || '#ffca2c' }}
+                  ></div>
+                </div>
+                <div
+                  onBlur={e => updateBlock(block.id, { ...block.content, text: e.currentTarget.textContent || '' })}
+                  contentEditable="true"
+                  suppressContentEditableWarning={true}
+                  className="w-full bg-transparent focus:outline-none"
+                  style={textStyle}
+                >{block.content.text}</div>
+              </div>
+            ) : (
+              <div
+                className={`heading-style-${block.content.design_style || 1}`}
+                style={headingStyle}
+              >
+                <div
+                  onBlur={e => updateBlock(block.id, { ...block.content, text: e.currentTarget.textContent || '' })}
+                  contentEditable="true"
+                  suppressContentEditableWarning={true}
+                  className="w-full bg-transparent focus:outline-none"
+                  style={textStyle}
+                >{block.content.text}</div>
+              </div>
+            )}
           </div>
         );
+      }
       
       case 'image':
         return (

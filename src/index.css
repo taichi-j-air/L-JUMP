@@ -167,36 +167,7 @@ All colors MUST be HSL.
     padding-left: 35px;
     margin: 1.5em 0;
   }
-  .heading-style-3::before {
-    position: absolute;
-    /* Font Awesome 5 Free is not available, using a placeholder */
-    content: "💡";
-    background: var(--heading-color-1, #ffca2c);
-    color: var(--heading-color-2, white);
-    font-weight: 900;
-    font-size: 15px;
-    border-radius: 50%;
-    left: 0;
-    width: 25px;
-    height: 25px;
-    line-height: 25px;
-    text-align: center;
-    top: 50%;
-    transform: translateY(-50%);
-  }
-  .heading-style-3::after {
-    content: '';
-    display: block;
-    position: absolute;
-    left: 20px;
-    height: 0;
-    width: 0;
-    border-top: 7px solid transparent;
-    border-bottom: 7px solid transparent;
-    border-left: 12px solid var(--heading-color-1, #ffca2c);
-    top: 50%;
-    transform: translateY(-50%);
-  }
+  
 
   .heading-style-4 {
     position: relative;
