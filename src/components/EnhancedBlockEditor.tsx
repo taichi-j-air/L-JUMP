@@ -267,7 +267,7 @@ export const EnhancedBlockEditor: React.FC<EnhancedBlockEditorProps> = ({ blocks
     const isCollapsed = collapsedBlocks.includes(block.id);
 
     return (
-      <Card key={block.id} className="mb-4 group bg-white dark:bg-gray-800 shadow-md border border-gray-300">
+      <Card key={block.id} className="mb-4 group bg-white dark:bg-gray-800 shadow-md border border-gray-300 rounded-sm">
         <CardContent className={isCollapsed ? "p-0" : "p-2"}>
           <div className="flex items-start space-x-2">
             <div className={`flex flex-col items-center space-y-1 ${isCollapsed ? 'pt-1' : 'pt-2'}`}>
