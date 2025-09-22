@@ -38,7 +38,7 @@ import {
 
 export interface Block {
   id: string;
-  type: 'paragraph' | 'heading' | 'image' | 'video' | 'list' | 'quote' | 'code' | 'separator' | 'note' | 'dialogue';
+  type: 'paragraph' | 'heading' | 'image' | 'video' | 'list' | 'quote' | 'code' | 'separator' | 'note' | 'dialogue' | 'button';
   content: any;
   order: number;
 }
@@ -225,6 +225,17 @@ export const EnhancedBlockEditor: React.FC<EnhancedBlockEditorProps> = ({ blocks
           { alignment: 'left', text: 'これは会話風の吹き出しです。' }
         ]
       };
+      case 'button': return {
+        ...baseContent,
+        text: 'ボタンテキスト',
+        url: '',
+        alignment: 'center',
+        textColor: '#ffffff',
+        backgroundColor: '#2563eb',
+        borderRadius: 6,
+        shadow: true,
+        width: 'auto',
+      };
       default: return { ...baseContent };
     }
   };
@@ -241,6 +252,7 @@ export const EnhancedBlockEditor: React.FC<EnhancedBlockEditorProps> = ({ blocks
       separator: '区切り線',
       note: '注意事項',
       dialogue: '対話',
+      button: 'ボタン',
     };
     const typeName = blockTypeMap[block.type] || 'ブロック';
     const prefix = `${typeName}：`;
@@ -271,6 +283,9 @@ export const EnhancedBlockEditor: React.FC<EnhancedBlockEditorProps> = ({ blocks
           break;
         case 'dialogue':
           previewContent = block.content?.items?.[0]?.text ? (block.content.items[0].text.substring(0, 40) + (block.content.items[0].text.length > 40 ? '...' : '')) : '';
+          break;
+        case 'button':
+          previewContent = block.content?.text || '';
           break;
         default:
           previewContent = '...';
@@ -521,7 +536,7 @@ export const EnhancedBlockEditor: React.FC<EnhancedBlockEditorProps> = ({ blocks
             )}
             
             <div className="space-y-4 pt-2 border-t">
-              <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+              <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <label className="text-sm font-medium">配置</label>
                   <div className="flex items-center gap-1 rounded-md bg-muted p-1 w-fit">
@@ -818,6 +833,72 @@ export const EnhancedBlockEditor: React.FC<EnhancedBlockEditorProps> = ({ blocks
           </div>
         );
       
+      case 'button':
+        return (
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <Label>ボタンテキスト</Label>
+              <Input
+                placeholder="例：詳しくはこちら"
+                value={block.content.text || ''}
+                onChange={(e) => updateBlock(block.id, { ...block.content, text: e.target.value })}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>リンクURL</Label>
+              <Input
+                type="url"
+                placeholder="https://example.com"
+                value={block.content.url || ''}
+                onChange={(e) => updateBlock(block.id, { ...block.content, url: e.target.value })}
+              />
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label>配置</Label>
+                <Select value={block.content.alignment || 'center'} onValueChange={(value) => updateBlock(block.id, { ...block.content, alignment: value })}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="left">左寄せ</SelectItem>
+                    <SelectItem value="center">中央</SelectItem>
+                    <SelectItem value="right">右寄せ</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label>幅</Label>
+                <Select value={block.content.width || 'auto'} onValueChange={(value) => updateBlock(block.id, { ...block.content, width: value })}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="auto">自動</SelectItem>
+                    <SelectItem value="full">最大幅</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label>文字色</Label>
+                <input type="color" value={block.content.textColor || '#ffffff'} onChange={(e) => updateBlock(block.id, { ...block.content, textColor: e.target.value })} className="w-full h-10 rounded border" />
+              </div>
+              <div className="space-y-2">
+                <Label>背景色</Label>
+                <input type="color" value={block.content.backgroundColor || '#2563eb'} onChange={(e) => updateBlock(block.id, { ...block.content, backgroundColor: e.target.value })} className="w-full h-10 rounded border" />
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                    <Label>角丸 (px)</Label>
+                    <Input type="number" value={block.content.borderRadius ?? 6} onChange={(e) => updateBlock(block.id, { ...block.content, borderRadius: Number(e.target.value) })} />
+                </div>
+                <div className="flex items-center space-x-2 pt-6">
+                    <Switch id={`shadow-${block.id}`} checked={block.content.shadow !== false} onCheckedChange={(checked) => updateBlock(block.id, { ...block.content, shadow: checked })} />
+                    <Label htmlFor={`shadow-${block.id}`}>影</Label>
+                </div>
+            </div>
+          </div>
+        );
+
       default:
         return <div>Unknown block type</div>;
     }
@@ -843,7 +924,7 @@ export const EnhancedBlockEditor: React.FC<EnhancedBlockEditorProps> = ({ blocks
 
       <div className="flex-none border-t border-gray-300 bg-background/95">
         <div className="p-2">
-          <div className="grid grid-cols-5 gap-1">
+          <div className="grid grid-cols-6 gap-1">
             <Button variant="ghost" className="flex flex-col h-auto py-2" onClick={() => addBlock('paragraph')}><Type className="h-5 w-5 mb-1" /><span className="text-xs">段落</span></Button>
             <Button variant="ghost" className="flex flex-col h-auto py-2" onClick={() => addBlock('heading')}><Type className="h-5 w-5 mb-1" /><span className="text-xs">見出し</span></Button>
             <Button variant="ghost" className="flex flex-col h-auto py-2" onClick={() => addBlock('image')}><Image className="h-5 w-5 mb-1" /><span className="text-xs">画像</span></Button>
@@ -854,6 +935,7 @@ export const EnhancedBlockEditor: React.FC<EnhancedBlockEditorProps> = ({ blocks
             <Button variant="ghost" className="flex flex-col h-auto py-2" onClick={() => addBlock('separator')}><Minus className="h-5 w-5 mb-1" /><span className="text-xs">区切り線</span></Button>
             <Button variant="ghost" className="flex flex-col h-auto py-2" onClick={() => addBlock('note')}><AlertTriangle className="h-5 w-5 mb-1" /><span className="text-xs">注意事項</span></Button>
             <Button variant="ghost" className="flex flex-col h-auto py-2" onClick={() => addBlock('dialogue')}><MessageSquare className="h-5 w-5 mb-1" /><span className="text-xs">対話</span></Button>
+            <Button variant="ghost" className="flex flex-col h-auto py-2" onClick={() => addBlock('button')}><Link className="h-5 w-5 mb-1" /><span className="text-xs">ボタン</span></Button>
           </div>
         </div>
       </div>

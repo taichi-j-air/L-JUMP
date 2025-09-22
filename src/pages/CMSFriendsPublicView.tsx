@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { useParams, useSearchParams } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
-import DOMPurify, { Config as DOMPurifyConfig } from "dompurify";
+import DOMPurify from "dompurify";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -123,7 +123,7 @@ const renderBlock = (block: Block) => {
         <img
           src={content.url}
           alt={content.alt}
-          className={`${sizeClasses[content.size] || 'w-1/2'} ${alignClasses[content.alignment] || 'mx-auto'} ${content.rounded ? 'rounded-lg' : ''} ${content.hoverEffect ? 'transition-transform duration-300 hover:scale-105' : ''}`}
+          className={`${sizeClasses[content.size] || 'w-1/2'} ${alignClasses[content.alignment] || 'mx-auto'} ${content.rounded ? 'rounded-lg' : ''} ${content.hoverEffect ? 'transition-opacity duration-300 hover:opacity-70' : ''}`}
         />
       );
       return (
@@ -210,6 +210,49 @@ const renderBlock = (block: Block) => {
           ))}
         </div>
       );
+
+    case 'button': {
+      const buttonStyle: React.CSSProperties = {
+        display: 'inline-block',
+        padding: '0.75rem 1.5rem',
+        textDecoration: 'none',
+        fontWeight: 600,
+        color: content.textColor || '#ffffff',
+        backgroundColor: content.backgroundColor || '#2563eb',
+        borderRadius: `${content.borderRadius ?? 6}px`,
+        transition: 'opacity 0.2s',
+      };
+
+      if (content.shadow) {
+        buttonStyle.boxShadow = '0 4px 14px 0 rgba(0, 0, 0, 0.1)';
+      }
+      
+      if (content.width === 'full') {
+        buttonStyle.width = '100%';
+        buttonStyle.textAlign = 'center';
+      }
+
+      const alignClasses: { [key: string]: string } = {
+        left: 'text-left',
+        center: 'text-center',
+        right: 'text-right',
+      };
+
+      return (
+        <div className={`my-4 ${alignClasses[content.alignment] || 'text-center'}`}>
+          <a
+            href={content.url || '#'}
+            target="_blank"
+            rel="noopener noreferrer"
+            style={buttonStyle}
+            onMouseOver={(e) => e.currentTarget.style.opacity = '0.8'}
+            onMouseOut={(e) => e.currentTarget.style.opacity = '1'}
+          >
+            {content.text}
+          </a>
+        </div>
+      );
+    }
 
     default:
       return null;
