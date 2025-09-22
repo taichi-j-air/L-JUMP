@@ -63,9 +63,14 @@ serve(async (req) => {
       }
     }
 
-    // 友だち情報取得 (UIDが提供されている場合)
+    // 友だち限定ページのチェック
     let friend = null
-    if (uid && uid !== "[UID]") {
+    if (page.visibility === "friends_only" && !isPreview) {
+      if (!uid || uid === "[UID]") {
+        return errorResponse("access_denied", "UID is required to view this page", 403)
+      }
+
+      // UIDフォーマットチェック
       if (!/^[A-Z0-9]{6}$/.test(uid)) {
         return errorResponse("access_denied", "Invalid UID format", 403)
       }
@@ -78,33 +83,26 @@ serve(async (req) => {
         .single()
 
       if (friendError || !friendData) {
-        // 友だちが見つからない場合は、アクセス拒否（友だち限定ページの場合）
-        if (page.visibility === "friends_only") {
-          return errorResponse("access_denied", "Friend not found or unauthorized access", 403)
-        }
-        // 友だち限定ページでない場合は、friendはnullのまま続行
-      } else {
-        friend = friendData
+        return errorResponse("access_denied", "Friend not found or unauthorized access", 403)
       }
-    }
-
-    // 友だち限定ページのチェック (friendがnullの場合のみ実行)
-    if (page.visibility === "friends_only" && !isPreview && !friend) {
-      return errorResponse("access_denied", "UID is required to view this page", 403)
+      
+      friend = friendData
     }
 
     // タグベースアクセス制御（友だち限定ページでのみ実行）
     if (friend && (page.blocked_tag_ids?.length > 0 || page.allowed_tag_ids?.length > 0)) {
       console.log(`Checking tag access for friend ${friend.id}`)
-
+      
+      // 友だちのタグを取得
       const { data: friendTags } = await supabase
         .from("friend_tags")
         .select("tag_id")
         .eq("friend_id", friend.id)
-
+      
       const friendTagIds = friendTags?.map(ft => ft.tag_id) || []
       console.log(`Friend has tags: ${friendTagIds}`)
-
+      
+      // 閲覧禁止タグチェック
       if (page.blocked_tag_ids?.length > 0) {
         const hasBlockedTag = page.blocked_tag_ids.some(tagId => friendTagIds.includes(tagId))
         if (hasBlockedTag) {
@@ -112,45 +110,13 @@ serve(async (req) => {
           return errorResponse("tag_blocked", "Access denied due to tag restrictions", 403)
         }
       }
-
+      
+      // 閲覧可能タグチェック
       if (page.allowed_tag_ids?.length > 0) {
         const hasAllowedTag = page.allowed_tag_ids.some(tagId => friendTagIds.includes(tagId))
         if (!hasAllowedTag) {
           console.log(`Friend missing required tag`)
           return errorResponse("tag_required", "Required tag not found", 403)
-        }
-      }
-    }
-
-    // タイマー期限切れチェック
-    if (!isPreview && page.timer_enabled) {
-      const now = new Date();
-      let effectiveDeadline: Date | null = null;
-
-      if (page.internal_timer && friend) { // friend が存在する場合のみ内部タイマーをチェック
-        const { data: friendAccess, error: friendAccessError } = await supabase
-          .from("friend_page_access")
-          .select("timer_start_at")
-          .eq("friend_id", friend.id)
-          .eq("page_share_code", shareCode)
-          .single();
-
-        if (friendAccessError || !friendAccess?.timer_start_at) {
-          console.warn(`Internal timer enabled but no start time found for friend ${friend.id} on page ${shareCode}`);
-          // タイマーが有効だが開始されていない場合は、アクセスを拒否する
-          return errorResponse("timer_not_started", "Timer has not started for this page.", 403);
-        }
-
-        const timerStartAt = new Date(friendAccess.timer_start_at);
-        effectiveDeadline = new Date(timerStartAt.getTime() + page.timer_duration_seconds * 1000);
-      } else if (!page.internal_timer && page.timer_deadline) {
-        effectiveDeadline = new Date(page.timer_deadline);
-      }
-
-      if (effectiveDeadline && now > effectiveDeadline) {
-        if (page.expire_action === "hide_page") {
-          console.log(`Page ${shareCode} expired and set to hide.`);
-          return errorResponse("page_expired", "This page has expired and is no longer accessible.", 403);
         }
       }
     }
