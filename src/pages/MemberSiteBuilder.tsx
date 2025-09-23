@@ -562,53 +562,60 @@ const MemberSiteBuilder = () => {
                   <TabsContent value="content-list" className="border-2 border-border rounded-none">
                     <div className="flex">
                       {/* Content Sidebar - 20% width */}
-                      <div className="w-1/5 border-r border-border p-4">
-                        <div className="space-y-3">
-                          <div className="flex items-center justify-between">
-                            <h3 className="text-sm font-medium">ページ一覧</h3>
-                            <Button size="sm" onClick={createNewContent} disabled={saving}>
-                              <Plus className="w-4 h-4" />
-                            </Button>
+                      <div className="w-1/5 border-r border-border flex flex-col">
+                        <div className="bg-[rgb(12,34,54)] p-4">
+                          <div className="flex items-center justify-center mb-4">
+                            <h3 className="text-sm font-medium text-white">ページ一覧</h3>
                           </div>
+                          <Button size="sm" onClick={createNewContent} disabled={saving} className="w-full bg-[#0cb386] hover:bg-[#0cb386]/90">
+                            <Plus className="w-4 h-4 mr-2" />
+                            コンテンツ追加
+                          </Button>
+                        </div>
+                        <div className="flex-grow overflow-y-auto p-4">
                           {siteContents.length === 0 ? (
                             <p className="text-xs text-muted-foreground">ページがありません</p>
                           ) : (
-                            <div className="space-y-1">
-                              {siteContents.map((content) => (
-                                <div
-                                  key={content.id}
-                                  className={`p-2 rounded-md border cursor-pointer transition-colors ${
-                                    selectedContentId === content.id
-                                      ? 'bg-primary/10 border-primary'
-                                      : 'border-border hover:bg-muted/50'
-                                  }`}
-                                  onClick={() => selectContent(content)}
-                                >
-                                  <div className="flex items-center justify-between">
-                                    <div className="min-w-0 flex-1">
-                                      <div className="text-xs font-medium truncate">{content.title}</div>
-                                      <div className="text-xs text-muted-foreground">{content.page_type}</div>
-                                    </div>
-                                    <div className="flex items-center gap-1">
-                                      {content.is_published && (
-                                        <Badge variant="secondary" className="text-xs">公開</Badge>
-                                      )}
-                                      <Button
-                                        size="sm"
-                                        variant="ghost"
-                                        className="h-5 w-5 p-0 text-destructive hover:text-destructive"
-                                        onClick={(e) => {
-                                          e.stopPropagation();
-                                          deleteContent(content.id);
-                                        }}
-                                      >
-                                        <Trash2 className="h-3 w-3" />
-                                      </Button>
-                                    </div>
-                                  </div>
-                                </div>
-                              ))}
-                            </div>
+                            <Table className="w-full border-collapse">
+                              <TableBody>
+                                {siteContents.map((content) => (
+                                  <TableRow
+                                    key={content.id}
+                                    className={`cursor-pointer transition-colors border-b-0 last:border-b-0 ${
+                                      selectedContentId === content.id
+                                        ? 'bg-[#0cb386]/20 border-l-2 border-[#0cb386]'
+                                        : 'hover:bg-muted/50'
+                                    }`}
+                                    onClick={() => selectContent(content)}
+                                  >
+                                    <TableCell className="py-2 px-2 text-left align-top border-b-0">
+                                      <div className="min-w-0 flex-1">
+                                        <div className="text-xs font-medium truncate">{content.title}</div>
+                                        <div className="text-xs text-muted-foreground">{content.page_type}</div>
+                                      </div>
+                                    </TableCell>
+                                    <TableCell className="py-2 px-2 text-right align-top border-b-0 w-1/4">
+                                      <div className="flex items-center justify-end gap-1">
+                                        {content.is_published && (
+                                          <Badge variant="secondary" className="text-xs">公開</Badge>
+                                        )}
+                                        <Button
+                                          size="sm"
+                                          variant="ghost"
+                                          className="h-5 w-5 p-0 text-destructive hover:text-destructive"
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            deleteContent(content.id);
+                                          }}
+                                        >
+                                          <Trash2 className="h-3 w-3" />
+                                        </Button>
+                                      </div>
+                                    </TableCell>
+                                  </TableRow>
+                                ))}
+                              </TableBody>
+                            </Table>
                           )}
                         </div>
                       </div>
