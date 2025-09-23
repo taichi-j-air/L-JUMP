@@ -578,15 +578,15 @@ const MemberSiteBuilder = () => {
                           {siteContents.length === 0 ? (
                             <p className="text-xs text-muted-foreground">ページがありません</p>
                           ) : (
-                            <Table className="w-full border-collapse">
-                              <TableBody className="border-b border-border">
+                             <Table className="w-full border-collapse">
+                              <TableBody>
                                 {siteContents.map((content) => (
                                   <TableRow
                                     key={content.id}
-                                    className={`cursor-pointer transition-colors border-b border-border ${
+                                    className={`cursor-pointer transition-colors ${
                                       selectedContentId === content.id
-                                        ? 'bg-[#0cb386]/20 border-l-2 border-[#0cb386]'
-                                        : 'hover:bg-muted/50'
+                                        ? 'bg-[#0cb386]/20 border-2 border-[#0cb386]'
+                                        : 'hover:bg-muted/50 border border-transparent'
                                     }`}
                                     onClick={() => selectContent(content)}
                                   >
@@ -623,9 +623,9 @@ const MemberSiteBuilder = () => {
                       </div>
                       
                       {/* Main Content Area - 80% width */}
-                      <div className="w-4/5 border border-border">
+                      <div className="w-4/5 rounded-none">
                         {selectedContent ? (
-                          <Card>
+                          <Card className="rounded-none">
                             <CardHeader>
                               <CardTitle>ページ編集</CardTitle>
                               <CardDescription>
@@ -710,7 +710,7 @@ const MemberSiteBuilder = () => {
                             </CardContent>
                           </Card>
                         ) : (
-                          <Card>
+                          <Card className="rounded-none">
                             <CardContent className="p-12">
                               <div className="text-center">
                                 <p className="text-muted-foreground mb-4">
@@ -729,12 +729,78 @@ const MemberSiteBuilder = () => {
                   </TabsContent>
 
                   <TabsContent value="category-settings" className="border-2 border-border rounded-none">
-                    <Card>
-                      <CardHeader><CardTitle>カテゴリ設定</CardTitle></CardHeader>
-                      <CardContent>
-                        <p className="text-muted-foreground">カテゴリ設定のコンテンツ</p>
-                      </CardContent>
-                    </Card>
+                    <div className="flex">
+                      {/* Category Sidebar - 20% width */}
+                      <div className="w-1/5 border-r border-border flex flex-col">
+                        <div className="bg-[rgb(12,34,54)] py-6 px-4">
+                          <div className="flex items-center justify-center">
+                            <h3 className="text-base font-medium text-white">カテゴリ一覧</h3>
+                          </div>
+                        </div>
+                        <div className="bg-white p-4 border-b border-border">
+                          <Button size="sm" disabled={saving} className="w-full bg-[#0cb386] hover:bg-[#0cb386]/90 text-white">
+                            <Plus className="w-4 h-4 mr-2" />
+                            カテゴリ追加
+                          </Button>
+                        </div>
+                        <div className="flex-grow overflow-y-auto">
+                          <Table className="w-full border-collapse">
+                            <TableBody>
+                              {/* Sample categories - replace with actual data */}
+                              <TableRow className="cursor-pointer transition-colors hover:bg-muted/50 border border-transparent">
+                                <TableCell className="py-1 text-left align-top border-b-0">
+                                  <div className="flex items-center gap-2">
+                                    <span className="h-2 w-2 rounded-full bg-blue-500"></span>
+                                    <div className="h-4 w-px bg-border"></div>
+                                    <div className="min-w-0 flex-1">
+                                      <div className="text-xs font-medium truncate">デフォルトカテゴリ</div>
+                                    </div>
+                                  </div>
+                                </TableCell>
+                                <TableCell className="py-1 text-right align-top border-b-0 w-1/4">
+                                  <div className="text-xs text-muted-foreground">{siteContents.length}件</div>
+                                </TableCell>
+                              </TableRow>
+                            </TableBody>
+                          </Table>
+                        </div>
+                      </div>
+                      
+                      {/* Main Category Settings Area - 80% width */}
+                      <div className="w-4/5 rounded-none">
+                        <Card className="rounded-none">
+                          <CardHeader>
+                            <CardTitle>カテゴリ設定</CardTitle>
+                            <CardDescription>
+                              コンテンツのカテゴリを管理
+                            </CardDescription>
+                          </CardHeader>
+                          <CardContent>
+                            <div className="space-y-4">
+                              <div className="space-y-2">
+                                <Label htmlFor="categoryName">カテゴリ名</Label>
+                                <Input
+                                  id="categoryName"
+                                  placeholder="カテゴリ名を入力"
+                                />
+                              </div>
+                              <div className="space-y-2">
+                                <Label htmlFor="categoryDescription">説明</Label>
+                                <Textarea
+                                  id="categoryDescription"
+                                  placeholder="カテゴリの説明を入力"
+                                  rows={3}
+                                />
+                              </div>
+                              <Button className="w-full">
+                                <Save className="w-4 h-4 mr-2" />
+                                カテゴリを保存
+                              </Button>
+                            </div>
+                          </CardContent>
+                        </Card>
+                      </div>
+                    </div>
                   </TabsContent>
 
                   <TabsContent value="plan-settings" className="border-2 border-border rounded-none">
