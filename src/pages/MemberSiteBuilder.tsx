@@ -516,19 +516,17 @@ const MemberSiteBuilder = () => {
                             <div className="text-sm font-medium line-clamp-1">{s.name}</div>
                           </button>
                           <div className="flex items-center gap-1 ml-2">
-                            {s.is_published && (
-                              <Button 
-                                variant="ghost" 
-                                size="sm"
-                                className="h-6 w-6 p-0"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  window.open(`/member-site/${s.slug}`, '_blank');
-                                }}
-                              >
-                                <Eye className="h-3 w-3" />
-                              </Button>
-                            )}
+                            <Button 
+                              variant="ghost" 
+                              size="sm"
+                              className="h-6 w-6 p-0"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                window.open(`/member-site/${s.slug}`, '_blank');
+                              }}
+                            >
+                              <Eye className="h-3 w-3" />
+                            </Button>
                             <Button
                               size="sm"
                               variant="ghost"
@@ -561,111 +559,167 @@ const MemberSiteBuilder = () => {
                   <TabsTrigger value="site-settings">サイト設定</TabsTrigger>
                 </TabsList>
 
-                  <TabsContent value="content-list">
-                    {/* Existing Content Editor */}
-                    {selectedContent ? (
-                      <Card>
-                        <CardHeader>
-                          <CardTitle>ページ編集</CardTitle>
-                          <CardDescription>
-                            {selectedContent.title} の編集
-                          </CardDescription>
-                        </CardHeader>
-                        <CardContent className="space-y-4">
-                          <div className="grid grid-cols-2 gap-4">
-                            <div className="space-y-2">
-                              <Label htmlFor="contentTitle">ページタイトル</Label>
-                              <Input
-                                id="contentTitle"
-                                value={contentTitle}
-                                onChange={(e) => setContentTitle(e.target.value)}
-                              />
-                            </div>
-                            <div className="space-y-2">
-                              <Label htmlFor="contentSlug">URL スラッグ</Label>
-                              <Input
-                                id="contentSlug"
-                                value={contentSlug}
-                                onChange={(e) => setContentSlug(e.target.value)}
-                              />
-                            </div>
-                          </div>
-
-                          <div className="grid grid-cols-3 gap-4">
-                            <div className="space-y-2">
-                              <Label htmlFor="contentType">ページタイプ</Label>
-                              <Select value={contentType} onValueChange={setContentType}>
-                                <SelectTrigger>
-                                  <SelectValue />
-                                </SelectTrigger>
-                                <SelectContent>
-                                  <SelectItem value="page">ページ</SelectItem>
-                                  <SelectItem value="post">投稿</SelectItem>
-                                  <SelectItem value="landing">ランディング</SelectItem>
-                                </SelectContent>
-                              </Select>
-                            </div>
-                            <div className="space-y-2">
-                              <Label htmlFor="contentAccessLevel">アクセスレベル</Label>
-                              <Select value={contentAccessLevel} onValueChange={setContentAccessLevel}>
-                                <SelectTrigger>
-                                  <SelectValue />
-                                </SelectTrigger>
-                                <SelectContent>
-                                  <SelectItem value="public">パブリック</SelectItem>
-                                  <SelectItem value="member">会員限定</SelectItem>
-                                  <SelectItem value="premium">プレミアム会員限定</SelectItem>
-                                </SelectContent>
-                              </Select>
-                            </div>
-                            <div className="space-y-2">
-                              <Label>公開設定</Label>
-                              <label className="flex items-center space-x-2">
-                                <input
-                                  type="checkbox"
-                                  checked={contentPublished}
-                                  onChange={(e) => setContentPublished(e.target.checked)}
-                                />
-                                <span>公開する</span>
-                              </label>
-                            </div>
-                          </div>
-
-                          <div className="space-y-2">
-                            <Label htmlFor="contentText">コンテンツ</Label>
-                            <Textarea
-                              id="contentText"
-                              value={contentText}
-                              onChange={(e) => setContentText(e.target.value)}
-                              rows={15}
-                              placeholder="ページの内容を入力してください"
-                            />
-                          </div>
-
-                          <Button onClick={saveContent} disabled={saving} className="w-full">
-                            <Save className="w-4 h-4 mr-2" />
-                            {saving ? "保存中..." : "ページを保存"}
-                          </Button>
-                        </CardContent>
-                      </Card>
-                    ) : (
-                      <Card>
-                        <CardContent className="p-12">
-                          <div className="text-center">
-                            <p className="text-muted-foreground mb-4">
-                              左側からページを選択して編集するか、新しいページを作成してください
-                            </p>
-                            <Button onClick={createNewContent}>
-                              <Plus className="w-4 h-4 mr-2" />
-                              最初のページを作成
+                  <TabsContent value="content-list" className="border-2 border-border rounded-none">
+                    <div className="flex">
+                      {/* Content Sidebar - 20% width */}
+                      <div className="w-1/5 border-r border-border p-4">
+                        <div className="space-y-3">
+                          <div className="flex items-center justify-between">
+                            <h3 className="text-sm font-medium">ページ一覧</h3>
+                            <Button size="sm" onClick={createNewContent} disabled={saving}>
+                              <Plus className="w-4 h-4" />
                             </Button>
                           </div>
-                        </CardContent>
-                      </Card>
-                    )}
+                          {siteContents.length === 0 ? (
+                            <p className="text-xs text-muted-foreground">ページがありません</p>
+                          ) : (
+                            <div className="space-y-1">
+                              {siteContents.map((content) => (
+                                <div
+                                  key={content.id}
+                                  className={`p-2 rounded-md border cursor-pointer transition-colors ${
+                                    selectedContentId === content.id
+                                      ? 'bg-primary/10 border-primary'
+                                      : 'border-border hover:bg-muted/50'
+                                  }`}
+                                  onClick={() => selectContent(content)}
+                                >
+                                  <div className="flex items-center justify-between">
+                                    <div className="min-w-0 flex-1">
+                                      <div className="text-xs font-medium truncate">{content.title}</div>
+                                      <div className="text-xs text-muted-foreground">{content.page_type}</div>
+                                    </div>
+                                    <div className="flex items-center gap-1">
+                                      {content.is_published && (
+                                        <Badge variant="secondary" className="text-xs">公開</Badge>
+                                      )}
+                                      <Button
+                                        size="sm"
+                                        variant="ghost"
+                                        className="h-5 w-5 p-0 text-destructive hover:text-destructive"
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          deleteContent(content.id);
+                                        }}
+                                      >
+                                        <Trash2 className="h-3 w-3" />
+                                      </Button>
+                                    </div>
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                      
+                      {/* Main Content Area - 80% width */}
+                      <div className="w-4/5 p-4">
+                        {selectedContent ? (
+                          <Card>
+                            <CardHeader>
+                              <CardTitle>ページ編集</CardTitle>
+                              <CardDescription>
+                                {selectedContent.title} の編集
+                              </CardDescription>
+                            </CardHeader>
+                            <CardContent className="space-y-4">
+                              <div className="grid grid-cols-2 gap-4">
+                                <div className="space-y-2">
+                                  <Label htmlFor="contentTitle">ページタイトル</Label>
+                                  <Input
+                                    id="contentTitle"
+                                    value={contentTitle}
+                                    onChange={(e) => setContentTitle(e.target.value)}
+                                  />
+                                </div>
+                                <div className="space-y-2">
+                                  <Label htmlFor="contentSlug">URL スラッグ</Label>
+                                  <Input
+                                    id="contentSlug"
+                                    value={contentSlug}
+                                    onChange={(e) => setContentSlug(e.target.value)}
+                                  />
+                                </div>
+                              </div>
+
+                              <div className="grid grid-cols-3 gap-4">
+                                <div className="space-y-2">
+                                  <Label htmlFor="contentType">ページタイプ</Label>
+                                  <Select value={contentType} onValueChange={setContentType}>
+                                    <SelectTrigger>
+                                      <SelectValue />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                      <SelectItem value="page">ページ</SelectItem>
+                                      <SelectItem value="post">投稿</SelectItem>
+                                      <SelectItem value="landing">ランディング</SelectItem>
+                                    </SelectContent>
+                                  </Select>
+                                </div>
+                                <div className="space-y-2">
+                                  <Label htmlFor="contentAccessLevel">アクセスレベル</Label>
+                                  <Select value={contentAccessLevel} onValueChange={setContentAccessLevel}>
+                                    <SelectTrigger>
+                                      <SelectValue />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                      <SelectItem value="public">パブリック</SelectItem>
+                                      <SelectItem value="member">会員限定</SelectItem>
+                                      <SelectItem value="premium">プレミアム会員限定</SelectItem>
+                                    </SelectContent>
+                                  </Select>
+                                </div>
+                                <div className="space-y-2">
+                                  <Label>公開設定</Label>
+                                  <label className="flex items-center space-x-2">
+                                    <input
+                                      type="checkbox"
+                                      checked={contentPublished}
+                                      onChange={(e) => setContentPublished(e.target.checked)}
+                                    />
+                                    <span>公開する</span>
+                                  </label>
+                                </div>
+                              </div>
+
+                              <div className="space-y-2">
+                                <Label htmlFor="contentText">コンテンツ</Label>
+                                <Textarea
+                                  id="contentText"
+                                  value={contentText}
+                                  onChange={(e) => setContentText(e.target.value)}
+                                  rows={15}
+                                  placeholder="ページの内容を入力してください"
+                                />
+                              </div>
+
+                              <Button onClick={saveContent} disabled={saving} className="w-full">
+                                <Save className="w-4 h-4 mr-2" />
+                                {saving ? "保存中..." : "ページを保存"}
+                              </Button>
+                            </CardContent>
+                          </Card>
+                        ) : (
+                          <Card>
+                            <CardContent className="p-12">
+                              <div className="text-center">
+                                <p className="text-muted-foreground mb-4">
+                                  左側からページを選択して編集するか、新しいページを作成してください
+                                </p>
+                                <Button onClick={createNewContent}>
+                                  <Plus className="w-4 h-4 mr-2" />
+                                  最初のページを作成
+                                </Button>
+                              </div>
+                            </CardContent>
+                          </Card>
+                        )}
+                      </div>
+                    </div>
                   </TabsContent>
 
-                  <TabsContent value="category-settings">
+                  <TabsContent value="category-settings" className="border-2 border-border rounded-none">
                     <Card>
                       <CardHeader><CardTitle>カテゴリ設定</CardTitle></CardHeader>
                       <CardContent>
@@ -674,7 +728,7 @@ const MemberSiteBuilder = () => {
                     </Card>
                   </TabsContent>
 
-                  <TabsContent value="plan-settings">
+                  <TabsContent value="plan-settings" className="border-2 border-border rounded-none">
                     <Card>
                       <CardHeader><CardTitle>プラン設定</CardTitle></CardHeader>
                       <CardContent>
@@ -683,7 +737,7 @@ const MemberSiteBuilder = () => {
                     </Card>
                   </TabsContent>
 
-                  <TabsContent value="content-display">
+                  <TabsContent value="content-display" className="border-2 border-border rounded-none">
                     <Card>
                       <CardHeader><CardTitle>コンテンツ表示方法</CardTitle></CardHeader>
                       <CardContent>
@@ -692,7 +746,7 @@ const MemberSiteBuilder = () => {
                     </Card>
                   </TabsContent>
 
-                  <TabsContent value="site-settings">
+                  <TabsContent value="site-settings" className="border-2 border-border rounded-none">
                     {/* Existing Site Settings */}
                     <Card>
                       <CardHeader>
