@@ -563,16 +563,18 @@ const MemberSiteBuilder = () => {
                     <div className="flex">
                       {/* Content Sidebar - 20% width */}
                       <div className="w-1/5 border-r border-border flex flex-col">
-                        <div className="bg-[rgb(12,34,54)] p-4">
-                          <div className="flex items-center justify-center mb-4">
-                            <h3 className="text-sm font-medium text-white">ページ一覧</h3>
+                        <div className="bg-[rgb(12,34,54)] py-6 px-4">
+                          <div className="flex items-center justify-center">
+                            <h3 className="text-base font-medium text-white">コンテンツ一覧</h3>
                           </div>
-                          <Button size="sm" onClick={createNewContent} disabled={saving} className="w-full bg-[#0cb386] hover:bg-[#0cb386]/90">
+                        </div>
+                        <div className="bg-white p-4 border-b border-border">
+                          <Button size="sm" onClick={createNewContent} disabled={saving} className="w-full bg-[#0cb386] hover:bg-[#0cb386]/90 text-white">
                             <Plus className="w-4 h-4 mr-2" />
                             コンテンツ追加
                           </Button>
                         </div>
-                        <div className="flex-grow overflow-y-auto p-4">
+                        <div className="flex-grow overflow-y-auto">
                           {siteContents.length === 0 ? (
                             <p className="text-xs text-muted-foreground">ページがありません</p>
                           ) : (
@@ -621,7 +623,7 @@ const MemberSiteBuilder = () => {
                       </div>
                       
                       {/* Main Content Area - 80% width */}
-                      <div className="w-4/5 p-4">
+                      <div className="w-4/5 border border-border">
                         {selectedContent ? (
                           <Card>
                             <CardHeader>
