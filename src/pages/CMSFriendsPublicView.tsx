@@ -48,6 +48,7 @@ const isHideAction = (action?: string | null) => action === "hide" || action ===
 type KnownErrors =
   | "not_found"
   | "access_denied"
+  | "timer_expired"
   | "not_published"
   | "tag_blocked"
   | "tag_required";
@@ -476,7 +477,15 @@ export default function CMSFriendsPublicView() {
           }
         }
 
-        setData(page as PagePayload);
+        setData({
+          ...page,
+          content_blocks: Array.isArray(page.content_blocks) 
+            ? page.content_blocks 
+            : (typeof page.content_blocks === 'string' 
+                ? JSON.parse(page.content_blocks) 
+                : []
+              )
+        } as PagePayload);
         setLoading(false);
         return;
       }
@@ -504,6 +513,7 @@ export default function CMSFriendsPublicView() {
           return;
         }
         if (status === 404) { setError("not_found"); setLoading(false); return; }
+        if (status === 410) { setError("timer_expired"); setLoading(false); return; }
         setError("not_found"); setLoading(false); return;
       }
 
@@ -513,7 +523,8 @@ export default function CMSFriendsPublicView() {
         if (code === "passcode_required") { setRequirePass(true); setLoading(false); return; }
         if (
           code === "not_published" || code === "tag_blocked" ||
-          code === "tag_required" || code === "access_denied" || code === "not_found"
+          code === "tag_required" || code === "access_denied" || code === "not_found" ||
+          code === "timer_expired"
         ) { setError(code as KnownErrors); setLoading(false); return; }
         setError("not_found"); setLoading(false); return;
       }
@@ -632,6 +643,27 @@ export default function CMSFriendsPublicView() {
             </div>
           </div>
         </div>
+        <div className="bg-gradient-to-r from-green-500 to-green-600 p-4 text-center">
+          <div className="flex flex-col items-center justify-center">
+            <span className="font-bold text-lg text-white">L-JUMP</span>
+            <span className="text-xs text-white opacity-90">LINE公式アカウント拡張ツール</span>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (error === "timer_expired") {
+    return (
+      <div className="min-h-screen bg-background flex flex-col">
+        <div className="flex-1 flex items-center justify-center px-4">
+          <div className="w-full max-w-md p-6 rounded-lg" style={{ backgroundColor: "#ff6b6b" }}>
+            <div className="text-center space-y-4">
+              <h3 className="text-2xl font-semibold text-white">閲覧期限切れ</h3>
+              <p className="text-white">このページの閲覧期限が過ぎました。</p>
+            </div>
+          </div>
+        </div>
         <div className="py-2 text-center" style={{ backgroundColor: "rgb(12, 179, 134)" }}>
           <div className="flex flex-col items-center justify-center">
             <span className="font-bold text-lg text-white">L-JUMP</span>
@@ -747,7 +779,7 @@ export default function CMSFriendsPublicView() {
             onExpire={
               isHideAction(data.expire_action)
                 ? () => {
-                    setError("not_found");
+                    setError("timer_expired");
                     setData(null);
                   }
                 : undefined

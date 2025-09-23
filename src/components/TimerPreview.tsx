@@ -163,10 +163,29 @@ export const TimerPreview = ({
   }, [targetTime, showMilliseconds]);
 
   const { days, hours, minutes, seconds, milli } = splitParts(remainingMs);
-  const isExpired =
-    (remainingMs <= 0 &&
-      (mode === "absolute" || ((mode === "per_access" || mode === "step_delivery") && !preview))) ||
-    serverSyncExpired;
+  const isExpired = useMemo(() => {
+    // プレビューモードでは期限切れ判定を無効化
+    if (preview) return false;
+    
+    // サーバー同期が明示的に期限切れを示している場合
+    if (serverSyncExpired) return true;
+    
+    // タイマーモード別の期限切れ判定
+    if (mode === "absolute") {
+      return remainingMs <= 0;
+    }
+    
+    if (mode === "per_access" || mode === "step_delivery") {
+      // サーバー同期情報がある場合はそれを優先
+      if (serverSyncedStart !== null) {
+        return serverSyncExpired;
+      }
+      // サーバー同期情報がない場合は期限切れではない
+      return false;
+    }
+    
+    return remainingMs <= 0;
+  }, [remainingMs, mode, preview, serverSyncExpired, serverSyncedStart]);
 
   useEffect(() => {
     if (!onExpire) {

@@ -327,7 +327,10 @@ export default function CMSFriendsPageBuilder() {
 
       const { data, error } = await supabase
         .from('cms_pages')
-        .update(payload)
+        .update({
+          ...payload,
+          content_blocks: JSON.stringify(payload.content_blocks)
+        })
         .eq('id', selected.id)
         .select('*')
         .maybeSingle();

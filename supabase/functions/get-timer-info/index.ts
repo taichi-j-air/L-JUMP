@@ -131,6 +131,25 @@ Deno.serve(async (req) => {
         // 期限切れチェック
         if (friendAccess.timer_end_at) {
           expired = new Date(friendAccess.timer_end_at) <= now;
+        } else if (friendAccess.timer_start_at) {
+          // timer_end_atが設定されていない場合、ページの設定から計算
+          const { data: pageData } = await supabase
+            .from('cms_pages')
+            .select('timer_duration_seconds')
+            .eq('share_code', pageShareCode)
+            .single();
+          
+          if (pageData && pageData.timer_duration_seconds) {
+            const startTime = new Date(friendAccess.timer_start_at);
+            const endTime = new Date(startTime.getTime() + pageData.timer_duration_seconds * 1000);
+            expired = now >= endTime;
+            
+            // timer_end_atを更新
+            await supabase
+              .from('friend_page_access')
+              .update({ timer_end_at: endTime.toISOString() })
+              .eq('id', friendAccess.id);
+          }
         }
 
         timerInfo = {

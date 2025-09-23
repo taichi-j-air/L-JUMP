@@ -121,6 +121,36 @@ serve(async (req) => {
       }
     }
 
+    // タイマー期限切れチェック
+    if (!isPreview && page.timer_enabled && page.expire_action === "hide_page") {
+      let isTimerExpired = false;
+      
+      if (page.timer_mode === "absolute" && page.timer_deadline) {
+        const deadline = new Date(page.timer_deadline);
+        isTimerExpired = new Date() > deadline;
+      } else if (page.timer_mode === "per_access" && friend) {
+        // friend_page_accessから期限切れ状態を確認
+        const { data: accessData } = await supabase
+          .from("friend_page_access")
+          .select("timer_start_at, timer_end_at, access_enabled")
+          .eq("friend_id", friend.id)
+          .eq("page_share_code", page.share_code)
+          .maybeSingle();
+        
+        if (accessData && accessData.timer_end_at) {
+          isTimerExpired = new Date() > new Date(accessData.timer_end_at);
+        } else if (accessData && accessData.timer_start_at && page.timer_duration_seconds) {
+          const startTime = new Date(accessData.timer_start_at);
+          const endTime = new Date(startTime.getTime() + page.timer_duration_seconds * 1000);
+          isTimerExpired = new Date() > endTime;
+        }
+      }
+      
+      if (isTimerExpired) {
+        return errorResponse("timer_expired", "ページの閲覧期限が過ぎました", 410);
+      }
+    }
+
     // ページデータを返す
     const pageData = {
       id: page.id,
