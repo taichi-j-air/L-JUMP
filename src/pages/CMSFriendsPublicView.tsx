@@ -496,6 +496,8 @@ export default function CMSFriendsPublicView() {
         return;
       }
 
+      console.log(`🔍 Calling cms-page-view with shareCode: ${shareCode}, uid: ${uid}`);
+      
       const { data: res, error: fnErr } = await supabase.functions.invoke(
         "cms-page-view",
         { body: { shareCode, uid, passcode: withPasscode } }
