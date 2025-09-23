@@ -1,30 +1,96 @@
 import { useState, useEffect } from "react";
-import { useParams } from "react-router-dom";
+import { useParams, useSearchParams } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { ChevronLeft, Menu, X } from "lucide-react";
+
+interface MemberSite {
+  id: string;
+  name: string;
+  description?: string;
+  is_published: boolean;
+  theme_config?: any;
+}
+
+interface MemberSiteCategory {
+  id: string;
+  name: string;
+  description?: string;
+  content_count: number;
+  sort_order: number;
+}
+
+interface MemberSiteContent {
+  id: string;
+  title: string;
+  content?: string;
+  content_blocks?: any;
+  category_id?: string;
+  is_published: boolean;
+  sort_order: number;
+  page_type: string;
+}
 
 const MemberSiteView = () => {
   const { slug } = useParams();
-  const [site, setSite] = useState<any>(null);
+  const [searchParams, setSearchParams] = useSearchParams();
+  const [site, setSite] = useState<MemberSite | null>(null);
+  const [categories, setCategories] = useState<MemberSiteCategory[]>([]);
+  const [contents, setContents] = useState<MemberSiteContent[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [selectedCategoryId, setSelectedCategoryId] = useState<string | null>(null);
+  const [selectedContentId, setSelectedContentId] = useState<string | null>(null);
+  const [sideMenuOpen, setSideMenuOpen] = useState(false);
+
+  // ページ状態の管理
+  const currentView = searchParams.get('view') || 'categories'; // categories, content-list, content-detail
+  const categoryId = searchParams.get('category');
+  const contentId = searchParams.get('content');
 
   useEffect(() => {
     const loadSite = async () => {
       if (!slug) return;
       
       try {
-        const { data, error } = await supabase
+        // サイト情報を取得
+        const { data: siteData, error: siteError } = await supabase
           .from('member_sites')
           .select('*')
           .eq('slug', slug)
+          .eq('is_published', true)
           .maybeSingle();
 
-        if (error) throw error;
-        setSite(data);
+        if (siteError) throw siteError;
+        if (!siteData) throw new Error('サイトが見つかりません');
+
+        setSite(siteData);
+
+        // カテゴリ情報を取得
+        const { data: categoriesData, error: categoriesError } = await supabase
+          .from('member_site_categories')
+          .select('*')
+          .eq('site_id', siteData.id)
+          .order('sort_order', { ascending: true });
+
+        if (categoriesError) throw categoriesError;
+        setCategories(categoriesData || []);
+
+        // コンテンツ情報を取得
+        const { data: contentsData, error: contentsError } = await supabase
+          .from('member_site_content')
+          .select('*')
+          .eq('site_id', siteData.id)
+          .eq('is_published', true)
+          .order('sort_order', { ascending: true });
+
+        if (contentsError) throw contentsError;
+        setContents(contentsData || []);
+
       } catch (error) {
         console.error('Error loading site:', error);
-        setError('サイトが見つかりません');
+        setError(error instanceof Error ? error.message : 'サイトが見つかりません');
       } finally {
         setLoading(false);
       }
@@ -33,17 +99,100 @@ const MemberSiteView = () => {
     loadSite();
   }, [slug]);
 
+  // ナビゲーション関数
+  const navigateToCategories = () => {
+    setSearchParams({});
+    setSelectedCategoryId(null);
+    setSelectedContentId(null);
+  };
+
+  const navigateToContentList = (categoryId: string) => {
+    setSearchParams({ view: 'content-list', category: categoryId });
+    setSelectedCategoryId(categoryId);
+    setSelectedContentId(null);
+  };
+
+  const navigateToContentDetail = (contentId: string) => {
+    const content = contents.find(c => c.id === contentId);
+    const params: any = { view: 'content-detail', content: contentId };
+    if (content?.category_id) {
+      params.category = content.category_id;
+    }
+    setSearchParams(params);
+    setSelectedContentId(contentId);
+  };
+
+  // コンテンツブロックのレンダリング
+  const renderContentBlocks = (blocks: any) => {
+    if (!blocks) return null;
+    
+    // JSON文字列の場合はパース
+    let blocksArray = blocks;
+    if (typeof blocks === 'string') {
+      try {
+        blocksArray = JSON.parse(blocks);
+      } catch (e) {
+        return null;
+      }
+    }
+    
+    if (!Array.isArray(blocksArray)) return null;
+
+    return blocksArray.map((block: any, index: number) => {
+      switch (block.type) {
+        case 'heading':
+          const HeadingTag = `h${block.level || 2}` as keyof JSX.IntrinsicElements;
+          return (
+            <HeadingTag key={index} className="text-2xl font-bold mb-4 text-foreground">
+              {block.content}
+            </HeadingTag>
+          );
+        case 'paragraph':
+          return (
+            <p key={index} className="mb-4 text-foreground leading-relaxed">
+              {block.content}
+            </p>
+          );
+        case 'image':
+          return (
+            <img
+              key={index}
+              src={block.src}
+              alt={block.alt || ''}
+              className="w-full max-w-2xl mx-auto rounded-lg mb-6"
+            />
+          );
+        case 'video':
+          return (
+            <video
+              key={index}
+              controls
+              className="w-full max-w-2xl mx-auto rounded-lg mb-6"
+            >
+              <source src={block.src} type="video/mp4" />
+            </video>
+          );
+        default:
+          return (
+            <div key={index} className="mb-4 text-foreground">
+              {block.content}
+            </div>
+          );
+      }
+    });
+  };
+
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div>読み込み中...</div>
+      <div className="min-h-screen flex items-center justify-center bg-background">
+        <div className="text-foreground">読み込み中...</div>
       </div>
     );
   }
 
-  if (error) {
+  if (error || !site) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
+      <div className="min-h-screen flex items-center justify-center bg-background">
         <Card>
           <CardContent className="p-8 text-center">
             <h1 className="text-2xl font-bold mb-4">404 - ページが見つかりません</h1>
@@ -54,30 +203,195 @@ const MemberSiteView = () => {
     );
   }
 
+  const selectedCategory = categories.find(c => c.id === categoryId);
+  const categoryContents = contents.filter(c => c.category_id === categoryId);
+  const selectedContent = contents.find(c => c.id === contentId);
+
   return (
     <div className="min-h-screen bg-background">
-      <div className="container mx-auto px-4 py-8">
-        <Card>
-          <CardContent className="p-8">
-            {!site?.is_published && (
-              <div className="mb-6 p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
-                <p className="text-yellow-800 text-sm font-medium">
-                  🔍 プレビューモード - このサイトは非公開です
-                </p>
-              </div>
+      {/* ヘッダー */}
+      <header className="bg-card border-b border-border sticky top-0 z-40">
+        <div className="flex items-center justify-between px-4 py-3">
+          <div className="flex items-center gap-3">
+            <Button
+              variant="ghost"
+              size="sm"
+              className="md:hidden"
+              onClick={() => setSideMenuOpen(!sideMenuOpen)}
+            >
+              {sideMenuOpen ? <X className="h-4 w-4" /> : <Menu className="h-4 w-4" />}
+            </Button>
+            <h1 className="text-lg font-semibold text-foreground">{site.name}</h1>
+          </div>
+          
+          {/* ナビゲーション */}
+          <div className="flex items-center gap-2">
+            {currentView !== 'categories' && (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => {
+                  if (currentView === 'content-detail' && categoryId) {
+                    navigateToContentList(categoryId);
+                  } else {
+                    navigateToCategories();
+                  }
+                }}
+                className="flex items-center gap-1"
+              >
+                <ChevronLeft className="h-4 w-4" />
+                戻る
+              </Button>
             )}
-            <h1 className="text-3xl font-bold mb-4">{site?.name}</h1>
-            <p className="text-muted-foreground mb-6">{site?.description}</p>
-            <div className="text-center py-12">
-              <p className="text-lg text-muted-foreground">
-                会員サイトのデザインは後日実装予定です
-              </p>
-              <p className="text-sm text-muted-foreground mt-2">
-                現在はプレースホルダー表示です
-              </p>
+          </div>
+        </div>
+      </header>
+
+      <div className="flex">
+        {/* サイドメニュー */}
+        <aside className={`fixed md:static inset-y-0 left-0 z-30 w-64 bg-card border-r border-border transform transition-transform duration-300 ease-in-out ${
+          sideMenuOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'
+        }`}>
+          <div className="p-4 border-b border-border">
+            <h2 className="font-semibold text-foreground">カテゴリ</h2>
+          </div>
+          <nav className="p-2">
+            {categories.map((category) => (
+              <button
+                key={category.id}
+                onClick={() => {
+                  navigateToContentList(category.id);
+                  setSideMenuOpen(false);
+                }}
+                className={`w-full text-left p-3 rounded-lg transition-colors ${
+                  selectedCategoryId === category.id
+                    ? 'bg-primary text-primary-foreground'
+                    : 'hover:bg-muted text-foreground'
+                }`}
+              >
+                <div className="font-medium">{category.name}</div>
+                <div className="text-sm text-muted-foreground">
+                  {category.content_count}件のコンテンツ
+                </div>
+              </button>
+            ))}
+          </nav>
+        </aside>
+
+        {/* オーバーレイ（モバイル用） */}
+        {sideMenuOpen && (
+          <div
+            className="fixed inset-0 bg-black/50 z-20 md:hidden"
+            onClick={() => setSideMenuOpen(false)}
+          />
+        )}
+
+        {/* メインコンテンツ */}
+        <main className="flex-1 min-h-screen">
+          {currentView === 'categories' && (
+            <div className="p-6">
+              <div className="mb-8">
+                <h1 className="text-3xl font-bold mb-2 text-foreground">{site.name}</h1>
+                {site.description && (
+                  <p className="text-muted-foreground">{site.description}</p>
+                )}
+              </div>
+              
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                {categories.map((category) => (
+                  <Card
+                    key={category.id}
+                    className="cursor-pointer hover:shadow-lg transition-shadow"
+                    onClick={() => navigateToContentList(category.id)}
+                  >
+                    <CardContent className="p-6">
+                      <h3 className="text-xl font-semibold mb-2 text-foreground">
+                        {category.name}
+                      </h3>
+                      {category.description && (
+                        <p className="text-muted-foreground mb-4">
+                          {category.description}
+                        </p>
+                      )}
+                      <div className="flex items-center justify-between">
+                        <span className="text-sm text-muted-foreground">
+                          {category.content_count}件のコンテンツ
+                        </span>
+                        <Button variant="outline" size="sm">
+                          表示 →
+                        </Button>
+                      </div>
+                    </CardContent>
+                  </Card>
+                ))}
+              </div>
             </div>
-          </CardContent>
-        </Card>
+          )}
+
+          {currentView === 'content-list' && selectedCategory && (
+            <div className="p-6">
+              <div className="mb-8">
+                <h1 className="text-3xl font-bold mb-2 text-foreground">
+                  {selectedCategory.name}
+                </h1>
+                {selectedCategory.description && (
+                  <p className="text-muted-foreground">{selectedCategory.description}</p>
+                )}
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                {categoryContents.map((content) => (
+                  <Card
+                    key={content.id}
+                    className="cursor-pointer hover:shadow-lg transition-shadow"
+                    onClick={() => navigateToContentDetail(content.id)}
+                  >
+                    <CardContent className="p-6">
+                      <h3 className="text-lg font-semibold mb-2 text-foreground">
+                        {content.title}
+                      </h3>
+                      <Button variant="outline" size="sm" className="mt-4">
+                        読む →
+                      </Button>
+                    </CardContent>
+                  </Card>
+                ))}
+              </div>
+
+              {categoryContents.length === 0 && (
+                <div className="text-center py-12">
+                  <p className="text-muted-foreground">
+                    このカテゴリにはまだコンテンツがありません。
+                  </p>
+                </div>
+              )}
+            </div>
+          )}
+
+          {currentView === 'content-detail' && selectedContent && (
+            <div className="p-6">
+              <article className="max-w-4xl mx-auto">
+                <header className="mb-8">
+                  <h1 className="text-4xl font-bold mb-4 text-foreground">
+                    {selectedContent.title}
+                  </h1>
+                </header>
+
+                <div className="prose prose-lg max-w-none">
+                  {selectedContent.content_blocks && selectedContent.content_blocks.length > 0 ? (
+                    renderContentBlocks(selectedContent.content_blocks)
+                  ) : selectedContent.content ? (
+                    <div className="text-foreground leading-relaxed">
+                      {selectedContent.content}
+                    </div>
+                  ) : (
+                    <p className="text-muted-foreground">コンテンツが準備中です。</p>
+                  )}
+                </div>
+              </article>
+            </div>
+          )}
+        </main>
       </div>
     </div>
   );
