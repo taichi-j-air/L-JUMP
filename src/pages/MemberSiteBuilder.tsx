@@ -108,7 +108,7 @@ const MemberSiteBuilder = () => {
       setContentType("page");
       setContentAccessLevel("member");
       setContentPublished(false);
-      setContentCategoryId("");
+      setContentCategoryId("none");
       setSelectedCategoryId(null);
       setCategoryName("");
       setCategoryDescription("");
@@ -453,7 +453,7 @@ const MemberSiteBuilder = () => {
       setContentType(data.page_type);
       setContentAccessLevel(data.access_level);
       setContentPublished(data.is_published);
-      setContentCategoryId("");
+      setContentCategoryId("none");
       
       loadSiteContents();
       
@@ -521,10 +521,52 @@ const MemberSiteBuilder = () => {
     }
   };
 
-  const createNewCategory = () => {
-    setSelectedCategoryId(null);
-    setCategoryName("");
-    setCategoryDescription("");
+  const createNewCategory = async () => {
+    if (!siteId) {
+      toast({
+        title: "エラー",
+        description: "サイトが選択されていません",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setSaving(true);
+    try {
+      const { data, error } = await supabase
+        .from('member_site_categories')
+        .insert({
+          name: "新しいカテゴリ",
+          description: "",
+          site_id: siteId,
+          sort_order: categories.length
+        })
+        .select()
+        .single();
+
+      if (error) throw error;
+      
+      // Select the newly created category for editing
+      setSelectedCategoryId(data.id);
+      setCategoryName(data.name);
+      setCategoryDescription(data.description || "");
+      
+      loadCategories();
+      
+      toast({
+        title: "作成完了",
+        description: "新しいカテゴリを作成しました",
+      });
+    } catch (error) {
+      console.error('Error creating category:', error);
+      toast({
+        title: "エラー",
+        description: "カテゴリの作成に失敗しました",
+        variant: "destructive",
+      });
+    } finally {
+      setSaving(false);
+    }
   };
 
   const saveCategory = async () => {
@@ -590,6 +632,51 @@ const MemberSiteBuilder = () => {
     setSelectedCategoryId(category.id);
     setCategoryName(category.name);
     setCategoryDescription(category.description || "");
+  };
+
+  const deleteCategory = async (categoryId: string) => {
+    if (!confirm("本当にこのカテゴリを削除しますか？このカテゴリに属するコンテンツは「カテゴリなし」に移動されます。")) return;
+    
+    setSaving(true);
+    try {
+      // First, update all content in this category to have no category
+      await supabase
+        .from('member_site_content')
+        .update({ category_id: null })
+        .eq('category_id', categoryId);
+
+      // Then delete the category
+      const { error } = await supabase
+        .from('member_site_categories')
+        .delete()
+        .eq('id', categoryId);
+
+      if (error) throw error;
+      
+      // Clear selection if deleted category was selected
+      if (selectedCategoryId === categoryId) {
+        setSelectedCategoryId(null);
+        setCategoryName("");
+        setCategoryDescription("");
+      }
+      
+      loadCategories();
+      loadSiteContents(); // Refresh contents to show updated categories
+      
+      toast({
+        title: "削除完了",
+        description: "カテゴリを削除しました",
+      });
+    } catch (error) {
+      console.error('Error deleting category:', error);
+      toast({
+        title: "エラー",
+        description: "カテゴリの削除に失敗しました",
+        variant: "destructive",
+      });
+    } finally {
+      setSaving(false);
+    }
   };
 
   const selectedContent = siteContents.find(c => c.id === selectedContentId);
@@ -727,44 +814,45 @@ const MemberSiteBuilder = () => {
                             <p className="text-xs text-muted-foreground">ページがありません</p>
                           ) : (
                               <Table className="w-full border-collapse">
-                               <TableBody>
-                                 {siteContents.map((content) => (
-                                   <TableRow
-                                     key={content.id}
-                                     className={`cursor-pointer transition-colors ${
-                                       selectedContentId === content.id
-                                         ? 'bg-[#0cb386]/20 border-2 border-[#0cb386]'
-                                         : 'hover:bg-muted/50 border-2 border-transparent'
-                                     }`}
-                                     onClick={() => selectContent(content)}
-                                   >
-                                     <TableCell className="py-1 text-left align-top">
-                                       <div className="flex items-center gap-2">
-                                         <span className={`h-2 w-2 rounded-full ${content.is_published ? 'bg-green-500' : 'bg-red-500'}`}></span>
-                                         <div className="h-4 w-px bg-border"></div>
-                                         <div className="min-w-0 flex-1">
-                                           <div className="text-xs font-medium truncate">{content.title}</div>
-                                         </div>
-                                       </div>
-                                     </TableCell>
-                                     <TableCell className="py-1 text-right align-top w-1/4">
-                                       <div className="flex items-center justify-end gap-1">
-                                         <Button
-                                           size="sm"
-                                           variant="ghost"
-                                           className="h-5 w-5 p-0 text-destructive hover:text-destructive"
-                                           onClick={(e) => {
-                                             e.stopPropagation();
-                                             deleteContent(content.id);
-                                           }}
-                                         >
-                                           <Trash2 className="h-3 w-3" />
-                                         </Button>
-                                       </div>
-                                     </TableCell>
-                                   </TableRow>
-                                 ))}
-                               </TableBody>
+                                <TableBody>
+                                  {siteContents.map((content, index) => (
+                                    <div key={content.id} className={`border-t border-border ${index === 0 ? 'border-t-0' : ''}`}>
+                                      <TableRow
+                                        className={`cursor-pointer transition-all ${
+                                          selectedContentId === content.id
+                                            ? 'bg-[#0cb386]/20 ring-2 ring-[#0cb386]'
+                                            : 'hover:bg-muted/50'
+                                        }`}
+                                        onClick={() => selectContent(content)}
+                                      >
+                                        <TableCell className="py-1 text-left align-top">
+                                          <div className="flex items-center gap-2">
+                                            <span className={`h-2 w-2 rounded-full ${content.is_published ? 'bg-green-500' : 'bg-red-500'}`}></span>
+                                            <div className="h-4 w-px bg-border"></div>
+                                            <div className="min-w-0 flex-1">
+                                              <div className="text-xs font-medium truncate">{content.title}</div>
+                                            </div>
+                                          </div>
+                                        </TableCell>
+                                        <TableCell className="py-1 text-right align-top w-1/4">
+                                          <div className="flex items-center justify-end gap-1">
+                                            <Button
+                                              size="sm"
+                                              variant="ghost"
+                                              className="h-5 w-5 p-0 text-destructive hover:text-destructive"
+                                              onClick={(e) => {
+                                                e.stopPropagation();
+                                                deleteContent(content.id);
+                                              }}
+                                            >
+                                              <Trash2 className="h-3 w-3" />
+                                            </Button>
+                                          </div>
+                                        </TableCell>
+                                      </TableRow>
+                                    </div>
+                                  ))}
+                                </TableBody>
                              </Table>
                           )}
                         </div>
@@ -911,28 +999,44 @@ const MemberSiteBuilder = () => {
                            {categories.length === 0 ? (
                              <p className="text-xs text-muted-foreground p-4">カテゴリがありません</p>
                            ) : (
-                             <Table className="w-full border-collapse">
-                               <TableBody>
-                                 {categories.map((category) => (
-                                   <TableRow
-                                     key={category.id}
-                                     className={`cursor-pointer transition-colors ${
-                                       selectedCategoryId === category.id
-                                         ? 'bg-[#0cb386]/20 border-2 border-[#0cb386]'
-                                         : 'hover:bg-muted/50 border-2 border-transparent'
-                                     }`}
-                                     onClick={() => selectCategory(category)}
-                                   >
-                                     <TableCell className="py-2 text-left">
-                                       <div className="text-xs font-medium">{category.name}</div>
-                                       <div className="text-xs text-muted-foreground">
-                                         {category.content_count}件のコンテンツ
-                                       </div>
-                                     </TableCell>
-                                   </TableRow>
-                                 ))}
-                               </TableBody>
-                             </Table>
+                              <Table className="w-full border-collapse">
+                                <TableBody>
+                                  {categories.map((category, index) => (
+                                    <div key={category.id} className={`border-t border-border ${index === 0 ? 'border-t-0' : ''}`}>
+                                      <TableRow
+                                        className={`cursor-pointer transition-all ${
+                                          selectedCategoryId === category.id
+                                            ? 'bg-[#0cb386]/20 ring-2 ring-[#0cb386]'
+                                            : 'hover:bg-muted/50'
+                                        }`}
+                                        onClick={() => selectCategory(category)}
+                                      >
+                                        <TableCell className="py-2 text-left">
+                                          <div className="text-xs font-medium">{category.name}</div>
+                                          <div className="text-xs text-muted-foreground">
+                                            {category.content_count}件のコンテンツ
+                                          </div>
+                                        </TableCell>
+                                        <TableCell className="py-2 text-right w-1/4">
+                                          <div className="flex items-center justify-end gap-1">
+                                            <Button
+                                              size="sm"
+                                              variant="ghost"
+                                              className="h-5 w-5 p-0 text-destructive hover:text-destructive"
+                                              onClick={(e) => {
+                                                e.stopPropagation();
+                                                deleteCategory(category.id);
+                                              }}
+                                            >
+                                              <Trash2 className="h-3 w-3" />
+                                            </Button>
+                                          </div>
+                                        </TableCell>
+                                      </TableRow>
+                                    </div>
+                                  ))}
+                                </TableBody>
+                              </Table>
                            )}
                          </div>
                        </div>
