@@ -18,8 +18,7 @@ const MemberSiteView = () => {
           .from('member_sites')
           .select('*')
           .eq('slug', slug)
-          .eq('is_published', true)
-          .single();
+          .maybeSingle();
 
         if (error) throw error;
         setSite(data);
@@ -60,6 +59,13 @@ const MemberSiteView = () => {
       <div className="container mx-auto px-4 py-8">
         <Card>
           <CardContent className="p-8">
+            {!site?.is_published && (
+              <div className="mb-6 p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
+                <p className="text-yellow-800 text-sm font-medium">
+                  🔍 プレビューモード - このサイトは非公開です
+                </p>
+              </div>
+            )}
             <h1 className="text-3xl font-bold mb-4">{site?.name}</h1>
             <p className="text-muted-foreground mb-6">{site?.description}</p>
             <div className="text-center py-12">

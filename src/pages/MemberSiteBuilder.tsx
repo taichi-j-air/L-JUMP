@@ -89,17 +89,90 @@ const MemberSiteBuilder = () => {
     }
   }, [siteId]);
 
-  const handleNewSite = () => {
-    // Clear current site data and show empty form
-    setSite(null);
-    setSiteName("新しいサイト");
-    setSiteDescription("");
-    setSiteSlug("new-site-" + Date.now());
-    setAccessType("paid");
-    setPrice(0);
-    setIsPublished(false);
-    setIsPublic(false);
-    setSearchParams({ site: 'new' });
+  const handleCreateSite = async () => {
+    setSaving(true);
+    try {
+      const { data: userData } = await supabase.auth.getUser();
+      if (!userData.user) throw new Error('認証が必要です');
+
+      const { data, error } = await supabase
+        .from('member_sites')
+        .insert({
+          name: "新しいサイト",
+          description: "",
+          slug: `site-${Date.now()}`,
+          access_type: "paid",
+          price: 0,
+          is_published: false,
+          is_public: false,
+          user_id: userData.user.id,
+        })
+        .select()
+        .single();
+
+      if (error) throw error;
+      
+      // Refresh sites list and select the new site
+      await loadSites();
+      setSearchParams({ site: data.id });
+      
+      toast({
+        title: "作成完了",
+        description: "新しいサイトを作成しました",
+      });
+    } catch (error) {
+      console.error('Error creating site:', error);
+      toast({
+        title: "エラー",
+        description: "サイトの作成に失敗しました",
+        variant: "destructive",
+      });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleDeleteSite = async (siteId: string) => {
+    if (!confirm('本当にこのサイトを削除しますか？関連するコンテンツも全て削除されます。')) return;
+    
+    setSaving(true);
+    try {
+      // Delete related data first
+      await supabase.from('member_site_content').delete().eq('site_id', siteId);
+      await supabase.from('member_site_payments').delete().eq('site_id', siteId);
+      await supabase.from('member_site_subscriptions').delete().eq('site_id', siteId);
+      await supabase.from('member_site_users').delete().eq('site_id', siteId);
+      
+      // Delete the site itself
+      const { error } = await supabase
+        .from('member_sites')
+        .delete()
+        .eq('id', siteId);
+
+      if (error) throw error;
+      
+      // If the deleted site was selected, clear selection
+      if (siteId === searchParams.get('site')) {
+        setSearchParams({});
+      }
+      
+      // Refresh sites list
+      await loadSites();
+      
+      toast({
+        title: "削除完了",
+        description: "サイトを削除しました",
+      });
+    } catch (error) {
+      console.error('Error deleting site:', error);
+      toast({
+        title: "エラー",
+        description: "サイトの削除に失敗しました",
+        variant: "destructive",
+      });
+    } finally {
+      setSaving(false);
+    }
   };
 
   const loadSites = async () => {
@@ -413,7 +486,7 @@ const MemberSiteBuilder = () => {
                 <CardHeader className="flex flex-col gap-2 py-3">
                   <div className="flex flex-row items-center justify-between">
                     <CardTitle className="text-base">会員サイト一覧</CardTitle>
-                    <Button size="sm" onClick={() => handleNewSite()} className="flex items-center gap-2">
+                    <Button size="sm" onClick={handleCreateSite} disabled={saving} className="flex items-center gap-2">
                       <Plus className="w-4 h-4" />
                       追加
                     </Button>
@@ -460,17 +533,10 @@ const MemberSiteBuilder = () => {
                               size="sm"
                               variant="ghost"
                               className="h-6 w-6 p-0 text-destructive hover:text-destructive"
+                              disabled={saving}
                               onClick={(e) => {
                                 e.stopPropagation();
-                                if (confirm('本当にこのサイトを削除しますか？')) {
-                                  // Implement delete site logic here
-                                  // handleDeleteSite(s.id);
-                                  toast({
-                                    title: "未実装",
-                                    description: "サイト削除機能はまだ実装されていません。",
-                                    variant: "destructive",
-                                  });
-                                }
+                                handleDeleteSite(s.id);
                               }}
                             >
                               <Trash2 className="h-3 w-3" />
