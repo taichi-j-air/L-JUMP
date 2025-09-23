@@ -721,6 +721,246 @@ export type Database = {
         }
         Relationships: []
       }
+      member_site_content: {
+        Row: {
+          access_level: string
+          content: string | null
+          content_blocks: Json | null
+          created_at: string
+          id: string
+          is_published: boolean
+          page_type: string
+          site_id: string
+          slug: string
+          sort_order: number | null
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          access_level?: string
+          content?: string | null
+          content_blocks?: Json | null
+          created_at?: string
+          id?: string
+          is_published?: boolean
+          page_type?: string
+          site_id: string
+          slug: string
+          sort_order?: number | null
+          title: string
+          updated_at?: string
+        }
+        Update: {
+          access_level?: string
+          content?: string | null
+          content_blocks?: Json | null
+          created_at?: string
+          id?: string
+          is_published?: boolean
+          page_type?: string
+          site_id?: string
+          slug?: string
+          sort_order?: number | null
+          title?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      member_site_payments: {
+        Row: {
+          billing_interval: string | null
+          created_at: string
+          currency: string
+          id: string
+          is_active: boolean
+          payment_type: string
+          price: number
+          site_id: string
+          stripe_price_id: string | null
+          stripe_product_id: string | null
+          trial_period_days: number | null
+          updated_at: string
+        }
+        Insert: {
+          billing_interval?: string | null
+          created_at?: string
+          currency?: string
+          id?: string
+          is_active?: boolean
+          payment_type?: string
+          price?: number
+          site_id: string
+          stripe_price_id?: string | null
+          stripe_product_id?: string | null
+          trial_period_days?: number | null
+          updated_at?: string
+        }
+        Update: {
+          billing_interval?: string | null
+          created_at?: string
+          currency?: string
+          id?: string
+          is_active?: boolean
+          payment_type?: string
+          price?: number
+          site_id?: string
+          stripe_price_id?: string | null
+          stripe_product_id?: string | null
+          trial_period_days?: number | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      member_site_subscriptions: {
+        Row: {
+          cancel_at_period_end: boolean | null
+          created_at: string
+          current_period_end: string | null
+          current_period_start: string | null
+          id: string
+          site_id: string
+          site_user_id: string
+          status: string
+          stripe_customer_id: string | null
+          stripe_subscription_id: string | null
+          updated_at: string
+        }
+        Insert: {
+          cancel_at_period_end?: boolean | null
+          created_at?: string
+          current_period_end?: string | null
+          current_period_start?: string | null
+          id?: string
+          site_id: string
+          site_user_id: string
+          status?: string
+          stripe_customer_id?: string | null
+          stripe_subscription_id?: string | null
+          updated_at?: string
+        }
+        Update: {
+          cancel_at_period_end?: boolean | null
+          created_at?: string
+          current_period_end?: string | null
+          current_period_start?: string | null
+          id?: string
+          site_id?: string
+          site_user_id?: string
+          status?: string
+          stripe_customer_id?: string | null
+          stripe_subscription_id?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      member_site_users: {
+        Row: {
+          access_level: string
+          created_at: string
+          expires_at: string | null
+          friend_id: string | null
+          id: string
+          joined_at: string
+          last_access_at: string | null
+          line_user_id: string | null
+          site_id: string
+          status: string
+          total_payment: number | null
+          updated_at: string
+          user_email: string
+          user_name: string | null
+        }
+        Insert: {
+          access_level?: string
+          created_at?: string
+          expires_at?: string | null
+          friend_id?: string | null
+          id?: string
+          joined_at?: string
+          last_access_at?: string | null
+          line_user_id?: string | null
+          site_id: string
+          status?: string
+          total_payment?: number | null
+          updated_at?: string
+          user_email: string
+          user_name?: string | null
+        }
+        Update: {
+          access_level?: string
+          created_at?: string
+          expires_at?: string | null
+          friend_id?: string | null
+          id?: string
+          joined_at?: string
+          last_access_at?: string | null
+          line_user_id?: string | null
+          site_id?: string
+          status?: string
+          total_payment?: number | null
+          updated_at?: string
+          user_email?: string
+          user_name?: string | null
+        }
+        Relationships: []
+      }
+      member_sites: {
+        Row: {
+          access_type: string
+          created_at: string
+          currency: string | null
+          description: string | null
+          domain: string | null
+          id: string
+          is_public: boolean
+          is_published: boolean
+          name: string
+          price: number | null
+          seo_config: Json | null
+          slug: string
+          theme_config: Json | null
+          trial_days: number | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          access_type?: string
+          created_at?: string
+          currency?: string | null
+          description?: string | null
+          domain?: string | null
+          id?: string
+          is_public?: boolean
+          is_published?: boolean
+          name: string
+          price?: number | null
+          seo_config?: Json | null
+          slug: string
+          theme_config?: Json | null
+          trial_days?: number | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          access_type?: string
+          created_at?: string
+          currency?: string | null
+          description?: string | null
+          domain?: string | null
+          id?: string
+          is_public?: boolean
+          is_published?: boolean
+          name?: string
+          price?: number | null
+          seo_config?: Json | null
+          slug?: string
+          theme_config?: Json | null
+          trial_days?: number | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       onboarding_videos: {
         Row: {
           completion_percentage: number | null
