@@ -62,36 +62,54 @@ Deno.serve(async (req) => {
       console.log(`🔧 Found ${countData?.length || 0} records to update:`, countData);
     }
 
-    // Update all active friend_page_access records for this page
-    const { data, error } = await supabase
-      .from('friend_page_access')
-      .update({
-        timer_end_at: supabase.sql`timer_start_at + ${timerDurationSeconds} * interval '1 second'`,
-        updated_at: new Date().toISOString()
-      })
-      .eq('page_share_code', pageShareCode)
-      .eq('access_enabled', true)
-      .not('timer_start_at', 'is', null)
-      .select('id, timer_start_at, timer_end_at');
+    // Calculate new timer_end_at for each record
+    const updatePromises = countData?.map(async (record) => {
+      const timerStartAt = new Date(record.timer_start_at);
+      const newTimerEndAt = new Date(timerStartAt.getTime() + (timerDurationSeconds * 1000));
+      
+      console.log(`🔧 Updating record ${record.id}: timer_start_at=${record.timer_start_at} -> timer_end_at=${newTimerEndAt.toISOString()}`);
+      
+      return supabase
+        .from('friend_page_access')
+        .update({
+          timer_end_at: newTimerEndAt.toISOString(),
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', record.id)
+        .select('id, timer_start_at, timer_end_at');
+    }) || [];
 
-    if (error) {
-      console.error('❌ Error updating friend page access records:', error);
-      return new Response(JSON.stringify({ 
-        success: false, 
-        error: `Failed to update timer settings: ${error.message}` 
-      }), {
-        status: 500,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-      });
+    // Execute all updates in parallel
+    const results = await Promise.allSettled(updatePromises);
+    
+    // Collect successful updates
+    const successfulUpdates = [];
+    let errorCount = 0;
+    
+    results.forEach((result, index) => {
+      if (result.status === 'fulfilled' && !result.value.error) {
+        if (result.value.data && result.value.data.length > 0) {
+          successfulUpdates.push(result.value.data[0]);
+        }
+      } else {
+        errorCount++;
+        console.error(`❌ Failed to update record ${countData?.[index]?.id}:`, 
+          result.status === 'rejected' ? result.reason : result.value.error);
+      }
+    });
+
+    if (errorCount > 0) {
+      console.log(`⚠️ ${errorCount} records failed to update, ${successfulUpdates.length} succeeded`);
     }
 
-    const updatedCount = data?.length || 0;
-    console.log(`✅ Successfully updated ${updatedCount} friend_page_access records:`, data);
+    const updatedCount = successfulUpdates.length;
+    console.log(`✅ Successfully updated ${updatedCount} friend_page_access records:`, successfulUpdates);
 
     return new Response(JSON.stringify({ 
       success: true, 
       updatedCount,
-      updatedRecords: data
+      updatedRecords: successfulUpdates,
+      errors: errorCount
     }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' }
     });
