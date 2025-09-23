@@ -12,8 +12,7 @@ Deno.serve(async (req) => {
 
   try {
     const url = new URL(req.url);
-    const pathSegments = url.pathname.split('/');
-    const slug = pathSegments[pathSegments.length - 1];
+    const slug = url.searchParams.get('slug');
     const uid = url.searchParams.get('uid');
 
     if (!slug || !uid) {
@@ -106,20 +105,20 @@ function generateSiteHTML(site: any): string {
       return content.content_blocks.map((block: any) => {
         switch (block.type) {
           case 'heading':
-            return `<h${block.level || 2} style="color: ${primaryColor}; margin: 1.5rem 0 1rem;">${block.content || ''}</h${block.level || 2}>`;
+            return `<h${block.level || 2} class="content-heading">${block.content || ''}</h${block.level || 2}>`;
           case 'paragraph':
-            return `<p style="margin: 1rem 0; line-height: 1.6;">${block.content || ''}</p>`;
+            return `<p class="content-paragraph">${block.content || ''}</p>`;
           case 'image':
-            return `<img src="${block.src || ''}" alt="${block.alt || ''}" style="max-width: 100%; height: auto; margin: 1rem 0;" />`;
+            return `<img src="${block.src || ''}" alt="${block.alt || ''}" class="content-image" />`;
           case 'video':
-            return `<video controls style="max-width: 100%; height: auto; margin: 1rem 0;"><source src="${block.src || ''}" type="video/mp4"></video>`;
+            return `<video controls class="content-video"><source src="${block.src || ''}" type="video/mp4"></video>`;
           default:
-            return `<div style="margin: 1rem 0;">${block.content || ''}</div>`;
+            return `<div class="content-block">${block.content || ''}</div>`;
         }
       }).join('');
     } else {
       // Fallback to plain content
-      return `<div style="margin: 2rem 0;">${content.content || ''}</div>`;
+      return `<div class="content-fallback">${content.content || ''}</div>`;
     }
   }).join('');
 
@@ -129,6 +128,7 @@ function generateSiteHTML(site: any): string {
       <head>
         <meta charset="UTF-8">
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; media-src 'self' https:;">
         <title>${site.name}</title>
         <style>
           * {
@@ -193,11 +193,36 @@ function generateSiteHTML(site: any): string {
             margin: 1.5rem 0;
           }
           
-          .content video {
+          .content video, .content-video {
             max-width: 100%;
             height: auto;
             border-radius: 8px;
             margin: 1.5rem 0;
+          }
+          
+          .content-heading {
+            color: ${primaryColor};
+            margin: 1.5rem 0 1rem;
+          }
+          
+          .content-paragraph {
+            margin: 1rem 0;
+            line-height: 1.6;
+          }
+          
+          .content-image {
+            max-width: 100%;
+            height: auto;
+            margin: 1rem 0;
+            border-radius: 8px;
+          }
+          
+          .content-block, .content-fallback {
+            margin: 1rem 0;
+          }
+          
+          .content-fallback {
+            margin: 2rem 0;
           }
           
           @media (max-width: 768px) {

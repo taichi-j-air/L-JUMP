@@ -60,7 +60,7 @@ const MemberSitesList = () => {
     if (site.is_published && site.public_url) {
       return site.public_url;
     }
-    return `https://rtjxurmuaawyzjcdkqxt.supabase.co/functions/v1/member-site-view/${site.slug}?uid=${site.site_uid}`;
+    return `https://rtjxurmuaawyzjcdkqxt.supabase.co/functions/v1/member-site-view?slug=${site.slug}&uid=${site.site_uid}`;
   };
 
   return (
