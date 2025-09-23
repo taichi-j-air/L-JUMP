@@ -13,6 +13,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 
+// Data Interfaces
 interface MemberSite {
   id: string;
   name: string;
@@ -35,6 +36,7 @@ interface SiteContent {
   is_published: boolean;
   access_level: string;
   sort_order: number;
+  category_id?: string;
 }
 
 interface Category {
@@ -42,8 +44,9 @@ interface Category {
   name: string;
   description: string | null;
   site_id: string;
-  created_at: string;
+  sort_order: number;
   content_count: number;
+  created_at: string;
 }
 
 const MemberSiteBuilder = () => {
@@ -57,7 +60,7 @@ const MemberSiteBuilder = () => {
   
   // Site data
   const [site, setSite] = useState<MemberSite | null>(null);
-  const [sites, setSites] = useState<MemberSite[]>([]); // For the list on the left
+  const [sites, setSites] = useState<MemberSite[]>([]);
   const [siteContents, setSiteContents] = useState<SiteContent[]>([]);
   
   // Form states
@@ -77,6 +80,7 @@ const MemberSiteBuilder = () => {
   const [contentType, setContentType] = useState("page");
   const [contentAccessLevel, setContentAccessLevel] = useState("member");
   const [contentPublished, setContentPublished] = useState(false);
+  const [contentCategoryId, setContentCategoryId] = useState<string>("");
 
   // Category editing
   const [categories, setCategories] = useState<Category[]>([]);
@@ -84,9 +88,32 @@ const MemberSiteBuilder = () => {
   const [categoryName, setCategoryName] = useState("");
   const [categoryDescription, setCategoryDescription] = useState("");
 
+  // Load site data when site is selected
   useEffect(() => {
-    loadSites(); // Load all sites for the left panel
+    loadSites();
     if (siteId) {
+      // Reset all state when switching sites
+      setSite(null);
+      setSiteName("");
+      setSiteDescription("");
+      setSiteSlug("");
+      setAccessType("paid");
+      setPrice(0);
+      setIsPublished(false);
+      setIsPublic(false);
+      setSelectedContentId(null);
+      setContentTitle("");
+      setContentText("");
+      setContentSlug("");
+      setContentType("page");
+      setContentAccessLevel("member");
+      setContentPublished(false);
+      setContentCategoryId("");
+      setSelectedCategoryId(null);
+      setCategoryName("");
+      setCategoryDescription("");
+      
+      // Load fresh data for the selected site
       loadSiteData();
       loadSiteContents();
       loadCategories();
@@ -159,6 +186,7 @@ const MemberSiteBuilder = () => {
     try {
       // Delete related data first
       await supabase.from('member_site_content').delete().eq('site_id', siteId);
+      await supabase.from('member_site_categories').delete().eq('site_id', siteId);
       await supabase.from('member_site_payments').delete().eq('site_id', siteId);
       await supabase.from('member_site_subscriptions').delete().eq('site_id', siteId);
       await supabase.from('member_site_users').delete().eq('site_id', siteId);
@@ -268,6 +296,29 @@ const MemberSiteBuilder = () => {
     }
   };
 
+  // Load categories function
+  const loadCategories = async () => {
+    if (!siteId) return;
+    
+    try {
+      const { data, error } = await supabase
+        .from('member_site_categories')
+        .select('*')
+        .eq('site_id', siteId)
+        .order('sort_order', { ascending: true });
+
+      if (error) throw error;
+      setCategories(data || []);
+    } catch (error) {
+      console.error('Error loading categories:', error);
+      toast({
+        title: "エラー",
+        description: "カテゴリの読み込みに失敗しました",
+        variant: "destructive",
+      });
+    }
+  };
+
   const saveSite = async () => {
     setSaving(true);
     try {
@@ -348,6 +399,7 @@ const MemberSiteBuilder = () => {
           page_type: contentType,
           access_level: contentAccessLevel,
           is_published: contentPublished,
+          category_id: contentCategoryId || null,
         })
         .eq('id', selectedContentId);
 
@@ -359,6 +411,7 @@ const MemberSiteBuilder = () => {
       });
       
       loadSiteContents();
+      loadCategories(); // Refresh categories to update content count
     } catch (error) {
       console.error('Error saving content:', error);
       toast({
@@ -400,6 +453,7 @@ const MemberSiteBuilder = () => {
       setContentType(data.page_type);
       setContentAccessLevel(data.access_level);
       setContentPublished(data.is_published);
+      setContentCategoryId("");
       
       loadSiteContents();
       
@@ -427,6 +481,7 @@ const MemberSiteBuilder = () => {
     setContentType(content.page_type);
     setContentAccessLevel(content.access_level);
     setContentPublished(content.is_published);
+    setContentCategoryId(content.category_id || "");
   };
 
   const deleteContent = async (contentId: string) => {
@@ -448,6 +503,7 @@ const MemberSiteBuilder = () => {
       }
       
       loadSiteContents();
+      loadCategories(); // Refresh categories to update content count
       
       toast({
         title: "削除完了",
@@ -465,27 +521,6 @@ const MemberSiteBuilder = () => {
     }
   };
 
-  const loadCategories = async () => {
-    if (!siteId) return;
-    
-    try {
-      // Create sample categories with content count for now
-      const sampleCategories: Category[] = [
-        {
-          id: 'default',
-          name: 'デフォルトカテゴリ',
-          description: 'デフォルトのカテゴリです',
-          site_id: siteId,
-          created_at: new Date().toISOString(),
-          content_count: siteContents.length
-        }
-      ];
-      setCategories(sampleCategories);
-    } catch (error) {
-      console.error('Error loading categories:', error);
-    }
-  };
-
   const createNewCategory = () => {
     setSelectedCategoryId(null);
     setCategoryName("");
@@ -493,7 +528,7 @@ const MemberSiteBuilder = () => {
   };
 
   const saveCategory = async () => {
-    if (!categoryName.trim()) {
+    if (!siteId || !categoryName.trim()) {
       toast({
         title: "エラー",
         description: "カテゴリ名を入力してください",
@@ -504,14 +539,21 @@ const MemberSiteBuilder = () => {
 
     setSaving(true);
     try {
+      const categoryPayload = {
+        name: categoryName,
+        description: categoryDescription,
+        site_id: siteId,
+        sort_order: categories.length
+      };
+
       if (selectedCategoryId) {
         // Update existing category
-        const updatedCategories = categories.map(cat => 
-          cat.id === selectedCategoryId 
-            ? { ...cat, name: categoryName, description: categoryDescription }
-            : cat
-        );
-        setCategories(updatedCategories);
+        const { error } = await supabase
+          .from('member_site_categories')
+          .update(categoryPayload)
+          .eq('id', selectedCategoryId);
+
+        if (error) throw error;
         
         toast({
           title: "保存完了",
@@ -519,22 +561,19 @@ const MemberSiteBuilder = () => {
         });
       } else {
         // Create new category
-        const newCategory: Category = {
-          id: `cat-${Date.now()}`,
-          name: categoryName,
-          description: categoryDescription,
-          site_id: siteId!,
-          created_at: new Date().toISOString(),
-          content_count: 0
-        };
-        setCategories([...categories, newCategory]);
-        setSelectedCategoryId(newCategory.id);
+        const { error } = await supabase
+          .from('member_site_categories')
+          .insert(categoryPayload);
+
+        if (error) throw error;
         
         toast({
           title: "作成完了",
           description: "新しいカテゴリを作成しました",
         });
       }
+
+      loadCategories();
     } catch (error) {
       console.error('Error saving category:', error);
       toast({
@@ -688,7 +727,7 @@ const MemberSiteBuilder = () => {
                             <p className="text-xs text-muted-foreground">ページがありません</p>
                           ) : (
                               <Table className="w-full border-collapse">
-                               <TableBody className="[&_tr:last-child]:border-b-0">
+                               <TableBody>
                                  {siteContents.map((content) => (
                                    <TableRow
                                      key={content.id}
@@ -761,14 +800,14 @@ const MemberSiteBuilder = () => {
                                 </div>
                               </div>
 
-                              <div className="grid grid-cols-3 gap-4">
+                              <div className="grid grid-cols-4 gap-4">
                                 <div className="space-y-2">
                                   <Label htmlFor="contentType">ページタイプ</Label>
                                   <Select value={contentType} onValueChange={setContentType}>
                                     <SelectTrigger>
                                       <SelectValue />
                                     </SelectTrigger>
-                                    <SelectContent>
+                                    <SelectContent className="bg-background border z-50">
                                       <SelectItem value="page">ページ</SelectItem>
                                       <SelectItem value="post">投稿</SelectItem>
                                       <SelectItem value="landing">ランディング</SelectItem>
@@ -781,10 +820,26 @@ const MemberSiteBuilder = () => {
                                     <SelectTrigger>
                                       <SelectValue />
                                     </SelectTrigger>
-                                    <SelectContent>
+                                    <SelectContent className="bg-background border z-50">
                                       <SelectItem value="public">パブリック</SelectItem>
                                       <SelectItem value="member">会員限定</SelectItem>
                                       <SelectItem value="premium">プレミアム会員限定</SelectItem>
+                                    </SelectContent>
+                                  </Select>
+                                </div>
+                                <div className="space-y-2">
+                                  <Label htmlFor="category">カテゴリ</Label>
+                                  <Select value={contentCategoryId} onValueChange={setContentCategoryId}>
+                                    <SelectTrigger>
+                                      <SelectValue placeholder="カテゴリを選択" />
+                                    </SelectTrigger>
+                                    <SelectContent className="bg-background border z-50">
+                                      <SelectItem value="">カテゴリなし</SelectItem>
+                                      {categories.map((category) => (
+                                        <SelectItem key={category.id} value={category.id}>
+                                          {category.name}
+                                        </SelectItem>
+                                      ))}
                                     </SelectContent>
                                   </Select>
                                 </div>
@@ -857,7 +912,7 @@ const MemberSiteBuilder = () => {
                              <p className="text-xs text-muted-foreground p-4">カテゴリがありません</p>
                            ) : (
                              <Table className="w-full border-collapse">
-                               <TableBody className="[&_tr:last-child]:border-b-0">
+                               <TableBody>
                                  {categories.map((category) => (
                                    <TableRow
                                      key={category.id}
@@ -868,17 +923,11 @@ const MemberSiteBuilder = () => {
                                      }`}
                                      onClick={() => selectCategory(category)}
                                    >
-                                     <TableCell className="py-1 text-left align-top">
-                                       <div className="flex items-center gap-2">
-                                         <span className="h-2 w-2 rounded-full bg-blue-500"></span>
-                                         <div className="h-4 w-px bg-border"></div>
-                                         <div className="min-w-0 flex-1">
-                                           <div className="text-xs font-medium truncate">{category.name}</div>
-                                         </div>
+                                     <TableCell className="py-2 text-left">
+                                       <div className="text-xs font-medium">{category.name}</div>
+                                       <div className="text-xs text-muted-foreground">
+                                         {category.content_count}件のコンテンツ
                                        </div>
-                                     </TableCell>
-                                     <TableCell className="py-1 text-right align-top w-1/4">
-                                       <div className="text-xs text-muted-foreground">{category.content_count}件</div>
                                      </TableCell>
                                    </TableRow>
                                  ))}
@@ -886,180 +935,183 @@ const MemberSiteBuilder = () => {
                              </Table>
                            )}
                          </div>
-                      </div>
-                      
-                      {/* Main Category Settings Area - 80% width */}
-                      <div className="w-4/5 rounded-none">
-                        <Card className="rounded-none">
-                          <CardHeader>
-                            <CardTitle>カテゴリ設定</CardTitle>
-                            <CardDescription>
-                              コンテンツのカテゴリを管理
-                            </CardDescription>
-                          </CardHeader>
-                           <CardContent>
-                             <div className="space-y-4">
+                       </div>
+                       
+                       {/* Main Category Area - 80% width */}
+                       <div className="w-4/5 rounded-none">
+                         {selectedCategory || (!selectedCategoryId && categoryName) ? (
+                           <Card className="rounded-none">
+                             <CardHeader>
+                               <CardTitle>カテゴリ編集</CardTitle>
+                               <CardDescription>
+                                 {selectedCategory ? selectedCategory.name + ' の編集' : '新しいカテゴリを作成'}
+                               </CardDescription>
+                             </CardHeader>
+                             <CardContent className="space-y-4">
                                <div className="space-y-2">
                                  <Label htmlFor="categoryName">カテゴリ名</Label>
                                  <Input
                                    id="categoryName"
                                    value={categoryName}
                                    onChange={(e) => setCategoryName(e.target.value)}
-                                   placeholder="カテゴリ名を入力"
+                                   placeholder="カテゴリ名を入力してください"
                                  />
                                </div>
+                               
                                <div className="space-y-2">
                                  <Label htmlFor="categoryDescription">説明</Label>
                                  <Textarea
                                    id="categoryDescription"
                                    value={categoryDescription}
                                    onChange={(e) => setCategoryDescription(e.target.value)}
-                                   placeholder="カテゴリの説明を入力"
-                                   rows={3}
+                                   placeholder="カテゴリの説明を入力してください（任意）"
+                                   rows={4}
                                  />
                                </div>
-                               <Button onClick={saveCategory} disabled={saving} className="w-full">
+
+                               <Button onClick={saveCategory} disabled={saving || !categoryName.trim()} className="w-full">
                                  <Save className="w-4 h-4 mr-2" />
-                                 {saving ? "保存中..." : selectedCategoryId ? "カテゴリを更新" : "カテゴリを保存"}
+                                 {saving ? "保存中..." : selectedCategoryId ? "カテゴリを更新" : "カテゴリを作成"}
                                </Button>
-                             </div>
-                           </CardContent>
-                        </Card>
-                      </div>
-                    </div>
-                  </TabsContent>
+                             </CardContent>
+                           </Card>
+                         ) : (
+                           <Card className="rounded-none">
+                             <CardContent className="p-12">
+                               <div className="text-center">
+                                 <p className="text-muted-foreground mb-4">
+                                   左側からカテゴリを選択して編集するか、新しいカテゴリを作成してください
+                                 </p>
+                                 <Button onClick={createNewCategory}>
+                                   <Plus className="w-4 h-4 mr-2" />
+                                   最初のカテゴリを作成
+                                 </Button>
+                               </div>
+                             </CardContent>
+                           </Card>
+                         )}
+                       </div>
+                     </div>
+                   </TabsContent>
 
-                  <TabsContent value="plan-settings" className="border-2 border-border rounded-none">
-                    <Card>
-                      <CardHeader><CardTitle>プラン設定</CardTitle></CardHeader>
-                      <CardContent>
-                        <p className="text-muted-foreground">プラン設定のコンテンツ</p>
-                      </CardContent>
-                    </Card>
-                  </TabsContent>
-
-                  <TabsContent value="content-display" className="border-2 border-border rounded-none">
-                    <Card>
-                      <CardHeader><CardTitle>コンテンツ表示方法</CardTitle></CardHeader>
-                      <CardContent>
-                        <p className="text-muted-foreground">コンテンツ表示方法のコンテンツ</p>
-                      </CardContent>
-                    </Card>
-                  </TabsContent>
-
-                  <TabsContent value="site-settings" className="border-2 border-border rounded-none">
-                    {/* Existing Site Settings */}
-                    <Card>
-                      <CardHeader>
-                        <CardTitle>サイト設定</CardTitle>
-                        <CardDescription>
-                          基本情報と設定
-                        </CardDescription>
-                      </CardHeader>
-                      <CardContent className="space-y-4">
+                <TabsContent value="plan-settings" className="space-y-6">
+                  <Card>
+                    <CardHeader>
+                      <CardTitle>プラン設定</CardTitle>
+                      <CardDescription>
+                        このサイトの料金プランを設定します
+                      </CardDescription>
+                    </CardHeader>
+                    <CardContent className="space-y-4">
+                      <div className="grid grid-cols-2 gap-4">
                         <div className="space-y-2">
-                          <Label htmlFor="siteName">サイト名</Label>
+                          <Label htmlFor="access-type">アクセス種別</Label>
+                          <Select value={accessType} onValueChange={setAccessType}>
+                            <SelectTrigger>
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent className="bg-background border z-50">
+                              <SelectItem value="free">無料</SelectItem>
+                              <SelectItem value="paid">有料</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        <div className="space-y-2">
+                          <Label htmlFor="price">価格（円）</Label>
                           <Input
-                            id="siteName"
+                            id="price"
+                            type="number"
+                            value={price}
+                            onChange={(e) => setPrice(Number(e.target.value))}
+                            disabled={accessType === 'free'}
+                          />
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+                </TabsContent>
+
+                <TabsContent value="content-display" className="space-y-6">
+                  <Card>
+                    <CardHeader>
+                      <CardTitle>コンテンツ表示方法</CardTitle>
+                      <CardDescription>
+                        サイトでのコンテンツの表示方法を設定します
+                      </CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                      <p className="text-muted-foreground">この機能は開発中です。</p>
+                    </CardContent>
+                  </Card>
+                </TabsContent>
+
+                <TabsContent value="site-settings" className="space-y-6">
+                  <Card>
+                    <CardHeader>
+                      <CardTitle>基本設定</CardTitle>
+                      <CardDescription>
+                        サイトの基本情報を設定します
+                      </CardDescription>
+                    </CardHeader>
+                    <CardContent className="space-y-4">
+                      <div className="grid grid-cols-2 gap-4">
+                        <div className="space-y-2">
+                          <Label htmlFor="site-name">サイト名</Label>
+                          <Input
+                            id="site-name"
                             value={siteName}
                             onChange={(e) => setSiteName(e.target.value)}
                             placeholder="サイト名を入力"
                           />
                         </div>
-                        
                         <div className="space-y-2">
-                          <Label htmlFor="siteDescription">説明</Label>
-                          <Textarea
-                            id="siteDescription"
-                            value={siteDescription}
-                            onChange={(e) => setSiteDescription(e.target.value)}
-                            placeholder="サイトの説明を入力"
-                          />
-                        </div>
-
-                        <div className="space-y-2">
-                          <Label htmlFor="siteSlug">URL スラッグ</Label>
+                          <Label htmlFor="site-slug">URL スラッグ</Label>
                           <Input
-                            id="siteSlug"
+                            id="site-slug"
                             value={siteSlug}
                             onChange={(e) => setSiteSlug(e.target.value)}
                             placeholder="url-slug"
                           />
                         </div>
+                      </div>
 
-                        <div className="space-y-2">
-                          <Label htmlFor="accessType">アクセスタイプ</Label>
-                          <Select value={accessType} onValueChange={setAccessType}>
-                            <SelectTrigger>
-                              <SelectValue />
-                            </SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="free">無料</SelectItem>
-                              <SelectItem value="paid">有料（買い切り）</SelectItem>
-                              <SelectItem value="subscription">サブスクリプション</SelectItem>
-                            </SelectContent>
-                          </Select>
-                        </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="site-description">サイト説明</Label>
+                        <Textarea
+                          id="site-description"
+                          value={siteDescription}
+                          onChange={(e) => setSiteDescription(e.target.value)}
+                          placeholder="サイトの説明を入力"
+                          rows={4}
+                        />
+                      </div>
 
-                        {accessType !== 'free' && (
-                          <div className="space-y-2">
-                            <Label htmlFor="price">料金 (円)</Label>
-                            <Input
-                              id="price"
-                              type="number"
-                              value={price}
-                              onChange={(e) => setPrice(Number(e.target.value))}
-                            />
-                          </div>
-                        )}
+                      <div className="flex items-center gap-4">
+                        <label className="flex items-center space-x-2">
+                          <input
+                            type="checkbox"
+                            checked={isPublished}
+                            onChange={(e) => setIsPublished(e.target.checked)}
+                          />
+                          <span>サイトを公開する</span>
+                        </label>
+                        <label className="flex items-center space-x-2">
+                          <input
+                            type="checkbox"
+                            checked={isPublic}
+                            onChange={(e) => setIsPublic(e.target.checked)}
+                          />
+                          <span>検索エンジンに表示</span>
+                        </label>
+                      </div>
 
-                        <div className="flex gap-4">
-                          <label className="flex items-center space-x-2">
-                            <input
-                              type="checkbox"
-                              checked={isPublished}
-                              onChange={(e) => setIsPublished(e.target.checked)}
-                            />
-                            <span>公開する</span>
-                          </label>
-                          <label className="flex items-center space-x-2">
-                            <input
-                              type="checkbox"
-                              checked={isPublic}
-                              onChange={(e) => setIsPublic(e.target.checked)}
-                            />
-                            <span>パブリックアクセス許可</span>
-                          </label>
-                        </div>
-
-                        <Button onClick={saveSite} disabled={saving} className="w-full">
-                          <Save className="w-4 h-4 mr-2" />
-                          {saving ? "保存中..." : "サイト設定を保存"}
-                        </Button>
-                        
-                        {siteId && siteId !== 'new' && (
-                          <div className="space-y-2">
-                            <Button 
-                              variant="outline" 
-                              onClick={() => window.open(`/member-site/${siteSlug}`, '_blank')}
-                              className="w-full"
-                            >
-                              <Eye className="w-4 h-4 mr-2" />
-                              プレビュー
-                            </Button>
-                            <Button 
-                              variant="outline" 
-                              onClick={() => navigate(`/member-sites/management?site=${siteId}`)}
-                              className="w-full"
-                            >
-                              <Settings className="w-4 h-4 mr-2" />
-                              管理画面へ
-                            </Button>
-                          </div>
-                        )}
-                      </CardContent>
-                    </Card>
-                  </TabsContent>
+                      <Button onClick={saveSite} disabled={saving} className="w-full">
+                        <Save className="w-4 h-4 mr-2" />
+                        {saving ? "保存中..." : "サイト設定を保存"}
+                      </Button>
+                    </CardContent>
+                  </Card>
+                </TabsContent>
               </Tabs>
             </div>
           </div>
