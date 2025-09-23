@@ -579,28 +579,28 @@ const MemberSiteBuilder = () => {
                             <p className="text-xs text-muted-foreground">ページがありません</p>
                           ) : (
                             <Table className="w-full border-collapse">
-                              <TableBody>
+                              <TableBody className="border-b border-border">
                                 {siteContents.map((content) => (
                                   <TableRow
                                     key={content.id}
-                                    className={`cursor-pointer transition-colors border-b-0 last:border-b-0 ${
+                                    className={`cursor-pointer transition-colors border-b border-border ${
                                       selectedContentId === content.id
                                         ? 'bg-[#0cb386]/20 border-l-2 border-[#0cb386]'
                                         : 'hover:bg-muted/50'
                                     }`}
                                     onClick={() => selectContent(content)}
                                   >
-                                    <TableCell className="py-2 px-2 text-left align-top border-b-0">
-                                      <div className="min-w-0 flex-1">
-                                        <div className="text-xs font-medium truncate">{content.title}</div>
-                                        <div className="text-xs text-muted-foreground">{content.page_type}</div>
+                                    <TableCell className="py-1 text-left align-top border-b-0">
+                                      <div className="flex items-center gap-2">
+                                        <span className={`h-2 w-2 rounded-full ${content.is_published ? 'bg-green-500' : 'bg-red-500'}`}></span>
+                                        <div className="h-4 w-px bg-border"></div>
+                                        <div className="min-w-0 flex-1">
+                                          <div className="text-xs font-medium truncate">{content.title}</div>
+                                        </div>
                                       </div>
                                     </TableCell>
-                                    <TableCell className="py-2 px-2 text-right align-top border-b-0 w-1/4">
+                                    <TableCell className="py-1 text-right align-top border-b-0 w-1/4">
                                       <div className="flex items-center justify-end gap-1">
-                                        {content.is_published && (
-                                          <Badge variant="secondary" className="text-xs">公開</Badge>
-                                        )}
                                         <Button
                                           size="sm"
                                           variant="ghost"
