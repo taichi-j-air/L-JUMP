@@ -3,7 +3,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2"
 import { corsHeaders } from "../_shared/cors.ts"
 
 console.log("Listening on http://localhost:9999/\n")
-
+　
 // 共通エラーレスポンス関数
 function errorResponse(error: string, message?: string, status: number = 403) {
   return new Response(
