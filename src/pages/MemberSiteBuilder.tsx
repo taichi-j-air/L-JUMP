@@ -80,7 +80,7 @@ const MemberSiteBuilder = () => {
   const [contentType, setContentType] = useState("page");
   const [contentAccessLevel, setContentAccessLevel] = useState("member");
   const [contentPublished, setContentPublished] = useState(false);
-  const [contentCategoryId, setContentCategoryId] = useState<string>("");
+  const [contentCategoryId, setContentCategoryId] = useState<string>("none");
 
   // Category editing
   const [categories, setCategories] = useState<Category[]>([]);
@@ -399,7 +399,7 @@ const MemberSiteBuilder = () => {
           page_type: contentType,
           access_level: contentAccessLevel,
           is_published: contentPublished,
-          category_id: contentCategoryId || null,
+          category_id: contentCategoryId === "none" ? null : contentCategoryId,
         })
         .eq('id', selectedContentId);
 
@@ -481,7 +481,7 @@ const MemberSiteBuilder = () => {
     setContentType(content.page_type);
     setContentAccessLevel(content.access_level);
     setContentPublished(content.is_published);
-    setContentCategoryId(content.category_id || "");
+    setContentCategoryId(content.category_id || "none");
   };
 
   const deleteContent = async (contentId: string) => {
@@ -833,8 +833,8 @@ const MemberSiteBuilder = () => {
                                     <SelectTrigger>
                                       <SelectValue placeholder="カテゴリを選択" />
                                     </SelectTrigger>
-                                    <SelectContent className="bg-background border z-50">
-                                      <SelectItem value="">カテゴリなし</SelectItem>
+                                     <SelectContent className="bg-background border z-50">
+                                       <SelectItem value="none">カテゴリなし</SelectItem>
                                       {categories.map((category) => (
                                         <SelectItem key={category.id} value={category.id}>
                                           {category.name}
