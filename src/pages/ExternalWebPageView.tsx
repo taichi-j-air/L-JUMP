@@ -540,7 +540,7 @@ export default function ExternalWebPageView() {
         </div>
         <div className="py-2 text-center" style={{ backgroundColor: "rgb(12, 179, 134)" }}>
           <div className="flex flex-col items-center justify-center">
-            <span className="font-bold text-lg text-white">L-JUMP</span>
+            <span className="font-bold text-lg text-white">L！JUMP</span>
             <span className="text-xs text-white opacity-90">LINE公式アカウント拡張ツール</span>
           </div>
         </div>
@@ -548,7 +548,62 @@ export default function ExternalWebPageView() {
     );
   }
 
+  if (error === "timer_expired") {
+    return (
+      <div className="min-h-screen bg-background flex flex-col">
+        <div className="flex-1 flex items-center justify-center px-4">
+          <div className="w-full max-w-md p-6 rounded-lg" style={{ backgroundColor: "#ff6b6b" }}>
+            <div className="text-center space-y-4">
+              <h3 className="text-2xl font-semibold text-white">閲覧期限切れ</h3>
+              <p className="text-white">このページの閲覧期限が過ぎました。</p>
+            </div>
+          </div>
+        </div>
+        <div className="py-2 text-center" style={{ backgroundColor: "rgb(12, 179, 134)" }}>
+          <div className="flex flex-col items-center justify-center">
+            <span className="font-bold text-lg text-white">L！JUMP</span>
+            <span className="text-xs text-white opacity-90">LINE公式アカウント拡張ツール</span>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
+  if (requirePass) {
+    return (
+      <div className="min-h-screen bg-background flex flex-col">
+        <div className="flex-1 flex items-center justify-center px-4">
+          <Card className="w-full max-w-md">
+            <CardContent className="p-6">
+              <div className="text-center space-y-4">
+                <h3 className="text-2xl font-semibold">パスコードを入力してください</h3>
+                <div className="space-y-3">
+                  <Input
+                    type="password"
+                    placeholder="パスコードを入力"
+                    value={passcode}
+                    onChange={(e) => setPasscode(e.target.value)}
+                  />
+                  <Button 
+                    className="w-full" 
+                    onClick={() => fetchData(passcode)}
+                  >
+                    送信
+                  </Button>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+        <div className="py-2 text-center" style={{ backgroundColor: "rgb(12, 179, 134)" }}>
+          <div className="flex flex-col items-center justify-center">
+            <span className="font-bold text-lg text-white">L！JUMP</span>
+            <span className="text-xs text-white opacity-90">LINE公式アカウント拡張ツール</span>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   if (!data) return null;
 
