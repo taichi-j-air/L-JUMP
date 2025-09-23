@@ -70,17 +70,65 @@ serve(async (req) => {
       );
     }
 
-    // テスト環境かライブ環境かを判定
-    const isTestMode = product.stripe_price_id?.startsWith('price_') && 
-                      !stripeCredentials.live_secret_key;
+    // Stripe環境の適切な判定とキー選択
+    console.log("Determining Stripe environment for price ID:", product.stripe_price_id);
     
-    const stripeSecretKey = isTestMode ? 
-      stripeCredentials.test_secret_key : 
-      stripeCredentials.live_secret_key;
-
-    if (!stripeSecretKey) {
+    let stripeSecretKey: string;
+    let isTestMode: boolean;
+    
+    // まずテストキーが利用可能かチェック
+    if (stripeCredentials.test_secret_key) {
+      try {
+        // テスト環境でprice IDを確認
+        const testStripe = new Stripe(stripeCredentials.test_secret_key, {
+          apiVersion: "2023-10-16",
+        });
+        
+        await testStripe.prices.retrieve(product.stripe_price_id);
+        // テスト環境でprice IDが見つかった場合
+        stripeSecretKey = stripeCredentials.test_secret_key;
+        isTestMode = true;
+        console.log("Price ID found in test environment, using test mode");
+      } catch (testError: any) {
+        console.log("Price ID not found in test environment:", testError.message);
+        
+        // テスト環境で見つからない場合、ライブ環境を試す
+        if (stripeCredentials.live_secret_key) {
+          try {
+            const liveStripe = new Stripe(stripeCredentials.live_secret_key, {
+              apiVersion: "2023-10-16",
+            });
+            
+            await liveStripe.prices.retrieve(product.stripe_price_id);
+            // ライブ環境でprice IDが見つかった場合
+            stripeSecretKey = stripeCredentials.live_secret_key;
+            isTestMode = false;
+            console.log("Price ID found in live environment, using live mode");
+          } catch (liveError: any) {
+            console.error("Price ID not found in either environment:", liveError.message);
+            return new Response(
+              JSON.stringify({ 
+                error: 'Stripe価格IDが見つかりません',
+                details: `Price ID ${product.stripe_price_id} が見つかりません`
+              }),
+              { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+            );
+          }
+        } else {
+          return new Response(
+            JSON.stringify({ error: 'Stripeライブ環境の設定が必要です' }),
+            { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          );
+        }
+      }
+    } else if (stripeCredentials.live_secret_key) {
+      // テストキーがない場合、ライブキーのみ使用
+      stripeSecretKey = stripeCredentials.live_secret_key;
+      isTestMode = false;
+      console.log("Only live key available, using live mode");
+    } else {
       return new Response(
-        JSON.stringify({ error: `Stripe ${isTestMode ? 'テスト' : 'ライブ'}環境の設定が不完全です` }),
+        JSON.stringify({ error: 'Stripe設定が不完全です' }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
@@ -89,7 +137,7 @@ serve(async (req) => {
       apiVersion: "2023-10-16",
     });
 
-    console.log(`Using Stripe ${isTestMode ? 'test' : 'live'} mode`);
+    console.log(`Using Stripe ${isTestMode ? 'test' : 'live'} mode with price ID: ${product.stripe_price_id}`);
 
     // チェックアウトセッションの設定
     const mode = product.product_type === 'subscription' ? 'subscription' : 'payment';
