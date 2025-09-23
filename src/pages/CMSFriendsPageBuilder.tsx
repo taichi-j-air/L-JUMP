@@ -329,7 +329,7 @@ export default function CMSFriendsPageBuilder() {
         .from('cms_pages')
         .update({
           ...payload,
-          content_blocks: JSON.stringify(payload.content_blocks)
+          content_blocks: payload.content_blocks as any
         })
         .eq('id', selected.id)
         .select('*')

@@ -158,12 +158,22 @@ serve(async (req) => {
       }
     }
 
-    // ページデータを返す
+    // ページデータを返す - content_blocksのJSONパース処理
+    let contentBlocks = page.content_blocks;
+    if (typeof contentBlocks === 'string') {
+      try {
+        contentBlocks = JSON.parse(contentBlocks);
+      } catch (e) {
+        console.log(`⚠️ Failed to parse content_blocks as JSON: ${e}`);
+        contentBlocks = [];
+      }
+    }
+    
     const pageData = {
       id: page.id,
       title: page.title,
       content: page.content,
-      content_blocks: page.content_blocks,
+      content_blocks: contentBlocks,
       visibility: page.visibility,
       timer_enabled: page.timer_enabled,
       timer_deadline: page.timer_deadline,
