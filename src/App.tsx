@@ -56,7 +56,7 @@ import ProductLandingPage from "./pages/ProductLandingPage";
 import PlanSettings from "./pages/PlanSettings";
 import RichMenuSettings from "./pages/RichMenuSettings";
 import GreetingMessageSettings from "./pages/GreetingMessageSettings";
-import MemberSitesList from "./pages/MemberSitesList";
+
 import MemberSiteBuilder from "./pages/MemberSiteBuilder";
 import MemberSiteManagement from "./pages/MemberSiteManagement";
 import CheckoutSuccess from "./pages/CheckoutSuccess";

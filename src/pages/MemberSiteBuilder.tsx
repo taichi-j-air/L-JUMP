@@ -383,7 +383,7 @@ const MemberSiteBuilder = () => {
         </div>
       </header>
 
-      <main className="container mx-auto px-4 py-8 max-w-6xl">
+      <main className="px-4 py-8">
         {loading ? (
           <Card>
             <CardContent className="p-6">
@@ -397,12 +397,17 @@ const MemberSiteBuilder = () => {
             {/* Left Column: Site List */}
             <div className="col-span-12 md:col-span-3 space-y-3">
               <Card>
-                <CardHeader className="flex flex-row items-center justify-between py-3">
-                  <CardTitle className="text-base">会員サイト一覧</CardTitle>
-                  <Button size="sm" onClick={() => setSearchParams({})} className="flex items-center gap-2">
-                    <Plus className="w-4 h-4" />
-                    新規作成
-                  </Button>
+                <CardHeader className="flex flex-col gap-2 py-3">
+                  <div className="flex flex-row items-center justify-between">
+                    <CardTitle className="text-base">会員サイト一覧</CardTitle>
+                    <Button size="sm" onClick={() => setSearchParams({})} className="flex items-center gap-2">
+                      <Plus className="w-4 h-4" />
+                      追加
+                    </Button>
+                  </div>
+                  <div className="text-sm text-muted-foreground">
+                    作成中のサイト: {sites.length}件
+                  </div>
                 </CardHeader>
                 <CardContent className="p-2">
                   {sites.length === 0 ? (
@@ -468,15 +473,14 @@ const MemberSiteBuilder = () => {
 
             {/* Right Column: Builder with Tabs */}
             <div className="col-span-12 md:col-span-9 space-y-6">
-              {siteId ? (
-                <Tabs defaultValue="content-list">
-                  <TabsList className="grid w-full grid-cols-5">
-                    <TabsTrigger value="content-list">コンテンツ一覧</TabsTrigger>
-                    <TabsTrigger value="category-settings">カテゴリ設定</TabsTrigger>
-                    <TabsTrigger value="plan-settings">プラン設定</TabsTrigger>
-                    <TabsTrigger value="content-display">コンテンツ表示方法</TabsTrigger>
-                    <TabsTrigger value="site-settings">サイト設定</TabsTrigger>
-                  </TabsList>
+              <Tabs defaultValue={siteId ? "content-list" : "site-settings"}>
+                <TabsList className="grid w-full grid-cols-5">
+                  <TabsTrigger value="content-list">コンテンツ一覧</TabsTrigger>
+                  <TabsTrigger value="category-settings">カテゴリ設定</TabsTrigger>
+                  <TabsTrigger value="plan-settings">プラン設定</TabsTrigger>
+                  <TabsTrigger value="content-display">コンテンツ表示方法</TabsTrigger>
+                  <TabsTrigger value="site-settings">サイト設定</TabsTrigger>
+                </TabsList>
 
                   <TabsContent value="content-list">
                     {/* Existing Content Editor */}
@@ -712,22 +716,7 @@ const MemberSiteBuilder = () => {
                       </CardContent>
                     </Card>
                   </TabsContent>
-                </Tabs>
-              ) : (
-                <Card>
-                  <CardContent className="p-12">
-                    <div className="text-center">
-                      <p className="text-muted-foreground mb-4">
-                        左側のリストからサイトを選択して編集するか、新しいサイトを作成してください
-                      </p>
-                      <Button onClick={() => setSearchParams({ site: 'new' })}> {/* Placeholder for new site creation */}
-                        <Plus className="w-4 h-4 mr-2" />
-                        最初のサイトを作成
-                      </Button>
-                    </div>
-                  </CardContent>
-                </Card>
-              )}
+              </Tabs>
             </div>
           </div>
         )}
