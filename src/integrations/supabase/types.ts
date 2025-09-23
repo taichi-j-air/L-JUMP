@@ -916,7 +916,10 @@ export type Database = {
           is_published: boolean
           name: string
           price: number | null
+          public_url: string | null
+          published_at: string | null
           seo_config: Json | null
+          site_uid: string | null
           slug: string
           theme_config: Json | null
           trial_days: number | null
@@ -934,7 +937,10 @@ export type Database = {
           is_published?: boolean
           name: string
           price?: number | null
+          public_url?: string | null
+          published_at?: string | null
           seo_config?: Json | null
+          site_uid?: string | null
           slug: string
           theme_config?: Json | null
           trial_days?: number | null
@@ -952,7 +958,10 @@ export type Database = {
           is_published?: boolean
           name?: string
           price?: number | null
+          public_url?: string | null
+          published_at?: string | null
           seo_config?: Json | null
+          site_uid?: string | null
           slug?: string
           theme_config?: Json | null
           trial_days?: number | null
@@ -2425,6 +2434,10 @@ export type Database = {
         Returns: undefined
       }
       generate_invite_code: {
+        Args: Record<PropertyKey, never>
+        Returns: string
+      }
+      generate_member_site_uid: {
         Args: Record<PropertyKey, never>
         Returns: string
       }

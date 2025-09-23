@@ -19,6 +19,9 @@ interface MemberSite {
   price: number;
   created_at: string;
   updated_at: string;
+  site_uid: string;
+  public_url?: string;
+  published_at?: string;
 }
 
 const MemberSitesList = () => {
@@ -51,6 +54,13 @@ const MemberSitesList = () => {
     } finally {
       setLoading(false);
     }
+  };
+
+  const getPreviewUrl = (site: MemberSite) => {
+    if (site.is_published && site.public_url) {
+      return site.public_url;
+    }
+    return `https://rtjxurmuaawyzjcdkqxt.supabase.co/functions/v1/member-site-view/${site.slug}?uid=${site.site_uid}`;
   };
 
   return (
@@ -183,15 +193,14 @@ const MemberSitesList = () => {
                             >
                               <Settings className="w-4 h-4" />
                             </Button>
-                            {site.is_published && (
-                              <Button 
-                                variant="ghost" 
-                                size="sm"
-                                onClick={() => window.open(`/member-site/${site.slug}`, '_blank')}
-                              >
-                                <Eye className="w-4 h-4" />
-                              </Button>
-                            )}
+                            <Button 
+                              variant="ghost" 
+                              size="sm"
+                              onClick={() => window.open(getPreviewUrl(site), '_blank')}
+                              title={site.is_published ? "公開サイトを表示" : "プレビュー"}
+                            >
+                              <Eye className="w-4 h-4" />
+                            </Button>
                           </div>
                         </TableCell>
                       </TableRow>
