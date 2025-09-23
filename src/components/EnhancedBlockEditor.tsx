@@ -17,7 +17,7 @@ import {
   Video, 
   List, 
   Quote, 
-  Code2,
+  Folder,
   GripVertical,
   Trash2,
   Copy,
@@ -1414,11 +1414,24 @@ export const EnhancedBlockEditor: React.FC<EnhancedBlockEditorProps> = ({ blocks
             <Button variant="ghost" className="flex flex-col h-auto py-2" onClick={() => addBlock('video')}><Video className="h-5 w-5 mb-1" /><span className="text-xs">動画</span></Button>
             <Button variant="ghost" className="flex flex-col h-auto py-2" onClick={() => addBlock('button')}><Link className="h-5 w-5 mb-1" /><span className="text-xs">ボタン</span></Button>
             <Button variant="ghost" className="flex flex-col h-auto py-2" onClick={() => addBlock('form_embed')}><FileText className="h-5 w-5 mb-1" /><span className="text-xs">フォーム</span></Button>
-            <Button variant="ghost" className="flex flex-col h-auto py-2" onClick={() => addBlock('background')} disabled={hasBackgroundBlock}>
-              <Palette className="h-5 w-5 mb-1" />
-              <span className="text-xs">背景色</span>
-            </Button>
-            <Button variant="ghost" className="flex flex-col h-auto py-2" onClick={() => addBlock('code')}><Code2 className="h-5 w-5 mb-1" /><span className="text-xs">コード</span></Button>
+<Button variant="ghost" className="flex flex-col h-auto py-2 hover:bg-[#0cb386] group" onClick={() => addBlock('background')} disabled={hasBackgroundBlock}>
+  <Palette className="h-5 w-5 mb-1 text-[#0cb386] group-hover:text-white" />
+  <span className="text-xs text-[#0cb386] group-hover:text-white">背景色</span>
+</Button>            <Dialog>
+  <DialogTrigger asChild>
+    <Button variant="ghost" className="flex flex-col h-auto py-2 hover:bg-[#0cb386] group">
+      <Folder className="h-5 w-5 mb-1 text-[#0cb386] group-hover:text-white" />
+      <span className="text-xs text-[#0cb386] group-hover:text-white">テンプレート</span>
+    </Button>
+  </DialogTrigger>
+  <DialogContent>
+    <DialogHeader>
+      <DialogTitle>テンプレートを選択</DialogTitle>
+    </DialogHeader>
+    {/* ここにポップアップウィンドウの内容が入ります */}
+    <p>ポップアップウィンドウの内容は後で指定されます。</p>
+  </DialogContent>
+</Dialog>
           </div>
         </div>
       </div>

@@ -814,7 +814,7 @@ export default function CMSFriendsPageBuilder() {
                                     setDurationSeconds(newSeconds);
                                     
                                   }}
-                                  className="h-8 w-full text-sm"
+                                  className="h-8 w-full text-sm text-center"
                                   inputMode="numeric"
                                   pattern="[0-9]*"
                                 />
@@ -824,16 +824,15 @@ export default function CMSFriendsPageBuilder() {
                                 <Input 
                                   type="number" 
                                   min={0} 
-                                  value={durHours} 
-                                  onChange={(e) => {
-                                    const v = Math.max(0, Number(e.target.value || 0));
-                                    setDurHours(v);
-                                    const newSeconds = toSeconds(durDays, v, durMinutes, durSecs);
-                                    setDurationSeconds(newSeconds);
-                                    
-                                  }}
-                                  className="h-8 w-full text-sm"
-                                  inputMode="numeric"
+                                                                    value={durHours}
+                                                                    onChange={(e) => {
+                                                                      const v = Math.max(0, Number(e.target.value || 0));
+                                                                      setDurHours(v);
+                                                                      const newSeconds = toSeconds(durDays, v, durMinutes, durSecs);
+                                                                      setDurationSeconds(newSeconds);
+                                  
+                                                                    }}
+                                                                    className="h-8 w-full text-sm text-center"                                  inputMode="numeric"
                                   pattern="[0-9]*"
                                 />
                               </div>
@@ -842,16 +841,15 @@ export default function CMSFriendsPageBuilder() {
                                 <Input 
                                   type="number" 
                                   min={0} 
-                                  value={durMinutes} 
-                                  onChange={(e) => {
-                                    const v = Math.max(0, Number(e.target.value || 0));
-                                    setDurMinutes(v);
-                                    const newSeconds = toSeconds(durDays, durHours, v, durSecs);
-                                    setDurationSeconds(newSeconds);
-                                    
-                                  }}
-                                  className="h-8 w-full text-sm"
-                                  inputMode="numeric"
+                                                                    value={durMinutes}
+                                                                    onChange={(e) => {
+                                                                      const v = Math.max(0, Number(e.target.value || 0));
+                                                                      setDurMinutes(v);
+                                                                      const newSeconds = toSeconds(durDays, durHours, v, durSecs);
+                                                                      setDurationSeconds(newSeconds);
+                                  
+                                                                    }}
+                                                                    className="h-8 w-full text-sm text-center"                                  inputMode="numeric"
                                   pattern="[0-9]*"
                                 />
                               </div>
@@ -868,7 +866,7 @@ export default function CMSFriendsPageBuilder() {
                                     setDurationSeconds(newSeconds);
                                     
                                   }}
-                                  className="h-8 w-full text-sm"
+                                  className="h-8 w-full text-sm text-center"
                                   inputMode="numeric"
                                   pattern="[0-9]*"
                                 />
