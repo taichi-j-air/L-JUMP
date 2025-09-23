@@ -353,17 +353,35 @@ export default function CMSFriendsPageBuilder() {
 
       // Update existing friend_page_access records if timer duration changed
       if (timerEnabled && timerMode === "per_access" && currentDurationSeconds !== null && currentDurationSeconds !== oldTimerDurationSeconds) {
+        console.log(`🔧 Timer duration changed from ${oldTimerDurationSeconds}s to ${currentDurationSeconds}s for page ${selected.share_code}`);
         try {
-          await supabase.functions.invoke('update-page-timer-settings', {
+          console.log(`🔧 Calling update-page-timer-settings function...`);
+          const { data: updateResult, error: updateError } = await supabase.functions.invoke('update-page-timer-settings', {
             body: {
               pageShareCode: selected.share_code,
               timerDurationSeconds: currentDurationSeconds
             }
           });
+
+          if (updateError) {
+            console.error('❌ Edge function invocation error:', updateError);
+            toast.error(`タイマー設定の更新に失敗しました: ${updateError.message}`);
+          } else {
+            console.log('✅ Timer settings update result:', updateResult);
+            if (updateResult?.success) {
+              console.log(`✅ Successfully updated ${updateResult.updatedCount} existing access records`);
+            } else {
+              console.error('❌ Timer update failed:', updateResult?.error);
+              toast.error(`タイマー設定の更新に失敗しました: ${updateResult?.error}`);
+            }
+          }
         } catch (updateError) {
-          console.error('Error updating timer settings for existing records:', updateError);
+          console.error('❌ Error updating timer settings for existing records:', updateError);
+          toast.error(`タイマー設定の更新中にエラーが発生しました: ${updateError.message}`);
           // Don't fail the save operation if this update fails
         }
+      } else if (timerEnabled && timerMode === "per_access") {
+        console.log(`🔧 Timer duration unchanged (${currentDurationSeconds}s), skipping update`);
       }
 
       setPages(prev => prev.map(p => (p.id === selected.id ? { ...(p as any), ...(data as any) } : p)) as any);
