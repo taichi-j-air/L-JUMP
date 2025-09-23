@@ -203,7 +203,7 @@ function AppContent() {
   const isLiffPage = window.location.pathname.startsWith('/liff')
 
   // Show pages without sidebar/header: auth, public forms, liff, checkout, product landing, cms public
-  if (isAuthPage || isPublicFormPage || isLiffPage || isProductLandingPage || isCheckoutPage || isCMSPublicPath || isCMSPreviewPath || isExternalWebPagePath || (!user && !isInvitePage && !isLoginPage && !hasLineLoginSuccess)) {
+  if (isAuthPage || isPublicFormPage || isLiffPage || isProductLandingPage || isCheckoutPage || isCMSPublicPath || isCMSPreviewPath || (!user && !isInvitePage && !isLoginPage && !hasLineLoginSuccess)) {
     return (
       <ErrorBoundary>
         <div className="min-h-screen">
