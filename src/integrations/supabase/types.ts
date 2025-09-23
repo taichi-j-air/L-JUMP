@@ -721,9 +721,43 @@ export type Database = {
         }
         Relationships: []
       }
+      member_site_categories: {
+        Row: {
+          content_count: number | null
+          created_at: string
+          description: string | null
+          id: string
+          name: string
+          site_id: string
+          sort_order: number | null
+          updated_at: string
+        }
+        Insert: {
+          content_count?: number | null
+          created_at?: string
+          description?: string | null
+          id?: string
+          name: string
+          site_id: string
+          sort_order?: number | null
+          updated_at?: string
+        }
+        Update: {
+          content_count?: number | null
+          created_at?: string
+          description?: string | null
+          id?: string
+          name?: string
+          site_id?: string
+          sort_order?: number | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
       member_site_content: {
         Row: {
           access_level: string
+          category_id: string | null
           content: string | null
           content_blocks: Json | null
           created_at: string
@@ -738,6 +772,7 @@ export type Database = {
         }
         Insert: {
           access_level?: string
+          category_id?: string | null
           content?: string | null
           content_blocks?: Json | null
           created_at?: string
@@ -752,6 +787,7 @@ export type Database = {
         }
         Update: {
           access_level?: string
+          category_id?: string | null
           content?: string | null
           content_blocks?: Json | null
           created_at?: string
@@ -764,7 +800,15 @@ export type Database = {
           title?: string
           updated_at?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "member_site_content_category_id_fkey"
+            columns: ["category_id"]
+            isOneToOne: false
+            referencedRelation: "member_site_categories"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       member_site_payments: {
         Row: {
