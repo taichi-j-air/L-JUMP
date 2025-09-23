@@ -30,7 +30,7 @@ export default function ExternalWebPageBuilder() {
   const [requirePass, setRequirePass] = useState(false);
   const [passcode, setPasscode] = useState("");
   const [timerEnabled, setTimerEnabled] = useState(false);
-  const [timerMode, setTimerMode] = useState<"absolute" | "per_access" | "step_delivery">("absolute");
+  const [timerMode, setTimerMode] = useState<"absolute">("absolute");
   const [timerDeadline, setTimerDeadline] = useState("");
   const [durationSeconds, setDurationSeconds] = useState<number>(0);
   const [showMilliseconds, setShowMilliseconds] = useState<boolean>(false);
@@ -59,6 +59,9 @@ export default function ExternalWebPageBuilder() {
   // Toggle controls for timer display
   const [showRemainingText, setShowRemainingText] = useState<boolean>(true);
   const [showEndDate, setShowEndDate] = useState<boolean>(true);
+  
+  // Force external browser setting
+  const [forceExternalBrowser, setForceExternalBrowser] = useState<boolean>(false);
 
   const normalizeExpireAction = (value?: string | null): "hide_page" | "keep_public" => {
     if (value === "hide" || value === "hide_page") return "hide_page";
@@ -149,6 +152,7 @@ export default function ExternalWebPageBuilder() {
     setDurSecs(0);
     setShowRemainingText(true);
     setShowEndDate(true);
+    setForceExternalBrowser(false);
   };
 
   // Load selected page data
@@ -203,6 +207,7 @@ export default function ExternalWebPageBuilder() {
     
     setShowRemainingText((selected as any).show_remaining_text ?? true);
     setShowEndDate((selected as any).show_end_date ?? true);
+    setForceExternalBrowser(!!(selected as any).force_external_browser);
   }, [selected]);
 
   const handleAddPage = async () => {
@@ -257,11 +262,10 @@ export default function ExternalWebPageBuilder() {
     if (!selected) return;
     setSaving(true);
     try {
-      // タイマー設定の検証
-      if (timerEnabled && timerMode === "per_access") {
-        const totalSeconds = toSeconds(durDays, durHours, durMinutes, durSecs);
-        if (totalSeconds <= 0) {
-          toast.error("タイマーが有効な場合、1秒以上の期間を設定してください");
+      // タイマー設定の検証（現在は absolute のみサポート）
+      if (timerEnabled && timerMode === "absolute") {
+        if (!timerDeadline) {
+          toast.error("タイマーが有効な場合、期限日時を設定してください");
           setSaving(false);
           return;
         }
@@ -295,7 +299,7 @@ export default function ExternalWebPageBuilder() {
         timer_enabled: timerEnabled,
         timer_mode: timerMode,
         timer_deadline: validatedTimerDeadline,
-        timer_duration_seconds: (timerMode === "per_access" || timerMode === "step_delivery") ? currentDurationSeconds : null,
+        timer_duration_seconds: null, // Only absolute mode supported
         show_milliseconds: showMilliseconds,
         timer_style: timerStyle,
         timer_bg_color: timerBgColor,
@@ -307,10 +311,11 @@ export default function ExternalWebPageBuilder() {
         timer_hour_label: hourLabel,
         timer_minute_label: minuteLabel,
         timer_second_label: secondLabel,
-        timer_scenario_id: timerMode === "step_delivery" ? selectedScenario || null : null,
-        timer_step_id: timerMode === "step_delivery" ? selectedStep || null : null,
+        timer_scenario_id: null, // Only absolute mode supported
+        timer_step_id: null, // Only absolute mode supported
         show_remaining_text: showRemainingText,
         show_end_date: showEndDate,
+        force_external_browser: forceExternalBrowser,
       };
 
       const { data, error } = await supabase
@@ -328,38 +333,8 @@ export default function ExternalWebPageBuilder() {
         throw error;
       }
 
-      // Update existing friend_page_access records if timer duration changed
-      if (timerEnabled && timerMode === "per_access" && currentDurationSeconds !== null && currentDurationSeconds !== oldTimerDurationSeconds) {
-        console.log(`🔧 Timer duration changed from ${oldTimerDurationSeconds}s to ${currentDurationSeconds}s for page ${selected.share_code}`);
-        try {
-          console.log(`🔧 Calling update-page-timer-settings function...`);
-          const { data: updateResult, error: updateError } = await supabase.functions.invoke('update-page-timer-settings', {
-            body: {
-              pageShareCode: selected.share_code,
-              timerDurationSeconds: currentDurationSeconds
-            }
-          });
-
-          if (updateError) {
-            console.error('❌ Edge function invocation error:', updateError);
-            toast.error(`タイマー設定の更新に失敗しました: ${updateError.message}`);
-          } else {
-            console.log('✅ Timer settings update result:', updateResult);
-            if (updateResult?.success) {
-              console.log(`✅ Successfully updated ${updateResult.updatedCount} existing access records`);
-            } else {
-              console.error('❌ Timer update failed:', updateResult?.error);
-              toast.error(`タイマー設定の更新に失敗しました: ${updateResult?.error}`);
-            }
-          }
-        } catch (updateError) {
-          console.error('❌ Error updating timer settings for existing records:', updateError);
-          toast.error(`タイマー設定の更新中にエラーが発生しました: ${updateError.message}`);
-          // Don't fail the save operation if this update fails
-        }
-      } else if (timerEnabled && timerMode === "per_access") {
-        console.log(`🔧 Timer duration unchanged (${currentDurationSeconds}s), skipping update`);
-      }
+      // Note: External web pages use absolute timer only
+      // External web pages don't use per-access timers
 
       setPages(prev => prev.map(p => (p.id === selected.id ? { ...(p as any), ...(data as any) } : p)) as any);
       toast.success("保存しました");
@@ -375,13 +350,12 @@ export default function ExternalWebPageBuilder() {
 
   const shareUrl = useMemo(() => {
     if (!selected) return "";
-    const queryParams = [];
     const baseUrl = `${window.location.origin}/ewp/${selected.share_code}`;
-    if (queryParams.length > 0) {
-      return `${baseUrl}?${queryParams.join('&')}`;
+    if (forceExternalBrowser) {
+      return `${baseUrl}?openExternalBrowser=1`;
     }
     return baseUrl;
-  }, [selected]);
+  }, [selected, forceExternalBrowser]);
 
   useEffect(() => {
     const checkOverflow = () => {
@@ -520,7 +494,7 @@ export default function ExternalWebPageBuilder() {
                       <TimerPreview
                         mode={timerMode}
                         deadline={timerMode === "absolute" && timerDeadline ? new Date(timerDeadline).toISOString() : undefined}
-                        durationSeconds={(timerMode === "per_access" || timerMode === "step_delivery") ? durationSeconds : undefined}
+                        durationSeconds={undefined}
                         showMilliseconds={showMilliseconds}
                         styleVariant={timerStyle}
                         bgColor={timerBgColor}
@@ -625,12 +599,20 @@ export default function ExternalWebPageBuilder() {
                   </div>
 
                   <Accordion type="multiple" className="w-full">
-                    <AccordionItem value="url-settings">
-                      <AccordionTrigger className="text-sm">URL設定</AccordionTrigger>
-                      <AccordionContent className="space-y-3">
-
-                      </AccordionContent>
-                    </AccordionItem>
+                     <AccordionItem value="url-settings">
+                       <AccordionTrigger className="text-sm">URL設定</AccordionTrigger>
+                       <AccordionContent className="space-y-3">
+                         <div className="space-y-2">
+                           <Label className="flex items-center justify-between">
+                             外部ブラウザで強制的に開く
+                             <Switch checked={forceExternalBrowser} onCheckedChange={setForceExternalBrowser} />
+                           </Label>
+                           <p className="text-xs text-muted-foreground">
+                             有効にすると、URLに openExternalBrowser=1 パラメーターが付与されます
+                           </p>
+                         </div>
+                       </AccordionContent>
+                     </AccordionItem>
 
 
                   </Accordion>
@@ -660,143 +642,14 @@ export default function ExternalWebPageBuilder() {
                     <Switch checked={timerEnabled} onCheckedChange={(v) => setTimerEnabled(!!v)} />
                   </div>
                   {timerEnabled && (
-                    <>
-                      <div className="space-y-2">
-                        <Label>表示期限タイプ</Label>
-                        <Select value={timerMode} onValueChange={(v) => setTimerMode(v as any)}>
-                          <SelectTrigger>
-                            <SelectValue placeholder="タイプ" />
-                          </SelectTrigger>
-                          <SelectContent className="bg-background">
-                            <SelectItem value="absolute">日時時間指定</SelectItem>
-                            <SelectItem value="per_access">アクセス後カウント</SelectItem>
-                            <SelectItem value="step_delivery">ステップ配信時からカウント</SelectItem>
-                          </SelectContent>
-                        </Select>
-                      </div>
-
-                      {timerMode === 'absolute' ? (
-                        <div className="space-y-2">
-                          <Label>表示期限（締切）</Label>
-                          <Input type="datetime-local" value={timerDeadline} onChange={(e) => setTimerDeadline(e.target.value)} />
-                        </div>
-                      ) : (timerMode === 'per_access' || timerMode === 'step_delivery') ? (
-                        <div className="space-y-4">
-                          {timerMode === 'step_delivery' && (
-                            <>
-                              <div className="space-y-2">
-                                <Label>対象シナリオ</Label>
-                                <Select value={selectedScenario} onValueChange={setSelectedScenario}>
-                                  <SelectTrigger>
-                                    <SelectValue placeholder="シナリオを選択" />
-                                  </SelectTrigger>
-                                  <SelectContent>
-                                    {scenarios.map((scenario) => (
-                                      <SelectItem key={scenario.id} value={scenario.id}>
-                                        {scenario.name}
-                                      </SelectItem>
-                                    ))}
-                                  </SelectContent>
-                                </Select>
-                              </div>
-                              
-                              {selectedScenario && (
-                                <div className="space-y-2">
-                                  <Label>対象ステップ</Label>
-                                  <Select value={selectedStep} onValueChange={setSelectedStep}>
-                                    <SelectTrigger>
-                                      <SelectValue placeholder="ステップを選択" />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                      {scenarioSteps.map((step) => (
-                                        <SelectItem key={step.id} value={step.id}>
-                                          {step.name}
-                                        </SelectItem>
-                                      ))}
-                                    </SelectContent>
-                                  </Select>
-                                </div>
-                              )}
-                            </>
-                          )}
-                          
-                          <div className="space-y-2">
-                            <Label>カウント時間</Label>
-                            <div className="grid grid-cols-4 gap-2">
-                              <div className="space-y-1">
-                                <Label className="text-xs">日</Label>
-                                <Input 
-                                  type="number" 
-                                  min={0} 
-                                  value={durDays} 
-                                  onChange={(e) => {
-                                    const v = Math.max(0, Number(e.target.value || 0));
-                                    setDurDays(v);
-                                    const newSeconds = toSeconds(v, durHours, durMinutes, durSecs);
-                                    setDurationSeconds(newSeconds);
-                                    
-                                  }}
-                                  className="h-8 w-full text-sm text-center"
-                                  inputMode="numeric"
-                                  pattern="[0-9]*"
-                                />
-                              </div>
-                              <div className="space-y-1">
-                                <Label className="text-xs">時</Label>
-                                <Input 
-                                  type="number" 
-                                  min={0} 
-                                                                    value={durHours}
-                                                                    onChange={(e) => {
-                                                                      const v = Math.max(0, Number(e.target.value || 0));
-                                                                      setDurHours(v);
-                                                                      const newSeconds = toSeconds(durDays, v, durMinutes, durSecs);
-                                                                      setDurationSeconds(newSeconds);
-                                  
-                                                                    }}
-                                                                    className="h-8 w-full text-sm text-center"                                  inputMode="numeric"
-                                  pattern="[0-9]*"
-                                />
-                              </div>
-                              <div className="space-y-1">
-                                <Label className="text-xs">分</Label>
-                                <Input 
-                                  type="number" 
-                                  min={0} 
-                                                                    value={durMinutes}
-                                                                    onChange={(e) => {
-                                                                      const v = Math.max(0, Number(e.target.value || 0));
-                                                                      setDurMinutes(v);
-                                                                      const newSeconds = toSeconds(durDays, durHours, v, durSecs);
-                                                                      setDurationSeconds(newSeconds);
-                                  
-                                                                    }}
-                                                                    className="h-8 w-full text-sm text-center"                                  inputMode="numeric"
-                                  pattern="[0-9]*"
-                                />
-                              </div>
-                              <div className="space-y-1">
-                                <Label className="text-xs">秒</Label>
-                                <Input 
-                                  type="number" 
-                                  min={0} 
-                                  value={durSecs} 
-                                  onChange={(e) => {
-                                    const v = Math.max(0, Number(e.target.value || 0));
-                                    setDurSecs(v);
-                                    const newSeconds = toSeconds(durDays, durHours, durMinutes, v);
-                                    setDurationSeconds(newSeconds);
-                                    
-                                  }}
-                                  className="h-8 w-full text-sm text-center"
-                                  inputMode="numeric"
-                                  pattern="[0-9]*"
-                                />
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-                      ) : null}
+                     <>
+                       <div className="space-y-2">
+                         <Label>表示期限（締切）</Label>
+                         <Input type="datetime-local" value={timerDeadline} onChange={(e) => setTimerDeadline(e.target.value)} />
+                         <p className="text-xs text-muted-foreground">
+                           外部WEBページでは日時時間指定のみ対応しています
+                         </p>
+                       </div>
 
                       <Accordion type="multiple" className="w-full">
                         <AccordionItem value="timer-settings">
