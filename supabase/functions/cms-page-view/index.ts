@@ -122,16 +122,13 @@ serve(async (req) => {
     }
 
     // タイマー期限切れチェック
-    if (!isPreview && page.timer_enabled && (page.expire_action === "hide" || page.expire_action === "hide_page")) {
+    if (!isPreview && page.timer_enabled && page.expire_action === "hide_page") {
       let isTimerExpired = false;
-      
-      console.log(`🕐 Checking timer expiration: mode=${page.timer_mode}, action=${page.expire_action}`);
       
       if (page.timer_mode === "absolute" && page.timer_deadline) {
         const deadline = new Date(page.timer_deadline);
         isTimerExpired = new Date() > deadline;
-        console.log(`⏰ Absolute mode: deadline=${deadline.toISOString()}, expired=${isTimerExpired}`);
-      } else if ((page.timer_mode === "per_access" || page.timer_mode === "step_delivery") && friend) {
+      } else if (page.timer_mode === "per_access" && friend) {
         // friend_page_accessから期限切れ状態を確認
         const { data: accessData } = await supabase
           .from("friend_page_access")
@@ -140,21 +137,16 @@ serve(async (req) => {
           .eq("page_share_code", page.share_code)
           .maybeSingle();
         
-        console.log(`📊 Access data found:`, accessData);
-        
         if (accessData && accessData.timer_end_at) {
           isTimerExpired = new Date() > new Date(accessData.timer_end_at);
-          console.log(`⏱️ Using timer_end_at: ${accessData.timer_end_at}, expired=${isTimerExpired}`);
         } else if (accessData && accessData.timer_start_at && page.timer_duration_seconds) {
           const startTime = new Date(accessData.timer_start_at);
           const endTime = new Date(startTime.getTime() + page.timer_duration_seconds * 1000);
           isTimerExpired = new Date() > endTime;
-          console.log(`⏲️ Calculated expiry: start=${startTime.toISOString()}, end=${endTime.toISOString()}, expired=${isTimerExpired}`);
         }
       }
       
       if (isTimerExpired) {
-        console.log(`🚫 Timer expired - hiding page`);
         return errorResponse("timer_expired", "ページの閲覧期限が過ぎました", 410);
       }
     }
