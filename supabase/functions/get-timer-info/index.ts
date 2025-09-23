@@ -1,4 +1,5 @@
 import { corsHeaders } from '../_shared/cors.ts';
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.3';
 
 interface TimerInfoRequest {
   pageShareCode: string;
@@ -69,6 +70,21 @@ Deno.serve(async (req) => {
           });
         }
 
+        // ページのタイマー設定を取得
+        const { data: pageData } = await supabase
+          .from('cms_pages')
+          .select('timer_duration_seconds, timer_mode')
+          .eq('share_code', pageShareCode)
+          .single();
+
+        const now = new Date();
+        let timer_end_at = null;
+        
+        // timer_end_atを計算
+        if (pageData && pageData.timer_duration_seconds > 0 && pageData.timer_mode === 'per_access') {
+          timer_end_at = new Date(now.getTime() + pageData.timer_duration_seconds * 1000).toISOString();
+        }
+
         // 新しいアクセス記録を作成
         const { data: newAccess, error: insertError } = await supabase
           .from('friend_page_access')
@@ -77,8 +93,9 @@ Deno.serve(async (req) => {
             friend_id: friend.id,
             page_share_code: pageShareCode,
             access_enabled: true,
-            timer_start_at: new Date().toISOString(),
-            first_access_at: new Date().toISOString(),
+            timer_start_at: now.toISOString(),
+            timer_end_at,
+            first_access_at: now.toISOString(),
             access_source: 'direct'
           })
           .select()
@@ -135,11 +152,11 @@ Deno.serve(async (req) => {
           // timer_end_atが設定されていない場合、ページの設定から計算
           const { data: pageData } = await supabase
             .from('cms_pages')
-            .select('timer_duration_seconds')
+            .select('timer_duration_seconds, timer_mode')
             .eq('share_code', pageShareCode)
             .single();
           
-          if (pageData && pageData.timer_duration_seconds) {
+          if (pageData && pageData.timer_duration_seconds > 0 && pageData.timer_mode === 'per_access') {
             const startTime = new Date(friendAccess.timer_start_at);
             const endTime = new Date(startTime.getTime() + pageData.timer_duration_seconds * 1000);
             expired = now >= endTime;
@@ -149,6 +166,8 @@ Deno.serve(async (req) => {
               .from('friend_page_access')
               .update({ timer_end_at: endTime.toISOString() })
               .eq('id', friendAccess.id);
+              
+            friendAccess.timer_end_at = endTime.toISOString();
           }
         }
 
@@ -185,70 +204,3 @@ Deno.serve(async (req) => {
     });
   }
 });
-
-// Shared CORS headers
-function createClient(supabaseUrl: string, supabaseKey: string) {
-  return {
-    from: (table: string) => ({
-      select: (columns = '*') => ({
-        eq: (column: string, value: any) => ({
-          single: async () => {
-            const response = await fetch(`${supabaseUrl}/rest/v1/${table}?select=${columns}&${column}=eq.${encodeURIComponent(value)}`, {
-              headers: {
-                'Authorization': `Bearer ${supabaseKey}`,
-                'apikey': supabaseKey,
-                'Content-Type': 'application/json'
-              }
-            });
-            const data = await response.json();
-            if (!response.ok) {
-              return { data: null, error: data };
-            }
-            return { data: data[0] || null, error: null };
-          }
-        })
-      }),
-      insert: (values: any) => ({
-        select: (columns = '*') => ({
-          single: async () => {
-            const response = await fetch(`${supabaseUrl}/rest/v1/${table}`, {
-              method: 'POST',
-              headers: {
-                'Authorization': `Bearer ${supabaseKey}`,
-                'apikey': supabaseKey,
-                'Content-Type': 'application/json',
-                'Prefer': 'return=representation'
-              },
-              body: JSON.stringify(values)
-            });
-            const data = await response.json();
-            if (!response.ok) {
-              return { data: null, error: data };
-            }
-            return { data: data[0] || null, error: null };
-          }
-        })
-      }),
-      update: (values: any) => ({
-        eq: (column: string, value: any) => ({
-          async: async () => {
-            const response = await fetch(`${supabaseUrl}/rest/v1/${table}?${column}=eq.${encodeURIComponent(value)}`, {
-              method: 'PATCH',
-              headers: {
-                'Authorization': `Bearer ${supabaseKey}`,
-                'apikey': supabaseKey,
-                'Content-Type': 'application/json'
-              },
-              body: JSON.stringify(values)
-            });
-            if (!response.ok) {
-              const error = await response.json();
-              return { error };
-            }
-            return { error: null };
-          }
-        })
-      })
-    })
-  };
-}

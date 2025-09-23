@@ -277,6 +277,16 @@ export default function CMSFriendsPageBuilder() {
     if (!selected) return;
     setSaving(true);
     try {
+      // タイマー設定の検証
+      if (timerEnabled && timerMode === "per_access") {
+        const totalSeconds = toSeconds(durDays, durHours, durMins, durSecs);
+        if (totalSeconds <= 0) {
+          toast.error("タイマーが有効な場合、1秒以上の期間を設定してください");
+          setSaving(false);
+          return;
+        }
+      }
+      
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) {
         toast.error("認証が必要です");

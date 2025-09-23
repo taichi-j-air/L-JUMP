@@ -144,11 +144,24 @@ serve(async (req) => {
         if (accessData && accessData.timer_end_at) {
           isTimerExpired = new Date() > new Date(accessData.timer_end_at);
           console.log(`⏰ Timer end check: timer_end_at=${accessData.timer_end_at}, expired=${isTimerExpired}`);
-        } else if (accessData && accessData.timer_start_at && page.timer_duration_seconds) {
+        } else if (accessData && accessData.timer_start_at && page.timer_duration_seconds && page.timer_duration_seconds > 0) {
           const startTime = new Date(accessData.timer_start_at);
           const endTime = new Date(startTime.getTime() + page.timer_duration_seconds * 1000);
           isTimerExpired = new Date() > endTime;
           console.log(`⏱️ Duration check: start=${accessData.timer_start_at}, duration=${page.timer_duration_seconds}s, expired=${isTimerExpired}`);
+          
+          // timer_end_atを更新（まだ設定されていない場合）
+          if (!accessData.timer_end_at) {
+            await supabase
+              .from("friend_page_access")
+              .update({ timer_end_at: endTime.toISOString() })
+              .eq("friend_id", friend.id)
+              .eq("page_share_code", page.share_code);
+          }
+        } else if (accessData && accessData.timer_start_at && (!page.timer_duration_seconds || page.timer_duration_seconds <= 0)) {
+          // duration が 0 または null の場合はタイマー無効として扱う
+          console.log(`⚠️ Timer duration is 0 or null - timer disabled`);
+          isTimerExpired = false;
         }
       }
       
