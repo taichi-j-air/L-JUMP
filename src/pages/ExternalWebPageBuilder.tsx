@@ -83,7 +83,7 @@ export default function ExternalWebPageBuilder() {
 
   const fetchPages = async () => {
     try {
-      const { data } = await supabase.from('cms_pages').select('*').order('created_at', { ascending: false });
+      const { data } = await supabase.from('cms_pages').select('*').eq('page_type', 'public').order('created_at', { ascending: false });
       setPages(data || []);
     } catch (e) {
       console.error(e);
@@ -219,6 +219,7 @@ export default function ExternalWebPageBuilder() {
         slug: `page-${Date.now()}`,
         content_blocks: [],
         visibility: "public" as const,
+        page_type: "public",
         require_passcode: false,
         timer_enabled: false,
         timer_mode: "absolute",

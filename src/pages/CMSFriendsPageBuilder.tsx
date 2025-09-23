@@ -90,7 +90,7 @@ export default function CMSFriendsPageBuilder() {
 
   const fetchPages = async () => {
     try {
-      const { data } = await supabase.from('cms_pages').select('*').order('created_at', { ascending: false });
+      const { data } = await supabase.from('cms_pages').select('*').eq('page_type', 'friends_only').order('created_at', { ascending: false });
       setPages(data || []);
     } catch (e) {
       console.error(e);
@@ -238,6 +238,7 @@ export default function CMSFriendsPageBuilder() {
         slug: `page-${Date.now()}`,
         content_blocks: [],
         visibility: "friends_only" as const,
+        page_type: "friends_only",
         allowed_tag_ids: [],
         blocked_tag_ids: [],
         require_passcode: false,

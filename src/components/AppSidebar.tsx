@@ -369,7 +369,7 @@ export function AppSidebar({ user }: AppSidebarProps) {
                     </SidebarMenuSubItem>
                     <SidebarMenuSubItem>
                       <SidebarMenuSubButton asChild>
-                        <NavLink to="/cms/public-page" end className={({ isActive }) => getNavClass({ isActive })}>
+                        <NavLink to="/external-web-page" end className={({ isActive }) => getNavClass({ isActive })}>
                           <span>外部WEBページ作成</span>
                         </NavLink>
                       </SidebarMenuSubButton>

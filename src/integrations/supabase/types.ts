@@ -131,6 +131,7 @@ export type Database = {
           internal_name: string | null
           internal_timer: boolean
           is_published: boolean
+          page_type: string
           passcode: string | null
           require_passcode: boolean
           share_code: string
@@ -172,6 +173,7 @@ export type Database = {
           internal_name?: string | null
           internal_timer?: boolean
           is_published?: boolean
+          page_type?: string
           passcode?: string | null
           require_passcode?: boolean
           share_code?: string
@@ -213,6 +215,7 @@ export type Database = {
           internal_name?: string | null
           internal_timer?: boolean
           is_published?: boolean
+          page_type?: string
           passcode?: string | null
           require_passcode?: boolean
           share_code?: string

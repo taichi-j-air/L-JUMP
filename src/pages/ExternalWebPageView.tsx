@@ -397,7 +397,7 @@ export default function ExternalWebPageView() {
 
   const sanitizeHtml = (raw: string) => {
     const clean = DOMPurify.sanitize(raw, { USE_PROFILES: { html: true } });
-    return clean.replace(/<a\s+([^>]*href=[\'"][^\'"]+[\'"][^>]*>/gi, (m, attrs) => {
+    return clean.replace(/<a\s+([^>]*href=[\'"][^\'"]+[\'"][^>]*>)/gi, (m, attrs) => {
       if (!/rel=/.test(attrs)) {
         return `<a ${attrs} rel="noopener noreferrer">`;
       }
