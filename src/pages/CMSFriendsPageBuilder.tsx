@@ -66,6 +66,21 @@ export default function CMSFriendsPageBuilder() {
   // External browser control
   const [forceExternalBrowser, setForceExternalBrowser] = useState<boolean>(false);
 
+  // Helper to format ISO string to YYYY-MM-DDTHH:mm for datetime-local input
+  const formatDatetimeLocal = (isoString: string | null | undefined): string => {
+    if (!isoString) return "";
+    const date = new Date(isoString);
+    if (isNaN(date.getTime())) return "";
+
+    const year = date.getFullYear();
+    const month = (date.getMonth() + 1).toString().padStart(2, '0');
+    const day = date.getDate().toString().padStart(2, '0');
+    const hours = date.getHours().toString().padStart(2, '0');
+    const minutes = date.getMinutes().toString().padStart(2, '0');
+
+    return `${year}-${month}-${day}T${hours}:${minutes}`;
+  };
+
   const normalizeExpireAction = (value?: string | null): "hide_page" | "keep_public" => {
     if (value === "hide" || value === "hide_page") return "hide_page";
     return "keep_public";
@@ -77,7 +92,7 @@ export default function CMSFriendsPageBuilder() {
   const [saving, setSaving] = useState(false);
 
   const selected = pages.find(p => p.id === selectedId) || null;
-  const hasLiffConfig = true; // Assume LIFF is configured
+  const hasLiffConfig = true; // Assume LIFF is configured;
 
   const shareUrlRef = useRef<HTMLDivElement>(null);
   const [isShareUrlOverflowing, setIsShareUrlOverflowing] = useState(false);
@@ -191,7 +206,7 @@ export default function CMSFriendsPageBuilder() {
     setPasscode(selected.passcode || "");
     setTimerEnabled(!!selected.timer_enabled);
     setTimerMode((selected as any).timer_mode || "absolute");
-    setTimerDeadline((selected as any).timer_deadline || "");
+    setTimerDeadline(formatDatetimeLocal((selected as any).timer_deadline));
     setDurationSeconds((selected as any).timer_duration_seconds || 0);
     setShowMilliseconds(!!(selected as any).show_milliseconds);
 
@@ -304,7 +319,7 @@ export default function CMSFriendsPageBuilder() {
           toast.error("期限日時が正しくありません");
           return;
         }
-        validatedTimerDeadline = deadlineDate.toISOString();
+        validatedTimerDeadline = formatDatetimeLocal(deadlineDate.toISOString());
       }
 
       const payload = {
