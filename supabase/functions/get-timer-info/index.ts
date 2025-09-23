@@ -69,7 +69,10 @@ Deno.serve(async (req) => {
           });
         }
 
-        // 新しいアクセス記録を作成
+        // 新しいアクセス記録を作成（JST時刻で統一）
+        const now = new Date();
+        const jstNow = new Date(now.getTime() + (9 * 60 * 60 * 1000));
+        
         const { data: newAccess, error: insertError } = await supabase
           .from('friend_page_access')
           .insert({
@@ -77,8 +80,8 @@ Deno.serve(async (req) => {
             friend_id: friend.id,
             page_share_code: pageShareCode,
             access_enabled: true,
-            timer_start_at: new Date().toISOString(),
-            first_access_at: new Date().toISOString(),
+            timer_start_at: jstNow.toISOString(),
+            first_access_at: jstNow.toISOString(),
             access_source: 'direct'
           })
           .select()
@@ -105,27 +108,28 @@ Deno.serve(async (req) => {
       } else {
         // 既存のアクセス記録がある場合
         const now = new Date();
+        const jstNow = new Date(now.getTime() + (9 * 60 * 60 * 1000));
         let expired = false;
 
-        // first_access_atが未設定の場合は設定
+        // first_access_atが未設定の場合は設定（JST時刻で統一）
         if (!friendAccess.first_access_at) {
           await supabase
             .from('friend_page_access')
             .update({ 
-              first_access_at: now.toISOString(),
-              timer_start_at: friendAccess.timer_start_at || now.toISOString()
+              first_access_at: jstNow.toISOString(),
+              timer_start_at: friendAccess.timer_start_at || jstNow.toISOString()
             })
             .eq('id', friendAccess.id);
         }
 
-        // timer_start_atが未設定の場合は設定
+        // timer_start_atが未設定の場合は設定（JST時刻で統一）
         if (!friendAccess.timer_start_at) {
           await supabase
             .from('friend_page_access')
-            .update({ timer_start_at: now.toISOString() })
+            .update({ timer_start_at: jstNow.toISOString() })
             .eq('id', friendAccess.id);
           
-          friendAccess.timer_start_at = now.toISOString();
+          friendAccess.timer_start_at = jstNow.toISOString();
         }
 
         // 期限切れチェック
@@ -161,10 +165,13 @@ Deno.serve(async (req) => {
         };
       }
     } else {
-      // UIDが提供されていない場合は一般的なタイマー情報のみ
+      // UIDが提供されていない場合は一般的なタイマー情報のみ（JST時刻で統一）
+      const now = new Date();
+      const jstNow = new Date(now.getTime() + (9 * 60 * 60 * 1000));
+      
       timerInfo = {
         success: true,
-        timer_start_at: new Date().toISOString(),
+        timer_start_at: jstNow.toISOString(),
         access_enabled: false,
         expired: false
       };
