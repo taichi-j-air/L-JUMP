@@ -43,32 +43,33 @@ Deno.serve(async (req) => {
     let timerInfo: TimerResponse = { success: false };
 
     if (uid) {
-      // UIDが提供された場合、friend_page_accessから情報を取得
+      // 友達情報を先に取得してfriend_idを確定
+      const { data: friend, error: friendLookupError } = await supabase
+        .from('line_friends')
+        .select('id, user_id')
+        .eq('short_uid_ci', uid.toUpperCase())
+        .single();
+
+      if (friendLookupError || !friend) {
+        return new Response(JSON.stringify({ 
+          success: false, 
+          error: 'Friend not found for provided UID' 
+        }), {
+          status: 404,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+        });
+      }
+
+      // 特定の友達のアクセス情報を取得
       const { data: friendAccess, error: friendError } = await supabase
         .from('friend_page_access')
         .select('*')
         .eq('page_share_code', pageShareCode)
+        .eq('friend_id', friend.id)
         .single();
 
       if (friendError || !friendAccess) {
         console.log('Friend access not found, creating new record');
-        
-        // 友達情報を取得
-        const { data: friend, error: friendLookupError } = await supabase
-          .from('line_friends')
-          .select('id, user_id')
-          .eq('short_uid_ci', uid.toUpperCase())
-          .single();
-
-        if (friendLookupError || !friend) {
-          return new Response(JSON.stringify({ 
-            success: false, 
-            error: 'Friend not found for provided UID' 
-          }), {
-            status: 404,
-            headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-          });
-        }
 
         // ページのタイマー設定を取得
         const { data: pageData } = await supabase
