@@ -18,10 +18,10 @@ serve(async (req) => {
   }
 
   try {
-    const { shareCode, uid, pageId, passcode = "", isPreview = false } = await req.json()
+    const { shareCode, uid, pageId, passcode = "", isPreview = false, pageType } = await req.json()
 
     console.log(
-      `🔍 Request received: shareCode=${shareCode}, uid=${uid}, pageId=${pageId}, isPreview=${isPreview}, passcode=${passcode ? '***' : 'none'}`
+      `🔍 Request received: shareCode=${shareCode}, uid=${uid}, pageId=${pageId}, isPreview=${isPreview}, pageType=${pageType}, passcode=${passcode ? '***' : 'none'}`
     )
 
     const supabase = createClient(
@@ -39,11 +39,17 @@ serve(async (req) => {
         .single()
       page = data
     } else {
-      const { data } = await supabase
+      let query = supabase
         .from("cms_pages")
         .select("*")
         .eq("share_code", shareCode)
-        .single()
+      
+      // 外部WEBページの場合はpage_typeでフィルタ
+      if (pageType === 'public') {
+        query = query.eq("page_type", "public")
+      }
+      
+      const { data } = await query.single()
       page = data
     }
 

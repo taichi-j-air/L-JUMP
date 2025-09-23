@@ -16,8 +16,8 @@
     <meta name="twitter:site" content="@lovable_dev" />
     <meta name="twitter:image" content="https://lovable.dev/opengraph-image-p98pqg.png" />
     
-    <!-- CSP修正: フォーム埋め込み対応、WebSocket接続を許可 -->
-    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://static.line-scdn.net; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; img-src 'self' data: https:; connect-src 'self' https://rtjxurmuaawyzjcdkqxt.supabase.co wss://rtjxurmuaawyzjcdkqxt.supabase.co https://api.line.me; font-src 'self' data: https://fonts.gstatic.com; media-src 'self'; frame-src 'self' https://ljump-line.netlify.app; object-src 'none'; base-uri 'self';" />
+    <!-- CSP修正: Google Fonts対応、frame-ancestors追加 -->
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://static.line-scdn.net; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; img-src 'self' data: https:; connect-src 'self' https://rtjxurmuaawyzjcdkqxt.supabase.co wss://rtjxurmuaawyzjcdkqxt.supabase.co https://api.line.me; font-src 'self' data: https://fonts.gstatic.com; media-src 'self'; frame-src 'self' https://ljump-line.netlify.app https://www.youtube.com https://youtube.com; object-src 'none'; base-uri 'self';" />
     
     <!-- LIFF SDK -->
     <script charset="utf-8" src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>

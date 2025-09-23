@@ -490,7 +490,7 @@ export default function ExternalWebPageView() {
       
       const { data: res, error: fnErr } = await supabase.functions.invoke(
         "cms-page-view",
-        { body: { shareCode, passcode: withPasscode } }
+        { body: { shareCode, passcode: withPasscode, pageType: 'public' } }
       );
 
       if (fnErr) {
