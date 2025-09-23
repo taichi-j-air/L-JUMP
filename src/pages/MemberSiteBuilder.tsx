@@ -7,11 +7,12 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { ArrowLeft, Save, Eye, Plus, Trash2, Settings, Edit, Globe } from "lucide-react";
+import { ArrowLeft, Save, Eye, Plus, Trash2, Settings, Edit, Globe, Image as ImageIcon } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
+import { MediaLibrarySelector } from "@/components/MediaLibrarySelector"; // MediaLibrarySelectorをインポート
 
 // Data Interfaces
 interface MemberSite {
@@ -46,6 +47,7 @@ interface Category {
   site_id: string;
   sort_order: number;
   content_count: number;
+  thumbnail_url: string | null; // サムネイルURLを追加
   created_at: string;
 }
 
@@ -87,6 +89,7 @@ const MemberSiteBuilder = () => {
   const [selectedCategoryId, setSelectedCategoryId] = useState<string | null>(null);
   const [categoryName, setCategoryName] = useState("");
   const [categoryDescription, setCategoryDescription] = useState("");
+  const [categoryThumbnailUrl, setCategoryThumbnailUrl] = useState<string | null>(null); // サムネイルURLのstateを追加
 
   // Load site data when site is selected
   useEffect(() => {
@@ -112,6 +115,7 @@ const MemberSiteBuilder = () => {
       setSelectedCategoryId(null);
       setCategoryName("");
       setCategoryDescription("");
+      setCategoryThumbnailUrl(null); // サムネイルURLのstateをリセット
       
       // Load fresh data for the selected site
       loadSiteData();
@@ -133,6 +137,7 @@ const MemberSiteBuilder = () => {
       setSelectedCategoryId(null);
       setCategoryName("");
       setCategoryDescription("");
+      setCategoryThumbnailUrl(null); // サムネイルURLのstateをリセット
     }
   }, [siteId]);
 
@@ -303,12 +308,17 @@ const MemberSiteBuilder = () => {
     try {
       const { data, error } = await supabase
         .from('member_site_categories')
-        .select('*')
+        .select('*, member_site_content(count)') // content_count を取得するために結合
         .eq('site_id', siteId)
         .order('sort_order', { ascending: true });
 
       if (error) throw error;
-      setCategories(data || []);
+      // content_count はリレーションから取得されるため、整形が必要
+      const formattedCategories = data ? data.map(cat => ({
+        ...cat,
+        content_count: cat.member_site_content ? cat.member_site_content.length : 0,
+      })) : [];
+      setCategories(formattedCategories);
     } catch (error) {
       console.error('Error loading categories:', error);
       toast({
@@ -584,6 +594,7 @@ const MemberSiteBuilder = () => {
       const categoryPayload = {
         name: categoryName,
         description: categoryDescription,
+        thumbnail_url: categoryThumbnailUrl, // サムネイルURLを追加
         site_id: siteId,
         sort_order: categories.length
       };
@@ -632,6 +643,7 @@ const MemberSiteBuilder = () => {
     setSelectedCategoryId(category.id);
     setCategoryName(category.name);
     setCategoryDescription(category.description || "");
+    setCategoryThumbnailUrl(category.thumbnail_url || null);
   };
 
   const deleteCategory = async (categoryId: string) => {
@@ -1071,6 +1083,30 @@ const MemberSiteBuilder = () => {
                                    placeholder="カテゴリの説明を入力してください（任意）"
                                    rows={4}
                                  />
+                               </div>
+
+                               <div className="space-y-2">
+                                 <Label>サムネイル画像</Label>
+                                 <div className="flex items-center space-x-2">
+                                   {categoryThumbnailUrl && (
+                                     <img src={categoryThumbnailUrl} alt="Category Thumbnail" className="w-24 h-24 object-cover rounded-md" />
+                                   )}
+                                   <MediaLibrarySelector
+                                     onSelect={(url) => setCategoryThumbnailUrl(url)}
+                                     onRemove={() => setCategoryThumbnailUrl(null)}
+                                     selectedUrl={categoryThumbnailUrl}
+                                   >
+                                     <Button type="button" variant="outline" className="flex items-center gap-2">
+                                       <ImageIcon className="w-4 h-4" />
+                                       {categoryThumbnailUrl ? "画像を変更" : "画像を選択"}
+                                     </Button>
+                                   </MediaLibrarySelector>
+                                   {categoryThumbnailUrl && (
+                                     <Button type="button" variant="ghost" size="icon" onClick={() => setCategoryThumbnailUrl(null)}>
+                                       <Trash2 className="w-4 h-4" />
+                                     </Button>
+                                   )}
+                                 </div>
                                </div>
 
                                <Button onClick={saveCategory} disabled={saving || !categoryName.trim()} className="w-full">
