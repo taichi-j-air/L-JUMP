@@ -84,13 +84,10 @@ export const TimerPreview = ({
   const expireNotifiedRef = useRef(false);
   const initializedRef = useRef(false);
 
-  // サーバー同期 - プレビューモードでは完全に無効化
+  // サーバー同期
   useEffect(() => {
     const fetchTimerInfo = async () => {
-      // プレビューモードでは一切サーバー同期を行わない
-      if (preview) return;
-      
-      if (shareCode && uid && (mode === "per_access" || mode === "step_delivery")) {
+      if (shareCode && (mode === "per_access" || mode === "step_delivery") && !preview) {
         try {
           const { data, error } = await supabase.functions.invoke("get-timer-info", {
             body: { pageShareCode: shareCode, uid },
@@ -107,30 +104,14 @@ export const TimerPreview = ({
   }, [shareCode, uid, mode, preview]);
 
   const targetTime = useMemo(() => {
-    // プレビューモードでは常に現在時刻から開始し、LocalStorageを完全に回避
-    if (preview) {
-      if (mode === "absolute" && deadline) {
-        const t = new Date(deadline).getTime();
-        return isNaN(t) ? Date.now() + 3600000 : t; // デフォルト1時間
-      }
-      if ((mode === "per_access" || mode === "step_delivery") && durationSeconds && durationSeconds > 0) {
-        return Date.now() + durationSeconds * 1000;
-      }
-      return Date.now() + 3600000; // デフォルト1時間
-    }
-
-    // 本番環境のロジック（プレビューモードでは実行されない）
     if (mode === "absolute" && deadline) {
       const t = new Date(deadline).getTime();
       return isNaN(t) ? Date.now() : t;
     }
     if ((mode === "per_access" || mode === "step_delivery") && durationSeconds && durationSeconds > 0) {
-      // サーバー同期された開始時刻があればそれを使用
-      if (serverSyncedStart) {
-        return serverSyncedStart.getTime() + durationSeconds * 1000;
-      }
+      if (preview) return Date.now() + durationSeconds * 1000;
+      if (serverSyncedStart) return serverSyncedStart.getTime() + durationSeconds * 1000;
 
-      // 本番環境でのLocalStorage使用
       if (mode === "step_delivery" && scenarioId && stepId && uid && shareCode) {
         const key = `step_delivery_timer:${shareCode}:${uid}:${scenarioId}:${stepId}`;
         try {

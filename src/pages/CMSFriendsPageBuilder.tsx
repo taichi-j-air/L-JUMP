@@ -406,16 +406,14 @@ export default function CMSFriendsPageBuilder() {
   const openPreview = () => {
     if (!selected) return;
     handleSave().then(() => {
-      // プレビューモードを明示的に指定
       const url = requirePass 
-        ? `/cms/preview/${selected.id}?passcode=${passcode}&preview=true`
-        : `/cms/preview/${selected.id}?preview=true`;
+        ? `/cms/preview/${selected.id}?passcode=${passcode}`
+        : `/cms/preview/${selected.id}`;
       window.open(url, '_blank');
     }).catch(() => {
-      // エラー時でもプレビューモードを指定
       const url = requirePass 
-        ? `/cms/preview/${selected.id}?passcode=${passcode}&preview=true`
-        : `/cms/preview/${selected.id}?preview=true`;
+        ? `/cms/preview/${selected.id}?passcode=${passcode}`
+        : `/cms/preview/${selected.id}`;
       window.open(url, '_blank');
     });
   };
