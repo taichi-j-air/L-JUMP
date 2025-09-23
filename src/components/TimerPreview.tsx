@@ -26,7 +26,9 @@ interface TimerPreviewProps {
   showRemainingText?: boolean;
   scenarioId?: string;
   stepId?: string;
+  onExpire?: () => void;
 }
+
 
 function splitParts(ms: number) {
   const total = Math.max(0, Math.floor(ms / 1000));
@@ -73,11 +75,14 @@ export const TimerPreview = ({
   showRemainingText = true,
   scenarioId,
   stepId,
+  onExpire,
 }: TimerPreviewProps) => {
   const [remainingMs, setRemainingMs] = useState<number>(0);
   const [serverSyncedStart, setServerSyncedStart] = useState<Date | null>(null);
   const [serverSyncExpired, setServerSyncExpired] = useState<boolean>(false);
   const intervalRef = useRef<number | null>(null);
+  const expireNotifiedRef = useRef(false);
+  const initializedRef = useRef(false);
 
   // サーバー同期
   useEffect(() => {
@@ -142,7 +147,14 @@ export const TimerPreview = ({
       window.clearInterval(intervalRef.current);
       intervalRef.current = null;
     }
-    const tick = () => setRemainingMs(Math.max(0, targetTime - Date.now()));
+    initializedRef.current = false;
+    const tick = () => {
+      const ms = Math.max(0, targetTime - Date.now());
+      setRemainingMs(ms);
+      if (!initializedRef.current) {
+        initializedRef.current = true;
+      }
+    };
     tick();
     intervalRef.current = window.setInterval(tick, showMilliseconds ? 50 : 500);
     return () => {
@@ -155,6 +167,22 @@ export const TimerPreview = ({
     (remainingMs <= 0 &&
       (mode === "absolute" || ((mode === "per_access" || mode === "step_delivery") && !preview))) ||
     serverSyncExpired;
+
+  useEffect(() => {
+    if (!onExpire) {
+      expireNotifiedRef.current = false;
+      return;
+    }
+    if (!initializedRef.current) {
+      return;
+    }
+    if (isExpired && !expireNotifiedRef.current) {
+      expireNotifiedRef.current = true;
+      onExpire();
+    } else if (!isExpired) {
+      expireNotifiedRef.current = false;
+    }
+  }, [isExpired, onExpire]);
 
   const endDateText = useMemo(() => {
     const d = new Date(targetTime);

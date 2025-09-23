@@ -31,7 +31,7 @@ interface PagePayload {
   timer_second_label?: string | null;
   timer_scenario_id?: string | null;
   timer_step_id?: string | null;
-  expire_action?: "hide_page" | "keep_public";
+  expire_action?: "hide_page" | "hide" | "keep_public";
   show_remaining_text?: boolean;
   show_end_date?: boolean;
 }
@@ -42,6 +42,8 @@ interface FriendInfo {
   add_friend_url: string | null;
   message?: string;
 }
+
+const isHideAction = (action?: string | null) => action === "hide" || action === "hide_page";
 
 type KnownErrors =
   | "not_found"
@@ -474,18 +476,6 @@ export default function CMSFriendsPublicView() {
           }
         }
 
-        if (page.timer_enabled && page.expire_action === "hide_page") {
-          const now = new Date();
-          if (page.timer_mode === "absolute" && page.timer_deadline) {
-            const isExpired = now > new Date(page.timer_deadline);
-            if (isExpired) {
-              setError("not_found");
-              setLoading(false);
-              return;
-            }
-          }
-        }
-
         setData(page as PagePayload);
         setLoading(false);
         return;
@@ -526,18 +516,6 @@ export default function CMSFriendsPublicView() {
           code === "tag_required" || code === "access_denied" || code === "not_found"
         ) { setError(code as KnownErrors); setLoading(false); return; }
         setError("not_found"); setLoading(false); return;
-      }
-
-      if ((res as any).timer_enabled && (res as any).expire_action === "hide_page") {
-        const now = new Date();
-        if ((res as any).timer_mode === "absolute" && (res as any).timer_deadline) {
-          const isExpired = now > new Date((res as any).timer_deadline);
-          if (isExpired) {
-            setError("not_found");
-            setLoading(false);
-            return;
-          }
-        }
       }
 
       setData(res as PagePayload);
@@ -766,6 +744,14 @@ export default function CMSFriendsPublicView() {
             showRemainingText={data.show_remaining_text ?? true}
             scenarioId={data.timer_scenario_id || undefined}
             stepId={data.timer_step_id || undefined}
+            onExpire={
+              isHideAction(data.expire_action)
+                ? () => {
+                    setError("not_found");
+                    setData(null);
+                  }
+                : undefined
+            }
           />
         )}
 

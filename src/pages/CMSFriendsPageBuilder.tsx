@@ -45,7 +45,7 @@ export default function CMSFriendsPageBuilder() {
   const [timerTextColor, setTimerTextColor] = useState<string>("#ffffff");
   const [internalTimer, setInternalTimer] = useState(false);
   const [timerText, setTimerText] = useState("");
-  const [expireAction, setExpireAction] = useState<"hide" | "keep_public">("keep_public");
+  const [expireAction, setExpireAction] = useState<"hide_page" | "keep_public">("keep_public");
   const [dayLabel, setDayLabel] = useState<string>("日");
   const [hourLabel, setHourLabel] = useState<string>("時間");
   const [minuteLabel, setMinuteLabel] = useState<string>("分");
@@ -65,6 +65,11 @@ export default function CMSFriendsPageBuilder() {
   
   // External browser control
   const [forceExternalBrowser, setForceExternalBrowser] = useState<boolean>(false);
+
+  const normalizeExpireAction = (value?: string | null): "hide_page" | "keep_public" => {
+    if (value === "hide" || value === "hide_page") return "hide_page";
+    return "keep_public";
+  };
 
   // ✅ 正しい秒換算
   const toSeconds = (d: number, h: number, m: number, s: number) => d * 86400 + h * 3600 + m * 60 + s;
@@ -196,7 +201,7 @@ export default function CMSFriendsPageBuilder() {
     setTimerTextColor((selected as any).timer_text_color || "#ffffff");
     setInternalTimer(!!(selected as any).internal_timer);
     setTimerText((selected as any).timer_text || "");
-    setExpireAction((selected as any).expire_action || "keep_public");
+    setExpireAction(normalizeExpireAction((selected as any).expire_action));
     setDayLabel((selected as any).timer_day_label || "日");
     setHourLabel((selected as any).timer_hour_label || "時間");
     setMinuteLabel((selected as any).timer_minute_label || "分");
@@ -832,11 +837,11 @@ export default function CMSFriendsPageBuilder() {
                           <AccordionContent className="space-y-3">
                             <div className="space-y-2">
                               <Label>期限切れ後の動作</Label>
-                              <Select value={expireAction} onValueChange={(v) => setExpireAction(v as any)}>
+                              <Select value={expireAction} onValueChange={(v) => setExpireAction(normalizeExpireAction(v))}>
                                 <SelectTrigger><SelectValue /></SelectTrigger>
                                 <SelectContent>
                                   <SelectItem value="keep_public">そのまま表示</SelectItem>
-                                  <SelectItem value="hide">ページを非表示</SelectItem>
+                                  <SelectItem value="hide_page">ページを非表示</SelectItem>
                                 </SelectContent>
                               </Select>
                             </div>
