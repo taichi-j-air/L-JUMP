@@ -59,6 +59,7 @@ import GreetingMessageSettings from "./pages/GreetingMessageSettings";
 
 import MemberSiteBuilder from "./pages/MemberSiteBuilder";
 import MemberSiteManagement from "./pages/MemberSiteManagement";
+import MemberSiteView from "./pages/MemberSiteView";
 import CheckoutSuccess from "./pages/CheckoutSuccess";
 import CheckoutCancel from "./pages/CheckoutCancel";
 import Onboarding from "./pages/Onboarding";
@@ -229,6 +230,7 @@ function AppContent() {
               <Route path="/checkout/cancel" element={<CheckoutCancel />} />
               <Route path="/cms/f/:shareCode" element={<CMSFriendsPublicView />} />
               <Route path="/cms/preview/:pageId" element={<CMSFriendsPublicView />} />
+              <Route path="/member-site/:slug" element={<MemberSiteView />} />
               <Route path="/ewp/:shareCode" element={<ExternalWebPageView />} />
               <Route path="/ewp/preview/:pageId" element={<ExternalWebPageView />} />
               <Route path="/error" element={<ErrorPage />} />

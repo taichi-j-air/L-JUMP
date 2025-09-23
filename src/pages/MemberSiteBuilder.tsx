@@ -89,6 +89,19 @@ const MemberSiteBuilder = () => {
     }
   }, [siteId]);
 
+  const handleNewSite = () => {
+    // Clear current site data and show empty form
+    setSite(null);
+    setSiteName("新しいサイト");
+    setSiteDescription("");
+    setSiteSlug("new-site-" + Date.now());
+    setAccessType("paid");
+    setPrice(0);
+    setIsPublished(false);
+    setIsPublic(false);
+    setSearchParams({ site: 'new' });
+  };
+
   const loadSites = async () => {
     setLoading(true);
     try {
@@ -165,7 +178,7 @@ const MemberSiteBuilder = () => {
   const saveSite = async () => {
     setSaving(true);
     try {
-      if (siteId) {
+      if (siteId && siteId !== 'new') {
         // Update existing site
         const { error } = await supabase
           .from('member_sites')
@@ -400,7 +413,7 @@ const MemberSiteBuilder = () => {
                 <CardHeader className="flex flex-col gap-2 py-3">
                   <div className="flex flex-row items-center justify-between">
                     <CardTitle className="text-base">会員サイト一覧</CardTitle>
-                    <Button size="sm" onClick={() => setSearchParams({})} className="flex items-center gap-2">
+                    <Button size="sm" onClick={() => handleNewSite()} className="flex items-center gap-2">
                       <Plus className="w-4 h-4" />
                       追加
                     </Button>
@@ -703,15 +716,25 @@ const MemberSiteBuilder = () => {
                           {saving ? "保存中..." : "サイト設定を保存"}
                         </Button>
                         
-                        {siteId && (
-                          <Button 
-                            variant="outline" 
-                            onClick={() => navigate(`/member-sites/management?site=${siteId}`)}
-                            className="w-full"
-                          >
-                            <Settings className="w-4 h-4 mr-2" />
-                            管理画面へ
-                          </Button>
+                        {siteId && siteId !== 'new' && (
+                          <div className="space-y-2">
+                            <Button 
+                              variant="outline" 
+                              onClick={() => window.open(`/member-site/${siteSlug}`, '_blank')}
+                              className="w-full"
+                            >
+                              <Eye className="w-4 h-4 mr-2" />
+                              プレビュー
+                            </Button>
+                            <Button 
+                              variant="outline" 
+                              onClick={() => navigate(`/member-sites/management?site=${siteId}`)}
+                              className="w-full"
+                            >
+                              <Settings className="w-4 h-4 mr-2" />
+                              管理画面へ
+                            </Button>
+                          </div>
                         )}
                       </CardContent>
                     </Card>
