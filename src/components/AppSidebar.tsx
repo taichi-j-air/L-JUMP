@@ -349,7 +349,7 @@ export function AppSidebar({ user }: AppSidebarProps) {
 
               {/* CMS dropdown */}
               <SidebarMenuItem>
-                <SidebarMenuButton onClick={() => setCmsOpen((v) => !v)} isActive={groupActiveCMS}>
+                <SidebarMenuButton isActive={groupActiveCMS}>
                   <BarChart3 className="h-4 w-4" />
                   {!collapsed && (
                     <span className="flex items-center gap-1">
@@ -369,7 +369,7 @@ export function AppSidebar({ user }: AppSidebarProps) {
                     </SidebarMenuSubItem>
                     <SidebarMenuSubItem>
                       <SidebarMenuSubButton asChild>
-                        <NavLink to="/cms/public-page" end className={({ isActive }) => getNavClass({ isActive })}>
+                        <NavLink to="/external-web-page" end className={({ isActive }) => getNavClass({ isActive })}>
                           <span>外部WEBページ作成</span>
                         </NavLink>
                       </SidebarMenuSubButton>

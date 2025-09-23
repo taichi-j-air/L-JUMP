@@ -65,6 +65,8 @@ import Onboarding from "./pages/Onboarding";
 const CMSFriendsPageBuilder = lazy(() => import('./pages/CMSFriendsPageBuilder'));
 const CMSPublicPageBuilder = lazy(() => import('./pages/CMSPublicPageBuilder'));
 const CMSFriendsPublicView = lazy(() => import('./pages/CMSFriendsPublicView'));
+const ExternalWebPageBuilder = lazy(() => import('./pages/ExternalWebPageBuilder'));
+const ExternalWebPageView = lazy(() => import('./pages/ExternalWebPageView'));
 const queryClient = new QueryClient();
 
 function AppContent() {
@@ -195,12 +197,13 @@ function AppContent() {
   const isPublicFormPage = window.location.pathname.startsWith('/form/') || window.location.pathname.startsWith('/liff-form/')
   const isCMSPublicPath = window.location.pathname.startsWith('/cms/f/')
   const isCMSPreviewPath = window.location.pathname.startsWith('/cms/preview/')
+  const isExternalWebPagePath = window.location.pathname.startsWith('/ewp/')
   const isProductLandingPage = window.location.pathname.startsWith('/product-landing/')
   const isCheckoutPage = window.location.pathname.startsWith('/checkout/')
   const isLiffPage = window.location.pathname.startsWith('/liff')
 
   // Show pages without sidebar/header: auth, public forms, liff, checkout, product landing, cms public
-  if (isAuthPage || isPublicFormPage || isLiffPage || isProductLandingPage || isCheckoutPage || isCMSPublicPath || isCMSPreviewPath || (!user && !isInvitePage && !isLoginPage && !hasLineLoginSuccess)) {
+  if (isAuthPage || isPublicFormPage || isLiffPage || isProductLandingPage || isCheckoutPage || isCMSPublicPath || isCMSPreviewPath || isExternalWebPagePath || (!user && !isInvitePage && !isLoginPage && !hasLineLoginSuccess)) {
     return (
       <ErrorBoundary>
         <div className="min-h-screen">
@@ -225,6 +228,8 @@ function AppContent() {
               <Route path="/checkout/cancel" element={<CheckoutCancel />} />
               <Route path="/cms/f/:shareCode" element={<CMSFriendsPublicView />} />
               <Route path="/cms/preview/:pageId" element={<CMSFriendsPublicView />} />
+              <Route path="/ewp/:shareCode" element={<ExternalWebPageView />} />
+              <Route path="/ewp/preview/:pageId" element={<ExternalWebPageView />} />
               <Route path="/error" element={<ErrorPage />} />
               <Route path="*" element={user ? <NotFound /> : <Auth />} />
             </Routes>
@@ -297,6 +302,7 @@ function AppContent() {
                   <Route path="/forms/responses" element={<FormResponses />} />
                   <Route path="/cms/friends-page" element={<CMSFriendsPageBuilder />} />
                   <Route path="/cms/public-page" element={<CMSPublicPageBuilder />} />
+                  <Route path="/external-web-page" element={<ExternalWebPageBuilder />} />
                   <Route path="*" element={<NotFound />} />
                 </Routes>
               </Suspense>
