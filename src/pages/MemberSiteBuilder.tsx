@@ -816,16 +816,16 @@ const MemberSiteBuilder = () => {
                               <Table className="w-full border-collapse">
                                 <TableBody>
                                   {siteContents.map((content, index) => (
-                                    <div key={content.id} className={`border-t border-border ${index === 0 ? 'border-t-0' : ''}`}>
-                                      <TableRow
-                                        className={`cursor-pointer transition-all ${
-                                          selectedContentId === content.id
-                                            ? 'bg-[#0cb386]/20 ring-2 ring-[#0cb386]'
-                                            : 'hover:bg-muted/50'
-                                        }`}
-                                        onClick={() => selectContent(content)}
-                                      >
-                                        <TableCell className="py-1 text-left align-top">
+                                     <div key={content.id} className={`border-t border-border ${index === 0 ? 'border-t-0' : ''} ${index === siteContents.length - 1 ? 'border-b' : ''}`}>
+                                       <TableRow
+                                         className={`cursor-pointer w-full ${
+                                           selectedContentId === content.id
+                                             ? 'bg-[#0cb386]/20'
+                                             : ''
+                                         }`}
+                                         onClick={() => selectContent(content)}
+                                       >
+                                         <TableCell className="py-1 text-left align-top w-full">
                                           <div className="flex items-center gap-2">
                                             <span className={`h-2 w-2 rounded-full ${content.is_published ? 'bg-green-500' : 'bg-red-500'}`}></span>
                                             <div className="h-4 w-px bg-border"></div>
@@ -1002,16 +1002,16 @@ const MemberSiteBuilder = () => {
                               <Table className="w-full border-collapse">
                                 <TableBody>
                                   {categories.map((category, index) => (
-                                    <div key={category.id} className={`border-t border-border ${index === 0 ? 'border-t-0' : ''}`}>
-                                      <TableRow
-                                        className={`cursor-pointer transition-all ${
-                                          selectedCategoryId === category.id
-                                            ? 'bg-[#0cb386]/20 ring-2 ring-[#0cb386]'
-                                            : 'hover:bg-muted/50'
-                                        }`}
-                                        onClick={() => selectCategory(category)}
-                                      >
-                                        <TableCell className="py-2 text-left">
+                                     <div key={category.id} className={`border-t border-border ${index === 0 ? 'border-t-0' : ''} ${index === categories.length - 1 ? 'border-b' : ''}`}>
+                                       <TableRow
+                                         className={`cursor-pointer w-full ${
+                                           selectedCategoryId === category.id
+                                             ? 'bg-[#0cb386]/20'
+                                             : ''
+                                         }`}
+                                         onClick={() => selectCategory(category)}
+                                       >
+                                         <TableCell className="py-2 text-left w-full">
                                           <div className="text-xs font-medium">{category.name}</div>
                                           <div className="text-xs text-muted-foreground">
                                             {category.content_count}件のコンテンツ
