@@ -7,9 +7,11 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { ArrowLeft, Save, Eye, Plus, Trash2, Settings } from "lucide-react";
+import { ArrowLeft, Save, Eye, Plus, Trash2, Settings, Edit, Globe } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Badge } from "@/components/ui/badge";
 
 interface MemberSite {
   id: string;
@@ -19,6 +21,9 @@ interface MemberSite {
   access_type: string;
   price: number;
   theme_config: any;
+  is_published: boolean;
+  is_public: boolean;
+  created_at: string;
 }
 
 interface SiteContent {
@@ -35,7 +40,7 @@ interface SiteContent {
 const MemberSiteBuilder = () => {
   const navigate = useNavigate();
   const { toast } = useToast();
-  const [searchParams] = useSearchParams();
+  const [searchParams, setSearchParams] = useSearchParams();
   const siteId = searchParams.get('site');
   
   const [loading, setLoading] = useState(false);
@@ -43,6 +48,7 @@ const MemberSiteBuilder = () => {
   
   // Site data
   const [site, setSite] = useState<MemberSite | null>(null);
+  const [sites, setSites] = useState<MemberSite[]>([]); // For the list on the left
   const [siteContents, setSiteContents] = useState<SiteContent[]>([]);
   
   // Form states
@@ -51,6 +57,8 @@ const MemberSiteBuilder = () => {
   const [siteSlug, setSiteSlug] = useState("");
   const [accessType, setAccessType] = useState("paid");
   const [price, setPrice] = useState(0);
+  const [isPublished, setIsPublished] = useState(false);
+  const [isPublic, setIsPublic] = useState(false);
   
   // Content editing
   const [selectedContentId, setSelectedContentId] = useState<string | null>(null);
@@ -62,11 +70,46 @@ const MemberSiteBuilder = () => {
   const [contentPublished, setContentPublished] = useState(false);
 
   useEffect(() => {
+    loadSites(); // Load all sites for the left panel
     if (siteId) {
       loadSiteData();
       loadSiteContents();
+    } else {
+      // Reset form if no site is selected
+      setSite(null);
+      setSiteName("");
+      setSiteDescription("");
+      setSiteSlug("");
+      setAccessType("paid");
+      setPrice(0);
+      setIsPublished(false);
+      setIsPublic(false);
+      setSiteContents([]);
+      setSelectedContentId(null);
     }
   }, [siteId]);
+
+  const loadSites = async () => {
+    setLoading(true);
+    try {
+      const { data, error } = await supabase
+        .from('member_sites')
+        .select('*')
+        .order('created_at', { ascending: false });
+
+      if (error) throw error;
+      setSites(data || []);
+    } catch (error) {
+      console.error('Error loading sites:', error);
+      toast({
+        title: "エラー",
+        description: "サイト一覧の読み込みに失敗しました",
+        variant: "destructive",
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const loadSiteData = async () => {
     if (!siteId) return;
@@ -87,6 +130,8 @@ const MemberSiteBuilder = () => {
       setSiteSlug(data.slug);
       setAccessType(data.access_type);
       setPrice(data.price);
+      setIsPublished(data.is_published);
+      setIsPublic(data.is_public);
     } catch (error) {
       console.error('Error loading site:', error);
       toast({
@@ -94,6 +139,7 @@ const MemberSiteBuilder = () => {
         description: "サイト情報の読み込みに失敗しました",
         variant: "destructive",
       });
+      setSearchParams({}); // Clear siteId if loading fails
     } finally {
       setLoading(false);
     }
@@ -129,6 +175,8 @@ const MemberSiteBuilder = () => {
             slug: siteSlug,
             access_type: accessType,
             price: price,
+            is_published: isPublished,
+            is_public: isPublic,
           })
           .eq('id', siteId);
 
@@ -143,6 +191,8 @@ const MemberSiteBuilder = () => {
             slug: siteSlug,
             access_type: accessType,
             price: price,
+            is_published: isPublished,
+            is_public: isPublic,
             user_id: (await supabase.auth.getUser()).data.user?.id,
           })
           .select()
@@ -151,7 +201,11 @@ const MemberSiteBuilder = () => {
         if (error) throw error;
         
         // Redirect to edit mode with the new site ID
-        navigate(`/member-sites/builder?site=${data.id}`);
+        setSearchParams({ site: data.id });
+        toast({
+          title: "作成完了",
+          description: "新しいサイトを作成しました",
+        });
         return;
       }
       
@@ -161,6 +215,7 @@ const MemberSiteBuilder = () => {
       });
       
       loadSiteData();
+      loadSites(); // Refresh the list on the left
     } catch (error) {
       console.error('Error saving site:', error);
       toast({
@@ -299,6 +354,8 @@ const MemberSiteBuilder = () => {
         description: "ページの削除に失敗しました",
         variant: "destructive",
       });
+    } finally {
+      setSaving(false);
     }
   };
 
@@ -337,245 +394,336 @@ const MemberSiteBuilder = () => {
           </Card>
         ) : (
           <div className="grid grid-cols-12 gap-6">
-            {/* Site Settings */}
-            <div className="col-span-4">
+            {/* Left Column: Site List */}
+            <div className="col-span-12 md:col-span-3 space-y-3">
               <Card>
-                <CardHeader>
-                  <CardTitle>サイト設定</CardTitle>
-                  <CardDescription>
-                    基本情報と設定
-                  </CardDescription>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="siteName">サイト名</Label>
-                    <Input
-                      id="siteName"
-                      value={siteName}
-                      onChange={(e) => setSiteName(e.target.value)}
-                      placeholder="サイト名を入力"
-                    />
-                  </div>
-                  
-                  <div className="space-y-2">
-                    <Label htmlFor="siteDescription">説明</Label>
-                    <Textarea
-                      id="siteDescription"
-                      value={siteDescription}
-                      onChange={(e) => setSiteDescription(e.target.value)}
-                      placeholder="サイトの説明を入力"
-                    />
-                  </div>
-
-                  <div className="space-y-2">
-                    <Label htmlFor="siteSlug">URL スラッグ</Label>
-                    <Input
-                      id="siteSlug"
-                      value={siteSlug}
-                      onChange={(e) => setSiteSlug(e.target.value)}
-                      placeholder="url-slug"
-                    />
-                  </div>
-
-                  <div className="space-y-2">
-                    <Label htmlFor="accessType">アクセスタイプ</Label>
-                    <Select value={accessType} onValueChange={setAccessType}>
-                      <SelectTrigger>
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="free">無料</SelectItem>
-                        <SelectItem value="paid">有料（買い切り）</SelectItem>
-                        <SelectItem value="subscription">サブスクリプション</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-
-                  {accessType !== 'free' && (
-                    <div className="space-y-2">
-                      <Label htmlFor="price">料金 (円)</Label>
-                      <Input
-                        id="price"
-                        type="number"
-                        value={price}
-                        onChange={(e) => setPrice(Number(e.target.value))}
-                      />
-                    </div>
-                  )}
-
-                  <Button onClick={saveSite} disabled={saving} className="w-full">
-                    <Save className="w-4 h-4 mr-2" />
-                    {saving ? "保存中..." : "サイト設定を保存"}
+                <CardHeader className="flex flex-row items-center justify-between py-3">
+                  <CardTitle className="text-base">会員サイト一覧</CardTitle>
+                  <Button size="sm" onClick={() => setSearchParams({})} className="flex items-center gap-2">
+                    <Plus className="w-4 h-4" />
+                    新規作成
                   </Button>
-                  
-                  {siteId && (
-                    <Button 
-                      variant="outline" 
-                      onClick={() => navigate(`/member-sites/management?site=${siteId}`)}
-                      className="w-full"
-                    >
-                      <Settings className="w-4 h-4 mr-2" />
-                      管理画面へ
-                    </Button>
-                  )}
-                </CardContent>
-              </Card>
-
-              {/* Content List */}
-              {siteId && (
-                <Card className="mt-6">
-                  <CardHeader>
-                    <CardTitle className="flex items-center justify-between">
-                      ページ一覧
-                      <Button size="sm" onClick={createNewContent} disabled={saving}>
-                        <Plus className="w-4 h-4" />
-                      </Button>
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="space-y-2">
-                      {siteContents.map((content) => (
+                </CardHeader>
+                <CardContent className="p-2">
+                  {sites.length === 0 ? (
+                    <p className="text-sm text-muted-foreground p-2">まだサイトがありません</p>
+                  ) : (
+                    <div className="space-y-1">
+                      {sites.map((s) => (
                         <div
-                          key={content.id}
-                          className={`p-3 border rounded cursor-pointer hover:bg-accent ${
-                            selectedContentId === content.id ? 'bg-accent' : ''
+                          key={s.id}
+                          className={`flex items-center justify-between border rounded-md px-2 py-1.5 transition-all ${
+                            siteId === s.id 
+                              ? 'bg-primary/10 border-primary shadow-sm' 
+                              : 'border-border hover:border-primary/50 hover:bg-muted/60'
                           }`}
-                          onClick={() => selectContent(content)}
                         >
-                          <div className="flex items-center justify-between">
-                            <div>
-                              <div className="font-medium">{content.title}</div>
-                              <div className="text-sm text-muted-foreground">
-                                /{content.slug}
-                              </div>
-                            </div>
+                          <button
+                            onClick={() => setSearchParams({ site: s.id })}
+                            className="flex-1 text-left min-w-0"
+                          >
+                            <div className="text-sm font-medium line-clamp-1">{s.name}</div>
+                          </button>
+                          <div className="flex items-center gap-1 ml-2">
+                            {s.is_published && (
+                              <Button 
+                                variant="ghost" 
+                                size="sm"
+                                className="h-6 w-6 p-0"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  window.open(`/member-site/${s.slug}`, '_blank');
+                                }}
+                              >
+                                <Eye className="h-3 w-3" />
+                              </Button>
+                            )}
                             <Button
-                              variant="ghost"
                               size="sm"
+                              variant="ghost"
+                              className="h-6 w-6 p-0 text-destructive hover:text-destructive"
                               onClick={(e) => {
                                 e.stopPropagation();
-                                deleteContent(content.id);
+                                if (confirm('本当にこのサイトを削除しますか？')) {
+                                  // Implement delete site logic here
+                                  // handleDeleteSite(s.id);
+                                  toast({
+                                    title: "未実装",
+                                    description: "サイト削除機能はまだ実装されていません。",
+                                    variant: "destructive",
+                                  });
+                                }
                               }}
                             >
-                              <Trash2 className="w-4 h-4" />
+                              <Trash2 className="h-3 w-3" />
                             </Button>
                           </div>
                         </div>
                       ))}
                     </div>
-                  </CardContent>
-                </Card>
-              )}
+                  )}
+                </CardContent>
+              </Card>
             </div>
 
-            {/* Content Editor */}
-            <div className="col-span-8">
-              {selectedContent ? (
-                <Card>
-                  <CardHeader>
-                    <CardTitle>ページ編集</CardTitle>
-                    <CardDescription>
-                      {selectedContent.title} の編集
-                    </CardDescription>
-                  </CardHeader>
-                  <CardContent className="space-y-4">
-                    <div className="grid grid-cols-2 gap-4">
-                      <div className="space-y-2">
-                        <Label htmlFor="contentTitle">ページタイトル</Label>
-                        <Input
-                          id="contentTitle"
-                          value={contentTitle}
-                          onChange={(e) => setContentTitle(e.target.value)}
-                        />
-                      </div>
-                      <div className="space-y-2">
-                        <Label htmlFor="contentSlug">URL スラッグ</Label>
-                        <Input
-                          id="contentSlug"
-                          value={contentSlug}
-                          onChange={(e) => setContentSlug(e.target.value)}
-                        />
-                      </div>
-                    </div>
+            {/* Right Column: Builder with Tabs */}
+            <div className="col-span-12 md:col-span-9 space-y-6">
+              {siteId ? (
+                <Tabs defaultValue="content-list">
+                  <TabsList className="grid w-full grid-cols-5">
+                    <TabsTrigger value="content-list">コンテンツ一覧</TabsTrigger>
+                    <TabsTrigger value="category-settings">カテゴリ設定</TabsTrigger>
+                    <TabsTrigger value="plan-settings">プラン設定</TabsTrigger>
+                    <TabsTrigger value="content-display">コンテンツ表示方法</TabsTrigger>
+                    <TabsTrigger value="site-settings">サイト設定</TabsTrigger>
+                  </TabsList>
 
-                    <div className="grid grid-cols-3 gap-4">
-                      <div className="space-y-2">
-                        <Label htmlFor="contentType">ページタイプ</Label>
-                        <Select value={contentType} onValueChange={setContentType}>
-                          <SelectTrigger>
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="page">ページ</SelectItem>
-                            <SelectItem value="post">投稿</SelectItem>
-                            <SelectItem value="landing">ランディング</SelectItem>
-                          </SelectContent>
-                        </Select>
-                      </div>
-                      <div className="space-y-2">
-                        <Label htmlFor="contentAccessLevel">アクセスレベル</Label>
-                        <Select value={contentAccessLevel} onValueChange={setContentAccessLevel}>
-                          <SelectTrigger>
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="public">パブリック</SelectItem>
-                            <SelectItem value="member">会員限定</SelectItem>
-                            <SelectItem value="premium">プレミアム会員限定</SelectItem>
-                          </SelectContent>
-                        </Select>
-                      </div>
-                      <div className="space-y-2">
-                        <Label>公開設定</Label>
-                        <label className="flex items-center space-x-2">
-                          <input
-                            type="checkbox"
-                            checked={contentPublished}
-                            onChange={(e) => setContentPublished(e.target.checked)}
+                  <TabsContent value="content-list">
+                    {/* Existing Content Editor */}
+                    {selectedContent ? (
+                      <Card>
+                        <CardHeader>
+                          <CardTitle>ページ編集</CardTitle>
+                          <CardDescription>
+                            {selectedContent.title} の編集
+                          </CardDescription>
+                        </CardHeader>
+                        <CardContent className="space-y-4">
+                          <div className="grid grid-cols-2 gap-4">
+                            <div className="space-y-2">
+                              <Label htmlFor="contentTitle">ページタイトル</Label>
+                              <Input
+                                id="contentTitle"
+                                value={contentTitle}
+                                onChange={(e) => setContentTitle(e.target.value)}
+                              />
+                            </div>
+                            <div className="space-y-2">
+                              <Label htmlFor="contentSlug">URL スラッグ</Label>
+                              <Input
+                                id="contentSlug"
+                                value={contentSlug}
+                                onChange={(e) => setContentSlug(e.target.value)}
+                              />
+                            </div>
+                          </div>
+
+                          <div className="grid grid-cols-3 gap-4">
+                            <div className="space-y-2">
+                              <Label htmlFor="contentType">ページタイプ</Label>
+                              <Select value={contentType} onValueChange={setContentType}>
+                                <SelectTrigger>
+                                  <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value="page">ページ</SelectItem>
+                                  <SelectItem value="post">投稿</SelectItem>
+                                  <SelectItem value="landing">ランディング</SelectItem>
+                                </SelectContent>
+                              </Select>
+                            </div>
+                            <div className="space-y-2">
+                              <Label htmlFor="contentAccessLevel">アクセスレベル</Label>
+                              <Select value={contentAccessLevel} onValueChange={setContentAccessLevel}>
+                                <SelectTrigger>
+                                  <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value="public">パブリック</SelectItem>
+                                  <SelectItem value="member">会員限定</SelectItem>
+                                  <SelectItem value="premium">プレミアム会員限定</SelectItem>
+                                </SelectContent>
+                              </Select>
+                            </div>
+                            <div className="space-y-2">
+                              <Label>公開設定</Label>
+                              <label className="flex items-center space-x-2">
+                                <input
+                                  type="checkbox"
+                                  checked={contentPublished}
+                                  onChange={(e) => setContentPublished(e.target.checked)}
+                                />
+                                <span>公開する</span>
+                              </label>
+                            </div>
+                          </div>
+
+                          <div className="space-y-2">
+                            <Label htmlFor="contentText">コンテンツ</Label>
+                            <Textarea
+                              id="contentText"
+                              value={contentText}
+                              onChange={(e) => setContentText(e.target.value)}
+                              rows={15}
+                              placeholder="ページの内容を入力してください"
+                            />
+                          </div>
+
+                          <Button onClick={saveContent} disabled={saving} className="w-full">
+                            <Save className="w-4 h-4 mr-2" />
+                            {saving ? "保存中..." : "ページを保存"}
+                          </Button>
+                        </CardContent>
+                      </Card>
+                    ) : (
+                      <Card>
+                        <CardContent className="p-12">
+                          <div className="text-center">
+                            <p className="text-muted-foreground mb-4">
+                              左側からページを選択して編集するか、新しいページを作成してください
+                            </p>
+                            <Button onClick={createNewContent}>
+                              <Plus className="w-4 h-4 mr-2" />
+                              最初のページを作成
+                            </Button>
+                          </div>
+                        </CardContent>
+                      </Card>
+                    )}
+                  </TabsContent>
+
+                  <TabsContent value="category-settings">
+                    <Card>
+                      <CardHeader><CardTitle>カテゴリ設定</CardTitle></CardHeader>
+                      <CardContent>
+                        <p className="text-muted-foreground">カテゴリ設定のコンテンツ</p>
+                      </CardContent>
+                    </Card>
+                  </TabsContent>
+
+                  <TabsContent value="plan-settings">
+                    <Card>
+                      <CardHeader><CardTitle>プラン設定</CardTitle></CardHeader>
+                      <CardContent>
+                        <p className="text-muted-foreground">プラン設定のコンテンツ</p>
+                      </CardContent>
+                    </Card>
+                  </TabsContent>
+
+                  <TabsContent value="content-display">
+                    <Card>
+                      <CardHeader><CardTitle>コンテンツ表示方法</CardTitle></CardHeader>
+                      <CardContent>
+                        <p className="text-muted-foreground">コンテンツ表示方法のコンテンツ</p>
+                      </CardContent>
+                    </Card>
+                  </TabsContent>
+
+                  <TabsContent value="site-settings">
+                    {/* Existing Site Settings */}
+                    <Card>
+                      <CardHeader>
+                        <CardTitle>サイト設定</CardTitle>
+                        <CardDescription>
+                          基本情報と設定
+                        </CardDescription>
+                      </CardHeader>
+                      <CardContent className="space-y-4">
+                        <div className="space-y-2">
+                          <Label htmlFor="siteName">サイト名</Label>
+                          <Input
+                            id="siteName"
+                            value={siteName}
+                            onChange={(e) => setSiteName(e.target.value)}
+                            placeholder="サイト名を入力"
                           />
-                          <span>公開する</span>
-                        </label>
-                      </div>
-                    </div>
+                        </div>
+                        
+                        <div className="space-y-2">
+                          <Label htmlFor="siteDescription">説明</Label>
+                          <Textarea
+                            id="siteDescription"
+                            value={siteDescription}
+                            onChange={(e) => setSiteDescription(e.target.value)}
+                            placeholder="サイトの説明を入力"
+                          />
+                        </div>
 
-                    <div className="space-y-2">
-                      <Label htmlFor="contentText">コンテンツ</Label>
-                      <Textarea
-                        id="contentText"
-                        value={contentText}
-                        onChange={(e) => setContentText(e.target.value)}
-                        rows={15}
-                        placeholder="ページの内容を入力してください"
-                      />
-                    </div>
+                        <div className="space-y-2">
+                          <Label htmlFor="siteSlug">URL スラッグ</Label>
+                          <Input
+                            id="siteSlug"
+                            value={siteSlug}
+                            onChange={(e) => setSiteSlug(e.target.value)}
+                            placeholder="url-slug"
+                          />
+                        </div>
 
-                    <Button onClick={saveContent} disabled={saving} className="w-full">
-                      <Save className="w-4 h-4 mr-2" />
-                      {saving ? "保存中..." : "ページを保存"}
-                    </Button>
-                  </CardContent>
-                </Card>
-              ) : siteId ? (
-                <Card>
-                  <CardContent className="p-12">
-                    <div className="text-center">
-                      <p className="text-muted-foreground mb-4">
-                        左側からページを選択して編集するか、新しいページを作成してください
-                      </p>
-                      <Button onClick={createNewContent}>
-                        <Plus className="w-4 h-4 mr-2" />
-                        最初のページを作成
-                      </Button>
-                    </div>
-                  </CardContent>
-                </Card>
+                        <div className="space-y-2">
+                          <Label htmlFor="accessType">アクセスタイプ</Label>
+                          <Select value={accessType} onValueChange={setAccessType}>
+                            <SelectTrigger>
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="free">無料</SelectItem>
+                              <SelectItem value="paid">有料（買い切り）</SelectItem>
+                              <SelectItem value="subscription">サブスクリプション</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
+
+                        {accessType !== 'free' && (
+                          <div className="space-y-2">
+                            <Label htmlFor="price">料金 (円)</Label>
+                            <Input
+                              id="price"
+                              type="number"
+                              value={price}
+                              onChange={(e) => setPrice(Number(e.target.value))}
+                            />
+                          </div>
+                        )}
+
+                        <div className="flex gap-4">
+                          <label className="flex items-center space-x-2">
+                            <input
+                              type="checkbox"
+                              checked={isPublished}
+                              onChange={(e) => setIsPublished(e.target.checked)}
+                            />
+                            <span>公開する</span>
+                          </label>
+                          <label className="flex items-center space-x-2">
+                            <input
+                              type="checkbox"
+                              checked={isPublic}
+                              onChange={(e) => setIsPublic(e.target.checked)}
+                            />
+                            <span>パブリックアクセス許可</span>
+                          </label>
+                        </div>
+
+                        <Button onClick={saveSite} disabled={saving} className="w-full">
+                          <Save className="w-4 h-4 mr-2" />
+                          {saving ? "保存中..." : "サイト設定を保存"}
+                        </Button>
+                        
+                        {siteId && (
+                          <Button 
+                            variant="outline" 
+                            onClick={() => navigate(`/member-sites/management?site=${siteId}`)}
+                            className="w-full"
+                          >
+                            <Settings className="w-4 h-4 mr-2" />
+                            管理画面へ
+                          </Button>
+                        )}
+                      </CardContent>
+                    </Card>
+                  </TabsContent>
+                </Tabs>
               ) : (
                 <Card>
                   <CardContent className="p-12">
                     <div className="text-center">
                       <p className="text-muted-foreground mb-4">
-                        まずはサイトの基本設定を保存してください
+                        左側のリストからサイトを選択して編集するか、新しいサイトを作成してください
                       </p>
+                      <Button onClick={() => setSearchParams({ site: 'new' })}> {/* Placeholder for new site creation */}
+                        <Plus className="w-4 h-4 mr-2" />
+                        最初のサイトを作成
+                      </Button>
                     </div>
                   </CardContent>
                 </Card>

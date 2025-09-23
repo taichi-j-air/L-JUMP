@@ -271,7 +271,7 @@ function AppContent() {
                 <Routes>
                   <Route path="/rich-menu" element={<RichMenuSettings />} />
                   <Route path="/greeting-message" element={<GreetingMessageSettings />} />
-                  <Route path="/member-sites" element={<MemberSitesList />} />
+                  <Route path="/member-sites" element={<MemberSiteBuilder />} />
                   <Route path="/member-sites/builder" element={<MemberSiteBuilder />} />
                   <Route path="/member-sites/management" element={<MemberSiteManagement />} />
                   <Route path="/" element={<Index />} />
