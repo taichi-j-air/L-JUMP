@@ -47,6 +47,7 @@ interface Category {
   sort_order: number;
   content_count: number;
   created_at: string;
+  thumbnail_url?: string;
 }
 
 const MemberSiteBuilder = () => {
@@ -87,6 +88,7 @@ const MemberSiteBuilder = () => {
   const [selectedCategoryId, setSelectedCategoryId] = useState<string | null>(null);
   const [categoryName, setCategoryName] = useState("");
   const [categoryDescription, setCategoryDescription] = useState("");
+  const [thumbnailUrl, setThumbnailUrl] = useState<string>("");
 
   // Load site data when site is selected
   useEffect(() => {
@@ -112,6 +114,7 @@ const MemberSiteBuilder = () => {
       setSelectedCategoryId(null);
       setCategoryName("");
       setCategoryDescription("");
+      setThumbnailUrl("");
       
       // Load fresh data for the selected site
       loadSiteData();
@@ -133,6 +136,7 @@ const MemberSiteBuilder = () => {
       setSelectedCategoryId(null);
       setCategoryName("");
       setCategoryDescription("");
+      setThumbnailUrl("");
     }
   }, [siteId]);
 
@@ -550,6 +554,7 @@ const MemberSiteBuilder = () => {
       setSelectedCategoryId(data.id);
       setCategoryName(data.name);
       setCategoryDescription(data.description || "");
+      setThumbnailUrl("");
       
       loadCategories();
       
@@ -585,14 +590,20 @@ const MemberSiteBuilder = () => {
         name: categoryName,
         description: categoryDescription,
         site_id: siteId,
-        sort_order: categories.length
+        sort_order: categories.length,
+        thumbnail_url: thumbnailUrl || null,
       };
 
       if (selectedCategoryId) {
         // Update existing category
+        const categoryUpdatePayload = {
+          name: categoryName,
+          description: categoryDescription,
+          thumbnail_url: thumbnailUrl || null,
+        };
         const { error } = await supabase
           .from('member_site_categories')
-          .update(categoryPayload)
+          .update(categoryUpdatePayload)
           .eq('id', selectedCategoryId);
 
         if (error) throw error;
@@ -632,6 +643,7 @@ const MemberSiteBuilder = () => {
     setSelectedCategoryId(category.id);
     setCategoryName(category.name);
     setCategoryDescription(category.description || "");
+    setThumbnailUrl(category.thumbnail_url || "");
   };
 
   const deleteCategory = async (categoryId: string) => {
@@ -658,6 +670,7 @@ const MemberSiteBuilder = () => {
         setSelectedCategoryId(null);
         setCategoryName("");
         setCategoryDescription("");
+        setThumbnailUrl("");
       }
       
       loadCategories();
@@ -1062,16 +1075,26 @@ const MemberSiteBuilder = () => {
                                  />
                                </div>
                                
-                               <div className="space-y-2">
-                                 <Label htmlFor="categoryDescription">説明</Label>
-                                 <Textarea
-                                   id="categoryDescription"
-                                   value={categoryDescription}
-                                   onChange={(e) => setCategoryDescription(e.target.value)}
-                                   placeholder="カテゴリの説明を入力してください（任意）"
-                                   rows={4}
-                                 />
-                               </div>
+                                <div className="space-y-2">
+                                  <Label htmlFor="categoryDescription">説明</Label>
+                                  <Textarea
+                                    id="categoryDescription"
+                                    value={categoryDescription}
+                                    onChange={(e) => setCategoryDescription(e.target.value)}
+                                    placeholder="カテゴリの説明を入力してください（任意）"
+                                    rows={4}
+                                  />
+                                </div>
+                                
+                                <div className="space-y-2">
+                                  <Label htmlFor="thumbnail-url">サムネイルURL</Label>
+                                  <Input
+                                    id="thumbnail-url"
+                                    placeholder="https://example.com/image.jpg"
+                                    value={thumbnailUrl}
+                                    onChange={(e) => setThumbnailUrl(e.target.value)}
+                                  />
+                                </div>
 
                                <Button onClick={saveCategory} disabled={saving || !categoryName.trim()} className="w-full">
                                  <Save className="w-4 h-4 mr-2" />
