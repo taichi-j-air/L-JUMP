@@ -37,6 +37,15 @@ interface SiteContent {
   sort_order: number;
 }
 
+interface Category {
+  id: string;
+  name: string;
+  description: string | null;
+  site_id: string;
+  created_at: string;
+  content_count: number;
+}
+
 const MemberSiteBuilder = () => {
   const navigate = useNavigate();
   const { toast } = useToast();
@@ -69,11 +78,18 @@ const MemberSiteBuilder = () => {
   const [contentAccessLevel, setContentAccessLevel] = useState("member");
   const [contentPublished, setContentPublished] = useState(false);
 
+  // Category editing
+  const [categories, setCategories] = useState<Category[]>([]);
+  const [selectedCategoryId, setSelectedCategoryId] = useState<string | null>(null);
+  const [categoryName, setCategoryName] = useState("");
+  const [categoryDescription, setCategoryDescription] = useState("");
+
   useEffect(() => {
     loadSites(); // Load all sites for the left panel
     if (siteId) {
       loadSiteData();
       loadSiteContents();
+      loadCategories();
     } else {
       // Reset form if no site is selected
       setSite(null);
@@ -86,6 +102,10 @@ const MemberSiteBuilder = () => {
       setIsPublic(false);
       setSiteContents([]);
       setSelectedContentId(null);
+      setCategories([]);
+      setSelectedCategoryId(null);
+      setCategoryName("");
+      setCategoryDescription("");
     }
   }, [siteId]);
 
@@ -445,7 +465,96 @@ const MemberSiteBuilder = () => {
     }
   };
 
+  const loadCategories = async () => {
+    if (!siteId) return;
+    
+    try {
+      // Create sample categories with content count for now
+      const sampleCategories: Category[] = [
+        {
+          id: 'default',
+          name: 'デフォルトカテゴリ',
+          description: 'デフォルトのカテゴリです',
+          site_id: siteId,
+          created_at: new Date().toISOString(),
+          content_count: siteContents.length
+        }
+      ];
+      setCategories(sampleCategories);
+    } catch (error) {
+      console.error('Error loading categories:', error);
+    }
+  };
+
+  const createNewCategory = () => {
+    setSelectedCategoryId(null);
+    setCategoryName("");
+    setCategoryDescription("");
+  };
+
+  const saveCategory = async () => {
+    if (!categoryName.trim()) {
+      toast({
+        title: "エラー",
+        description: "カテゴリ名を入力してください",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setSaving(true);
+    try {
+      if (selectedCategoryId) {
+        // Update existing category
+        const updatedCategories = categories.map(cat => 
+          cat.id === selectedCategoryId 
+            ? { ...cat, name: categoryName, description: categoryDescription }
+            : cat
+        );
+        setCategories(updatedCategories);
+        
+        toast({
+          title: "保存完了",
+          description: "カテゴリを更新しました",
+        });
+      } else {
+        // Create new category
+        const newCategory: Category = {
+          id: `cat-${Date.now()}`,
+          name: categoryName,
+          description: categoryDescription,
+          site_id: siteId!,
+          created_at: new Date().toISOString(),
+          content_count: 0
+        };
+        setCategories([...categories, newCategory]);
+        setSelectedCategoryId(newCategory.id);
+        
+        toast({
+          title: "作成完了",
+          description: "新しいカテゴリを作成しました",
+        });
+      }
+    } catch (error) {
+      console.error('Error saving category:', error);
+      toast({
+        title: "エラー",
+        description: "カテゴリの保存に失敗しました",
+        variant: "destructive",
+      });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const selectCategory = (category: Category) => {
+    setSelectedCategoryId(category.id);
+    setCategoryName(category.name);
+    setCategoryDescription(category.description || "");
+  };
+
   const selectedContent = siteContents.find(c => c.id === selectedContentId);
+  const selectedCategory = categories.find(c => c.id === selectedCategoryId);
 
   return (
     <div className="min-h-screen bg-background">
@@ -578,46 +687,46 @@ const MemberSiteBuilder = () => {
                           {siteContents.length === 0 ? (
                             <p className="text-xs text-muted-foreground">ページがありません</p>
                           ) : (
-                             <Table className="w-full border-collapse">
-                              <TableBody>
-                                {siteContents.map((content) => (
-                                  <TableRow
-                                    key={content.id}
-                                    className={`cursor-pointer transition-colors ${
-                                      selectedContentId === content.id
-                                        ? 'bg-[#0cb386]/20 border-2 border-[#0cb386]'
-                                        : 'hover:bg-muted/50 border border-transparent'
-                                    }`}
-                                    onClick={() => selectContent(content)}
-                                  >
-                                    <TableCell className="py-1 text-left align-top border-b-0">
-                                      <div className="flex items-center gap-2">
-                                        <span className={`h-2 w-2 rounded-full ${content.is_published ? 'bg-green-500' : 'bg-red-500'}`}></span>
-                                        <div className="h-4 w-px bg-border"></div>
-                                        <div className="min-w-0 flex-1">
-                                          <div className="text-xs font-medium truncate">{content.title}</div>
-                                        </div>
-                                      </div>
-                                    </TableCell>
-                                    <TableCell className="py-1 text-right align-top border-b-0 w-1/4">
-                                      <div className="flex items-center justify-end gap-1">
-                                        <Button
-                                          size="sm"
-                                          variant="ghost"
-                                          className="h-5 w-5 p-0 text-destructive hover:text-destructive"
-                                          onClick={(e) => {
-                                            e.stopPropagation();
-                                            deleteContent(content.id);
-                                          }}
-                                        >
-                                          <Trash2 className="h-3 w-3" />
-                                        </Button>
-                                      </div>
-                                    </TableCell>
-                                  </TableRow>
-                                ))}
-                              </TableBody>
-                            </Table>
+                              <Table className="w-full border-collapse">
+                               <TableBody className="[&_tr:last-child]:border-b-0">
+                                 {siteContents.map((content) => (
+                                   <TableRow
+                                     key={content.id}
+                                     className={`cursor-pointer transition-colors ${
+                                       selectedContentId === content.id
+                                         ? 'bg-[#0cb386]/20 border-2 border-[#0cb386]'
+                                         : 'hover:bg-muted/50 border-2 border-transparent'
+                                     }`}
+                                     onClick={() => selectContent(content)}
+                                   >
+                                     <TableCell className="py-1 text-left align-top">
+                                       <div className="flex items-center gap-2">
+                                         <span className={`h-2 w-2 rounded-full ${content.is_published ? 'bg-green-500' : 'bg-red-500'}`}></span>
+                                         <div className="h-4 w-px bg-border"></div>
+                                         <div className="min-w-0 flex-1">
+                                           <div className="text-xs font-medium truncate">{content.title}</div>
+                                         </div>
+                                       </div>
+                                     </TableCell>
+                                     <TableCell className="py-1 text-right align-top w-1/4">
+                                       <div className="flex items-center justify-end gap-1">
+                                         <Button
+                                           size="sm"
+                                           variant="ghost"
+                                           className="h-5 w-5 p-0 text-destructive hover:text-destructive"
+                                           onClick={(e) => {
+                                             e.stopPropagation();
+                                             deleteContent(content.id);
+                                           }}
+                                         >
+                                           <Trash2 className="h-3 w-3" />
+                                         </Button>
+                                       </div>
+                                     </TableCell>
+                                   </TableRow>
+                                 ))}
+                               </TableBody>
+                             </Table>
                           )}
                         </div>
                       </div>
@@ -737,33 +846,46 @@ const MemberSiteBuilder = () => {
                             <h3 className="text-base font-medium text-white">カテゴリ一覧</h3>
                           </div>
                         </div>
-                        <div className="bg-white p-4 border-b border-border">
-                          <Button size="sm" disabled={saving} className="w-full bg-[#0cb386] hover:bg-[#0cb386]/90 text-white">
-                            <Plus className="w-4 h-4 mr-2" />
-                            カテゴリ追加
-                          </Button>
-                        </div>
-                        <div className="flex-grow overflow-y-auto">
-                          <Table className="w-full border-collapse">
-                            <TableBody>
-                              {/* Sample categories - replace with actual data */}
-                              <TableRow className="cursor-pointer transition-colors hover:bg-muted/50 border border-transparent">
-                                <TableCell className="py-1 text-left align-top border-b-0">
-                                  <div className="flex items-center gap-2">
-                                    <span className="h-2 w-2 rounded-full bg-blue-500"></span>
-                                    <div className="h-4 w-px bg-border"></div>
-                                    <div className="min-w-0 flex-1">
-                                      <div className="text-xs font-medium truncate">デフォルトカテゴリ</div>
-                                    </div>
-                                  </div>
-                                </TableCell>
-                                <TableCell className="py-1 text-right align-top border-b-0 w-1/4">
-                                  <div className="text-xs text-muted-foreground">{siteContents.length}件</div>
-                                </TableCell>
-                              </TableRow>
-                            </TableBody>
-                          </Table>
-                        </div>
+                         <div className="bg-white p-4 border-b border-border">
+                           <Button size="sm" onClick={createNewCategory} disabled={saving} className="w-full bg-[#0cb386] hover:bg-[#0cb386]/90 text-white">
+                             <Plus className="w-4 h-4 mr-2" />
+                             カテゴリ追加
+                           </Button>
+                         </div>
+                         <div className="flex-grow overflow-y-auto">
+                           {categories.length === 0 ? (
+                             <p className="text-xs text-muted-foreground p-4">カテゴリがありません</p>
+                           ) : (
+                             <Table className="w-full border-collapse">
+                               <TableBody className="[&_tr:last-child]:border-b-0">
+                                 {categories.map((category) => (
+                                   <TableRow
+                                     key={category.id}
+                                     className={`cursor-pointer transition-colors ${
+                                       selectedCategoryId === category.id
+                                         ? 'bg-[#0cb386]/20 border-2 border-[#0cb386]'
+                                         : 'hover:bg-muted/50 border-2 border-transparent'
+                                     }`}
+                                     onClick={() => selectCategory(category)}
+                                   >
+                                     <TableCell className="py-1 text-left align-top">
+                                       <div className="flex items-center gap-2">
+                                         <span className="h-2 w-2 rounded-full bg-blue-500"></span>
+                                         <div className="h-4 w-px bg-border"></div>
+                                         <div className="min-w-0 flex-1">
+                                           <div className="text-xs font-medium truncate">{category.name}</div>
+                                         </div>
+                                       </div>
+                                     </TableCell>
+                                     <TableCell className="py-1 text-right align-top w-1/4">
+                                       <div className="text-xs text-muted-foreground">{category.content_count}件</div>
+                                     </TableCell>
+                                   </TableRow>
+                                 ))}
+                               </TableBody>
+                             </Table>
+                           )}
+                         </div>
                       </div>
                       
                       {/* Main Category Settings Area - 80% width */}
@@ -775,29 +897,33 @@ const MemberSiteBuilder = () => {
                               コンテンツのカテゴリを管理
                             </CardDescription>
                           </CardHeader>
-                          <CardContent>
-                            <div className="space-y-4">
-                              <div className="space-y-2">
-                                <Label htmlFor="categoryName">カテゴリ名</Label>
-                                <Input
-                                  id="categoryName"
-                                  placeholder="カテゴリ名を入力"
-                                />
-                              </div>
-                              <div className="space-y-2">
-                                <Label htmlFor="categoryDescription">説明</Label>
-                                <Textarea
-                                  id="categoryDescription"
-                                  placeholder="カテゴリの説明を入力"
-                                  rows={3}
-                                />
-                              </div>
-                              <Button className="w-full">
-                                <Save className="w-4 h-4 mr-2" />
-                                カテゴリを保存
-                              </Button>
-                            </div>
-                          </CardContent>
+                           <CardContent>
+                             <div className="space-y-4">
+                               <div className="space-y-2">
+                                 <Label htmlFor="categoryName">カテゴリ名</Label>
+                                 <Input
+                                   id="categoryName"
+                                   value={categoryName}
+                                   onChange={(e) => setCategoryName(e.target.value)}
+                                   placeholder="カテゴリ名を入力"
+                                 />
+                               </div>
+                               <div className="space-y-2">
+                                 <Label htmlFor="categoryDescription">説明</Label>
+                                 <Textarea
+                                   id="categoryDescription"
+                                   value={categoryDescription}
+                                   onChange={(e) => setCategoryDescription(e.target.value)}
+                                   placeholder="カテゴリの説明を入力"
+                                   rows={3}
+                                 />
+                               </div>
+                               <Button onClick={saveCategory} disabled={saving} className="w-full">
+                                 <Save className="w-4 h-4 mr-2" />
+                                 {saving ? "保存中..." : selectedCategoryId ? "カテゴリを更新" : "カテゴリを保存"}
+                               </Button>
+                             </div>
+                           </CardContent>
                         </Card>
                       </div>
                     </div>
