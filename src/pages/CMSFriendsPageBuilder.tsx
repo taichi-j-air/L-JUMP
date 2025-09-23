@@ -279,7 +279,7 @@ export default function CMSFriendsPageBuilder() {
     try {
       // タイマー設定の検証
       if (timerEnabled && timerMode === "per_access") {
-        const totalSeconds = toSeconds(durDays, durHours, durMins, durSecs);
+        const totalSeconds = toSeconds(durDays, durHours, durMinutes, durSecs);
         if (totalSeconds <= 0) {
           toast.error("タイマーが有効な場合、1秒以上の期間を設定してください");
           setSaving(false);
