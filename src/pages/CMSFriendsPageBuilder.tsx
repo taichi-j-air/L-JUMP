@@ -294,6 +294,7 @@ export default function CMSFriendsPageBuilder() {
       }
 
       const currentDurationSeconds = toSeconds(durDays, durHours, durMinutes, durSecs);
+      const oldTimerDurationSeconds = selected.timer_duration_seconds;
 
       let validatedTimerDeadline = null;
       if (timerMode === "absolute" && timerDeadline) {
@@ -348,6 +349,21 @@ export default function CMSFriendsPageBuilder() {
       if (error) {
         console.error("Save error:", error);
         throw error;
+      }
+
+      // Update existing friend_page_access records if timer duration changed
+      if (timerEnabled && timerMode === "per_access" && currentDurationSeconds !== null && currentDurationSeconds !== oldTimerDurationSeconds) {
+        try {
+          await supabase.functions.invoke('update-page-timer-settings', {
+            body: {
+              pageShareCode: selected.share_code,
+              timerDurationSeconds: currentDurationSeconds
+            }
+          });
+        } catch (updateError) {
+          console.error('Error updating timer settings for existing records:', updateError);
+          // Don't fail the save operation if this update fails
+        }
       }
 
       setPages(prev => prev.map(p => (p.id === selected.id ? { ...(p as any), ...(data as any) } : p)) as any);
