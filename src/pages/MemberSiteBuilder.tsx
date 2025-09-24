@@ -11,8 +11,8 @@ import { ArrowLeft, Save, Eye, Plus, Trash2, Settings, Image as ImageIcon } from
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { Table, TableBody, TableCell, TableRow } from "@/components/ui/table";
-import { Badge } from "@/components/ui/badge";
 import { MediaLibrarySelector } from "@/components/MediaLibrarySelector";
+import { EnhancedBlockEditor } from "@/components/EnhancedBlockEditor";
 
 // Data Interfaces
 interface MemberSite {
@@ -20,7 +20,7 @@ interface MemberSite {
   name: string;
   description: string | null;
   slug: string;
-  access_type: string;
+  access_type: "free" | "paid";
   price: number;
   theme_config: any;
   is_published: boolean;
@@ -32,12 +32,12 @@ interface SiteContent {
   id: string;
   title: string;
   content: string | null;
-  page_type: string;
+  page_type: "page" | "post" | "landing";
   slug: string;
   is_published: boolean;
-  access_level: string;
+  access_level: "public" | "member" | "premium";
   sort_order: number;
-  category_id?: string;
+  category_id?: string | null;
 }
 
 interface Category {
@@ -46,9 +46,10 @@ interface Category {
   description: string | null;
   site_id: string;
   sort_order: number;
-  content_count: number;        // 表示用の件数フィールド
+  content_count: number;
   created_at: string;
-  thumbnail_url: string | null; // サムネイルURL（DB列）
+  thumbnail_url: string | null;
+  content_blocks?: any[] | null; // JSON array
 }
 
 const MemberSiteBuilder = () => {
@@ -65,11 +66,11 @@ const MemberSiteBuilder = () => {
   const [sites, setSites] = useState<MemberSite[]>([]);
   const [siteContents, setSiteContents] = useState<SiteContent[]>([]);
 
-  // Form states
+  // Site form
   const [siteName, setSiteName] = useState("");
   const [siteDescription, setSiteDescription] = useState("");
   const [siteSlug, setSiteSlug] = useState("");
-  const [accessType, setAccessType] = useState("paid");
+  const [accessType, setAccessType] = useState<"free" | "paid">("paid");
   const [price, setPrice] = useState(0);
   const [isPublished, setIsPublished] = useState(false);
   const [isPublic, setIsPublic] = useState(false);
@@ -79,8 +80,8 @@ const MemberSiteBuilder = () => {
   const [contentTitle, setContentTitle] = useState("");
   const [contentText, setContentText] = useState("");
   const [contentSlug, setContentSlug] = useState("");
-  const [contentType, setContentType] = useState("page");
-  const [contentAccessLevel, setContentAccessLevel] = useState("member");
+  const [contentType, setContentType] = useState<"page" | "post" | "landing">("page");
+  const [contentAccessLevel, setContentAccessLevel] = useState<"public" | "member" | "premium">("member");
   const [contentPublished, setContentPublished] = useState(false);
   const [contentCategoryId, setContentCategoryId] = useState<string>("none");
 
@@ -89,13 +90,13 @@ const MemberSiteBuilder = () => {
   const [selectedCategoryId, setSelectedCategoryId] = useState<string | null>(null);
   const [categoryName, setCategoryName] = useState("");
   const [categoryDescription, setCategoryDescription] = useState("");
-  const [categoryThumbnailUrl, setCategoryThumbnailUrl] = useState<string | null>(null); // ★統一
+  const [categoryThumbnailUrl, setCategoryThumbnailUrl] = useState<string | null>(null);
+  const [categoryBlocks, setCategoryBlocks] = useState<any[]>([]); // JSON array
 
-  // Load site data when site is selected
   useEffect(() => {
     loadSites();
     if (siteId) {
-      // Reset all state when switching sites
+      // reset (site switch)
       setSite(null);
       setSiteName("");
       setSiteDescription("");
@@ -116,13 +117,14 @@ const MemberSiteBuilder = () => {
       setCategoryName("");
       setCategoryDescription("");
       setCategoryThumbnailUrl(null);
+      setCategoryBlocks([]);
 
-      // Load fresh data for the selected site
+      // load fresh
       loadSiteData();
       loadSiteContents();
       loadCategories();
     } else {
-      // Reset form if no site is selected
+      // reset all when no site selected
       setSite(null);
       setSiteName("");
       setSiteDescription("");
@@ -138,106 +140,22 @@ const MemberSiteBuilder = () => {
       setCategoryName("");
       setCategoryDescription("");
       setCategoryThumbnailUrl(null);
+      setCategoryBlocks([]);
     }
   }, [siteId]);
-
-  const handleCreateSite = async () => {
-    setSaving(true);
-    try {
-      const { data: userData } = await supabase.auth.getUser();
-      if (!userData.user) throw new Error("認証が必要です");
-
-      const { data, error } = await supabase
-        .from("member_sites")
-        .insert({
-          name: "新しいサイト",
-          description: "",
-          slug: `site-${Date.now()}`,
-          access_type: "paid",
-          price: 0,
-          is_published: false,
-          is_public: false,
-          user_id: userData.user.id,
-        })
-        .select()
-        .single();
-
-      if (error) throw error;
-
-      // Refresh sites list and select the new site
-      await loadSites();
-      setSearchParams({ site: data.id });
-
-      toast({
-        title: "作成完了",
-        description: "新しいサイトを作成しました",
-      });
-    } catch (error) {
-      console.error("Error creating site:", error);
-      toast({
-        title: "エラー",
-        description: "サイトの作成に失敗しました",
-        variant: "destructive",
-      });
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  const handleDeleteSite = async (delSiteId: string) => {
-    if (!confirm("本当にこのサイトを削除しますか？関連するコンテンツも全て削除されます。")) return;
-
-    setSaving(true);
-    try {
-      // Delete related data first
-      await supabase.from("member_site_content").delete().eq("site_id", delSiteId);
-      await supabase.from("member_site_categories").delete().eq("site_id", delSiteId);
-      await supabase.from("member_site_payments").delete().eq("site_id", delSiteId);
-      await supabase.from("member_site_subscriptions").delete().eq("site_id", delSiteId);
-      await supabase.from("member_site_users").delete().eq("site_id", delSiteId);
-
-      // Delete the site itself
-      const { error } = await supabase.from("member_sites").delete().eq("id", delSiteId);
-      if (error) throw error;
-
-      // If the deleted site was selected, clear selection
-      if (delSiteId === searchParams.get("site")) {
-        setSearchParams({});
-      }
-
-      // Refresh sites list
-      await loadSites();
-
-      toast({
-        title: "削除完了",
-        description: "サイトを削除しました",
-      });
-    } catch (error) {
-      console.error("Error deleting site:", error);
-      toast({
-        title: "エラー",
-        description: "サイトの削除に失敗しました",
-        variant: "destructive",
-      });
-    } finally {
-      setSaving(false);
-    }
-  };
 
   const loadSites = async () => {
     setLoading(true);
     try {
-      const { data, error } = await supabase.from("member_sites").select("*").order("created_at", { ascending: false });
-
+      const { data, error } = await supabase
+        .from("member_sites")
+        .select("*")
+        .order("created_at", { ascending: false });
       if (error) throw error;
-      setSites(data || []);
+      setSites((data || []).map((d: any) => ({ ...d, access_type: (d.access_type || "paid") as "free" | "paid" })));
     } catch (error) {
       console.error("Error loading sites:", error);
-      toast({
-        title: "エラー",
-        description: "サイト一覧の読み込みに失敗しました",
-        variant: "destructive",
-      });
+      toast({ title: "エラー", description: "サイト一覧の読み込みに失敗しました", variant: "destructive" });
     } finally {
       setLoading(false);
     }
@@ -245,29 +163,22 @@ const MemberSiteBuilder = () => {
 
   const loadSiteData = async () => {
     if (!siteId) return;
-
     setLoading(true);
     try {
       const { data, error } = await supabase.from("member_sites").select("*").eq("id", siteId).single();
-
       if (error) throw error;
-
       setSite(data);
       setSiteName(data.name);
       setSiteDescription(data.description || "");
       setSiteSlug(data.slug);
-      setAccessType(data.access_type);
+      setAccessType((data.access_type as "free" | "paid") || "paid");
       setPrice(data.price);
       setIsPublished(data.is_published);
       setIsPublic(data.is_public);
     } catch (error) {
       console.error("Error loading site:", error);
-      toast({
-        title: "エラー",
-        description: "サイト情報の読み込みに失敗しました",
-        variant: "destructive",
-      });
-      setSearchParams({}); // Clear siteId if loading fails
+      toast({ title: "エラー", description: "サイト情報の読み込みに失敗しました", variant: "destructive" });
+      setSearchParams({});
     } finally {
       setLoading(false);
     }
@@ -275,14 +186,12 @@ const MemberSiteBuilder = () => {
 
   const loadSiteContents = async () => {
     if (!siteId) return;
-
     try {
       const { data, error } = await supabase
         .from("member_site_content")
         .select("*")
         .eq("site_id", siteId)
         .order("sort_order", { ascending: true });
-
       if (error) throw error;
       setSiteContents(data || []);
     } catch (error) {
@@ -290,12 +199,9 @@ const MemberSiteBuilder = () => {
     }
   };
 
-  // Load categories function
   const loadCategories = async () => {
     if (!siteId) return;
-
     try {
-      // 関連の count を取得（PostgREST 結果の形に合わせて整形）
       const { data, error } = await supabase
         .from("member_site_categories")
         .select("*, member_site_content(count)")
@@ -313,18 +219,16 @@ const MemberSiteBuilder = () => {
           sort_order: cat.sort_order,
           created_at: cat.created_at,
           thumbnail_url: cat.thumbnail_url ?? null,
-          // PostgREST の形: member_site_content: [{ count: N }] or []
-          content_count: cat.member_site_content?.[0]?.count ?? 0,
+          content_blocks: Array.isArray(cat.content_blocks) ? cat.content_blocks : [],
+          content_count: Array.isArray(cat.member_site_content)
+            ? cat.member_site_content.length
+            : cat.member_site_content?.[0]?.count ?? 0,
         })) ?? [];
 
       setCategories(formatted);
     } catch (error) {
       console.error("Error loading categories:", error);
-      toast({
-        title: "エラー",
-        description: "カテゴリの読み込みに失敗しました",
-        variant: "destructive",
-      });
+      toast({ title: "エラー", description: "カテゴリの読み込みに失敗しました", variant: "destructive" });
     }
   };
 
@@ -332,7 +236,6 @@ const MemberSiteBuilder = () => {
     setSaving(true);
     try {
       if (siteId && siteId !== "new") {
-        // Update existing site
         const { error } = await supabase
           .from("member_sites")
           .update({
@@ -340,15 +243,13 @@ const MemberSiteBuilder = () => {
             description: siteDescription,
             slug: siteSlug,
             access_type: accessType,
-            price: price,
+            price,
             is_published: isPublished,
             is_public: isPublic,
           })
           .eq("id", siteId);
-
         if (error) throw error;
       } else {
-        // Create new site
         const { data, error } = await supabase
           .from("member_sites")
           .insert({
@@ -356,39 +257,25 @@ const MemberSiteBuilder = () => {
             description: siteDescription,
             slug: siteSlug,
             access_type: accessType,
-            price: price,
+            price,
             is_published: isPublished,
             is_public: isPublic,
             user_id: (await supabase.auth.getUser()).data.user?.id,
           })
           .select()
           .single();
-
         if (error) throw error;
 
-        // Redirect to edit mode with the new site ID
         setSearchParams({ site: data.id });
-        toast({
-          title: "作成完了",
-          description: "新しいサイトを作成しました",
-        });
+        toast({ title: "作成完了", description: "新しいサイトを作成しました" });
         return;
       }
-
-      toast({
-        title: "保存完了",
-        description: "サイト情報を保存しました",
-      });
-
+      toast({ title: "保存完了", description: "サイト情報を保存しました" });
       loadSiteData();
-      loadSites(); // Refresh the list on the left
+      loadSites();
     } catch (error) {
       console.error("Error saving site:", error);
-      toast({
-        title: "エラー",
-        description: "サイト情報の保存に失敗しました",
-        variant: "destructive",
-      });
+      toast({ title: "エラー", description: "サイト情報の保存に失敗しました", variant: "destructive" });
     } finally {
       setSaving(false);
     }
@@ -396,7 +283,6 @@ const MemberSiteBuilder = () => {
 
   const saveContent = async () => {
     if (!siteId || !selectedContentId) return;
-
     setSaving(true);
     try {
       const { error } = await supabase
@@ -411,23 +297,46 @@ const MemberSiteBuilder = () => {
           category_id: contentCategoryId === "none" ? null : contentCategoryId,
         })
         .eq("id", selectedContentId);
-
       if (error) throw error;
 
-      toast({
-        title: "保存完了",
-        description: "コンテンツを保存しました",
-      });
-
+      toast({ title: "保存完了", description: "コンテンツを保存しました" });
       loadSiteContents();
-      loadCategories(); // Refresh categories to update content count
+      loadCategories();
     } catch (error) {
       console.error("Error saving content:", error);
-      toast({
-        title: "エラー",
-        description: "コンテンツの保存に失敗しました",
-        variant: "destructive",
-      });
+      toast({ title: "エラー", description: "コンテンツの保存に失敗しました", variant: "destructive" });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleCreateSite = async () => {
+    setSaving(true);
+    try {
+      const { data: userData } = await supabase.auth.getUser();
+      if (!userData.user) throw new Error("認証が必要です");
+      const { data, error } = await supabase
+        .from("member_sites")
+        .insert({
+          name: "新しいサイト",
+          description: "",
+          slug: `site-${Date.now()}`,
+          access_type: "paid",
+          price: 0,
+          is_published: false,
+          is_public: false,
+          user_id: userData.user.id,
+        })
+        .select()
+        .single();
+      if (error) throw error;
+
+      await loadSites();
+      setSearchParams({ site: data.id });
+      toast({ title: "作成完了", description: "新しいサイトを作成しました" });
+    } catch (error) {
+      console.error("Error creating site:", error);
+      toast({ title: "エラー", description: "サイトの作成に失敗しました", variant: "destructive" });
     } finally {
       setSaving(false);
     }
@@ -435,7 +344,6 @@ const MemberSiteBuilder = () => {
 
   const createNewContent = async () => {
     if (!siteId) return;
-
     setSaving(true);
     try {
       const { data, error } = await supabase
@@ -452,7 +360,6 @@ const MemberSiteBuilder = () => {
         })
         .select()
         .single();
-
       if (error) throw error;
 
       setSelectedContentId(data.id);
@@ -465,18 +372,10 @@ const MemberSiteBuilder = () => {
       setContentCategoryId("none");
 
       loadSiteContents();
-
-      toast({
-        title: "作成完了",
-        description: "新しいページを作成しました",
-      });
+      toast({ title: "作成完了", description: "新しいページを作成しました" });
     } catch (error) {
       console.error("Error creating content:", error);
-      toast({
-        title: "エラー",
-        description: "ページの作成に失敗しました",
-        variant: "destructive",
-      });
+      toast({ title: "エラー", description: "ページの作成に失敗しました", variant: "destructive" });
     } finally {
       setSaving(false);
     }
@@ -495,10 +394,8 @@ const MemberSiteBuilder = () => {
 
   const deleteContent = async (contentId: string) => {
     if (!confirm("本当にこのページを削除しますか？")) return;
-
     try {
       const { error } = await supabase.from("member_site_content").delete().eq("id", contentId);
-
       if (error) throw error;
 
       if (selectedContentId === contentId) {
@@ -507,36 +404,20 @@ const MemberSiteBuilder = () => {
         setContentText("");
         setContentSlug("");
       }
-
       loadSiteContents();
-      loadCategories(); // Refresh categories to update content count
-
-      toast({
-        title: "削除完了",
-        description: "ページを削除しました",
-      });
+      loadCategories();
+      toast({ title: "削除完了", description: "ページを削除しました" });
     } catch (error) {
       console.error("Error deleting content:", error);
-      toast({
-        title: "エラー",
-        description: "ページの削除に失敗しました",
-        variant: "destructive",
-      });
-    } finally {
-      setSaving(false);
+      toast({ title: "エラー", description: "ページの削除に失敗しました", variant: "destructive" });
     }
   };
 
   const createNewCategory = async () => {
     if (!siteId) {
-      toast({
-        title: "エラー",
-        description: "サイトが選択されていません",
-        variant: "destructive",
-      });
+      toast({ title: "エラー", description: "サイトが選択されていません", variant: "destructive" });
       return;
     }
-
     setSaving(true);
     try {
       const { data, error } = await supabase
@@ -547,31 +428,23 @@ const MemberSiteBuilder = () => {
           site_id: siteId,
           sort_order: categories.length,
           thumbnail_url: null,
+          content_blocks: [], // 空配列で作成
         })
         .select()
         .single();
-
       if (error) throw error;
 
-      // Select the newly created category for editing
       setSelectedCategoryId(data.id);
       setCategoryName(data.name);
       setCategoryDescription(data.description || "");
       setCategoryThumbnailUrl(data.thumbnail_url ?? null);
+      setCategoryBlocks(Array.isArray(data.content_blocks) ? data.content_blocks : []);
 
       loadCategories();
-
-      toast({
-        title: "作成完了",
-        description: "新しいカテゴリを作成しました",
-      });
+      toast({ title: "作成完了", description: "新しいカテゴリを作成しました" });
     } catch (error) {
       console.error("Error creating category:", error);
-      toast({
-        title: "エラー",
-        description: "カテゴリの作成に失敗しました",
-        variant: "destructive",
-      });
+      toast({ title: "エラー", description: "カテゴリの作成に失敗しました", variant: "destructive" });
     } finally {
       setSaving(false);
     }
@@ -579,14 +452,9 @@ const MemberSiteBuilder = () => {
 
   const saveCategory = async () => {
     if (!siteId || !categoryName.trim()) {
-      toast({
-        title: "エラー",
-        description: "カテゴリ名を入力してください",
-        variant: "destructive",
-      });
+      toast({ title: "エラー", description: "カテゴリ名を入力してください", variant: "destructive" });
       return;
     }
-
     setSaving(true);
     try {
       const payload = {
@@ -594,37 +462,23 @@ const MemberSiteBuilder = () => {
         description: categoryDescription,
         site_id: siteId,
         sort_order: categories.length,
-        thumbnail_url: categoryThumbnailUrl, // ★統一
+        thumbnail_url: categoryThumbnailUrl,
+        content_blocks: Array.isArray(categoryBlocks) ? categoryBlocks : [], // 常に配列
       };
 
       if (selectedCategoryId) {
-        // Update existing category
         const { error } = await supabase.from("member_site_categories").update(payload).eq("id", selectedCategoryId);
         if (error) throw error;
-
-        toast({
-          title: "保存完了",
-          description: "カテゴリを更新しました",
-        });
+        toast({ title: "保存完了", description: "カテゴリを更新しました" });
       } else {
-        // Create new category
         const { error } = await supabase.from("member_site_categories").insert(payload);
         if (error) throw error;
-
-        toast({
-          title: "作成完了",
-          description: "新しいカテゴリを作成しました",
-        });
+        toast({ title: "作成完了", description: "新しいカテゴリを作成しました" });
       }
-
       loadCategories();
     } catch (error) {
       console.error("Error saving category:", error);
-      toast({
-        title: "エラー",
-        description: "カテゴリの保存に失敗しました",
-        variant: "destructive",
-      });
+      toast({ title: "エラー", description: "カテゴリの保存に失敗しました", variant: "destructive" });
     } finally {
       setSaving(false);
     }
@@ -635,42 +489,30 @@ const MemberSiteBuilder = () => {
     setCategoryName(category.name);
     setCategoryDescription(category.description || "");
     setCategoryThumbnailUrl(category.thumbnail_url ?? null);
+    setCategoryBlocks(Array.isArray(category.content_blocks) ? category.content_blocks : []);
   };
 
   const deleteCategory = async (categoryId: string) => {
     if (!confirm("本当にこのカテゴリを削除しますか？このカテゴリに属するコンテンツは「カテゴリなし」に移動されます。")) return;
-
     setSaving(true);
     try {
-      // First, update all content in this category to have no category
       await supabase.from("member_site_content").update({ category_id: null }).eq("category_id", categoryId);
-
-      // Then delete the category
       const { error } = await supabase.from("member_site_categories").delete().eq("id", categoryId);
       if (error) throw error;
 
-      // Clear selection if deleted category was selected
       if (selectedCategoryId === categoryId) {
         setSelectedCategoryId(null);
         setCategoryName("");
         setCategoryDescription("");
         setCategoryThumbnailUrl(null);
+        setCategoryBlocks([]);
       }
-
       loadCategories();
-      loadSiteContents(); // Refresh contents to show updated categories
-
-      toast({
-        title: "削除完了",
-        description: "カテゴリを削除しました",
-      });
+      loadSiteContents();
+      toast({ title: "削除完了", description: "カテゴリを削除しました" });
     } catch (error) {
       console.error("Error deleting category:", error);
-      toast({
-        title: "エラー",
-        description: "カテゴリの削除に失敗しました",
-        variant: "destructive",
-      });
+      toast({ title: "エラー", description: "カテゴリの削除に失敗しました", variant: "destructive" });
     } finally {
       setSaving(false);
     }
@@ -705,7 +547,7 @@ const MemberSiteBuilder = () => {
           </Card>
         ) : (
           <div className="grid grid-cols-12 gap-6">
-            {/* Left Column: Site List */}
+            {/* Left Column */}
             <div className="col-span-12 md:col-span-3 space-y-3">
               <Card>
                 <CardHeader className="flex flex-col gap-2 py-3">
@@ -752,7 +594,24 @@ const MemberSiteBuilder = () => {
                               disabled={saving}
                               onClick={(e) => {
                                 e.stopPropagation();
-                                handleDeleteSite(s.id);
+                                (async () => {
+                                  if (!confirm("本当にこのサイトを削除しますか？関連するコンテンツも全て削除されます。")) return;
+                                  try {
+                                    await supabase.from("member_site_content").delete().eq("site_id", s.id);
+                                    await supabase.from("member_site_categories").delete().eq("site_id", s.id);
+                                    await supabase.from("member_site_payments").delete().eq("site_id", s.id);
+                                    await supabase.from("member_site_subscriptions").delete().eq("site_id", s.id);
+                                    await supabase.from("member_site_users").delete().eq("site_id", s.id);
+                                    const { error } = await supabase.from("member_sites").delete().eq("id", s.id);
+                                    if (error) throw error;
+                                    if (s.id === searchParams.get("site")) setSearchParams({});
+                                    await loadSites();
+                                    toast({ title: "削除完了", description: "サイトを削除しました" });
+                                  } catch (err) {
+                                    console.error(err);
+                                    toast({ title: "エラー", description: "サイトの削除に失敗しました", variant: "destructive" });
+                                  }
+                                })();
                               }}
                             >
                               <Trash2 className="h-3 w-3" />
@@ -766,7 +625,7 @@ const MemberSiteBuilder = () => {
               </Card>
             </div>
 
-            {/* Right Column: Builder with Tabs */}
+            {/* Right Column */}
             <div className="col-span-12 md:col-span-9 space-y-6">
               <Tabs defaultValue={siteId ? "content-list" : "site-settings"}>
                 <TabsList className="grid w-full grid-cols-5">
@@ -777,9 +636,10 @@ const MemberSiteBuilder = () => {
                   <TabsTrigger value="site-settings">サイト設定</TabsTrigger>
                 </TabsList>
 
+                {/* Content List */}
                 <TabsContent value="content-list" className="border-2 border-border rounded-none">
                   <div className="flex">
-                    {/* Content Sidebar - 20% width */}
+                    {/* Sidebar */}
                     <div className="w-1/5 border-r border-border flex flex-col">
                       <div className="bg-[rgb(12,34,54)] py-6 px-4">
                         <div className="flex items-center justify-center">
@@ -799,10 +659,7 @@ const MemberSiteBuilder = () => {
                           <Table className="w-full border-collapse">
                             <TableBody>
                               {siteContents.map((content, index) => (
-                                <div
-                                  key={content.id}
-                                  className={`border-t border-border ${index === 0 ? "border-t-0" : ""} ${index === siteContents.length - 1 ? "border-b" : ""}`}
-                                >
+                                <div key={content.id} className={`border-t border-border ${index === 0 ? "border-t-0" : ""} ${index === siteContents.length - 1 ? "border-b" : ""}`}>
                                   <TableRow
                                     className={`cursor-pointer w-full ${selectedContentId === content.id ? "bg-[#0cb386]/20" : ""}`}
                                     onClick={() => selectContent(content)}
@@ -840,7 +697,7 @@ const MemberSiteBuilder = () => {
                       </div>
                     </div>
 
-                    {/* Main Content Area - 80% width */}
+                    {/* Main */}
                     <div className="w-4/5 rounded-none">
                       {selectedContent ? (
                         <Card className="rounded-none">
@@ -863,7 +720,7 @@ const MemberSiteBuilder = () => {
                             <div className="grid grid-cols-4 gap-4">
                               <div className="space-y-2">
                                 <Label htmlFor="contentType">ページタイプ</Label>
-                                <Select value={contentType} onValueChange={setContentType}>
+                                <Select value={contentType} onValueChange={(v: "page" | "post" | "landing") => setContentType(v)}>
                                   <SelectTrigger>
                                     <SelectValue />
                                   </SelectTrigger>
@@ -876,7 +733,7 @@ const MemberSiteBuilder = () => {
                               </div>
                               <div className="space-y-2">
                                 <Label htmlFor="contentAccessLevel">アクセスレベル</Label>
-                                <Select value={contentAccessLevel} onValueChange={setContentAccessLevel}>
+                                <Select value={contentAccessLevel} onValueChange={(v: "public" | "member" | "premium") => setContentAccessLevel(v)}>
                                   <SelectTrigger>
                                     <SelectValue />
                                   </SelectTrigger>
@@ -946,9 +803,10 @@ const MemberSiteBuilder = () => {
                   </div>
                 </TabsContent>
 
+                {/* Category Settings */}
                 <TabsContent value="category-settings" className="border-2 border-border rounded-none">
                   <div className="flex">
-                    {/* Category Sidebar - 20% width */}
+                    {/* Sidebar */}
                     <div className="w-1/5 border-r border-border flex flex-col">
                       <div className="bg-[rgb(12,34,54)] py-6 px-4">
                         <div className="flex items-center justify-center">
@@ -968,19 +826,14 @@ const MemberSiteBuilder = () => {
                           <Table className="w-full border-collapse">
                             <TableBody>
                               {categories.map((category, index) => (
-                                <div
-                                  key={category.id}
-                                  className={`border-t border-border ${index === 0 ? "border-t-0" : ""} ${index === categories.length - 1 ? "border-b" : ""}`}
-                                >
+                                <div key={category.id} className={`border-t border-border ${index === 0 ? "border-t-0" : ""} ${index === categories.length - 1 ? "border-b" : ""}`}>
                                   <TableRow
                                     className={`cursor-pointer w-full ${selectedCategoryId === category.id ? "bg-[#0cb386]/20" : ""}`}
                                     onClick={() => selectCategory(category)}
                                   >
                                     <TableCell className="py-2 text-left w-full">
                                       <div className="flex items-center gap-2">
-                                        {category.thumbnail_url && (
-                                          <img src={category.thumbnail_url} className="w-6 h-6 object-cover rounded" alt="" />
-                                        )}
+                                        {category.thumbnail_url && <img src={category.thumbnail_url} className="w-6 h-6 object-cover rounded" alt="" />}
                                         <div className="text-xs font-medium">{category.name}</div>
                                       </div>
                                       <div className="text-xs text-muted-foreground">{category.content_count}件のコンテンツ</div>
@@ -996,7 +849,7 @@ const MemberSiteBuilder = () => {
                                             deleteCategory(category.id);
                                           }}
                                         >
-                                          <Trash2 className="h-3 w-3" />
+                                          <Trash2 className="w-3.5 h-3.5" />
                                         </Button>
                                       </div>
                                     </TableCell>
@@ -1009,23 +862,18 @@ const MemberSiteBuilder = () => {
                       </div>
                     </div>
 
-                    {/* Main Category Area - 80% width */}
+                    {/* Main */}
                     <div className="w-4/5 rounded-none">
                       {selectedCategory || (!selectedCategoryId && categoryName) ? (
                         <Card className="rounded-none">
                           <CardHeader>
                             <CardTitle>カテゴリ編集</CardTitle>
-                            <CardDescription>{selectedCategory ? selectedCategory.name + " の編集" : "新しいカテゴリを作成"}</CardDescription>
+                            <CardDescription>{selectedCategory ? `${selectedCategory.name} の編集` : "新しいカテゴリを作成"}</CardDescription>
                           </CardHeader>
-                          <CardContent className="space-y-4">
+                          <CardContent className="space-y-6">
                             <div className="space-y-2">
                               <Label htmlFor="categoryName">カテゴリ名</Label>
-                              <Input
-                                id="categoryName"
-                                value={categoryName}
-                                onChange={(e) => setCategoryName(e.target.value)}
-                                placeholder="カテゴリ名を入力してください"
-                              />
+                              <Input id="categoryName" value={categoryName} onChange={(e) => setCategoryName(e.target.value)} placeholder="カテゴリ名を入力してください" />
                             </div>
 
                             <div className="space-y-2">
@@ -1039,6 +887,7 @@ const MemberSiteBuilder = () => {
                               />
                             </div>
 
+                            {/* URL入力 + MediaLibrary ボタン */}
                             <div className="space-y-2">
                               <Label htmlFor="thumbnail-url">サムネイルURL</Label>
                               <Input
@@ -1047,35 +896,51 @@ const MemberSiteBuilder = () => {
                                 value={categoryThumbnailUrl ?? ""}
                                 onChange={(e) => setCategoryThumbnailUrl(e.target.value || null)}
                               />
-                              <p className="text-xs text-muted-foreground">直接URLを入力するか、下のボタンでメディアライブラリから選択できます。</p>
+                              <p className="text-xs text-muted-foreground">直接URLを入力するか、下の「画像を選択」ボタンからメディアライブラリを開いて設定できます。</p>
                             </div>
 
                             <div className="space-y-2">
                               <Label>サムネイル画像</Label>
                               <div className="flex items-center gap-2">
                                 {categoryThumbnailUrl && (
-                                  <img
-                                    src={categoryThumbnailUrl}
-                                    alt="Category Thumbnail"
-                                    className="w-24 h-24 object-cover rounded-md border"
-                                  />
+                                  <img src={categoryThumbnailUrl} alt="Category Thumbnail" className="w-24 h-24 object-cover rounded-md border" />
                                 )}
+
                                 <MediaLibrarySelector
-                                  onSelect={(url) => setCategoryThumbnailUrl(url)}
-                                  onRemove={() => setCategoryThumbnailUrl(null)}
-                                  selectedUrl={categoryThumbnailUrl}
-                                >
-                                  <Button type="button" variant="outline" className="flex items-center gap-2">
-                                    <ImageIcon className="w-4 h-4" />
-                                    {categoryThumbnailUrl ? "画像を変更" : "メディアライブラリから選択"}
-                                  </Button>
-                                </MediaLibrarySelector>
+                                  trigger={
+                                    <Button type="button" variant="outline" className="flex items-center gap-2">
+                                      <ImageIcon className="w-4 h-4" />
+                                      {categoryThumbnailUrl ? "画像を変更" : "画像を選択"}
+                                    </Button>
+                                  }
+                                  onSelect={(url: string) => setCategoryThumbnailUrl(url)}
+                                  selectedUrl={categoryThumbnailUrl ?? undefined}
+                                />
+
                                 {categoryThumbnailUrl && (
-                                  <Button type="button" variant="ghost" size="icon" onClick={() => setCategoryThumbnailUrl(null)}>
+                                  <Button type="button" variant="ghost" size="icon" onClick={() => setCategoryThumbnailUrl(null)} title="画像を削除">
                                     <Trash2 className="w-4 h-4" />
                                   </Button>
                                 )}
                               </div>
+                            </div>
+
+                            {/* ブロックエディタ */}
+                            <div className="space-y-2">
+                              <Label>詳細コンテンツ（ブロックエディタ）</Label>
+                              <EnhancedBlockEditor
+                                value={categoryBlocks ?? []} // 配列を保証
+                                onChange={(next: any[]) => setCategoryBlocks(Array.isArray(next) ? next : [])}
+                                placeholder="カテゴリの詳細コンテンツをブロックで編集できます"
+                              />
+                              <div className="flex gap-2">
+                                <Button type="button" variant="secondary" onClick={() => setCategoryBlocks([])} title="ブロックをクリア">
+                                  クリア
+                                </Button>
+                              </div>
+                              <p className="text-xs text-muted-foreground">
+                                この内容は <code>member_site_categories.content_blocks</code>（JSON配列）に保存されます。
+                              </p>
                             </div>
 
                             <Button onClick={saveCategory} disabled={saving || !categoryName.trim()} className="w-full">
@@ -1101,6 +966,7 @@ const MemberSiteBuilder = () => {
                   </div>
                 </TabsContent>
 
+                {/* Plan Settings */}
                 <TabsContent value="plan-settings" className="space-y-6">
                   <Card>
                     <CardHeader>
@@ -1111,7 +977,7 @@ const MemberSiteBuilder = () => {
                       <div className="grid grid-cols-2 gap-4">
                         <div className="space-y-2">
                           <Label htmlFor="access-type">アクセス種別</Label>
-                          <Select value={accessType} onValueChange={setAccessType}>
+                          <Select value={accessType} onValueChange={(v: "free" | "paid") => setAccessType(v)}>
                             <SelectTrigger>
                               <SelectValue />
                             </SelectTrigger>
@@ -1123,24 +989,19 @@ const MemberSiteBuilder = () => {
                         </div>
                         <div className="space-y-2">
                           <Label htmlFor="price">価格（円）</Label>
-                          <Input
-                            id="price"
-                            type="number"
-                            value={price}
-                            onChange={(e) => setPrice(Number(e.target.value))}
-                            disabled={accessType === "free"}
-                          />
+                          <Input id="price" type="number" value={price} onChange={(e) => setPrice(Number(e.target.value))} disabled={accessType === "free"} />
                         </div>
                       </div>
                     </CardContent>
                   </Card>
                 </TabsContent>
 
+                {/* Content Display */}
                 <TabsContent value="content-display" className="space-y-6">
                   <Card>
                     <CardHeader>
                       <CardTitle>コンテンツ表示方法</CardTitle>
-                      <CardDescription>サイトでのコンテンツの表示方法を設定します</CardDescription>
+                      <CardDescription>この機能は開発中です。</CardDescription>
                     </CardHeader>
                     <CardContent>
                       <p className="text-muted-foreground">この機能は開発中です。</p>
@@ -1148,6 +1009,7 @@ const MemberSiteBuilder = () => {
                   </Card>
                 </TabsContent>
 
+                {/* Site Settings */}
                 <TabsContent value="site-settings" className="space-y-6">
                   <Card>
                     <CardHeader>
@@ -1168,13 +1030,7 @@ const MemberSiteBuilder = () => {
 
                       <div className="space-y-2">
                         <Label htmlFor="site-description">サイト説明</Label>
-                        <Textarea
-                          id="site-description"
-                          value={siteDescription}
-                          onChange={(e) => setSiteDescription(e.target.value)}
-                          placeholder="サイトの説明を入力"
-                          rows={4}
-                        />
+                        <Textarea id="site-description" value={siteDescription} onChange={(e) => setSiteDescription(e.target.value)} placeholder="サイトの説明を入力" rows={4} />
                       </div>
 
                       <div className="flex items-center gap-4">

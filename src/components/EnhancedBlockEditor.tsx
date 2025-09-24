@@ -10,13 +10,13 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/comp
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { MediaLibrarySelector } from '@/components/MediaLibrarySelector';
 import { supabase } from '@/integrations/supabase/client';
-import { 
-  Plus, 
-  Type, 
-  Image, 
-  Video, 
-  List, 
-  Quote, 
+import {
+  Plus,
+  Type,
+  Image,
+  Video,
+  List,
+  Quote,
   Folder,
   GripVertical,
   Trash2,
@@ -40,18 +40,38 @@ import {
   FileText
 } from 'lucide-react';
 
+/* =========================
+   Types
+========================= */
 export interface Block {
   id: string;
-  type: 'paragraph' | 'heading' | 'image' | 'video' | 'list' | 'code' | 'separator' | 'note' | 'dialogue' | 'button' | 'background' | 'form_embed';
+  type:
+    | 'paragraph'
+    | 'heading'
+    | 'image'
+    | 'video'
+    | 'list'
+    | 'code'
+    | 'separator'
+    | 'note'
+    | 'dialogue'
+    | 'button'
+    | 'background'
+    | 'form_embed';
   content: any;
   order: number;
 }
 
+/** 両対応にするため blocks と value を両方サポート */
 interface EnhancedBlockEditorProps {
-  blocks: Block[];
+  blocks?: Block[];
+  value?: Block[];
   onChange: (blocks: Block[]) => void;
 }
 
+/* =========================
+   Button Templates (12個そのまま)
+========================= */
 const buttonTemplates = [
   {
     name: 'テンプレート1',
@@ -247,229 +267,173 @@ const buttonTemplates = [
   }
 ];
 
+/* =========================
+   Helpers
+========================= */
 const getHeadingDefaults = (style: number) => {
   switch (style) {
-    case 1:
-      return { color1: '#2589d0', color2: '#f2f2f2', color3: '#333333' };
-    case 2:
-      return { color1: '#80c8d1', color2: '#f4f4f4', color3: '#ffffff' };
-    case 3:
-      return { color1: '#ffca2c', color2: '#ffffff', color3: '#333333' };
-    case 4:
-      return { color1: '#494949', color2: '#7db4e6', color3: '#494949' };
-    default:
-      return { color1: '#2589d0', color2: '#f2f2f2', color3: '#333333' };
+    case 1: return { color1: '#2589d0', color2: '#f2f2f2', color3: '#333333' };
+    case 2: return { color1: '#80c8d1', color2: '#f4f4f4', color3: '#ffffff' };
+    case 3: return { color1: '#ffca2c', color2: '#ffffff', color3: '#333333' };
+    case 4: return { color1: '#494949', color2: '#7db4e6', color3: '#494949' };
+    default: return { color1: '#2589d0', color2: '#f2f2f2', color3: '#333333' };
   }
-}
+};
 
-export const EnhancedBlockEditor: React.FC<EnhancedBlockEditorProps> = ({ blocks, onChange }) => {
+const uid = () => Math.random().toString(36).slice(2);
+
+/* =========================
+   Component
+========================= */
+export const EnhancedBlockEditor: React.FC<EnhancedBlockEditorProps> = (props) => {
+  // 両対応：blocks / value のどちらでも受ける
+  const incomingBlocks: Block[] = useMemo(
+    () =>
+      Array.isArray(props.blocks)
+        ? props.blocks
+        : Array.isArray(props.value)
+        ? props.value!
+        : [],
+    [props.blocks, props.value]
+  );
+
+  // map安全化
+  const safeBlocks: Block[] = useMemo(
+    () =>
+      Array.isArray(incomingBlocks)
+        ? incomingBlocks.map(b => ({
+            id: b?.id ?? uid(),
+            type: b?.type ?? 'paragraph',
+            order: typeof b?.order === 'number' ? b.order : 0,
+            content: (b?.content && typeof b.content === 'object') ? b.content : {},
+          }))
+        : [],
+    [incomingBlocks]
+  );
+
   const [expandedBlocks, setExpandedBlocks] = useState<string[]>([]);
   const [templateDialogOpenFor, setTemplateDialogOpenFor] = useState<string | null>(null);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const lastAddedBlockTypeRef = useRef<Block['type'] | null>(null);
-  const blockIds = useMemo(() => blocks.map(block => block.id), [blocks]);
-  const hasBackgroundBlock = useMemo(() => blocks.some(block => block.type === 'background'), [blocks]);
+  const blockIds = useMemo(() => safeBlocks.map(block => block.id), [safeBlocks]);
+  const hasBackgroundBlock = useMemo(() => safeBlocks.some(block => block.type === 'background'), [safeBlocks]);
 
   const [forms, setForms] = useState<any[]>([]);
 
   useEffect(() => {
     const fetchForms = async () => {
       const { data, error } = await supabase.from('forms').select('id, name');
-      if (error) {
-        console.error('Error fetching forms:', error);
-      }
- else {
-        setForms(data || []);
-      }
+      if (!error) setForms(data || []);
+      else console.error('Error fetching forms:', error);
     };
     fetchForms();
   }, []);
 
   useEffect(() => {
-    setExpandedBlocks(prev => {
-      if (prev.length === 0) return prev;
-      const filtered = prev.filter(id => blockIds.includes(id));
-      if (filtered.length === prev.length && filtered.every((id, index) => id === prev[index])) return prev;
-      return filtered;
-    });
+    setExpandedBlocks(prev => (prev.length === 0 ? prev : prev.filter(id => blockIds.includes(id))));
   }, [blockIds]);
 
   useEffect(() => {
     if (!scrollContainerRef.current) return;
-
     if (lastAddedBlockTypeRef.current === 'background') {
-      scrollContainerRef.current.scrollTo({
-        top: 0,
-        behavior: 'smooth'
-      });
+      scrollContainerRef.current.scrollTo({ top: 0, behavior: 'smooth' });
     } else {
-      scrollContainerRef.current.scrollTo({
-        top: scrollContainerRef.current.scrollHeight,
-        behavior: 'smooth'
-      });
+      scrollContainerRef.current.scrollTo({ top: scrollContainerRef.current.scrollHeight, behavior: 'smooth' });
     }
-
     lastAddedBlockTypeRef.current = null;
-  }, [blocks.length]);
+  }, [safeBlocks.length]);
 
-  const addBlock = (type: Block['type']) => {
-    const newBlock: Block = {
-      id: Math.random().toString(36),
-      type,
-      content: getDefaultContent(type),
-      order: blocks.length
-    };
-    onChange([...blocks, newBlock]);
-    setExpandedBlocks(prev => (prev.includes(newBlock.id) ? prev : [...prev, newBlock.id]));
-  };
+  const emit = (next: Block[]) => props.onChange(Array.isArray(next) ? next : []);
 
-  const updateBlock = (id: string, content: any) => {
-    const updatedBlocks = blocks.map(block => 
-      block.id === id ? { ...block, content } : block
-    );
-    onChange(updatedBlocks);
-  };
-
-  const deleteBlock = (id: string) => {
-    const updatedBlocks = blocks.filter(block => block.id !== id);
-    onChange(updatedBlocks);
-  };
-
-  const duplicateBlock = (id: string) => {
-    const blockToDuplicate = blocks.find(block => block.id === id);
-    if (blockToDuplicate) {
-      const newBlock: Block = {
-        ...blockToDuplicate,
-        id: Math.random().toString(36),
-        order: blockToDuplicate.order + 0.5
-      };
-      const reorderedBlocks = [...blocks, newBlock].sort((a, b) => a.order - b.order)
-        .map((b, i) => ({ ...b, order: i }));
-      onChange(reorderedBlocks);
-    }
-  };
-
-  const moveBlock = (id: string, direction: 'up' | 'down') => {
-    const blockIndex = blocks.findIndex(block => block.id === id);
-    if (
-      (direction === 'up' && blockIndex > 0) ||
-      (direction === 'down' && blockIndex < blocks.length - 1)
-    ) {
-      const newBlocks = [...blocks];
-      const targetIndex = direction === 'up' ? blockIndex - 1 : blockIndex + 1;
-      
-      const tempOrder = newBlocks[blockIndex].order;
-      newBlocks[blockIndex].order = newBlocks[targetIndex].order;
-      newBlocks[targetIndex].order = tempOrder;
-
-      onChange(newBlocks.sort((a, b) => a.order - b.order));
-    }
-  };
-
-  const toggleCollapse = (id: string) => {
-    setExpandedBlocks(prev =>
-      prev.includes(id) ? prev.filter(blockId => blockId !== id) : [...prev, id]
-    );
-  };
-
+  /* -------- CRUD -------- */
   const getDefaultContent = (type: Block['type']) => {
     const baseContent = { title: '' };
     switch (type) {
-      case 'paragraph': return { 
-        ...baseContent,
-        text: '', 
-        fontSize: '16px', 
-        color: '#454545', 
-        backgroundColor: 'transparent',
-        bold: false,
-        italic: false,
-        underline: false,
-        alignment: 'left'
+      case 'paragraph': return {
+        ...baseContent, text: '', fontSize: '16px', color: '#454545', backgroundColor: 'transparent',
+        bold: false, italic: false, underline: false, alignment: 'left'
       };
-      case 'heading': return { 
-        ...baseContent,
-        text: '', 
-        level: 1, 
-        design_style: 1,
-        color1: '#2589d0',
-        color2: '#f2f2f2',
-        color3: '#333333',
-        fontSize: '24px', 
-        color: '#454545', 
-        bold: false,
-        italic: false,
-        underline: false,
-        alignment: 'left'
+      case 'heading': return {
+        ...baseContent, text: '', level: 1, design_style: 1,
+        color1: '#2589d0', color2: '#f2f2f2', color3: '#333333',
+        fontSize: '24px', color: '#454545', bold: false, italic: false, underline: false, alignment: 'left'
       };
-      case 'image': return { 
-        ...baseContent,
-        url: '', 
-        alt: '', 
-        caption: '', 
-        size: 'medium',
-        linkUrl: '', 
-        alignment: 'center',
-        rounded: true,
-        hoverEffect: false,
-        removeMargins: false,
+      case 'image': return {
+        ...baseContent, url: '', alt: '', caption: '', size: 'medium',
+        linkUrl: '', alignment: 'center', rounded: true, hoverEffect: false, removeMargins: false
       };
-      case 'video': return { 
-        ...baseContent,
-        url: '', 
-        caption: '', 
-        borderColor: '#000000',
-        rounded: true,
-        size: 'medium'
+      case 'video': return {
+        ...baseContent, url: '', caption: '', borderColor: '#000000', rounded: true, size: 'medium'
       };
       case 'list': return { ...baseContent, items: [''], type: 'bullet' };
       case 'code': return { ...baseContent, code: '', language: 'javascript' };
       case 'separator': return { ...baseContent };
       case 'form_embed': return { ...baseContent, formId: '', title: 'フォーム埋め込み', description: 'ここにフォームが埋め込まれます。' };
-      case 'note': return {
-        ...baseContent,
-        text: '', 
-        fontSize: '16px', 
-        color: '#454545', 
-        bold: false,
-        italic: false,
-        underline: false,
-        alignment: 'left'
-      };
+      case 'note': return { ...baseContent, text: '', fontSize: '16px', color: '#454545', bold: false, italic: false, underline: false, alignment: 'left' };
       case 'dialogue': return {
-        ...baseContent,
-        leftIcon: '/placeholder.svg',
-        rightIcon: '/placeholder.svg',
-        leftName: '左の名前',
-        rightName: '右の名前',
-        bubbleBackgroundColor: '#f2f2f2',
-        items: [
-          { alignment: 'left', text: 'これは会話風の吹き出しです。' }
-        ]
+        ...baseContent, leftIcon: '/placeholder.svg', rightIcon: '/placeholder.svg',
+        leftName: '左の名前', rightName: '右の名前', bubbleBackgroundColor: '#f2f2f2',
+        items: [{ alignment: 'left', text: 'これは会話風の吹き出しです。' }]
       };
       case 'button': return {
-        ...baseContent,
-        text: 'ボタンテキスト',
-        url: '',
-        alignment: 'center',
-        width: 'auto',
-        height: 40,
-        textColor: '#ffffff',
-        textSize: 16,
-        backgroundColor: '#2563eb',
-        borderRadius: 6,
-        shadow: true,
-        borderEnabled: false,
-        borderWidth: 1,
-        borderColor: '#000000',
+        ...baseContent, text: 'ボタンテキスト', url: '', alignment: 'center', width: 'auto',
+        height: 40, textColor: '#ffffff', textSize: 16, backgroundColor: '#2563eb',
+        borderRadius: 6, shadow: true, borderEnabled: false, borderWidth: 1, borderColor: '#000000'
       };
-      case 'background': return {
-        ...baseContent,
-        color: '#f5f5f5'
-      };
+      case 'background': return { ...baseContent, color: '#f5f5f5' };
       default: return { ...baseContent };
     }
   };
 
+  const addBlock = (type: Block['type']) => {
+    const newBlock: Block = { id: uid(), type, content: getDefaultContent(type), order: safeBlocks.length };
+    emit([...safeBlocks, newBlock]);
+    setExpandedBlocks(prev => (prev.includes(newBlock.id) ? prev : [...prev, newBlock.id]));
+    lastAddedBlockTypeRef.current = type;
+  };
+
+  const updateBlock = (id: string, content: any) => {
+    const updated = safeBlocks.map(block => (block.id === id ? { ...block, content } : block));
+    emit(updated);
+  };
+
+  const deleteBlock = (id: string) => {
+    emit(safeBlocks.filter(block => block.id !== id));
+  };
+
+  const duplicateBlock = (id: string) => {
+    const blockToDuplicate = safeBlocks.find(block => block.id === id);
+    if (!blockToDuplicate) return;
+    const newBlock: Block = { ...blockToDuplicate, id: uid(), order: (blockToDuplicate.order ?? 0) + 0.5 };
+    const reorderedBlocks = [...safeBlocks, newBlock]
+      .sort((a, b) => (a.order ?? 0) - (b.order ?? 0))
+      .map((b, i) => ({ ...b, order: i }));
+    emit(reorderedBlocks);
+  };
+
+  const moveBlock = (id: string, direction: 'up' | 'down') => {
+    const blockIndex = safeBlocks.findIndex(block => block.id === id);
+    if (blockIndex < 0) return;
+    if ((direction === 'up' && blockIndex === 0) || (direction === 'down' && blockIndex === safeBlocks.length - 1)) return;
+
+    const newBlocks = [...safeBlocks];
+    const targetIndex = direction === 'up' ? blockIndex - 1 : blockIndex + 1;
+
+    const isBackground = (i: number) => newBlocks[i]?.type === 'background';
+    if (isBackground(blockIndex) || isBackground(targetIndex)) return;
+
+    const tempOrder = newBlocks[blockIndex].order;
+    newBlocks[blockIndex].order = newBlocks[targetIndex].order;
+    newBlocks[targetIndex].order = tempOrder;
+
+    emit(newBlocks.sort((a, b) => (a.order ?? 0) - (b.order ?? 0)));
+  };
+
+  const toggleCollapse = (id: string) => {
+    setExpandedBlocks(prev => (prev.includes(id) ? prev.filter(blockId => blockId !== id) : [...prev, id]));
+  };
+
+  /* -------- UI helpers -------- */
   const renderCollapsedPreview = (block: Block) => {
     const blockTypeMap: { [key: string]: string } = {
       paragraph: 'テキスト',
@@ -530,81 +494,6 @@ export const EnhancedBlockEditor: React.FC<EnhancedBlockEditorProps> = ({ blocks
     return <p className="w-full truncate text-sm text-muted-foreground font-mono">{prefix}{previewContent}</p>;
   };
 
-  const renderBlock = (block: Block) => {
-    const isCollapsed = !expandedBlocks.includes(block.id);
-
-    const blockIndex = blocks.findIndex(b => b.id === block.id);
-    const isBackgroundBlock = block.type === 'background';
-    const previousBlock = blockIndex > 0 ? blocks[blockIndex - 1] : undefined;
-    const nextBlock = blockIndex >= 0 && blockIndex < blocks.length - 1 ? blocks[blockIndex + 1] : undefined;
-    const canMoveUp = !isBackgroundBlock && blockIndex > 0 && previousBlock?.type !== 'background';
-    const canMoveDown = !isBackgroundBlock && blockIndex < blocks.length - 1 && nextBlock?.type !== 'background';
-
-    return (
-      <Card key={block.id} className="mb-4 group bg-white dark:bg-gray-800 shadow-md border border-gray-300 rounded-sm">
-        <CardContent className={isCollapsed ? "p-0" : "p-2"}>
-          <div className="flex items-start space-x-2">
-            <div className={`flex flex-col items-center space-y-1 ${isCollapsed ? 'pt-1' : 'pt-2'}`}>
-              <Button size="sm" variant="ghost" className="h-6 w-6 p-0" onClick={() => moveBlock(block.id, 'up')} disabled={!canMoveUp}><ChevronUp className="h-4 w-4" /></Button>
-              <GripVertical className="h-5 w-5 text-muted-foreground cursor-grab" />
-              <Button size="sm" variant="ghost" className="h-6 w-6 p-0" onClick={() => moveBlock(block.id, 'down')} disabled={!canMoveDown}><ChevronDown className="h-4 w-4" /></Button>
-            </div>
-            
-            <div className={`flex-1 min-w-0 ${isCollapsed ? 'py-1' : 'p-2'}`}>
-              <div className="flex items-center justify-between">
-                <div className="flex items-center flex-1 min-w-0 overflow-hidden">
-                  <Button size="sm" variant="ghost" className="h-6 w-6 p-0 mr-2" onClick={() => toggleCollapse(block.id)}>
-                    {isCollapsed ? <ChevronRight className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
-                  </Button>
-                  {isCollapsed && (
-                    <div className="flex-1 min-w-0 overflow-hidden">
-                      {renderCollapsedPreview(block)}
-                    </div>
-                  )}
-                </div>
-                <div className="flex space-x-1">
-                  <div className="flex space-x-1">
-                  <TooltipProvider delayDuration={0}>
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <Button size="sm" variant="ghost" className="h-8 w-8 p-0" onClick={() => duplicateBlock(block.id)} disabled={isBackgroundBlock}><Copy className="h-4 w-4" /></Button>
-                      </TooltipTrigger>
-                      <TooltipContent className="text-xs text-gray-500">
-                        <p>複製</p>
-                      </TooltipContent>
-                    </Tooltip>
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <Button size="sm" variant="ghost" className="h-8 w-8 p-0 text-destructive hover:bg-destructive hover:text-white" onClick={() => deleteBlock(block.id)}><Trash2 className="h-4 w-4" /></Button>
-                      </TooltipTrigger>
-                      <TooltipContent className="text-xs text-gray-500">
-                        <p>削除</p>
-                      </TooltipContent>
-                    </Tooltip>
-                  </TooltipProvider>
-                </div>
-                </div>
-              </div>
-              {!isCollapsed && (
-                <div className="mt-2 space-y-4">
-                  {block.type !== 'background' && (
-                    <Input
-                    placeholder="ブロックタイトル（任意）"
-                    value={block.content?.title || ''}
-                    onChange={(e) => updateBlock(block.id, { ...(block.content || {}), title: e.target.value })}
-                    className="text-xs h-8 bg-slate-50"
-                    />
-                  )}
-                  {renderBlockContent(block)}
-                </div>
-              )}
-            </div>
-          </div>
-        </CardContent>
-      </Card>
-    );
-  };
-
   const renderTextFormatting = (block: Block) => {
     if (block.type !== 'paragraph' && block.type !== 'heading' && block.type !== 'note') return null;
 
@@ -615,15 +504,23 @@ export const EnhancedBlockEditor: React.FC<EnhancedBlockEditorProps> = ({ blocks
           <Button size="sm" variant={block.content.italic ? "default" : "ghost"} className="h-8 w-8 p-0" onClick={() => updateBlock(block.id, { ...block.content, italic: !block.content.italic })}><Italic className="h-3 w-3" /></Button>
           <Button size="sm" variant={block.content.underline ? "default" : "ghost"} className="h-8 w-8 p-0" onClick={() => updateBlock(block.id, { ...block.content, underline: !block.content.underline })}><Underline className="h-3 w-3" /></Button>
         </div>
-        
+
         <div className="flex items-center space-x-1 border-r pr-2">
-          <Button size="sm" variant={block.content.alignment === 'left' ? "default" : "ghost"} className="h-8 w-8 p-0" onClick={() => updateBlock(block.id, { ...block.content, alignment: 'left' })}><AlignLeft className="h-3 w-3" /></Button>
+          <Button size="sm" variant={(block.content.alignment ?? 'left') === 'left' ? "default" : "ghost"} className="h-8 w-8 p-0" onClick={() => updateBlock(block.id, { ...block.content, alignment: 'left' })}><AlignLeft className="h-3 w-3" /></Button>
           <Button size="sm" variant={block.content.alignment === 'center' ? "default" : "ghost"} className="h-8 w-8 p-0" onClick={() => updateBlock(block.id, { ...block.content, alignment: 'center' })}><AlignCenter className="h-3 w-3" /></Button>
           <Button size="sm" variant={block.content.alignment === 'right' ? "default" : "ghost"} className="h-8 w-8 p-0" onClick={() => updateBlock(block.id, { ...block.content, alignment: 'right' })}><AlignRight className="h-3 w-3" /></Button>
         </div>
 
-        <Input type="number" placeholder="サイズ" value={parseInt(block.content.fontSize) || 16} onChange={(e) => updateBlock(block.id, { ...block.content, fontSize: `${e.target.value}px` })} className="w-20 h-8" min="8" max="72" />
-        
+        <Input
+          type="number"
+          placeholder="サイズ"
+          value={parseInt(block.content.fontSize || '16') || 16}
+          onChange={(e) => updateBlock(block.id, { ...block.content, fontSize: `${e.target.value}px` })}
+          className="w-20 h-8"
+          min={8}
+          max={72}
+        />
+
         <div className="flex items-center space-x-1">
           <Palette className="h-3 w-3" />
           <input type="color" value={block.content.color || '#000000'} onChange={(e) => updateBlock(block.id, { ...block.content, color: e.target.value })} className="w-8 h-8 rounded border" />
@@ -644,21 +541,18 @@ export const EnhancedBlockEditor: React.FC<EnhancedBlockEditorProps> = ({ blocks
   };
 
   const renderBlockContent = (block: Block) => {
-    const sizeClasses: { [key: string]: string } = {
-      small: 'w-1/4',
-      medium: 'w-1/2',
-      large: 'w-3/4',
-      full: 'w-full'
-    };
+    const sizeClasses: { [key: string]: string } = { small: 'w-1/4', medium: 'w-1/2', large: 'w-3/4', full: 'w-full' };
 
-    const textStyle = (block.type === 'paragraph' || block.type === 'heading' || block.type === 'note') ? {
-      fontSize: block.content.fontSize,
-      color: block.content.color,
-      fontWeight: block.content.bold ? 'bold' : 'normal',
-      fontStyle: block.content.italic ? 'italic' : 'normal',
-      textDecoration: block.content.underline ? 'underline' : 'none',
-      textAlign: block.content.alignment || 'left'
-    } as React.CSSProperties : {};
+    const textStyle = (block.type === 'paragraph' || block.type === 'heading' || block.type === 'note')
+      ? ({
+          fontSize: block.content.fontSize,
+          color: block.content.color,
+          fontWeight: block.content.bold ? 'bold' : 'normal',
+          fontStyle: block.content.italic ? 'italic' : 'normal',
+          textDecoration: block.content.underline ? 'underline' : 'none',
+          textAlign: block.content.alignment || 'left'
+        } as React.CSSProperties)
+      : {};
 
     switch (block.type) {
       case 'background': {
@@ -684,9 +578,7 @@ export const EnhancedBlockEditor: React.FC<EnhancedBlockEditorProps> = ({ blocks
                 onChange={(e) => {
                   let value = e.target.value.trim();
                   value = value.startsWith('#') ? `#${value.slice(1).replace(/[^0-9a-fA-F]/g, '')}` : `#${value.replace(/[^0-9a-fA-F]/g, '')}`;
-                  if (value.length > 7) {
-                    value = value.slice(0, 7);
-                  }
+                  if (value.length > 7) value = value.slice(0, 7);
                   updateBlock(block.id, { ...(block.content || {}), color: value });
                 }}
               />
@@ -701,7 +593,7 @@ export const EnhancedBlockEditor: React.FC<EnhancedBlockEditorProps> = ({ blocks
             {renderTextFormatting(block)}
             <Textarea
               placeholder="段落テキストを入力..."
-              value={block.content.text}
+              value={block.content.text || ''}
               onChange={(e) => updateBlock(block.id, { ...block.content, text: e.target.value })}
               rows={6}
               style={textStyle}
@@ -709,7 +601,7 @@ export const EnhancedBlockEditor: React.FC<EnhancedBlockEditorProps> = ({ blocks
             />
           </div>
         );
-      
+
       case 'heading': {
         const headingStyle = {
           '--heading-color-1': block.content.color1,
@@ -722,7 +614,7 @@ export const EnhancedBlockEditor: React.FC<EnhancedBlockEditorProps> = ({ blocks
             {renderTextFormatting(block)}
             <div className="flex space-x-2">
               <Select
-                value={block.content.level.toString()}
+                value={String(block.content.level ?? 1)}
                 onValueChange={(value) => updateBlock(block.id, { ...block.content, level: parseInt(value) })}
               >
                 <SelectTrigger className="w-24">
@@ -736,15 +628,11 @@ export const EnhancedBlockEditor: React.FC<EnhancedBlockEditorProps> = ({ blocks
                 </SelectContent>
               </Select>
               <Select
-                value={block.content.design_style?.toString() || '1'}
+                value={String(block.content.design_style ?? 1)}
                 onValueChange={(value) => {
                   const style = parseInt(value);
                   const defaults = getHeadingDefaults(style);
-                  updateBlock(block.id, { 
-                    ...block.content, 
-                    design_style: style,
-                    ...defaults 
-                  });
+                  updateBlock(block.id, { ...block.content, design_style: style, ...defaults });
                 }}
               >
                 <SelectTrigger className="w-40">
@@ -758,28 +646,28 @@ export const EnhancedBlockEditor: React.FC<EnhancedBlockEditorProps> = ({ blocks
                 </SelectContent>
               </Select>
             </div>
-            
+
             {(block.content.design_style || 1) === 3 ? (
               <div className="flex items-center my-6" style={{ color: block.content.color3 || '#333333' }}>
                 <div className="relative mr-4 flex-shrink-0">
-                  <div 
+                  <div
                     className="flex items-center justify-center rounded-full w-[25px] h-[25px]"
                     style={{ backgroundColor: block.content.color1 || '#ffca2c' }}
                   >
                     <Lightbulb size={15} color={block.content.color2 || 'white'} />
                   </div>
-                  <div 
+                  <div
                     className="absolute top-1/2 -translate-y-1/2 left-[20px] w-0 h-0 border-t-[7px] border-t-transparent border-b-[7px] border-b-transparent border-l-[12px]"
                     style={{ borderLeftColor: block.content.color1 || '#ffca2c' }}
-                  ></div>
+                  />
                 </div>
                 <div
                   onBlur={e => updateBlock(block.id, { ...block.content, text: e.currentTarget.textContent || '' })}
-                  contentEditable="true"
-                  suppressContentEditableWarning={true}
+                  contentEditable
+                  suppressContentEditableWarning
                   className="w-full bg-transparent focus:outline-none"
                   style={textStyle}
-                >{block.content.text}</div>
+                >{block.content.text || ''}</div>
               </div>
             ) : (
               <div
@@ -788,36 +676,36 @@ export const EnhancedBlockEditor: React.FC<EnhancedBlockEditorProps> = ({ blocks
               >
                 <div
                   onBlur={e => updateBlock(block.id, { ...block.content, text: e.currentTarget.textContent || '' })}
-                  contentEditable="true"
-                  suppressContentEditableWarning={true}
+                  contentEditable
+                  suppressContentEditableWarning
                   className="w-full bg-transparent focus:outline-none"
                   style={textStyle}
-                >{block.content.text}</div>
+                >{block.content.text || ''}</div>
               </div>
             )}
           </div>
         );
       }
-      
+
       case 'image':
         return (
           <div className="space-y-4">
             <MediaLibrarySelector
-                trigger={<Button variant="outline">メディアライブラリから画像を選択</Button>}
-                onSelect={(url) => updateBlock(block.id, { ...block.content, url })}
-                selectedUrl={block.content.url}
+              trigger={<Button variant="outline">メディアライブラリから画像を選択</Button>}
+              onSelect={(url) => updateBlock(block.id, { ...block.content, url })}
+              selectedUrl={block.content.url}
             />
-            
+
             {block.content.url && (
               <div className="bg-gray-100 dark:bg-gray-800/50 p-4 rounded-md flex justify-center">
-                <img 
-                  src={block.content.url} 
-                  alt={block.content.alt || 'preview'} 
+                <img
+                  src={block.content.url}
+                  alt={block.content.alt || 'preview'}
                   className={`max-w-full h-auto rounded shadow-md ${sizeClasses[block.content.size] || 'w-1/2'}`}
                 />
               </div>
             )}
-            
+
             <div className="space-y-4 pt-2 border-t">
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
@@ -881,37 +769,37 @@ export const EnhancedBlockEditor: React.FC<EnhancedBlockEditorProps> = ({ blocks
             </div>
 
             <div className="space-y-2 pt-4 border-t">
-                <label className="text-sm font-medium flex items-center gap-1">
-                  リンクとテキスト
-                  <TooltipProvider delayDuration={0}>
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <button type="button" className="p-0 flex items-center justify-center" onClick={(e) => e.preventDefault()}>
-                          <AlertCircle className="h-4 w-4 text-white fill-gray-500" />
-                        </button>
-                      </TooltipTrigger>
-                      <TooltipContent side="right" className="max-w-xs text-[11px] text-gray-600">
-                        <ul className="list-disc pl-4 space-y-1 text-left">
-                          <li><b>リンクURL:</b> 画像全体をクリックしたときの遷移先URLです。</li>
-                          <li><b>代替テキスト:</b> 画像が表示されない場合に代わりに表示されるテキストです。SEOにも影響します。</li>
-                          <li><b>キャプション:</b> 画像の下に表示される説明文です。</li>
-                        </ul>
-                      </TooltipContent>
-                    </Tooltip>
-                  </TooltipProvider>
-                </label>
-                <div className="flex items-center gap-2">
-                  <Link className="h-5 w-5 text-muted-foreground flex-shrink-0" />
-                  <Input type="url" placeholder="リンクURL (任意)" value={block.content.linkUrl || ''} onChange={(e) => updateBlock(block.id, { ...block.content, linkUrl: e.target.value })} />
-                </div>
-                <div className="flex items-center gap-2">
-                  <div className="w-5 h-5 flex-shrink-0"></div> {/* Spacer */}
-                  <Input placeholder="代替テキスト (画像の簡単な説明)" value={block.content.alt || ''} onChange={(e) => updateBlock(block.id, { ...block.content, alt: e.target.value })} />
-                </div>
-                <div className="flex items-center gap-2">
-                  <div className="w-5 h-5 flex-shrink-0"></div> {/* Spacer */}
-                  <Input placeholder="キャプション (画像の下に表示されるテキスト)" value={block.content.caption || ''} onChange={(e) => updateBlock(block.id, { ...block.content, caption: e.target.value })} />
-                </div>
+              <label className="text-sm font-medium flex items-center gap-1">
+                リンクとテキスト
+                <TooltipProvider delayDuration={0}>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <button type="button" className="p-0 flex items-center justify-center" onClick={(e) => e.preventDefault()}>
+                        <AlertCircle className="h-4 w-4 text-white fill-gray-500" />
+                      </button>
+                    </TooltipTrigger>
+                    <TooltipContent side="right" className="max-w-xs text-[11px] text-gray-600">
+                      <ul className="list-disc pl-4 space-y-1 text-left">
+                        <li><b>リンクURL:</b> 画像全体の遷移先。</li>
+                        <li><b>代替テキスト:</b> 画像説明（SEO）。</li>
+                        <li><b>キャプション:</b> 画像下の説明文。</li>
+                      </ul>
+                    </TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
+              </label>
+              <div className="flex items-center gap-2">
+                <Link className="h-5 w-5 text-muted-foreground flex-shrink-0" />
+                <Input type="url" placeholder="リンクURL (任意)" value={block.content.linkUrl || ''} onChange={(e) => updateBlock(block.id, { ...block.content, linkUrl: e.target.value })} />
+              </div>
+              <div className="flex items-center gap-2">
+                <div className="w-5 h-5 flex-shrink-0" />
+                <Input placeholder="代替テキスト" value={block.content.alt || ''} onChange={(e) => updateBlock(block.id, { ...block.content, alt: e.target.value })} />
+              </div>
+              <div className="flex items-center gap-2">
+                <div className="w-5 h-5 flex-shrink-0" />
+                <Input placeholder="キャプション" value={block.content.caption || ''} onChange={(e) => updateBlock(block.id, { ...block.content, caption: e.target.value })} />
+              </div>
             </div>
           </div>
         );
@@ -926,7 +814,7 @@ export const EnhancedBlockEditor: React.FC<EnhancedBlockEditorProps> = ({ blocks
             <div className="note-box">
               <Textarea
                 placeholder="注意事項を入力..."
-                value={block.content.text}
+                value={block.content.text || ''}
                 onChange={(e) => updateBlock(block.id, { ...block.content, text: e.target.value })}
                 className="w-full bg-transparent focus:ring-0 border-0 p-0"
                 style={textStyle}
@@ -938,41 +826,41 @@ export const EnhancedBlockEditor: React.FC<EnhancedBlockEditorProps> = ({ blocks
       case 'list':
         return (
           <div className="space-y-2">
-            <Select value={block.content.type} onValueChange={(value) => updateBlock(block.id, { ...block.content, type: value })}>
+            <Select value={block.content.type || 'bullet'} onValueChange={(value) => updateBlock(block.id, { ...block.content, type: value })}>
               <SelectTrigger className="w-32"><SelectValue /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="bullet">箇条書き</SelectItem>
                 <SelectItem value="numbered">番号付き</SelectItem>
               </SelectContent>
             </Select>
-            {block.content.items.map((item: string, index: number) => (
+            {(Array.isArray(block.content.items) ? block.content.items : []).map((item: string, index: number) => (
               <div key={index} className="flex space-x-2">
                 <Input
                   value={item}
                   onChange={(e) => {
-                    const newItems = [...block.content.items];
+                    const newItems = [...(Array.isArray(block.content.items) ? block.content.items : [])];
                     newItems[index] = e.target.value;
                     updateBlock(block.id, { ...block.content, items: newItems });
                   }}
                   placeholder={`項目 ${index + 1}`}
                 />
                 <Button size="sm" variant="outline" onClick={() => {
-                  const newItems = block.content.items.filter((_: any, i: number) => i !== index);
+                  const newItems = (Array.isArray(block.content.items) ? block.content.items : []).filter((_: any, i: number) => i !== index);
                   updateBlock(block.id, { ...block.content, items: newItems });
                 }}>削除</Button>
               </div>
             ))}
             <Button size="sm" variant="outline" onClick={() => {
-              const newItems = [...block.content.items, ''];
+              const newItems = [...(Array.isArray(block.content.items) ? block.content.items : []), ''];
               updateBlock(block.id, { ...block.content, items: newItems });
             }}>項目を追加</Button>
           </div>
         );
-      
+
       case 'code':
         return (
           <div className="space-y-2">
-            <Select value={block.content.language} onValueChange={(value) => updateBlock(block.id, { ...block.content, language: value })}>
+            <Select value={block.content.language || 'javascript'} onValueChange={(value) => updateBlock(block.id, { ...block.content, language: value })}>
               <SelectTrigger className="w-40"><SelectValue /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="javascript">JavaScript</SelectItem>
@@ -985,7 +873,7 @@ export const EnhancedBlockEditor: React.FC<EnhancedBlockEditorProps> = ({ blocks
             </Select>
             <Textarea
               placeholder="コードを入力..."
-              value={block.content.code}
+              value={block.content.code || ''}
               onChange={(e) => updateBlock(block.id, { ...block.content, code: e.target.value })}
               rows={8}
               className="font-mono"
@@ -1015,26 +903,25 @@ export const EnhancedBlockEditor: React.FC<EnhancedBlockEditorProps> = ({ blocks
                 ))}
               </SelectContent>
             </Select>
-            {block.content.formId && (
+            {block.content.formId ? (
               <p className="text-sm text-muted-foreground">選択されたフォーム: {forms.find(f => f.id === block.content.formId)?.name || block.content.formId}</p>
-            )}
-            {!block.content.formId && (
+            ) : (
               <p className="text-sm text-muted-foreground">フォームを選択してください。</p>
             )}
           </div>
         );
-      
-      case 'video':
+
+      case 'video': {
         const convertYouTubeUrl = (url: string) => {
           const youtubeRegex = /(?:youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/embed\/)([^&\n?#]+)/;
-          const match = url.match(youtubeRegex);
+          const match = (url || '').match(youtubeRegex);
           if (match) return `https://www.youtube.com/embed/${match[1]}`;
           return url;
         };
 
         return (
           <div className="space-y-2">
-            <Input placeholder="動画URL (YouTube対応)" value={block.content.url} onChange={(e) => updateBlock(block.id, { ...block.content, url: e.target.value })} />
+            <Input placeholder="動画URL (YouTube対応)" value={block.content.url || ''} onChange={(e) => updateBlock(block.id, { ...block.content, url: e.target.value })} />
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="flex items-center space-x-2">
                 <span className="text-sm">枠線色:</span>
@@ -1067,10 +954,11 @@ export const EnhancedBlockEditor: React.FC<EnhancedBlockEditorProps> = ({ blocks
                 />
               </div>
             )}
-            <Input placeholder="キャプション" value={block.content.caption} onChange={(e) => updateBlock(block.id, { ...block.content, caption: e.target.value })} />
+            <Input placeholder="キャプション" value={block.content.caption || ''} onChange={(e) => updateBlock(block.id, { ...block.content, caption: e.target.value })} />
           </div>
         );
-      
+      }
+
       case 'dialogue':
         return (
           <div className="space-y-4 p-3 bg-gray-50/50 dark:bg-gray-800/20 rounded-lg border">
@@ -1078,14 +966,14 @@ export const EnhancedBlockEditor: React.FC<EnhancedBlockEditorProps> = ({ blocks
               <div className="space-y-2">
                 <label className="text-sm font-semibold text-gray-700 dark:text-gray-300">左キャラクター</label>
                 <MediaLibrarySelector
-                    trigger={
-                        <Button variant="outline" className="w-full">
-                            <Image className="h-4 w-4 mr-2" />
-                            アイコンを選択
-                        </Button>
-                    }
-                    onSelect={(url) => updateBlock(block.id, { ...block.content, leftIcon: url })}
-                    selectedUrl={block.content.leftIcon}
+                  trigger={
+                    <Button variant="outline" className="w-full">
+                      <Image className="h-4 w-4 mr-2" />
+                      アイコンを選択
+                    </Button>
+                  }
+                  onSelect={(url) => updateBlock(block.id, { ...block.content, leftIcon: url })}
+                  selectedUrl={block.content.leftIcon}
                 />
                 {block.content.leftIcon && <img src={block.content.leftIcon} alt="left icon" className="w-16 h-16 rounded-full object-cover mx-auto" />}
                 <Input
@@ -1098,14 +986,14 @@ export const EnhancedBlockEditor: React.FC<EnhancedBlockEditorProps> = ({ blocks
               <div className="space-y-2">
                 <label className="text-sm font-semibold text-gray-700 dark:text-gray-300">右キャラクター</label>
                 <MediaLibrarySelector
-                    trigger={
-                        <Button variant="outline" className="w-full">
-                            <Image className="h-4 w-4 mr-2" />
-                            アイコンを選択
-                        </Button>
-                    }
-                    onSelect={(url) => updateBlock(block.id, { ...block.content, rightIcon: url })}
-                    selectedUrl={block.content.rightIcon}
+                  trigger={
+                    <Button variant="outline" className="w-full">
+                      <Image className="h-4 w-4 mr-2" />
+                      アイコンを選択
+                    </Button>
+                  }
+                  onSelect={(url) => updateBlock(block.id, { ...block.content, rightIcon: url })}
+                  selectedUrl={block.content.rightIcon}
                 />
                 {block.content.rightIcon && <img src={block.content.rightIcon} alt="right icon" className="w-16 h-16 rounded-full object-cover mx-auto" />}
                 <Input
@@ -1124,15 +1012,15 @@ export const EnhancedBlockEditor: React.FC<EnhancedBlockEditorProps> = ({ blocks
 
             <div className="space-y-3 pt-2">
               <label className="text-sm font-semibold text-gray-700 dark:text-gray-300">会話</label>
-              {block.content.items.map((item: any, index: number) => (
+              {(Array.isArray(block.content.items) ? block.content.items : []).map((item: any, index: number) => (
                 <div key={index} className="flex items-start gap-2 p-2 rounded-md border bg-white dark:bg-gray-900/50">
                   <img src={item.alignment === 'left' ? block.content.leftIcon || '/placeholder.svg' : block.content.rightIcon || '/placeholder.svg'} alt="icon preview" className="w-10 h-10 rounded-full object-cover mt-1" />
                   <div className="flex-1 space-y-2">
-                    <Textarea 
+                    <Textarea
                       placeholder="テキスト..."
-                      value={item.text}
+                      value={item.text || ''}
                       onChange={(e) => {
-                        const newItems = [...block.content.items];
+                        const newItems = [...(Array.isArray(block.content.items) ? block.content.items : [])];
                         newItems[index] = { ...item, text: e.target.value };
                         updateBlock(block.id, { ...block.content, items: newItems });
                       }}
@@ -1142,18 +1030,18 @@ export const EnhancedBlockEditor: React.FC<EnhancedBlockEditorProps> = ({ blocks
                     <div className="flex justify-between items-center">
                       <div className="flex items-center gap-1 rounded-md p-0.5">
                         <Button size="sm" variant={item.alignment === 'left' ? 'secondary' : 'ghost'} className="h-7" onClick={() => {
-                          const newItems = [...block.content.items];
+                          const newItems = [...(Array.isArray(block.content.items) ? block.content.items : [])];
                           newItems[index] = { ...item, alignment: 'left' };
                           updateBlock(block.id, { ...block.content, items: newItems });
                         }}>左</Button>
                         <Button size="sm" variant={item.alignment === 'right' ? 'secondary' : 'ghost'} className="h-7" onClick={() => {
-                          const newItems = [...block.content.items];
+                          const newItems = [...(Array.isArray(block.content.items) ? block.content.items : [])];
                           newItems[index] = { ...item, alignment: 'right' };
                           updateBlock(block.id, { ...block.content, items: newItems });
                         }}>右</Button>
                       </div>
                       <Button size="sm" variant="ghost" className="text-destructive hover:text-destructive h-7" onClick={() => {
-                        const newItems = block.content.items.filter((_: any, i: number) => i !== index);
+                        const newItems = (Array.isArray(block.content.items) ? block.content.items : []).filter((_: any, i: number) => i !== index);
                         updateBlock(block.id, { ...block.content, items: newItems });
                       }}><Trash2 className="h-4 w-4" /></Button>
                     </div>
@@ -1162,18 +1050,18 @@ export const EnhancedBlockEditor: React.FC<EnhancedBlockEditorProps> = ({ blocks
               ))}
               <div className="flex gap-2 pt-2">
                 <Button size="sm" variant="outline" onClick={() => {
-                  const newItems = [...block.content.items, { alignment: 'left', text: '' }];
+                  const newItems = [...(Array.isArray(block.content.items) ? block.content.items : []), { alignment: 'left', text: '' }];
                   updateBlock(block.id, { ...block.content, items: newItems });
                 }}><Plus className="h-4 w-4 mr-1" /> 左向きを追加</Button>
                 <Button size="sm" variant="outline" onClick={() => {
-                  const newItems = [...block.content.items, { alignment: 'right', text: '' }];
+                  const newItems = [...(Array.isArray(block.content.items) ? block.content.items : []), { alignment: 'right', text: '' }];
                   updateBlock(block.id, { ...block.content, items: newItems });
                 }}><Plus className="h-4 w-4 mr-1" /> 右向きを追加</Button>
               </div>
             </div>
           </div>
         );
-      
+
       case 'button': {
         const buttonStyle: React.CSSProperties = {
           display: 'inline-flex',
@@ -1183,22 +1071,22 @@ export const EnhancedBlockEditor: React.FC<EnhancedBlockEditorProps> = ({ blocks
           textDecoration: 'none',
           fontWeight: 600,
           color: block.content.textColor || '#ffffff',
-          backgroundColor: block.content.backgroundColor,
+          backgroundColor: block.content.backgroundColor || '#2563eb',
           borderRadius: `${block.content.borderRadius ?? 6}px`,
           fontSize: `${block.content.textSize || 16}px`,
           height: `${block.content.height || 40}px`,
           transition: 'opacity 0.2s',
         };
+
+        // 予備: 将来グラデーション名のテンプレを追加したとき用
         if (block.content.template === 'グラデーション (紫)') {
-          buttonStyle.background = 'linear-gradient(to right, #9333ea, #4f46e5)';
-        } else {
-          buttonStyle.backgroundColor = block.content.backgroundColor || '#2563eb';
+          (buttonStyle as any).background = 'linear-gradient(to right, #9333ea, #4f46e5)';
         }
 
         if (block.content.shadow) {
           buttonStyle.boxShadow = '0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1)';
         }
-        
+
         if (block.content.width === 'full') {
           buttonStyle.width = '100%';
         } else if (block.content.width === 'medium') {
@@ -1206,7 +1094,7 @@ export const EnhancedBlockEditor: React.FC<EnhancedBlockEditorProps> = ({ blocks
         }
 
         if (block.content.borderEnabled) {
-            buttonStyle.border = `${block.content.borderWidth || 1}px solid ${block.content.borderColor || '#000000'}`;
+          buttonStyle.border = `${block.content.borderWidth || 1}px solid ${block.content.borderColor || '#000000'}`;
         }
 
         return (
@@ -1233,23 +1121,19 @@ export const EnhancedBlockEditor: React.FC<EnhancedBlockEditorProps> = ({ blocks
                       fontSize: `${template.styles.textSize || 16}px`,
                       height: `${template.styles.height || 40}px`,
                       width: '100%',
+                      backgroundColor: template.styles.backgroundColor,
+                      ...(template.styles.shadow
+                        ? { boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1)' }
+                        : {})
                     };
-                    if (template.name === 'グラデーション (紫)') {
-                      templateStyle.background = 'linear-gradient(to right, #9333ea, #4f46e5)';
-                    } else {
-                      templateStyle.backgroundColor = template.styles.backgroundColor;
-                    }
-                    if (template.styles.shadow) {
-                      templateStyle.boxShadow = '0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1)';
-                    }
                     if (template.styles.borderEnabled) {
-                      templateStyle.border = `${template.styles.borderWidth || 1}px solid ${template.styles.borderColor || '#000000'}`;
+                      (templateStyle as any).border = `${template.styles.borderWidth || 1}px solid ${template.styles.borderColor || '#000000'}`;
                     }
 
                     return (
                       <div key={template.name} className="space-y-2">
-                        <button 
-                          style={templateStyle} 
+                        <button
+                          style={templateStyle}
                           onClick={() => {
                             updateBlock(block.id, { ...block.content, ...template.styles, text: template.text, template: template.name });
                             setTemplateDialogOpenFor(null);
@@ -1259,7 +1143,7 @@ export const EnhancedBlockEditor: React.FC<EnhancedBlockEditorProps> = ({ blocks
                         </button>
                         <p className="text-center text-xs text-muted-foreground">{template.name}</p>
                       </div>
-                    )
+                    );
                   })}
                 </div>
               </DialogContent>
@@ -1267,9 +1151,9 @@ export const EnhancedBlockEditor: React.FC<EnhancedBlockEditorProps> = ({ blocks
 
             {/* Preview */}
             <div className="my-3 p-3 rounded-md bg-muted flex items-center justify-center">
-                <div style={buttonStyle}>
-                    {block.content.text || 'ボタンテキスト'}
-                </div>
+              <div style={buttonStyle}>
+                {block.content.text || 'ボタンテキスト'}
+              </div>
             </div>
 
             {/* Settings */}
@@ -1290,7 +1174,7 @@ export const EnhancedBlockEditor: React.FC<EnhancedBlockEditorProps> = ({ blocks
                 onChange={(e) => updateBlock(block.id, { ...block.content, url: e.target.value })}
               />
             </div>
-            
+
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1">
                 <Label>配置</Label>
@@ -1317,14 +1201,14 @@ export const EnhancedBlockEditor: React.FC<EnhancedBlockEditorProps> = ({ blocks
             </div>
 
             <div className="grid grid-cols-2 gap-3">
-                <div className="space-y-1">
-                    <Label>高さ (px)</Label>
-                    <Input type="number" value={block.content.height ?? 40} onChange={(e) => updateBlock(block.id, { ...block.content, height: Number(e.target.value) })} />
-                </div>
-                <div className="space-y-1">
-                    <Label>文字サイズ (px)</Label>
-                    <Input type="number" value={block.content.textSize ?? 16} onChange={(e) => updateBlock(block.id, { ...block.content, textSize: Number(e.target.value) })} />
-                </div>
+              <div className="space-y-1">
+                <Label>高さ (px)</Label>
+                <Input type="number" value={block.content.height ?? 40} onChange={(e) => updateBlock(block.id, { ...block.content, height: Number(e.target.value) })} />
+              </div>
+              <div className="space-y-1">
+                <Label>文字サイズ (px)</Label>
+                <Input type="number" value={block.content.textSize ?? 16} onChange={(e) => updateBlock(block.id, { ...block.content, textSize: Number(e.target.value) })} />
+              </div>
             </div>
 
             <div className="grid grid-cols-2 gap-3">
@@ -1339,40 +1223,40 @@ export const EnhancedBlockEditor: React.FC<EnhancedBlockEditorProps> = ({ blocks
             </div>
 
             <div className="grid grid-cols-2 gap-3 items-center">
-                <div className="space-y-1">
-                    <Label>角丸</Label>
-                    <Select value={String(block.content.borderRadius ?? 6)} onValueChange={(value) => updateBlock(block.id, { ...block.content, borderRadius: Number(value) })}>
-                        <SelectTrigger><SelectValue /></SelectTrigger>
-                        <SelectContent>
-                            <SelectItem value="0">なし (0px)</SelectItem>
-                            <SelectItem value="6">標準 (6px)</SelectItem>
-                            <SelectItem value="50">丸 (50px)</SelectItem>
-                        </SelectContent>
-                    </Select>
-                </div>
-                <div className="flex items-center space-x-2 pt-5">
-                    <Switch id={`shadow-${block.id}`} checked={block.content.shadow !== false} onCheckedChange={(checked) => updateBlock(block.id, { ...block.content, shadow: checked })} />
-                    <Label htmlFor={`shadow-${block.id}`}>影</Label>
-                </div>
+              <div className="space-y-1">
+                <Label>角丸</Label>
+                <Select value={String(block.content.borderRadius ?? 6)} onValueChange={(value) => updateBlock(block.id, { ...block.content, borderRadius: Number(value) })}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="0">なし (0px)</SelectItem>
+                    <SelectItem value="6">標準 (6px)</SelectItem>
+                    <SelectItem value="50">丸 (50px)</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="flex items-center space-x-2 pt-5">
+                <Switch id={`shadow-${block.id}`} checked={block.content.shadow !== false} onCheckedChange={(checked) => updateBlock(block.id, { ...block.content, shadow: checked })} />
+                <Label htmlFor={`shadow-${block.id}`}>影</Label>
+              </div>
             </div>
 
             <div className="space-y-2 pt-3 border-t mt-3">
-                <div className="flex items-center justify-between">
-                    <Label htmlFor={`border-${block.id}`}>枠線</Label>
-                    <Switch id={`border-${block.id}`} checked={!!block.content.borderEnabled} onCheckedChange={(checked) => updateBlock(block.id, { ...block.content, borderEnabled: checked })} />
+              <div className="flex items-center justify-between">
+                <Label htmlFor={`border-${block.id}`}>枠線</Label>
+                <Switch id={`border-${block.id}`} checked={!!block.content.borderEnabled} onCheckedChange={(checked) => updateBlock(block.id, { ...block.content, borderEnabled: checked })} />
+              </div>
+              {block.content.borderEnabled && (
+                <div className="grid grid-cols-2 gap-3 pt-2">
+                  <div className="space-y-1">
+                    <Label>枠線 太さ (px)</Label>
+                    <Input type="number" value={block.content.borderWidth ?? 1} onChange={(e) => updateBlock(block.id, { ...block.content, borderWidth: Number(e.target.value) })} />
+                  </div>
+                  <div className="space-y-1">
+                    <Label>枠線 色</Label>
+                    <input type="color" value={block.content.borderColor || '#000000'} onChange={(e) => updateBlock(block.id, { ...block.content, borderColor: e.target.value })} className="w-full h-10 rounded border" />
+                  </div>
                 </div>
-                {block.content.borderEnabled && (
-                    <div className="grid grid-cols-2 gap-3 pt-2">
-                        <div className="space-y-1">
-                            <Label>枠線 太さ (px)</Label>
-                            <Input type="number" value={block.content.borderWidth ?? 1} onChange={(e) => updateBlock(block.id, { ...block.content, borderWidth: Number(e.target.value) })} />
-                        </div>
-                        <div className="space-y-1">
-                            <Label>枠線 色</Label>
-                            <input type="color" value={block.content.borderColor || '#000000'} onChange={(e) => updateBlock(block.id, { ...block.content, borderColor: e.target.value })} className="w-full h-10 rounded border" />
-                        </div>
-                    </div>
-                )}
+              )}
             </div>
           </div>
         );
@@ -1383,10 +1267,86 @@ export const EnhancedBlockEditor: React.FC<EnhancedBlockEditorProps> = ({ blocks
     }
   };
 
+  const renderBlock = (block: Block) => {
+    const isCollapsed = !expandedBlocks.includes(block.id);
+
+    const blockIndex = safeBlocks.findIndex(b => b.id === block.id);
+    const isBackgroundBlock = block.type === 'background';
+    const previousBlock = blockIndex > 0 ? safeBlocks[blockIndex - 1] : undefined;
+    const nextBlock = blockIndex >= 0 && blockIndex < safeBlocks.length - 1 ? safeBlocks[blockIndex + 1] : undefined;
+    const canMoveUp = !isBackgroundBlock && blockIndex > 0 && previousBlock?.type !== 'background';
+    const canMoveDown = !isBackgroundBlock && blockIndex < safeBlocks.length - 1 && nextBlock?.type !== 'background';
+
+    return (
+      <Card key={block.id} className="mb-4 group bg-white dark:bg-gray-800 shadow-md border border-gray-300 rounded-sm">
+        <CardContent className={isCollapsed ? "p-0" : "p-2"}>
+          <div className="flex items-start space-x-2">
+            <div className={`flex flex-col items-center space-y-1 ${isCollapsed ? 'pt-1' : 'pt-2'}`}>
+              <Button size="sm" variant="ghost" className="h-6 w-6 p-0" onClick={() => moveBlock(block.id, 'up')} disabled={!canMoveUp}><ChevronUp className="h-4 w-4" /></Button>
+              <GripVertical className="h-5 w-5 text-muted-foreground cursor-grab" />
+              <Button size="sm" variant="ghost" className="h-6 w-6 p-0" onClick={() => moveBlock(block.id, 'down')} disabled={!canMoveDown}><ChevronDown className="h-4 w-4" /></Button>
+            </div>
+
+            <div className={`flex-1 min-w-0 ${isCollapsed ? 'py-1' : 'p-2'}`}>
+              <div className="flex items-center justify-between">
+                <div className="flex items-center flex-1 min-w-0 overflow-hidden">
+                  <Button size="sm" variant="ghost" className="h-6 w-6 p-0 mr-2" onClick={() => toggleCollapse(block.id)}>
+                    {isCollapsed ? <ChevronRight className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+                  </Button>
+                  {isCollapsed && (
+                    <div className="flex-1 min-w-0 overflow-hidden">
+                      {renderCollapsedPreview(block)}
+                    </div>
+                  )}
+                </div>
+                <div className="flex space-x-1">
+                  <TooltipProvider delayDuration={0}>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Button size="sm" variant="ghost" className="h-8 w-8 p-0" onClick={() => duplicateBlock(block.id)} disabled={isBackgroundBlock}><Copy className="h-4 w-4" /></Button>
+                      </TooltipTrigger>
+                      <TooltipContent className="text-xs text-gray-500">
+                        <p>複製</p>
+                      </TooltipContent>
+                    </Tooltip>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Button size="sm" variant="ghost" className="h-8 w-8 p-0 text-destructive hover:bg-destructive hover:text-white" onClick={() => deleteBlock(block.id)}><Trash2 className="h-4 w-4" /></Button>
+                      </TooltipTrigger>
+                      <TooltipContent className="text-xs text-gray-500">
+                        <p>削除</p>
+                      </TooltipContent>
+                    </Tooltip>
+                  </TooltipProvider>
+                </div>
+              </div>
+              {!isCollapsed && (
+                <div className="mt-2 space-y-4">
+                  {block.type !== 'background' && (
+                    <Input
+                      placeholder="ブロックタイトル（任意）"
+                      value={block.content?.title || ''}
+                      onChange={(e) => updateBlock(block.id, { ...(block.content || {}), title: e.target.value })}
+                      className="text-xs h-8 bg-slate-50"
+                    />
+                  )}
+                  {renderBlockContent(block)}
+                </div>
+              )}
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+    );
+  };
+
+  /* =========================
+     Render
+  ========================= */
   return (
     <div className="relative min-h-[700px] h-[700px] max-h-[700px] flex flex-col border rounded-md bg-white">
       <div ref={scrollContainerRef} className="flex-1 overflow-y-auto p-4 border border-gray-300" style={{ backgroundColor: '#ffffe0' }}>
-        {blocks.length === 0 && (
+        {safeBlocks.length === 0 && (
           <div className="flex items-center justify-center h-full">
             <div className="text-center">
               <p className="text-muted-foreground mb-4">ブロックを追加して記事を作成しましょう</p>
@@ -1398,7 +1358,7 @@ export const EnhancedBlockEditor: React.FC<EnhancedBlockEditorProps> = ({ blocks
           </div>
         )}
 
-        {blocks.sort((a, b) => a.order - b.order).map(renderBlock)}
+        {safeBlocks.slice().sort((a, b) => (a.order ?? 0) - (b.order ?? 0)).map(renderBlock)}
       </div>
 
       <div className="flex-none border-t border-gray-300 bg-background/95">
@@ -1414,24 +1374,24 @@ export const EnhancedBlockEditor: React.FC<EnhancedBlockEditorProps> = ({ blocks
             <Button variant="ghost" className="flex flex-col h-auto py-2" onClick={() => addBlock('video')}><Video className="h-5 w-5 mb-1" /><span className="text-xs">動画</span></Button>
             <Button variant="ghost" className="flex flex-col h-auto py-2" onClick={() => addBlock('button')}><Link className="h-5 w-5 mb-1" /><span className="text-xs">ボタン</span></Button>
             <Button variant="ghost" className="flex flex-col h-auto py-2" onClick={() => addBlock('form_embed')}><FileText className="h-5 w-5 mb-1" /><span className="text-xs">フォーム</span></Button>
-<Button variant="ghost" className="flex flex-col h-auto py-2 hover:bg-[#0cb386] group" onClick={() => addBlock('background')} disabled={hasBackgroundBlock}>
-  <Palette className="h-5 w-5 mb-1 text-[#0cb386] group-hover:text-white" />
-  <span className="text-xs text-[#0cb386] group-hover:text-white">背景色</span>
-</Button>            <Dialog>
-  <DialogTrigger asChild>
-    <Button variant="ghost" className="flex flex-col h-auto py-2 hover:bg-[#0cb386] group">
-      <Folder className="h-5 w-5 mb-1 text-[#0cb386] group-hover:text-white" />
-      <span className="text-xs text-[#0cb386] group-hover:text-white">テンプレート</span>
-    </Button>
-  </DialogTrigger>
-  <DialogContent>
-    <DialogHeader>
-      <DialogTitle>テンプレートを選択</DialogTitle>
-    </DialogHeader>
-    {/* ここにポップアップウィンドウの内容が入ります */}
-    <p>ポップアップウィンドウの内容は後で指定されます。</p>
-  </DialogContent>
-</Dialog>
+            <Button variant="ghost" className="flex flex-col h-auto py-2 hover:bg-[#0cb386] group" onClick={() => addBlock('background')} disabled={hasBackgroundBlock}>
+              <Palette className="h-5 w-5 mb-1 text-[#0cb386] group-hover:text-white" />
+              <span className="text-xs text-[#0cb386] group-hover:text-white">背景色</span>
+            </Button>
+            <Dialog>
+              <DialogTrigger asChild>
+                <Button variant="ghost" className="flex flex-col h-auto py-2 hover:bg-[#0cb386] group">
+                  <Folder className="h-5 w-5 mb-1 text-[#0cb386] group-hover:text-white" />
+                  <span className="text-xs text-[#0cb386] group-hover:text-white">テンプレート</span>
+                </Button>
+              </DialogTrigger>
+              <DialogContent>
+                <DialogHeader>
+                  <DialogTitle>テンプレートを選択</DialogTitle>
+                </DialogHeader>
+                <p>ポップアップウィンドウの内容は後で指定されます。</p>
+              </DialogContent>
+            </Dialog>
           </div>
         </div>
       </div>
