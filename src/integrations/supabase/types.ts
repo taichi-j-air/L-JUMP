@@ -723,6 +723,7 @@ export type Database = {
       }
       member_site_categories: {
         Row: {
+          content_blocks: Json
           content_count: number | null
           created_at: string
           description: string | null
@@ -734,6 +735,7 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          content_blocks?: Json
           content_count?: number | null
           created_at?: string
           description?: string | null
@@ -745,6 +747,7 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          content_blocks?: Json
           content_count?: number | null
           created_at?: string
           description?: string | null
