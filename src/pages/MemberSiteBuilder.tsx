@@ -167,7 +167,7 @@ const MemberSiteBuilder = () => {
     try {
       const { data, error } = await supabase.from("member_sites").select("*").eq("id", siteId).single();
       if (error) throw error;
-      setSite(data);
+      setSite(data as MemberSite);
       setSiteName(data.name);
       setSiteDescription(data.description || "");
       setSiteSlug(data.slug);
@@ -193,7 +193,11 @@ const MemberSiteBuilder = () => {
         .eq("site_id", siteId)
         .order("sort_order", { ascending: true });
       if (error) throw error;
-      setSiteContents(data || []);
+      setSiteContents((data || []).map(item => ({
+        ...item,
+        page_type: item.page_type as "page" | "post" | "landing",
+        access_level: item.access_level as "public" | "premium" | "member"
+      })));
     } catch (error) {
       console.error("Error loading contents:", error);
     }
@@ -366,8 +370,8 @@ const MemberSiteBuilder = () => {
       setContentTitle(data.title);
       setContentText(data.content || "");
       setContentSlug(data.slug);
-      setContentType(data.page_type);
-      setContentAccessLevel(data.access_level);
+      setContentType(data.page_type as "page" | "post" | "landing");
+      setContentAccessLevel(data.access_level as "public" | "premium" | "member");
       setContentPublished(data.is_published);
       setContentCategoryId("none");
 

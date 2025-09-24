@@ -36,6 +36,7 @@ Deno.serve(async (req) => {
           id,
           name,
           description,
+          thumbnail_url,
           content_count,
           sort_order
         ),
@@ -119,16 +120,25 @@ function generateSiteHTML(site: any): string {
   `).join('');
 
   // Generate category blocks for main view
-  const categoriesHTML = categories.map((category: any) => `
-    <div class="category-card" onclick="showCategory('${category.id}')">
-      <h3 class="category-title">${category.name}</h3>
-      ${category.description ? `<p class="category-description">${category.description}</p>` : ''}
-      <div class="category-meta">
-        <span class="content-count">${category.content_count}件のコンテンツ</span>
-        <span class="view-arrow">表示 →</span>
+  const categoriesHTML = categories.map((category: any) => {
+    const thumbnailHTML = category.thumbnail_url 
+      ? `<div class="category-thumbnail"><img src="${category.thumbnail_url}" alt="${category.name}" /></div>`
+      : `<div class="category-thumbnail category-thumbnail-placeholder"><div class="placeholder-text">画像なし</div></div>`;
+    
+    return `
+      <div class="category-card" onclick="showCategory('${category.id}')">
+        ${thumbnailHTML}
+        <div class="category-content">
+          <h3 class="category-title">${category.name}</h3>
+          ${category.description ? `<p class="category-description">${category.description}</p>` : ''}
+          <div class="category-meta">
+            <span class="content-count">${category.content_count}件のコンテンツ</span>
+            <span class="view-arrow">表示 →</span>
+          </div>
+        </div>
       </div>
-    </div>
-  `).join('');
+    `;
+  }).join('');
 
   // Generate content by category
   const categoryContentHTML = categories.map((category: any) => {
@@ -358,10 +368,12 @@ function generateSiteHTML(site: any): string {
             background: white;
             border: 1px solid #e0e0e0;
             border-radius: 12px;
-            padding: 1.5rem;
+            overflow: hidden;
             cursor: pointer;
             transition: all 0.3s ease;
             box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+            display: flex;
+            flex-direction: column;
           }
           
           .category-card:hover {
@@ -370,6 +382,36 @@ function generateSiteHTML(site: any): string {
             border-color: ${primaryColor};
           }
           
+          .category-thumbnail {
+            width: 100%;
+            height: 160px;
+            overflow: hidden;
+            background: #f5f5f5;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+          }
+          
+          .category-thumbnail img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+          }
+          
+          .category-thumbnail-placeholder {
+            background: linear-gradient(135deg, #f5f5f5, #e5e5e5);
+          }
+          
+          .placeholder-text {
+            color: #999;
+            font-size: 14px;
+          }
+          
+          .category-content {
+            padding: 1.5rem;
+            flex: 1;
+          }
+
           .category-title {
             font-size: 1.3rem;
             font-weight: 600;
