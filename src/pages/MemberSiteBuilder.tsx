@@ -90,12 +90,8 @@ const MemberSiteBuilder = () => {
   const [selectedCategoryId, setSelectedCategoryId] = useState<string | null>(null);
   const [categoryName, setCategoryName] = useState("");
   const [categoryDescription, setCategoryDescription] = useState("");
-<<<<<<< HEAD
   const [categoryThumbnailUrl, setCategoryThumbnailUrl] = useState<string | null>(null);
   const [categoryBlocks, setCategoryBlocks] = useState<any[]>([]); // JSON array
-=======
-  const [thumbnailUrl, setThumbnailUrl] = useState<string>("");
->>>>>>> e69e97f99aaaf224402bf92693ec3815742e4afc
 
   useEffect(() => {
     loadSites();
@@ -120,16 +116,10 @@ const MemberSiteBuilder = () => {
       setSelectedCategoryId(null);
       setCategoryName("");
       setCategoryDescription("");
-<<<<<<< HEAD
       setCategoryThumbnailUrl(null);
       setCategoryBlocks([]);
 
       // load fresh
-=======
-      setThumbnailUrl("");
-      
-      // Load fresh data for the selected site
->>>>>>> e69e97f99aaaf224402bf92693ec3815742e4afc
       loadSiteData();
       loadSiteContents();
       loadCategories();
@@ -149,12 +139,8 @@ const MemberSiteBuilder = () => {
       setSelectedCategoryId(null);
       setCategoryName("");
       setCategoryDescription("");
-<<<<<<< HEAD
       setCategoryThumbnailUrl(null);
       setCategoryBlocks([]);
-=======
-      setThumbnailUrl("");
->>>>>>> e69e97f99aaaf224402bf92693ec3815742e4afc
     }
   }, [siteId]);
 
@@ -474,16 +460,10 @@ const MemberSiteBuilder = () => {
       const payload = {
         name: categoryName,
         description: categoryDescription,
-<<<<<<< HEAD
         site_id: siteId,
         sort_order: categories.length,
         thumbnail_url: categoryThumbnailUrl,
         content_blocks: Array.isArray(categoryBlocks) ? categoryBlocks : [], // 常に配列
-=======
-        thumbnail_url: thumbnailUrl || null,
-        site_id: siteId,
-        sort_order: categories.length,
->>>>>>> e69e97f99aaaf224402bf92693ec3815742e4afc
       };
 
       if (selectedCategoryId) {
@@ -508,12 +488,8 @@ const MemberSiteBuilder = () => {
     setSelectedCategoryId(category.id);
     setCategoryName(category.name);
     setCategoryDescription(category.description || "");
-<<<<<<< HEAD
     setCategoryThumbnailUrl(category.thumbnail_url ?? null);
     setCategoryBlocks(Array.isArray(category.content_blocks) ? category.content_blocks : []);
-=======
-    setThumbnailUrl(category.thumbnail_url || "");
->>>>>>> e69e97f99aaaf224402bf92693ec3815742e4afc
   };
 
   const deleteCategory = async (categoryId: string) => {
@@ -886,7 +862,6 @@ const MemberSiteBuilder = () => {
                       </div>
                     </div>
 
-<<<<<<< HEAD
                     {/* Main */}
                     <div className="w-4/5 rounded-none">
                       {selectedCategory || (!selectedCategoryId && categoryName) ? (
@@ -900,31 +875,6 @@ const MemberSiteBuilder = () => {
                               <Label htmlFor="categoryName">カテゴリ名</Label>
                               <Input id="categoryName" value={categoryName} onChange={(e) => setCategoryName(e.target.value)} placeholder="カテゴリ名を入力してください" />
                             </div>
-=======
-                               <div className="space-y-2">
-                                 <Label>サムネイル画像</Label>
-                                 <div className="flex items-center space-x-2">
-                                   {thumbnailUrl && (
-                                     <img src={thumbnailUrl} alt="Category Thumbnail" className="w-24 h-24 object-cover rounded-md" />
-                                   )}
-                                   <MediaLibrarySelector
-                                     trigger={
-                                       <Button type="button" variant="outline" className="flex items-center gap-2">
-                                         <ImageIcon className="w-4 h-4" />
-                                         {thumbnailUrl ? "画像を変更" : "画像を選択"}
-                                       </Button>
-                                     }
-                                     onSelect={(url) => setThumbnailUrl(url)}
-                                     selectedUrl={thumbnailUrl}
-                                   />
-                                   {thumbnailUrl && (
-                                     <Button type="button" variant="ghost" size="icon" onClick={() => setThumbnailUrl("")}>
-                                       <Trash2 className="w-4 h-4" />
-                                     </Button>
-                                   )}
-                                 </div>
-                               </div>
->>>>>>> e69e97f99aaaf224402bf92693ec3815742e4afc
 
                             <div className="space-y-2">
                               <Label htmlFor="categoryDescription">説明</Label>
@@ -979,9 +929,8 @@ const MemberSiteBuilder = () => {
                             <div className="space-y-2">
                               <Label>詳細コンテンツ（ブロックエディタ）</Label>
                               <EnhancedBlockEditor
-                                value={categoryBlocks ?? []} // 配列を保証
+                                blocks={Array.isArray(categoryBlocks) ? categoryBlocks : []}
                                 onChange={(next: any[]) => setCategoryBlocks(Array.isArray(next) ? next : [])}
-                                placeholder="カテゴリの詳細コンテンツをブロックで編集できます"
                               />
                               <div className="flex gap-2">
                                 <Button type="button" variant="secondary" onClick={() => setCategoryBlocks([])} title="ブロックをクリア">
