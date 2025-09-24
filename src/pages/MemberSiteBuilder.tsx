@@ -47,7 +47,6 @@ interface Category {
   site_id: string;
   sort_order: number;
   content_count: number;
-  thumbnail_url: string | null; // サムネイルURLを追加
   created_at: string;
   thumbnail_url?: string;
 }
@@ -90,11 +89,7 @@ const MemberSiteBuilder = () => {
   const [selectedCategoryId, setSelectedCategoryId] = useState<string | null>(null);
   const [categoryName, setCategoryName] = useState("");
   const [categoryDescription, setCategoryDescription] = useState("");
-<<<<<<< HEAD
-  const [categoryThumbnailUrl, setCategoryThumbnailUrl] = useState<string | null>(null); // サムネイルURLのstateを追加
-=======
   const [thumbnailUrl, setThumbnailUrl] = useState<string>("");
->>>>>>> 395e8c58deab4df18114cccbfdeec9291f117c6d
 
   // Load site data when site is selected
   useEffect(() => {
@@ -120,11 +115,7 @@ const MemberSiteBuilder = () => {
       setSelectedCategoryId(null);
       setCategoryName("");
       setCategoryDescription("");
-<<<<<<< HEAD
-      setCategoryThumbnailUrl(null); // サムネイルURLのstateをリセット
-=======
       setThumbnailUrl("");
->>>>>>> 395e8c58deab4df18114cccbfdeec9291f117c6d
       
       // Load fresh data for the selected site
       loadSiteData();
@@ -146,11 +137,7 @@ const MemberSiteBuilder = () => {
       setSelectedCategoryId(null);
       setCategoryName("");
       setCategoryDescription("");
-<<<<<<< HEAD
-      setCategoryThumbnailUrl(null); // サムネイルURLのstateをリセット
-=======
       setThumbnailUrl("");
->>>>>>> 395e8c58deab4df18114cccbfdeec9291f117c6d
     }
   }, [siteId]);
 
@@ -608,10 +595,9 @@ const MemberSiteBuilder = () => {
       const categoryPayload = {
         name: categoryName,
         description: categoryDescription,
-        thumbnail_url: categoryThumbnailUrl, // サムネイルURLを追加
+        thumbnail_url: thumbnailUrl || null,
         site_id: siteId,
         sort_order: categories.length,
-        thumbnail_url: thumbnailUrl || null,
       };
 
       if (selectedCategoryId) {
@@ -663,11 +649,7 @@ const MemberSiteBuilder = () => {
     setSelectedCategoryId(category.id);
     setCategoryName(category.name);
     setCategoryDescription(category.description || "");
-<<<<<<< HEAD
-    setCategoryThumbnailUrl(category.thumbnail_url || null);
-=======
     setThumbnailUrl(category.thumbnail_url || "");
->>>>>>> 395e8c58deab4df18114cccbfdeec9291f117c6d
   };
 
   const deleteCategory = async (categoryId: string) => {
@@ -1123,21 +1105,21 @@ const MemberSiteBuilder = () => {
                                <div className="space-y-2">
                                  <Label>サムネイル画像</Label>
                                  <div className="flex items-center space-x-2">
-                                   {categoryThumbnailUrl && (
-                                     <img src={categoryThumbnailUrl} alt="Category Thumbnail" className="w-24 h-24 object-cover rounded-md" />
+                                   {thumbnailUrl && (
+                                     <img src={thumbnailUrl} alt="Category Thumbnail" className="w-24 h-24 object-cover rounded-md" />
                                    )}
                                    <MediaLibrarySelector
-                                     onSelect={(url) => setCategoryThumbnailUrl(url)}
-                                     onRemove={() => setCategoryThumbnailUrl(null)}
-                                     selectedUrl={categoryThumbnailUrl}
-                                   >
-                                     <Button type="button" variant="outline" className="flex items-center gap-2">
-                                       <ImageIcon className="w-4 h-4" />
-                                       {categoryThumbnailUrl ? "画像を変更" : "画像を選択"}
-                                     </Button>
-                                   </MediaLibrarySelector>
-                                   {categoryThumbnailUrl && (
-                                     <Button type="button" variant="ghost" size="icon" onClick={() => setCategoryThumbnailUrl(null)}>
+                                     trigger={
+                                       <Button type="button" variant="outline" className="flex items-center gap-2">
+                                         <ImageIcon className="w-4 h-4" />
+                                         {thumbnailUrl ? "画像を変更" : "画像を選択"}
+                                       </Button>
+                                     }
+                                     onSelect={(url) => setThumbnailUrl(url)}
+                                     selectedUrl={thumbnailUrl}
+                                   />
+                                   {thumbnailUrl && (
+                                     <Button type="button" variant="ghost" size="icon" onClick={() => setThumbnailUrl("")}>
                                        <Trash2 className="w-4 h-4" />
                                      </Button>
                                    )}
