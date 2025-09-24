@@ -7,12 +7,12 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { ArrowLeft, Save, Eye, Plus, Trash2, Settings, Edit, Globe, Image as ImageIcon } from "lucide-react";
+import { ArrowLeft, Save, Eye, Plus, Trash2, Settings, Image as ImageIcon } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Table, TableBody, TableCell, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import { MediaLibrarySelector } from "@/components/MediaLibrarySelector"; // MediaLibrarySelectorをインポート
+import { MediaLibrarySelector } from "@/components/MediaLibrarySelector";
 
 // Data Interfaces
 interface MemberSite {
@@ -46,26 +46,25 @@ interface Category {
   description: string | null;
   site_id: string;
   sort_order: number;
-  content_count: number;
-  thumbnail_url: string | null; // サムネイルURLを追加
+  content_count: number;        // 表示用の件数フィールド
   created_at: string;
-  thumbnail_url?: string;
+  thumbnail_url: string | null; // サムネイルURL（DB列）
 }
 
 const MemberSiteBuilder = () => {
   const navigate = useNavigate();
   const { toast } = useToast();
   const [searchParams, setSearchParams] = useSearchParams();
-  const siteId = searchParams.get('site');
-  
+  const siteId = searchParams.get("site");
+
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
-  
+
   // Site data
   const [site, setSite] = useState<MemberSite | null>(null);
   const [sites, setSites] = useState<MemberSite[]>([]);
   const [siteContents, setSiteContents] = useState<SiteContent[]>([]);
-  
+
   // Form states
   const [siteName, setSiteName] = useState("");
   const [siteDescription, setSiteDescription] = useState("");
@@ -74,7 +73,7 @@ const MemberSiteBuilder = () => {
   const [price, setPrice] = useState(0);
   const [isPublished, setIsPublished] = useState(false);
   const [isPublic, setIsPublic] = useState(false);
-  
+
   // Content editing
   const [selectedContentId, setSelectedContentId] = useState<string | null>(null);
   const [contentTitle, setContentTitle] = useState("");
@@ -90,11 +89,7 @@ const MemberSiteBuilder = () => {
   const [selectedCategoryId, setSelectedCategoryId] = useState<string | null>(null);
   const [categoryName, setCategoryName] = useState("");
   const [categoryDescription, setCategoryDescription] = useState("");
-<<<<<<< HEAD
-  const [categoryThumbnailUrl, setCategoryThumbnailUrl] = useState<string | null>(null); // サムネイルURLのstateを追加
-=======
-  const [thumbnailUrl, setThumbnailUrl] = useState<string>("");
->>>>>>> 395e8c58deab4df18114cccbfdeec9291f117c6d
+  const [categoryThumbnailUrl, setCategoryThumbnailUrl] = useState<string | null>(null); // ★統一
 
   // Load site data when site is selected
   useEffect(() => {
@@ -120,12 +115,8 @@ const MemberSiteBuilder = () => {
       setSelectedCategoryId(null);
       setCategoryName("");
       setCategoryDescription("");
-<<<<<<< HEAD
-      setCategoryThumbnailUrl(null); // サムネイルURLのstateをリセット
-=======
-      setThumbnailUrl("");
->>>>>>> 395e8c58deab4df18114cccbfdeec9291f117c6d
-      
+      setCategoryThumbnailUrl(null);
+
       // Load fresh data for the selected site
       loadSiteData();
       loadSiteContents();
@@ -146,11 +137,7 @@ const MemberSiteBuilder = () => {
       setSelectedCategoryId(null);
       setCategoryName("");
       setCategoryDescription("");
-<<<<<<< HEAD
-      setCategoryThumbnailUrl(null); // サムネイルURLのstateをリセット
-=======
-      setThumbnailUrl("");
->>>>>>> 395e8c58deab4df18114cccbfdeec9291f117c6d
+      setCategoryThumbnailUrl(null);
     }
   }, [siteId]);
 
@@ -158,10 +145,10 @@ const MemberSiteBuilder = () => {
     setSaving(true);
     try {
       const { data: userData } = await supabase.auth.getUser();
-      if (!userData.user) throw new Error('認証が必要です');
+      if (!userData.user) throw new Error("認証が必要です");
 
       const { data, error } = await supabase
-        .from('member_sites')
+        .from("member_sites")
         .insert({
           name: "新しいサイト",
           description: "",
@@ -176,17 +163,17 @@ const MemberSiteBuilder = () => {
         .single();
 
       if (error) throw error;
-      
+
       // Refresh sites list and select the new site
       await loadSites();
       setSearchParams({ site: data.id });
-      
+
       toast({
         title: "作成完了",
         description: "新しいサイトを作成しました",
       });
     } catch (error) {
-      console.error('Error creating site:', error);
+      console.error("Error creating site:", error);
       toast({
         title: "エラー",
         description: "サイトの作成に失敗しました",
@@ -197,40 +184,36 @@ const MemberSiteBuilder = () => {
     }
   };
 
-  const handleDeleteSite = async (siteId: string) => {
-    if (!confirm('本当にこのサイトを削除しますか？関連するコンテンツも全て削除されます。')) return;
-    
+  const handleDeleteSite = async (delSiteId: string) => {
+    if (!confirm("本当にこのサイトを削除しますか？関連するコンテンツも全て削除されます。")) return;
+
     setSaving(true);
     try {
       // Delete related data first
-      await supabase.from('member_site_content').delete().eq('site_id', siteId);
-      await supabase.from('member_site_categories').delete().eq('site_id', siteId);
-      await supabase.from('member_site_payments').delete().eq('site_id', siteId);
-      await supabase.from('member_site_subscriptions').delete().eq('site_id', siteId);
-      await supabase.from('member_site_users').delete().eq('site_id', siteId);
-      
-      // Delete the site itself
-      const { error } = await supabase
-        .from('member_sites')
-        .delete()
-        .eq('id', siteId);
+      await supabase.from("member_site_content").delete().eq("site_id", delSiteId);
+      await supabase.from("member_site_categories").delete().eq("site_id", delSiteId);
+      await supabase.from("member_site_payments").delete().eq("site_id", delSiteId);
+      await supabase.from("member_site_subscriptions").delete().eq("site_id", delSiteId);
+      await supabase.from("member_site_users").delete().eq("site_id", delSiteId);
 
+      // Delete the site itself
+      const { error } = await supabase.from("member_sites").delete().eq("id", delSiteId);
       if (error) throw error;
-      
+
       // If the deleted site was selected, clear selection
-      if (siteId === searchParams.get('site')) {
+      if (delSiteId === searchParams.get("site")) {
         setSearchParams({});
       }
-      
+
       // Refresh sites list
       await loadSites();
-      
+
       toast({
         title: "削除完了",
         description: "サイトを削除しました",
       });
     } catch (error) {
-      console.error('Error deleting site:', error);
+      console.error("Error deleting site:", error);
       toast({
         title: "エラー",
         description: "サイトの削除に失敗しました",
@@ -244,15 +227,12 @@ const MemberSiteBuilder = () => {
   const loadSites = async () => {
     setLoading(true);
     try {
-      const { data, error } = await supabase
-        .from('member_sites')
-        .select('*')
-        .order('created_at', { ascending: false });
+      const { data, error } = await supabase.from("member_sites").select("*").order("created_at", { ascending: false });
 
       if (error) throw error;
       setSites(data || []);
     } catch (error) {
-      console.error('Error loading sites:', error);
+      console.error("Error loading sites:", error);
       toast({
         title: "エラー",
         description: "サイト一覧の読み込みに失敗しました",
@@ -265,17 +245,13 @@ const MemberSiteBuilder = () => {
 
   const loadSiteData = async () => {
     if (!siteId) return;
-    
+
     setLoading(true);
     try {
-      const { data, error } = await supabase
-        .from('member_sites')
-        .select('*')
-        .eq('id', siteId)
-        .single();
+      const { data, error } = await supabase.from("member_sites").select("*").eq("id", siteId).single();
 
       if (error) throw error;
-      
+
       setSite(data);
       setSiteName(data.name);
       setSiteDescription(data.description || "");
@@ -285,7 +261,7 @@ const MemberSiteBuilder = () => {
       setIsPublished(data.is_published);
       setIsPublic(data.is_public);
     } catch (error) {
-      console.error('Error loading site:', error);
+      console.error("Error loading site:", error);
       toast({
         title: "エラー",
         description: "サイト情報の読み込みに失敗しました",
@@ -299,41 +275,51 @@ const MemberSiteBuilder = () => {
 
   const loadSiteContents = async () => {
     if (!siteId) return;
-    
+
     try {
       const { data, error } = await supabase
-        .from('member_site_content')
-        .select('*')
-        .eq('site_id', siteId)
-        .order('sort_order', { ascending: true });
+        .from("member_site_content")
+        .select("*")
+        .eq("site_id", siteId)
+        .order("sort_order", { ascending: true });
 
       if (error) throw error;
       setSiteContents(data || []);
     } catch (error) {
-      console.error('Error loading contents:', error);
+      console.error("Error loading contents:", error);
     }
   };
 
   // Load categories function
   const loadCategories = async () => {
     if (!siteId) return;
-    
+
     try {
+      // 関連の count を取得（PostgREST 結果の形に合わせて整形）
       const { data, error } = await supabase
-        .from('member_site_categories')
-        .select('*, member_site_content(count)') // content_count を取得するために結合
-        .eq('site_id', siteId)
-        .order('sort_order', { ascending: true });
+        .from("member_site_categories")
+        .select("*, member_site_content(count)")
+        .eq("site_id", siteId)
+        .order("sort_order", { ascending: true });
 
       if (error) throw error;
-      // content_count はリレーションから取得されるため、整形が必要
-      const formattedCategories = data ? data.map(cat => ({
-        ...cat,
-        content_count: cat.member_site_content ? cat.member_site_content.length : 0,
-      })) : [];
-      setCategories(formattedCategories);
+
+      const formatted: Category[] =
+        (data as any[] | null)?.map((cat: any) => ({
+          id: cat.id,
+          name: cat.name,
+          description: cat.description,
+          site_id: cat.site_id,
+          sort_order: cat.sort_order,
+          created_at: cat.created_at,
+          thumbnail_url: cat.thumbnail_url ?? null,
+          // PostgREST の形: member_site_content: [{ count: N }] or []
+          content_count: cat.member_site_content?.[0]?.count ?? 0,
+        })) ?? [];
+
+      setCategories(formatted);
     } catch (error) {
-      console.error('Error loading categories:', error);
+      console.error("Error loading categories:", error);
       toast({
         title: "エラー",
         description: "カテゴリの読み込みに失敗しました",
@@ -345,10 +331,10 @@ const MemberSiteBuilder = () => {
   const saveSite = async () => {
     setSaving(true);
     try {
-      if (siteId && siteId !== 'new') {
+      if (siteId && siteId !== "new") {
         // Update existing site
         const { error } = await supabase
-          .from('member_sites')
+          .from("member_sites")
           .update({
             name: siteName,
             description: siteDescription,
@@ -358,13 +344,13 @@ const MemberSiteBuilder = () => {
             is_published: isPublished,
             is_public: isPublic,
           })
-          .eq('id', siteId);
+          .eq("id", siteId);
 
         if (error) throw error;
       } else {
         // Create new site
         const { data, error } = await supabase
-          .from('member_sites')
+          .from("member_sites")
           .insert({
             name: siteName,
             description: siteDescription,
@@ -379,7 +365,7 @@ const MemberSiteBuilder = () => {
           .single();
 
         if (error) throw error;
-        
+
         // Redirect to edit mode with the new site ID
         setSearchParams({ site: data.id });
         toast({
@@ -388,16 +374,16 @@ const MemberSiteBuilder = () => {
         });
         return;
       }
-      
+
       toast({
         title: "保存完了",
         description: "サイト情報を保存しました",
       });
-      
+
       loadSiteData();
       loadSites(); // Refresh the list on the left
     } catch (error) {
-      console.error('Error saving site:', error);
+      console.error("Error saving site:", error);
       toast({
         title: "エラー",
         description: "サイト情報の保存に失敗しました",
@@ -410,11 +396,11 @@ const MemberSiteBuilder = () => {
 
   const saveContent = async () => {
     if (!siteId || !selectedContentId) return;
-    
+
     setSaving(true);
     try {
       const { error } = await supabase
-        .from('member_site_content')
+        .from("member_site_content")
         .update({
           title: contentTitle,
           content: contentText,
@@ -424,19 +410,19 @@ const MemberSiteBuilder = () => {
           is_published: contentPublished,
           category_id: contentCategoryId === "none" ? null : contentCategoryId,
         })
-        .eq('id', selectedContentId);
+        .eq("id", selectedContentId);
 
       if (error) throw error;
-      
+
       toast({
         title: "保存完了",
         description: "コンテンツを保存しました",
       });
-      
+
       loadSiteContents();
       loadCategories(); // Refresh categories to update content count
     } catch (error) {
-      console.error('Error saving content:', error);
+      console.error("Error saving content:", error);
       toast({
         title: "エラー",
         description: "コンテンツの保存に失敗しました",
@@ -449,11 +435,11 @@ const MemberSiteBuilder = () => {
 
   const createNewContent = async () => {
     if (!siteId) return;
-    
+
     setSaving(true);
     try {
       const { data, error } = await supabase
-        .from('member_site_content')
+        .from("member_site_content")
         .insert({
           site_id: siteId,
           title: "新しいページ",
@@ -468,7 +454,7 @@ const MemberSiteBuilder = () => {
         .single();
 
       if (error) throw error;
-      
+
       setSelectedContentId(data.id);
       setContentTitle(data.title);
       setContentText(data.content || "");
@@ -477,15 +463,15 @@ const MemberSiteBuilder = () => {
       setContentAccessLevel(data.access_level);
       setContentPublished(data.is_published);
       setContentCategoryId("none");
-      
+
       loadSiteContents();
-      
+
       toast({
         title: "作成完了",
         description: "新しいページを作成しました",
       });
     } catch (error) {
-      console.error('Error creating content:', error);
+      console.error("Error creating content:", error);
       toast({
         title: "エラー",
         description: "ページの作成に失敗しました",
@@ -509,31 +495,28 @@ const MemberSiteBuilder = () => {
 
   const deleteContent = async (contentId: string) => {
     if (!confirm("本当にこのページを削除しますか？")) return;
-    
+
     try {
-      const { error } = await supabase
-        .from('member_site_content')
-        .delete()
-        .eq('id', contentId);
+      const { error } = await supabase.from("member_site_content").delete().eq("id", contentId);
 
       if (error) throw error;
-      
+
       if (selectedContentId === contentId) {
         setSelectedContentId(null);
         setContentTitle("");
         setContentText("");
         setContentSlug("");
       }
-      
+
       loadSiteContents();
       loadCategories(); // Refresh categories to update content count
-      
+
       toast({
         title: "削除完了",
         description: "ページを削除しました",
       });
     } catch (error) {
-      console.error('Error deleting content:', error);
+      console.error("Error deleting content:", error);
       toast({
         title: "エラー",
         description: "ページの削除に失敗しました",
@@ -557,32 +540,33 @@ const MemberSiteBuilder = () => {
     setSaving(true);
     try {
       const { data, error } = await supabase
-        .from('member_site_categories')
+        .from("member_site_categories")
         .insert({
           name: "新しいカテゴリ",
           description: "",
           site_id: siteId,
-          sort_order: categories.length
+          sort_order: categories.length,
+          thumbnail_url: null,
         })
         .select()
         .single();
 
       if (error) throw error;
-      
+
       // Select the newly created category for editing
       setSelectedCategoryId(data.id);
       setCategoryName(data.name);
       setCategoryDescription(data.description || "");
-      setThumbnailUrl("");
-      
+      setCategoryThumbnailUrl(data.thumbnail_url ?? null);
+
       loadCategories();
-      
+
       toast({
         title: "作成完了",
         description: "新しいカテゴリを作成しました",
       });
     } catch (error) {
-      console.error('Error creating category:', error);
+      console.error("Error creating category:", error);
       toast({
         title: "エラー",
         description: "カテゴリの作成に失敗しました",
@@ -605,41 +589,28 @@ const MemberSiteBuilder = () => {
 
     setSaving(true);
     try {
-      const categoryPayload = {
+      const payload = {
         name: categoryName,
         description: categoryDescription,
-        thumbnail_url: categoryThumbnailUrl, // サムネイルURLを追加
         site_id: siteId,
         sort_order: categories.length,
-        thumbnail_url: thumbnailUrl || null,
+        thumbnail_url: categoryThumbnailUrl, // ★統一
       };
 
       if (selectedCategoryId) {
         // Update existing category
-        const categoryUpdatePayload = {
-          name: categoryName,
-          description: categoryDescription,
-          thumbnail_url: thumbnailUrl || null,
-        };
-        const { error } = await supabase
-          .from('member_site_categories')
-          .update(categoryUpdatePayload)
-          .eq('id', selectedCategoryId);
-
+        const { error } = await supabase.from("member_site_categories").update(payload).eq("id", selectedCategoryId);
         if (error) throw error;
-        
+
         toast({
           title: "保存完了",
           description: "カテゴリを更新しました",
         });
       } else {
         // Create new category
-        const { error } = await supabase
-          .from('member_site_categories')
-          .insert(categoryPayload);
-
+        const { error } = await supabase.from("member_site_categories").insert(payload);
         if (error) throw error;
-        
+
         toast({
           title: "作成完了",
           description: "新しいカテゴリを作成しました",
@@ -648,7 +619,7 @@ const MemberSiteBuilder = () => {
 
       loadCategories();
     } catch (error) {
-      console.error('Error saving category:', error);
+      console.error("Error saving category:", error);
       toast({
         title: "エラー",
         description: "カテゴリの保存に失敗しました",
@@ -663,49 +634,38 @@ const MemberSiteBuilder = () => {
     setSelectedCategoryId(category.id);
     setCategoryName(category.name);
     setCategoryDescription(category.description || "");
-<<<<<<< HEAD
-    setCategoryThumbnailUrl(category.thumbnail_url || null);
-=======
-    setThumbnailUrl(category.thumbnail_url || "");
->>>>>>> 395e8c58deab4df18114cccbfdeec9291f117c6d
+    setCategoryThumbnailUrl(category.thumbnail_url ?? null);
   };
 
   const deleteCategory = async (categoryId: string) => {
     if (!confirm("本当にこのカテゴリを削除しますか？このカテゴリに属するコンテンツは「カテゴリなし」に移動されます。")) return;
-    
+
     setSaving(true);
     try {
       // First, update all content in this category to have no category
-      await supabase
-        .from('member_site_content')
-        .update({ category_id: null })
-        .eq('category_id', categoryId);
+      await supabase.from("member_site_content").update({ category_id: null }).eq("category_id", categoryId);
 
       // Then delete the category
-      const { error } = await supabase
-        .from('member_site_categories')
-        .delete()
-        .eq('id', categoryId);
-
+      const { error } = await supabase.from("member_site_categories").delete().eq("id", categoryId);
       if (error) throw error;
-      
+
       // Clear selection if deleted category was selected
       if (selectedCategoryId === categoryId) {
         setSelectedCategoryId(null);
         setCategoryName("");
         setCategoryDescription("");
-        setThumbnailUrl("");
+        setCategoryThumbnailUrl(null);
       }
-      
+
       loadCategories();
       loadSiteContents(); // Refresh contents to show updated categories
-      
+
       toast({
         title: "削除完了",
         description: "カテゴリを削除しました",
       });
     } catch (error) {
-      console.error('Error deleting category:', error);
+      console.error("Error deleting category:", error);
       toast({
         title: "エラー",
         description: "カテゴリの削除に失敗しました",
@@ -716,27 +676,20 @@ const MemberSiteBuilder = () => {
     }
   };
 
-  const selectedContent = siteContents.find(c => c.id === selectedContentId);
-  const selectedCategory = categories.find(c => c.id === selectedCategoryId);
+  const selectedContent = siteContents.find((c) => c.id === selectedContentId);
+  const selectedCategory = categories.find((c) => c.id === selectedCategoryId);
 
   return (
     <div className="min-h-screen bg-background">
       <header className="border-b">
         <div className="container mx-auto px-4 py-4">
           <div className="flex items-center gap-4">
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => navigate("/member-sites")}
-              className="flex items-center gap-2"
-            >
+            <Button variant="ghost" size="sm" onClick={() => navigate("/member-sites")} className="flex items-center gap-2">
               <ArrowLeft className="w-4 h-4" />
               サイト一覧に戻る
             </Button>
             <Settings className="w-6 h-6" />
-            <h1 className="text-2xl font-bold">
-              {siteId ? "サイト編集" : "新しいサイトを作成"}
-            </h1>
+            <h1 className="text-2xl font-bold">{siteId ? "サイト編集" : "新しいサイトを作成"}</h1>
           </div>
         </div>
       </header>
@@ -763,9 +716,7 @@ const MemberSiteBuilder = () => {
                       追加
                     </Button>
                   </div>
-                  <div className="text-sm text-muted-foreground">
-                    作成中のサイト: {sites.length}件
-                  </div>
+                  <div className="text-sm text-muted-foreground">作成中のサイト: {sites.length}件</div>
                 </CardHeader>
                 <CardContent className="p-2">
                   {sites.length === 0 ? (
@@ -776,25 +727,20 @@ const MemberSiteBuilder = () => {
                         <div
                           key={s.id}
                           className={`flex items-center justify-between border rounded-md px-2 py-1.5 transition-all ${
-                            siteId === s.id 
-                              ? 'bg-primary/10 border-primary shadow-sm' 
-                              : 'border-border hover:border-primary/50 hover:bg-muted/60'
+                            siteId === s.id ? "bg-primary/10 border-primary shadow-sm" : "border-border hover:border-primary/50 hover:bg-muted/60"
                           }`}
                         >
-                          <button
-                            onClick={() => setSearchParams({ site: s.id })}
-                            className="flex-1 text-left min-w-0"
-                          >
+                          <button onClick={() => setSearchParams({ site: s.id })} className="flex-1 text-left min-w-0">
                             <div className="text-sm font-medium line-clamp-1">{s.name}</div>
                           </button>
                           <div className="flex items-center gap-1 ml-2">
-                            <Button 
-                              variant="ghost" 
+                            <Button
+                              variant="ghost"
                               size="sm"
                               className="h-6 w-6 p-0"
                               onClick={(e) => {
                                 e.stopPropagation();
-                                window.open(`/member-site/${s.slug}`, '_blank');
+                                window.open(`/member-site/${s.slug}`, "_blank");
                               }}
                             >
                               <Eye className="h-3 w-3" />
@@ -831,351 +777,335 @@ const MemberSiteBuilder = () => {
                   <TabsTrigger value="site-settings">サイト設定</TabsTrigger>
                 </TabsList>
 
-                  <TabsContent value="content-list" className="border-2 border-border rounded-none">
-                    <div className="flex">
-                      {/* Content Sidebar - 20% width */}
-                      <div className="w-1/5 border-r border-border flex flex-col">
-                        <div className="bg-[rgb(12,34,54)] py-6 px-4">
-                          <div className="flex items-center justify-center">
-                            <h3 className="text-base font-medium text-white">コンテンツ一覧</h3>
-                          </div>
-                        </div>
-                        <div className="bg-white p-4 border-b border-border">
-                          <Button size="sm" onClick={createNewContent} disabled={saving} className="w-full bg-[#0cb386] hover:bg-[#0cb386]/90 text-white">
-                            <Plus className="w-4 h-4 mr-2" />
-                            コンテンツ追加
-                          </Button>
-                        </div>
-                        <div className="flex-grow overflow-y-auto">
-                          {siteContents.length === 0 ? (
-                            <p className="text-xs text-muted-foreground">ページがありません</p>
-                          ) : (
-                              <Table className="w-full border-collapse">
-                                <TableBody>
-                                  {siteContents.map((content, index) => (
-                                     <div key={content.id} className={`border-t border-border ${index === 0 ? 'border-t-0' : ''} ${index === siteContents.length - 1 ? 'border-b' : ''}`}>
-                                       <TableRow
-                                         className={`cursor-pointer w-full ${
-                                           selectedContentId === content.id
-                                             ? 'bg-[#0cb386]/20'
-                                             : ''
-                                         }`}
-                                         onClick={() => selectContent(content)}
-                                       >
-                                         <TableCell className="py-1 text-left align-top w-full">
-                                          <div className="flex items-center gap-2">
-                                            <span className={`h-2 w-2 rounded-full ${content.is_published ? 'bg-green-500' : 'bg-red-500'}`}></span>
-                                            <div className="h-4 w-px bg-border"></div>
-                                            <div className="min-w-0 flex-1">
-                                              <div className="text-xs font-medium truncate">{content.title}</div>
-                                            </div>
-                                          </div>
-                                        </TableCell>
-                                        <TableCell className="py-1 text-right align-top w-1/4">
-                                          <div className="flex items-center justify-end gap-1">
-                                            <Button
-                                              size="sm"
-                                              variant="ghost"
-                                              className="h-5 w-5 p-0 text-destructive hover:text-destructive"
-                                              onClick={(e) => {
-                                                e.stopPropagation();
-                                                deleteContent(content.id);
-                                              }}
-                                            >
-                                              <Trash2 className="h-3 w-3" />
-                                            </Button>
-                                          </div>
-                                        </TableCell>
-                                      </TableRow>
-                                    </div>
-                                  ))}
-                                </TableBody>
-                             </Table>
-                          )}
+                <TabsContent value="content-list" className="border-2 border-border rounded-none">
+                  <div className="flex">
+                    {/* Content Sidebar - 20% width */}
+                    <div className="w-1/5 border-r border-border flex flex-col">
+                      <div className="bg-[rgb(12,34,54)] py-6 px-4">
+                        <div className="flex items-center justify-center">
+                          <h3 className="text-base font-medium text-white">コンテンツ一覧</h3>
                         </div>
                       </div>
-                      
-                      {/* Main Content Area - 80% width */}
-                      <div className="w-4/5 rounded-none">
-                        {selectedContent ? (
-                          <Card className="rounded-none">
-                            <CardHeader>
-                              <CardTitle>ページ編集</CardTitle>
-                              <CardDescription>
-                                {selectedContent.title} の編集
-                              </CardDescription>
-                            </CardHeader>
-                            <CardContent className="space-y-4">
-                              <div className="grid grid-cols-2 gap-4">
-                                <div className="space-y-2">
-                                  <Label htmlFor="contentTitle">ページタイトル</Label>
-                                  <Input
-                                    id="contentTitle"
-                                    value={contentTitle}
-                                    onChange={(e) => setContentTitle(e.target.value)}
-                                  />
-                                </div>
-                                <div className="space-y-2">
-                                  <Label htmlFor="contentSlug">URL スラッグ</Label>
-                                  <Input
-                                    id="contentSlug"
-                                    value={contentSlug}
-                                    onChange={(e) => setContentSlug(e.target.value)}
-                                  />
-                                </div>
-                              </div>
-
-                              <div className="grid grid-cols-4 gap-4">
-                                <div className="space-y-2">
-                                  <Label htmlFor="contentType">ページタイプ</Label>
-                                  <Select value={contentType} onValueChange={setContentType}>
-                                    <SelectTrigger>
-                                      <SelectValue />
-                                    </SelectTrigger>
-                                    <SelectContent className="bg-background border z-50">
-                                      <SelectItem value="page">ページ</SelectItem>
-                                      <SelectItem value="post">投稿</SelectItem>
-                                      <SelectItem value="landing">ランディング</SelectItem>
-                                    </SelectContent>
-                                  </Select>
-                                </div>
-                                <div className="space-y-2">
-                                  <Label htmlFor="contentAccessLevel">アクセスレベル</Label>
-                                  <Select value={contentAccessLevel} onValueChange={setContentAccessLevel}>
-                                    <SelectTrigger>
-                                      <SelectValue />
-                                    </SelectTrigger>
-                                    <SelectContent className="bg-background border z-50">
-                                      <SelectItem value="public">パブリック</SelectItem>
-                                      <SelectItem value="member">会員限定</SelectItem>
-                                      <SelectItem value="premium">プレミアム会員限定</SelectItem>
-                                    </SelectContent>
-                                  </Select>
-                                </div>
-                                <div className="space-y-2">
-                                  <Label htmlFor="category">カテゴリ</Label>
-                                  <Select value={contentCategoryId} onValueChange={setContentCategoryId}>
-                                    <SelectTrigger>
-                                      <SelectValue placeholder="カテゴリを選択" />
-                                    </SelectTrigger>
-                                     <SelectContent className="bg-background border z-50">
-                                       <SelectItem value="none">カテゴリなし</SelectItem>
-                                      {categories.map((category) => (
-                                        <SelectItem key={category.id} value={category.id}>
-                                          {category.name}
-                                        </SelectItem>
-                                      ))}
-                                    </SelectContent>
-                                  </Select>
-                                </div>
-                                <div className="space-y-2">
-                                  <Label>公開設定</Label>
-                                  <label className="flex items-center space-x-2">
-                                    <input
-                                      type="checkbox"
-                                      checked={contentPublished}
-                                      onChange={(e) => setContentPublished(e.target.checked)}
-                                    />
-                                    <span>公開する</span>
-                                  </label>
-                                </div>
-                              </div>
-
-                              <div className="space-y-2">
-                                <Label htmlFor="contentText">コンテンツ</Label>
-                                <Textarea
-                                  id="contentText"
-                                  value={contentText}
-                                  onChange={(e) => setContentText(e.target.value)}
-                                  rows={15}
-                                  placeholder="ページの内容を入力してください"
-                                />
-                              </div>
-
-                              <Button onClick={saveContent} disabled={saving} className="w-full">
-                                <Save className="w-4 h-4 mr-2" />
-                                {saving ? "保存中..." : "ページを保存"}
-                              </Button>
-                            </CardContent>
-                          </Card>
+                      <div className="bg-white p-4 border-b border-border">
+                        <Button size="sm" onClick={createNewContent} disabled={saving} className="w-full bg-[#0cb386] hover:bg-[#0cb386]/90 text-white">
+                          <Plus className="w-4 h-4 mr-2" />
+                          コンテンツ追加
+                        </Button>
+                      </div>
+                      <div className="flex-grow overflow-y-auto">
+                        {siteContents.length === 0 ? (
+                          <p className="text-xs text-muted-foreground">ページがありません</p>
                         ) : (
-                          <Card className="rounded-none">
-                            <CardContent className="p-12">
-                              <div className="text-center">
-                                <p className="text-muted-foreground mb-4">
-                                  左側からページを選択して編集するか、新しいページを作成してください
-                                </p>
-                                <Button onClick={createNewContent}>
-                                  <Plus className="w-4 h-4 mr-2" />
-                                  最初のページを作成
-                                </Button>
-                              </div>
-                            </CardContent>
-                          </Card>
+                          <Table className="w-full border-collapse">
+                            <TableBody>
+                              {siteContents.map((content, index) => (
+                                <div
+                                  key={content.id}
+                                  className={`border-t border-border ${index === 0 ? "border-t-0" : ""} ${index === siteContents.length - 1 ? "border-b" : ""}`}
+                                >
+                                  <TableRow
+                                    className={`cursor-pointer w-full ${selectedContentId === content.id ? "bg-[#0cb386]/20" : ""}`}
+                                    onClick={() => selectContent(content)}
+                                  >
+                                    <TableCell className="py-1 text-left align-top w-full">
+                                      <div className="flex items-center gap-2">
+                                        <span className={`h-2 w-2 rounded-full ${content.is_published ? "bg-green-500" : "bg-red-500"}`}></span>
+                                        <div className="h-4 w-px bg-border"></div>
+                                        <div className="min-w-0 flex-1">
+                                          <div className="text-xs font-medium truncate">{content.title}</div>
+                                        </div>
+                                      </div>
+                                    </TableCell>
+                                    <TableCell className="py-1 text-right align-top w-1/4">
+                                      <div className="flex items-center justify-end gap-1">
+                                        <Button
+                                          size="sm"
+                                          variant="ghost"
+                                          className="h-5 w-5 p-0 text-destructive hover:text-destructive"
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            deleteContent(content.id);
+                                          }}
+                                        >
+                                          <Trash2 className="h-3 w-3" />
+                                        </Button>
+                                      </div>
+                                    </TableCell>
+                                  </TableRow>
+                                </div>
+                              ))}
+                            </TableBody>
+                          </Table>
                         )}
                       </div>
                     </div>
-                  </TabsContent>
 
-                  <TabsContent value="category-settings" className="border-2 border-border rounded-none">
-                    <div className="flex">
-                      {/* Category Sidebar - 20% width */}
-                      <div className="w-1/5 border-r border-border flex flex-col">
-                        <div className="bg-[rgb(12,34,54)] py-6 px-4">
-                          <div className="flex items-center justify-center">
-                            <h3 className="text-base font-medium text-white">カテゴリ一覧</h3>
-                          </div>
+                    {/* Main Content Area - 80% width */}
+                    <div className="w-4/5 rounded-none">
+                      {selectedContent ? (
+                        <Card className="rounded-none">
+                          <CardHeader>
+                            <CardTitle>ページ編集</CardTitle>
+                            <CardDescription>{selectedContent.title} の編集</CardDescription>
+                          </CardHeader>
+                          <CardContent className="space-y-4">
+                            <div className="grid grid-cols-2 gap-4">
+                              <div className="space-y-2">
+                                <Label htmlFor="contentTitle">ページタイトル</Label>
+                                <Input id="contentTitle" value={contentTitle} onChange={(e) => setContentTitle(e.target.value)} />
+                              </div>
+                              <div className="space-y-2">
+                                <Label htmlFor="contentSlug">URL スラッグ</Label>
+                                <Input id="contentSlug" value={contentSlug} onChange={(e) => setContentSlug(e.target.value)} />
+                              </div>
+                            </div>
+
+                            <div className="grid grid-cols-4 gap-4">
+                              <div className="space-y-2">
+                                <Label htmlFor="contentType">ページタイプ</Label>
+                                <Select value={contentType} onValueChange={setContentType}>
+                                  <SelectTrigger>
+                                    <SelectValue />
+                                  </SelectTrigger>
+                                  <SelectContent className="bg-background border z-50">
+                                    <SelectItem value="page">ページ</SelectItem>
+                                    <SelectItem value="post">投稿</SelectItem>
+                                    <SelectItem value="landing">ランディング</SelectItem>
+                                  </SelectContent>
+                                </Select>
+                              </div>
+                              <div className="space-y-2">
+                                <Label htmlFor="contentAccessLevel">アクセスレベル</Label>
+                                <Select value={contentAccessLevel} onValueChange={setContentAccessLevel}>
+                                  <SelectTrigger>
+                                    <SelectValue />
+                                  </SelectTrigger>
+                                  <SelectContent className="bg-background border z-50">
+                                    <SelectItem value="public">パブリック</SelectItem>
+                                    <SelectItem value="member">会員限定</SelectItem>
+                                    <SelectItem value="premium">プレミアム会員限定</SelectItem>
+                                  </SelectContent>
+                                </Select>
+                              </div>
+                              <div className="space-y-2">
+                                <Label htmlFor="category">カテゴリ</Label>
+                                <Select value={contentCategoryId} onValueChange={setContentCategoryId}>
+                                  <SelectTrigger>
+                                    <SelectValue placeholder="カテゴリを選択" />
+                                  </SelectTrigger>
+                                  <SelectContent className="bg-background border z-50">
+                                    <SelectItem value="none">カテゴリなし</SelectItem>
+                                    {categories.map((category) => (
+                                      <SelectItem key={category.id} value={category.id}>
+                                        {category.name}
+                                      </SelectItem>
+                                    ))}
+                                  </SelectContent>
+                                </Select>
+                              </div>
+                              <div className="space-y-2">
+                                <Label>公開設定</Label>
+                                <label className="flex items-center space-x-2">
+                                  <input type="checkbox" checked={contentPublished} onChange={(e) => setContentPublished(e.target.checked)} />
+                                  <span>公開する</span>
+                                </label>
+                              </div>
+                            </div>
+
+                            <div className="space-y-2">
+                              <Label htmlFor="contentText">コンテンツ</Label>
+                              <Textarea
+                                id="contentText"
+                                value={contentText}
+                                onChange={(e) => setContentText(e.target.value)}
+                                rows={15}
+                                placeholder="ページの内容を入力してください"
+                              />
+                            </div>
+
+                            <Button onClick={saveContent} disabled={saving} className="w-full">
+                              <Save className="w-4 h-4 mr-2" />
+                              {saving ? "保存中..." : "ページを保存"}
+                            </Button>
+                          </CardContent>
+                        </Card>
+                      ) : (
+                        <Card className="rounded-none">
+                          <CardContent className="p-12">
+                            <div className="text-center">
+                              <p className="text-muted-foreground mb-4">左側からページを選択して編集するか、新しいページを作成してください</p>
+                              <Button onClick={createNewContent}>
+                                <Plus className="w-4 h-4 mr-2" />
+                                最初のページを作成
+                              </Button>
+                            </div>
+                          </CardContent>
+                        </Card>
+                      )}
+                    </div>
+                  </div>
+                </TabsContent>
+
+                <TabsContent value="category-settings" className="border-2 border-border rounded-none">
+                  <div className="flex">
+                    {/* Category Sidebar - 20% width */}
+                    <div className="w-1/5 border-r border-border flex flex-col">
+                      <div className="bg-[rgb(12,34,54)] py-6 px-4">
+                        <div className="flex items-center justify-center">
+                          <h3 className="text-base font-medium text-white">カテゴリ一覧</h3>
                         </div>
-                         <div className="bg-white p-4 border-b border-border">
-                           <Button size="sm" onClick={createNewCategory} disabled={saving} className="w-full bg-[#0cb386] hover:bg-[#0cb386]/90 text-white">
-                             <Plus className="w-4 h-4 mr-2" />
-                             カテゴリ追加
-                           </Button>
-                         </div>
-                         <div className="flex-grow overflow-y-auto">
-                           {categories.length === 0 ? (
-                             <p className="text-xs text-muted-foreground p-4">カテゴリがありません</p>
-                           ) : (
-                              <Table className="w-full border-collapse">
-                                <TableBody>
-                                  {categories.map((category, index) => (
-                                     <div key={category.id} className={`border-t border-border ${index === 0 ? 'border-t-0' : ''} ${index === categories.length - 1 ? 'border-b' : ''}`}>
-                                       <TableRow
-                                         className={`cursor-pointer w-full ${
-                                           selectedCategoryId === category.id
-                                             ? 'bg-[#0cb386]/20'
-                                             : ''
-                                         }`}
-                                         onClick={() => selectCategory(category)}
-                                       >
-                                         <TableCell className="py-2 text-left w-full">
-                                          <div className="text-xs font-medium">{category.name}</div>
-                                          <div className="text-xs text-muted-foreground">
-                                            {category.content_count}件のコンテンツ
-                                          </div>
-                                        </TableCell>
-                                        <TableCell className="py-2 text-right w-1/4">
-                                          <div className="flex items-center justify-end gap-1">
-                                            <Button
-                                              size="sm"
-                                              variant="ghost"
-                                              className="h-5 w-5 p-0 text-destructive hover:text-destructive"
-                                              onClick={(e) => {
-                                                e.stopPropagation();
-                                                deleteCategory(category.id);
-                                              }}
-                                            >
-                                              <Trash2 className="h-3 w-3" />
-                                            </Button>
-                                          </div>
-                                        </TableCell>
-                                      </TableRow>
-                                    </div>
-                                  ))}
-                                </TableBody>
-                              </Table>
-                           )}
-                         </div>
-                       </div>
-                       
-                       {/* Main Category Area - 80% width */}
-                       <div className="w-4/5 rounded-none">
-                         {selectedCategory || (!selectedCategoryId && categoryName) ? (
-                           <Card className="rounded-none">
-                             <CardHeader>
-                               <CardTitle>カテゴリ編集</CardTitle>
-                               <CardDescription>
-                                 {selectedCategory ? selectedCategory.name + ' の編集' : '新しいカテゴリを作成'}
-                               </CardDescription>
-                             </CardHeader>
-                             <CardContent className="space-y-4">
-                               <div className="space-y-2">
-                                 <Label htmlFor="categoryName">カテゴリ名</Label>
-                                 <Input
-                                   id="categoryName"
-                                   value={categoryName}
-                                   onChange={(e) => setCategoryName(e.target.value)}
-                                   placeholder="カテゴリ名を入力してください"
-                                 />
-                               </div>
-                               
-                                <div className="space-y-2">
-                                  <Label htmlFor="categoryDescription">説明</Label>
-                                  <Textarea
-                                    id="categoryDescription"
-                                    value={categoryDescription}
-                                    onChange={(e) => setCategoryDescription(e.target.value)}
-                                    placeholder="カテゴリの説明を入力してください（任意）"
-                                    rows={4}
-                                  />
+                      </div>
+                      <div className="bg-white p-4 border-b border-border">
+                        <Button size="sm" onClick={createNewCategory} disabled={saving} className="w-full bg-[#0cb386] hover:bg-[#0cb386]/90 text-white">
+                          <Plus className="w-4 h-4 mr-2" />
+                          カテゴリ追加
+                        </Button>
+                      </div>
+                      <div className="flex-grow overflow-y-auto">
+                        {categories.length === 0 ? (
+                          <p className="text-xs text-muted-foreground p-4">カテゴリがありません</p>
+                        ) : (
+                          <Table className="w-full border-collapse">
+                            <TableBody>
+                              {categories.map((category, index) => (
+                                <div
+                                  key={category.id}
+                                  className={`border-t border-border ${index === 0 ? "border-t-0" : ""} ${index === categories.length - 1 ? "border-b" : ""}`}
+                                >
+                                  <TableRow
+                                    className={`cursor-pointer w-full ${selectedCategoryId === category.id ? "bg-[#0cb386]/20" : ""}`}
+                                    onClick={() => selectCategory(category)}
+                                  >
+                                    <TableCell className="py-2 text-left w-full">
+                                      <div className="flex items-center gap-2">
+                                        {category.thumbnail_url && (
+                                          <img src={category.thumbnail_url} className="w-6 h-6 object-cover rounded" alt="" />
+                                        )}
+                                        <div className="text-xs font-medium">{category.name}</div>
+                                      </div>
+                                      <div className="text-xs text-muted-foreground">{category.content_count}件のコンテンツ</div>
+                                    </TableCell>
+                                    <TableCell className="py-2 text-right w-1/4">
+                                      <div className="flex items-center justify-end gap-1">
+                                        <Button
+                                          size="sm"
+                                          variant="ghost"
+                                          className="h-5 w-5 p-0 text-destructive hover:text-destructive"
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            deleteCategory(category.id);
+                                          }}
+                                        >
+                                          <Trash2 className="h-3 w-3" />
+                                        </Button>
+                                      </div>
+                                    </TableCell>
+                                  </TableRow>
                                 </div>
-                                
-                                <div className="space-y-2">
-                                  <Label htmlFor="thumbnail-url">サムネイルURL</Label>
-                                  <Input
-                                    id="thumbnail-url"
-                                    placeholder="https://example.com/image.jpg"
-                                    value={thumbnailUrl}
-                                    onChange={(e) => setThumbnailUrl(e.target.value)}
+                              ))}
+                            </TableBody>
+                          </Table>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Main Category Area - 80% width */}
+                    <div className="w-4/5 rounded-none">
+                      {selectedCategory || (!selectedCategoryId && categoryName) ? (
+                        <Card className="rounded-none">
+                          <CardHeader>
+                            <CardTitle>カテゴリ編集</CardTitle>
+                            <CardDescription>{selectedCategory ? selectedCategory.name + " の編集" : "新しいカテゴリを作成"}</CardDescription>
+                          </CardHeader>
+                          <CardContent className="space-y-4">
+                            <div className="space-y-2">
+                              <Label htmlFor="categoryName">カテゴリ名</Label>
+                              <Input
+                                id="categoryName"
+                                value={categoryName}
+                                onChange={(e) => setCategoryName(e.target.value)}
+                                placeholder="カテゴリ名を入力してください"
+                              />
+                            </div>
+
+                            <div className="space-y-2">
+                              <Label htmlFor="categoryDescription">説明</Label>
+                              <Textarea
+                                id="categoryDescription"
+                                value={categoryDescription}
+                                onChange={(e) => setCategoryDescription(e.target.value)}
+                                placeholder="カテゴリの説明を入力してください（任意）"
+                                rows={4}
+                              />
+                            </div>
+
+                            <div className="space-y-2">
+                              <Label htmlFor="thumbnail-url">サムネイルURL</Label>
+                              <Input
+                                id="thumbnail-url"
+                                placeholder="https://example.com/image.jpg"
+                                value={categoryThumbnailUrl ?? ""}
+                                onChange={(e) => setCategoryThumbnailUrl(e.target.value || null)}
+                              />
+                              <p className="text-xs text-muted-foreground">直接URLを入力するか、下のボタンでメディアライブラリから選択できます。</p>
+                            </div>
+
+                            <div className="space-y-2">
+                              <Label>サムネイル画像</Label>
+                              <div className="flex items-center gap-2">
+                                {categoryThumbnailUrl && (
+                                  <img
+                                    src={categoryThumbnailUrl}
+                                    alt="Category Thumbnail"
+                                    className="w-24 h-24 object-cover rounded-md border"
                                   />
-                                </div>
+                                )}
+                                <MediaLibrarySelector
+                                  onSelect={(url) => setCategoryThumbnailUrl(url)}
+                                  onRemove={() => setCategoryThumbnailUrl(null)}
+                                  selectedUrl={categoryThumbnailUrl}
+                                >
+                                  <Button type="button" variant="outline" className="flex items-center gap-2">
+                                    <ImageIcon className="w-4 h-4" />
+                                    {categoryThumbnailUrl ? "画像を変更" : "メディアライブラリから選択"}
+                                  </Button>
+                                </MediaLibrarySelector>
+                                {categoryThumbnailUrl && (
+                                  <Button type="button" variant="ghost" size="icon" onClick={() => setCategoryThumbnailUrl(null)}>
+                                    <Trash2 className="w-4 h-4" />
+                                  </Button>
+                                )}
+                              </div>
+                            </div>
 
-                               <div className="space-y-2">
-                                 <Label>サムネイル画像</Label>
-                                 <div className="flex items-center space-x-2">
-                                   {categoryThumbnailUrl && (
-                                     <img src={categoryThumbnailUrl} alt="Category Thumbnail" className="w-24 h-24 object-cover rounded-md" />
-                                   )}
-                                   <MediaLibrarySelector
-                                     onSelect={(url) => setCategoryThumbnailUrl(url)}
-                                     onRemove={() => setCategoryThumbnailUrl(null)}
-                                     selectedUrl={categoryThumbnailUrl}
-                                   >
-                                     <Button type="button" variant="outline" className="flex items-center gap-2">
-                                       <ImageIcon className="w-4 h-4" />
-                                       {categoryThumbnailUrl ? "画像を変更" : "画像を選択"}
-                                     </Button>
-                                   </MediaLibrarySelector>
-                                   {categoryThumbnailUrl && (
-                                     <Button type="button" variant="ghost" size="icon" onClick={() => setCategoryThumbnailUrl(null)}>
-                                       <Trash2 className="w-4 h-4" />
-                                     </Button>
-                                   )}
-                                 </div>
-                               </div>
-
-                               <Button onClick={saveCategory} disabled={saving || !categoryName.trim()} className="w-full">
-                                 <Save className="w-4 h-4 mr-2" />
-                                 {saving ? "保存中..." : selectedCategoryId ? "カテゴリを更新" : "カテゴリを作成"}
-                               </Button>
-                             </CardContent>
-                           </Card>
-                         ) : (
-                           <Card className="rounded-none">
-                             <CardContent className="p-12">
-                               <div className="text-center">
-                                 <p className="text-muted-foreground mb-4">
-                                   左側からカテゴリを選択して編集するか、新しいカテゴリを作成してください
-                                 </p>
-                                 <Button onClick={createNewCategory}>
-                                   <Plus className="w-4 h-4 mr-2" />
-                                   最初のカテゴリを作成
-                                 </Button>
-                               </div>
-                             </CardContent>
-                           </Card>
-                         )}
-                       </div>
-                     </div>
-                   </TabsContent>
+                            <Button onClick={saveCategory} disabled={saving || !categoryName.trim()} className="w-full">
+                              <Save className="w-4 h-4 mr-2" />
+                              {saving ? "保存中..." : selectedCategoryId ? "カテゴリを更新" : "カテゴリを作成"}
+                            </Button>
+                          </CardContent>
+                        </Card>
+                      ) : (
+                        <Card className="rounded-none">
+                          <CardContent className="p-12">
+                            <div className="text-center">
+                              <p className="text-muted-foreground mb-4">左側からカテゴリを選択して編集するか、新しいカテゴリを作成してください</p>
+                              <Button onClick={createNewCategory}>
+                                <Plus className="w-4 h-4 mr-2" />
+                                最初のカテゴリを作成
+                              </Button>
+                            </div>
+                          </CardContent>
+                        </Card>
+                      )}
+                    </div>
+                  </div>
+                </TabsContent>
 
                 <TabsContent value="plan-settings" className="space-y-6">
                   <Card>
                     <CardHeader>
                       <CardTitle>プラン設定</CardTitle>
-                      <CardDescription>
-                        このサイトの料金プランを設定します
-                      </CardDescription>
+                      <CardDescription>このサイトの料金プランを設定します</CardDescription>
                     </CardHeader>
                     <CardContent className="space-y-4">
                       <div className="grid grid-cols-2 gap-4">
@@ -1198,7 +1128,7 @@ const MemberSiteBuilder = () => {
                             type="number"
                             value={price}
                             onChange={(e) => setPrice(Number(e.target.value))}
-                            disabled={accessType === 'free'}
+                            disabled={accessType === "free"}
                           />
                         </div>
                       </div>
@@ -1210,9 +1140,7 @@ const MemberSiteBuilder = () => {
                   <Card>
                     <CardHeader>
                       <CardTitle>コンテンツ表示方法</CardTitle>
-                      <CardDescription>
-                        サイトでのコンテンツの表示方法を設定します
-                      </CardDescription>
+                      <CardDescription>サイトでのコンテンツの表示方法を設定します</CardDescription>
                     </CardHeader>
                     <CardContent>
                       <p className="text-muted-foreground">この機能は開発中です。</p>
@@ -1224,29 +1152,17 @@ const MemberSiteBuilder = () => {
                   <Card>
                     <CardHeader>
                       <CardTitle>基本設定</CardTitle>
-                      <CardDescription>
-                        サイトの基本情報を設定します
-                      </CardDescription>
+                      <CardDescription>サイトの基本情報を設定します</CardDescription>
                     </CardHeader>
                     <CardContent className="space-y-4">
                       <div className="grid grid-cols-2 gap-4">
                         <div className="space-y-2">
                           <Label htmlFor="site-name">サイト名</Label>
-                          <Input
-                            id="site-name"
-                            value={siteName}
-                            onChange={(e) => setSiteName(e.target.value)}
-                            placeholder="サイト名を入力"
-                          />
+                          <Input id="site-name" value={siteName} onChange={(e) => setSiteName(e.target.value)} placeholder="サイト名を入力" />
                         </div>
                         <div className="space-y-2">
                           <Label htmlFor="site-slug">URL スラッグ</Label>
-                          <Input
-                            id="site-slug"
-                            value={siteSlug}
-                            onChange={(e) => setSiteSlug(e.target.value)}
-                            placeholder="url-slug"
-                          />
+                          <Input id="site-slug" value={siteSlug} onChange={(e) => setSiteSlug(e.target.value)} placeholder="url-slug" />
                         </div>
                       </div>
 
@@ -1263,19 +1179,11 @@ const MemberSiteBuilder = () => {
 
                       <div className="flex items-center gap-4">
                         <label className="flex items-center space-x-2">
-                          <input
-                            type="checkbox"
-                            checked={isPublished}
-                            onChange={(e) => setIsPublished(e.target.checked)}
-                          />
+                          <input type="checkbox" checked={isPublished} onChange={(e) => setIsPublished(e.target.checked)} />
                           <span>サイトを公開する</span>
                         </label>
                         <label className="flex items-center space-x-2">
-                          <input
-                            type="checkbox"
-                            checked={isPublic}
-                            onChange={(e) => setIsPublic(e.target.checked)}
-                          />
+                          <input type="checkbox" checked={isPublic} onChange={(e) => setIsPublic(e.target.checked)} />
                           <span>検索エンジンに表示</span>
                         </label>
                       </div>
