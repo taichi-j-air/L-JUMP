@@ -276,6 +276,18 @@ const MemberSiteBuilder = () => {
     }
   };
 
+  const resetToDefaultColors = () => {
+    setHeaderBgColor("#051e38");
+    setHeaderFgColor("#ffffff");
+    setSidebarBgColor("#21242c");
+    setSidebarFgColor("#ffffff");
+    setSidebarHoverBgColor("#e3e3e3");
+    setSidebarHoverFgColor("#212121");
+    setSidebarActiveBgColor("#828282");
+    setSidebarActiveFgColor("#21242c");
+    toast({ title: "デザイン設定をデフォルトに戻しました", description: "保存ボタンを押して変更を適用してください" });
+  };
+
   const saveSite = async () => {
     setSaving(true);
     try {
@@ -1274,6 +1286,11 @@ const MemberSiteBuilder = () => {
                             サイドバーにコンテンツ数を表示する
                           </label>
                         </div>
+                      </div>
+                      <div className="flex justify-end">
+                        <Button variant="outline" onClick={resetToDefaultColors}>
+                          デフォルトに戻す
+                        </Button>
                       </div>
                     </CardContent>
                   </Card>
