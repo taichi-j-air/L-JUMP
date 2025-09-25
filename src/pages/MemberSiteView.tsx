@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from "react";
 import { useParams, useSearchParams } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
@@ -61,6 +62,7 @@ const MemberSiteView = () => {
   const sidebarColors = {
     background: themeConfig.sidebarBgColor || "hsl(var(--card))",
     foreground: themeConfig.sidebarFgColor || "hsl(var(--card-foreground))",
+    hoverBackground: themeConfig.sidebarHoverBgColor || "hsl(var(--muted))",
   };
 
   // ページ状態の管理
@@ -280,258 +282,267 @@ const MemberSiteView = () => {
   });
 
   return (
-    <div className="min-h-screen bg-slate-100">
-      {/* ヘッダー */}
-      <header
-        className="border-b border-border sticky top-0 z-40"
-        style={{
-          backgroundColor: headerColors.background,
-          color: headerColors.foreground,
-        }}
-      >
-        <div className="flex items-center justify-between px-4 py-4">
-          <h1 className="text-lg font-semibold">{site.name}</h1>
-          
-          <div className="flex items-center gap-2">
-            {currentView !== 'categories' && (
+    <>
+      <style>
+        {`
+          .sidebar-button:hover {
+            background-color: ${sidebarColors.hoverBackground};
+          }
+        `}
+      </style>
+      <div className="min-h-screen bg-slate-100">
+        {/* ヘッダー */}
+        <header
+          className="border-b border-border sticky top-0 z-40"
+          style={{
+            backgroundColor: headerColors.background,
+            color: headerColors.foreground,
+          }}
+        >
+          <div className="flex items-center justify-between px-4 py-4">
+            <h1 className="text-lg font-semibold">{site.name}</h1>
+            
+            <div className="flex items-center gap-2">
+              {currentView !== 'categories' && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => {
+                    if (currentView === 'content-detail' && categoryId) {
+                      navigateToContentList(categoryId);
+                    } else {
+                      navigateToCategories();
+                    }
+                  }}
+                  className="flex items-center gap-1"
+                >
+                  <ChevronLeft className="h-4 w-4" />
+                  戻る
+                </Button>
+              )}
               <Button
                 variant="ghost"
                 size="sm"
-                onClick={() => {
-                  if (currentView === 'content-detail' && categoryId) {
-                    navigateToContentList(categoryId);
-                  } else {
-                    navigateToCategories();
-                  }
-                }}
-                className="flex items-center gap-1"
+                className="md:hidden"
+                onClick={() => setSideMenuOpen(!sideMenuOpen)}
               >
-                <ChevronLeft className="h-4 w-4" />
-                戻る
+                {sideMenuOpen ? <X className="h-4 w-4" /> : <Menu className="h-4 w-4" />}
               </Button>
-            )}
-            <Button
-              variant="ghost"
-              size="sm"
-              className="md:hidden"
-              onClick={() => setSideMenuOpen(!sideMenuOpen)}
-            >
-              {sideMenuOpen ? <X className="h-4 w-4" /> : <Menu className="h-4 w-4" />}
-            </Button>
-          </div>
-        </div>
-      </header>
-
-      <div className="flex">
-        {/* サイドメニュー */}
-        <aside
-          className={`fixed md:static inset-y-0 left-0 z-30 w-64 border-r border-border transform transition-transform duration-300 ease-in-out ${
-            sideMenuOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'
-          }`}
-          style={{
-            backgroundColor: sidebarColors.background,
-            color: sidebarColors.foreground,
-          }}
-        >
-          <div className="p-4 border-b border-border">
-            <h2 className="font-semibold">カテゴリ</h2>
-          </div>
-          <nav className="p-2">
-            {categories.map((category) => (
-              <button
-                key={category.id}
-                onClick={() => {
-                  navigateToContentList(category.id);
-                  setSideMenuOpen(false);
-                }}
-                className={`w-full text-left p-3 rounded-lg transition-colors ${
-                  selectedCategoryId === category.id
-                    ? 'bg-primary text-primary-foreground'
-                    : 'hover:bg-muted'
-                }`}
-              >
-                <div className="font-medium">{category.name}</div>
-                <div className="text-sm text-muted-foreground">
-                  {category.content_count}件のコンテンツ
-                </div>
-              </button>
-            ))}
-          </nav>
-        </aside>
-
-        {/* オーバーレイ（モバイル用） */}
-        {sideMenuOpen && (
-          <div
-            className="fixed inset-0 bg-black/50 z-20 md:hidden"
-            onClick={() => setSideMenuOpen(false)}
-          />
-        )}
-
-        {/* メインコンテンツ */}
-        <main className="flex-1 min-h-screen">
-          {currentView === 'categories' && (
-            <div className="px-3 py-6">
-              
-              <div className="grid grid-cols-2 gap-3 justify-center lg:grid-cols-5 lg:gap-y-6 lg:gap-x-2">
-                {paginatedCategories.map((category) => (
-                  <Card
-                    key={category.id}
-                    className="cursor-pointer hover:shadow-lg transition-shadow overflow-hidden w-full flex flex-col border border-gray-300 rounded"
-                    onClick={() => navigateToContentList(category.id)}
-                  >
-                    <div className="aspect-[16/9] w-full bg-gray-200">
-                      {category.thumbnail_url ? (
-                        <img
-                          src={category.thumbnail_url}
-                          alt={`${category.name}のサムネイル`}
-                          className="h-full w-full object-contain"
-                        />
-                      ) : (
-                        <div className="flex h-full w-full items-center justify-center text-xs text-muted-foreground">
-                          サムネイルが設定されていません
-                        </div>
-                      )}
-                    </div>
-                    <CardContent className="flex flex-1 flex-col p-4">
-                      <div className="space-y-2">
-                        <h3 className="text-base font-semibold text-foreground truncate">
-                          {category.name}
-                        </h3>
-                        <p className="text-xs text-muted-foreground leading-relaxed line-clamp-2 h-10">
-                          {category.description}
-                        </p>
-                      </div>
-
-                      <div className="mt-auto pt-4">
-                        <div className="h-3 w-full rounded-full bg-gray-200">
-                          <div
-                            className="h-full rounded-full transition-all"
-                            style={{
-                              width: `${categoryProgressMap.get(category.id) || 0}%`,
-                              backgroundColor: progressBarColor,
-                            }}
-                          />
-                        </div>
-                        <div className="mt-1 flex justify-between text-xs text-muted-foreground">
-                          <div className="max-[499px]:hidden">コンテンツ数: {category.content_count}</div>
-                          <div>{`${categoryProgressMap.get(category.id) || 0}% : 完了`}</div>
-                        </div>
-                      </div>
-                    </CardContent>
-                  </Card>
-                ))}
-              </div>
-              {totalCategoryPages > 1 && (
-                <div className="mt-6 flex items-center justify-center gap-4">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={goToPreviousCategoryPage}
-                    disabled={currentCategoryPage === 1}
-                  >
-                    前へ
-                  </Button>
-                  <span className="text-sm text-muted-foreground">
-                    {currentCategoryPage} / {totalCategoryPages}
-                  </span>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={goToNextCategoryPage}
-                    disabled={currentCategoryPage === totalCategoryPages}
-                  >
-                    次へ
-                  </Button>
-                </div>
-              )}
             </div>
+          </div>
+        </header>
+
+        <div className="flex">
+          {/* サイドメニュー */}
+          <aside
+            className={`fixed md:static inset-y-0 left-0 z-30 w-64 border-r border-border transform transition-transform duration-300 ease-in-out ${
+              sideMenuOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'
+            }`}
+            style={{
+              backgroundColor: sidebarColors.background,
+              color: sidebarColors.foreground,
+            }}
+          >
+            <div className="p-4 border-b border-border">
+              <h2 className="font-semibold">カテゴリ</h2>
+            </div>
+            <nav>
+              {categories.map((category) => (
+                <button
+                  key={category.id}
+                  onClick={() => {
+                    navigateToContentList(category.id);
+                    setSideMenuOpen(false);
+                  }}
+                  className={`sidebar-button w-full text-left px-4 py-3 transition-colors ${
+                    selectedCategoryId === category.id
+                      ? 'bg-primary text-primary-foreground'
+                      : ''
+                  }`}
+                >
+                  <div className="font-medium">{category.name}</div>
+                  <div className="text-sm text-muted-foreground">
+                    {category.content_count}件のコンテンツ
+                  </div>
+                </button>
+              ))}
+            </nav>
+          </aside>
+
+          {/* オーバーレイ（モバイル用） */}
+          {sideMenuOpen && (
+            <div
+              className="fixed inset-0 bg-black/50 z-20 md:hidden"
+              onClick={() => setSideMenuOpen(false)}
+            />
           )}
 
-          {currentView === 'content-list' && selectedCategory && (
-            <div className="px-3 py-6">
-              <div className="mb-8">
-                <h1 className="text-3xl font-bold mb-2 text-foreground">
-                  {selectedCategory.name}
-                </h1>
-                {selectedCategory.description && (
-                  <p className="text-sm text-muted-foreground">
-                    {selectedCategory.description}
-                  </p>
-                )}
-                <div className="mt-2 text-sm text-muted-foreground">
-                  コンテンツ数: {selectedCategory.content_count}
-                </div>
-              </div>
-
-              <div className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3">
-                {categoryContents.map((content) => {
-                  const contentProgress = Math.max(
-                    0,
-                    Math.min(100, Number(content.progress_percentage ?? 0))
-                  );
-
-                  return (
+          {/* メインコンテンツ */}
+          <main className="flex-1 min-h-screen">
+            {currentView === 'categories' && (
+              <div className="px-3 py-6">
+                
+                <div className="grid grid-cols-2 gap-3 justify-center lg:grid-cols-5 lg:gap-y-6 lg:gap-x-2">
+                  {paginatedCategories.map((category) => (
                     <Card
-                      key={content.id}
-                      className="cursor-pointer hover:shadow-lg transition-shadow"
-                      onClick={() => navigateToContentDetail(content.id)}
+                      key={category.id}
+                      className="cursor-pointer hover:shadow-lg transition-shadow overflow-hidden w-full flex flex-col border border-gray-300 rounded"
+                      onClick={() => navigateToContentList(category.id)}
                     >
-                      <CardContent className="space-y-4 p-6">
-                        <h3 className="text-lg font-semibold text-foreground">
-                          {content.title}
-                        </h3>
-                        <div>
-                          <Progress value={contentProgress} className="h-2" />
-                          <div className="mt-2 flex items-center justify-between text-xs text-muted-foreground">
-                            <span>進捗</span>
-                            <span>{contentProgress}%</span>
+                      <div className="aspect-[16/9] w-full bg-gray-200">
+                        {category.thumbnail_url ? (
+                          <img
+                            src={category.thumbnail_url}
+                            alt={`${category.name}のサムネイル`}
+                            className="h-full w-full object-contain"
+                          />
+                        ) : (
+                          <div className="flex h-full w-full items-center justify-center text-xs text-muted-foreground">
+                            サムネイルが設定されていません
+                          </div>
+                        )}
+                      </div>
+                      <CardContent className="flex flex-1 flex-col p-4">
+                        <div className="space-y-2">
+                          <h3 className="text-base font-semibold text-foreground truncate">
+                            {category.name}
+                          </h3>
+                          <p className="text-xs text-muted-foreground leading-relaxed line-clamp-2 h-10">
+                            {category.description}
+                          </p>
+                        </div>
+
+                        <div className="mt-auto pt-4">
+                          <div className="h-3 w-full rounded-full bg-gray-200">
+                            <div
+                              className="h-full rounded-full transition-all"
+                              style={{
+                                width: `${categoryProgressMap.get(category.id) || 0}%`,
+                                backgroundColor: progressBarColor,
+                              }}
+                            />
+                          </div>
+                          <div className="mt-1 flex justify-between text-xs text-muted-foreground">
+                            <div className="max-[499px]:hidden">コンテンツ数: {category.content_count}</div>
+                            <div>{`${categoryProgressMap.get(category.id) || 0}% : 完了`}</div>
                           </div>
                         </div>
-                        <Button variant="outline" size="sm">
-                          読む >
-                        </Button>
                       </CardContent>
                     </Card>
-                  );
-                })}
+                  ))}
+                </div>
+                {totalCategoryPages > 1 && (
+                  <div className="mt-6 flex items-center justify-center gap-4">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={goToPreviousCategoryPage}
+                      disabled={currentCategoryPage === 1}
+                    >
+                      前へ
+                    </Button>
+                    <span className="text-sm text-muted-foreground">
+                      {currentCategoryPage} / {totalCategoryPages}
+                    </span>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={goToNextCategoryPage}
+                      disabled={currentCategoryPage === totalCategoryPages}
+                    >
+                      次へ
+                    </Button>
+                  </div>
+                )}
               </div>
+            )}
 
-              {categoryContents.length === 0 && (
-                <div className="text-center py-12">
-                  <p className="text-muted-foreground">
-                    このカテゴリにはまだコンテンツがありません。
-                  </p>
-                </div>
-              )}
-            </div>
-          )}
-
-          {currentView === 'content-detail' && selectedContent && (
-            <div className="px-3 py-6">
-              <article className="max-w-4xl mx-auto">
-                <header className="mb-8">
-                  <h1 className="text-4xl font-bold mb-4 text-foreground">
-                    {selectedContent.title}
+            {currentView === 'content-list' && selectedCategory && (
+              <div className="px-3 py-6">
+                <div className="mb-8">
+                  <h1 className="text-3xl font-bold mb-2 text-foreground">
+                    {selectedCategory.name}
                   </h1>
-                </header>
-
-                <div className="prose prose-lg max-w-none">
-                  {selectedContent.content_blocks && selectedContent.content_blocks.length > 0 ? (
-                    renderContentBlocks(selectedContent.content_blocks)
-                  ) : selectedContent.content ? (
-                    <div className="text-foreground leading-relaxed">
-                      {selectedContent.content}
-                    </div>
-                  ) : (
-                    <p className="text-muted-foreground">コンテンツが準備中です。</p>
+                  {selectedCategory.description && (
+                    <p className="text-sm text-muted-foreground">
+                      {selectedCategory.description}
+                    </p>
                   )}
+                  <div className="mt-2 text-sm text-muted-foreground">
+                    コンテンツ数: {selectedCategory.content_count}
+                  </div>
                 </div>
-              </article>
-            </div>
-          )}
-        </main>
+
+                <div className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3">
+                  {categoryContents.map((content) => {
+                    const contentProgress = Math.max(
+                      0,
+                      Math.min(100, Number(content.progress_percentage ?? 0))
+                    );
+
+                    return (
+                      <Card
+                        key={content.id}
+                        className="cursor-pointer hover:shadow-lg transition-shadow"
+                        onClick={() => navigateToContentDetail(content.id)}
+                      >
+                        <CardContent className="space-y-4 p-6">
+                          <h3 className="text-lg font-semibold text-foreground">
+                            {content.title}
+                          </h3>
+                          <div>
+                            <Progress value={contentProgress} className="h-2" />
+                            <div className="mt-2 flex items-center justify-between text-xs text-muted-foreground">
+                              <span>進捗</span>
+                              <span>{contentProgress}%</span>
+                            </div>
+                          </div>
+                          <Button variant="outline" size="sm">
+                            読む >
+                          </Button>
+                        </CardContent>
+                      </Card>
+                    );
+                  })}
+                </div>
+
+                {categoryContents.length === 0 && (
+                  <div className="text-center py-12">
+                    <p className="text-muted-foreground">
+                      このカテゴリにはまだコンテンツがありません。
+                    </p>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {currentView === 'content-detail' && selectedContent && (
+              <div className="px-3 py-6">
+                <article className="max-w-4xl mx-auto">
+                  <header className="mb-8">
+                    <h1 className="text-4xl font-bold mb-4 text-foreground">
+                      {selectedContent.title}
+                    </h1>
+                  </header>
+
+                  <div className="prose prose-lg max-w-none">
+                    {selectedContent.content_blocks && selectedContent.content_blocks.length > 0 ? (
+                      renderContentBlocks(selectedContent.content_blocks)
+                    ) : selectedContent.content ? (
+                      <div className="text-foreground leading-relaxed">
+                        {selectedContent.content}
+                      </div>
+                    ) : (
+                      <p className="text-muted-foreground">コンテンツが準備中です。</p>
+                    )}
+                  </div>
+                </article>
+              </div>
+            )}
+          </main>
+        </div>
       </div>
-    </div>
+    </>
   );
 };
 

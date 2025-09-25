@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { Button } from "@/components/ui/button";
@@ -79,6 +80,7 @@ const MemberSiteBuilder = () => {
   const [headerFgColor, setHeaderFgColor] = useState("#000000");
   const [sidebarBgColor, setSidebarBgColor] = useState("#ffffff");
   const [sidebarFgColor, setSidebarFgColor] = useState("#000000");
+  const [sidebarHoverBgColor, setSidebarHoverBgColor] = useState("#f1f5f9");
 
   // Content editing
   const [selectedContentId, setSelectedContentId] = useState<string | null>(null);
@@ -114,6 +116,7 @@ const MemberSiteBuilder = () => {
       setHeaderFgColor("#000000");
       setSidebarBgColor("#ffffff");
       setSidebarFgColor("#000000");
+      setSidebarHoverBgColor("#f1f5f9");
       setSelectedContentId(null);
       setContentTitle("");
       setContentText("");
@@ -146,6 +149,7 @@ const MemberSiteBuilder = () => {
       setHeaderFgColor("#000000");
       setSidebarBgColor("#ffffff");
       setSidebarFgColor("#000000");
+      setSidebarHoverBgColor("#f1f5f9");
       setSiteContents([]);
       setSelectedContentId(null);
       setCategories([]);
@@ -193,6 +197,7 @@ const MemberSiteBuilder = () => {
       setHeaderFgColor(theme.headerFgColor || "#000000");
       setSidebarBgColor(theme.sidebarBgColor || "#ffffff");
       setSidebarFgColor(theme.sidebarFgColor || "#000000");
+      setSidebarHoverBgColor(theme.sidebarHoverBgColor || "#f1f5f9");
     } catch (error) {
       console.error("Error loading site:", error);
       toast({ title: "エラー", description: "サイト情報の読み込みに失敗しました", variant: "destructive" });
@@ -257,7 +262,7 @@ const MemberSiteBuilder = () => {
   const saveSite = async () => {
     setSaving(true);
     try {
-      const theme_config = { headerBgColor, headerFgColor, sidebarBgColor, sidebarFgColor };
+      const theme_config = { headerBgColor, headerFgColor, sidebarBgColor, sidebarFgColor, sidebarHoverBgColor };
       if (siteId && siteId !== "new") {
         const { error } = await supabase
           .from("member_sites")
@@ -1149,6 +1154,24 @@ const MemberSiteBuilder = () => {
                               placeholder="#000000"
                             />
                           </div>
+                        </div>
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="sidebar-hover-bg-color">サイドバーホバー背景色</Label>
+                        <div className="flex items-center gap-2">
+                          <Input
+                            id="sidebar-hover-bg-color"
+                            type="color"
+                            value={sidebarHoverBgColor}
+                            onChange={(e) => setSidebarHoverBgColor(e.target.value)}
+                            className="p-1 h-10 w-14"
+                          />
+                          <Input
+                            type="text"
+                            value={sidebarHoverBgColor}
+                            onChange={(e) => setSidebarHoverBgColor(e.target.value)}
+                            placeholder="#f1f5f9"
+                          />
                         </div>
                       </div>
                     </CardContent>
