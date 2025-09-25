@@ -232,7 +232,7 @@ const MemberSiteBuilder = () => {
         .from("member_site_content")
         .select("*")
         .eq("site_id", siteId)
-        .order("sort_order", { ascending: false });
+        .order("sort_order", { ascending: true });
       if (error) throw error;
       setSiteContents((data || []).map(item => ({
         ...item,
