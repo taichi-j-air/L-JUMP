@@ -17,10 +17,17 @@ Deno.serve(async (req) => {
     const uid = url.searchParams.get('uid'); // LINE friend short_uid for authentication
     const passcode = url.searchParams.get('passcode'); // Optional passcode
 
+    const secureHeaders = {
+      'Content-Type': 'text/html; charset=utf-8',
+      'Content-Security-Policy': "default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data: https:; media-src https:; font-src data:;",
+      'X-Content-Type-Options': 'nosniff',
+      ...corsHeaders
+    };
+
     if (!slug) {
       return new Response(
         generateErrorPage('エラー', 'サイトが見つかりません'),
-        { headers: { 'Content-Type': 'text/html' }, status: 404 }
+        { headers: secureHeaders, status: 404 }
       );
     }
 
@@ -38,7 +45,7 @@ Deno.serve(async (req) => {
       console.error('Site fetch error:', siteError);
       return new Response(
         generateErrorPage('エラー', 'サイトの取得に失敗しました'),
-        { headers: { 'Content-Type': 'text/html' }, status: 500 }
+        { headers: secureHeaders, status: 500 }
       );
     }
 
@@ -46,7 +53,7 @@ Deno.serve(async (req) => {
       console.log('Site not found:', { slug, uid });
       return new Response(
         generateErrorPage('404', 'サイトが見つかりません'),
-        { headers: { 'Content-Type': 'text/html' }, status: 404 }
+        { headers: secureHeaders, status: 404 }
       );
     }
 
@@ -64,7 +71,7 @@ Deno.serve(async (req) => {
         console.log('Friend not found or error:', { uid, error: friendError });
         return new Response(
           generateErrorPage('認証エラー', 'アクセス権限がありません'),
-          { headers: { 'Content-Type': 'text/html' }, status: 403 }
+          { headers: secureHeaders, status: 403 }
         );
       }
 
@@ -72,7 +79,7 @@ Deno.serve(async (req) => {
       if (site.passcode && site.passcode !== passcode) {
         return new Response(
           generatePasscodeInputPage(slug, uid),
-          { headers: { 'Content-Type': 'text/html' }, status: 200 }
+          { headers: secureHeaders, status: 200 }
         );
       }
 
@@ -84,12 +91,12 @@ Deno.serve(async (req) => {
           .eq('friend_id', friend.id);
 
         const friendTagIds = friendTags?.map(ft => ft.tag_id) || [];
-        const hasAllowedTag = site.allowed_tag_ids.some(tagId => friendTagIds.includes(tagId));
+        const hasAllowedTag = site.allowed_tag_ids.some((tagId: string) => friendTagIds.includes(tagId));
 
         if (!hasAllowedTag) {
           return new Response(
             generateErrorPage('アクセス拒否', 'このコンテンツにアクセスする権限がありません'),
-            { headers: { 'Content-Type': 'text/html' }, status: 403 }
+            { headers: secureHeaders, status: 403 }
           );
         }
       }
@@ -102,12 +109,12 @@ Deno.serve(async (req) => {
           .eq('friend_id', friend.id);
 
         const friendTagIds = friendTags?.map(ft => ft.tag_id) || [];
-        const hasBlockedTag = site.blocked_tag_ids.some(tagId => friendTagIds.includes(tagId));
+        const hasBlockedTag = site.blocked_tag_ids.some((tagId: string) => friendTagIds.includes(tagId));
 
         if (hasBlockedTag) {
           return new Response(
             generateErrorPage('アクセス拒否', 'このコンテンツにアクセスする権限がありません'),
-            { headers: { 'Content-Type': 'text/html' }, status: 403 }
+            { headers: secureHeaders, status: 403 }
           );
         }
       }
@@ -131,7 +138,7 @@ Deno.serve(async (req) => {
       console.error('Content fetch error:', { categoriesError, contentError });
       return new Response(
         generateErrorPage('エラー', 'コンテンツの取得に失敗しました'),
-        { headers: { 'Content-Type': 'text/html' }, status: 500 }
+        { headers: secureHeaders, status: 500 }
       );
     }
 
@@ -144,27 +151,23 @@ Deno.serve(async (req) => {
     // Generate and return HTML
     const html = generateSiteHTML(siteData);
     return new Response(html, {
-      headers: {
-        ...corsHeaders,
-        'Content-Type': 'text/html; charset=utf-8',
-        'Content-Security-Policy': "default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data: https:; media-src https:; font-src data:;",
-        'X-Content-Type-Options': 'nosniff',
-      },
+      headers: secureHeaders,
       status: 200
     });
 
   } catch (error) {
     console.error('Error in member-site-view:', error);
+    const secureHeaders = {
+      'Content-Type': 'text/html; charset=utf-8',
+      'Content-Security-Policy': "default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data: https:; media-src https:; font-src data:;",
+      'X-Content-Type-Options': 'nosniff',
+      ...corsHeaders
+    };
     return new Response(
       generateErrorPage('エラーが発生しました', 'サイトの読み込み中にエラーが発生しました。'),
       { 
         status: 500, 
-        headers: { 
-          ...corsHeaders, 
-          'Content-Type': 'text/html; charset=utf-8',
-          'Content-Security-Policy': "default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data: https:; media-src https:; font-src data:;",
-          'X-Content-Type-Options': 'nosniff',
-        }
+        headers: secureHeaders
       }
     );
   }

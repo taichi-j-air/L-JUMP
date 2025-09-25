@@ -110,7 +110,7 @@ serve(async (req) => {
       
       // 閲覧禁止タグチェック
       if (page.blocked_tag_ids?.length > 0) {
-        const hasBlockedTag = page.blocked_tag_ids.some(tagId => friendTagIds.includes(tagId))
+        const hasBlockedTag = page.blocked_tag_ids.some((tagId: string) => friendTagIds.includes(tagId))
         if (hasBlockedTag) {
           console.log(`Friend blocked by tag`)
           return errorResponse("tag_blocked", "Access denied due to tag restrictions", 403)
@@ -119,7 +119,7 @@ serve(async (req) => {
       
       // 閲覧可能タグチェック
       if (page.allowed_tag_ids?.length > 0) {
-        const hasAllowedTag = page.allowed_tag_ids.some(tagId => friendTagIds.includes(tagId))
+        const hasAllowedTag = page.allowed_tag_ids.some((tagId: string) => friendTagIds.includes(tagId))
         if (!hasAllowedTag) {
           console.log(`Friend missing required tag`)
           return errorResponse("tag_required", "Required tag not found", 403)
