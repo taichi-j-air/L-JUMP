@@ -349,13 +349,13 @@ const MemberSiteView = () => {
         {/* メインコンテンツ */}
         <main className="flex-1 min-h-screen">
           {currentView === 'categories' && (
-            <div className="p-6">
+            <div className="px-3 py-6">
               
-              <div className="grid grid-cols-2 gap-y-4 gap-x-1 justify-center lg:grid-cols-5 lg:gap-y-6 lg:gap-x-2">
+              <div className="grid grid-cols-2 gap-3 justify-center lg:grid-cols-5 lg:gap-y-6 lg:gap-x-2">
                 {paginatedCategories.map((category) => (
                   <Card
                     key={category.id}
-                    className="cursor-pointer hover:shadow-lg transition-shadow overflow-hidden w-[280px] flex flex-col border border-gray-300 rounded"
+                    className="cursor-pointer hover:shadow-lg transition-shadow overflow-hidden w-full flex flex-col border border-gray-300 rounded"
                     onClick={() => navigateToContentList(category.id)}
                   >
                     <div className="aspect-[16/9] w-full bg-muted/80">
@@ -392,7 +392,7 @@ const MemberSiteView = () => {
                           />
                         </div>
                         <div className="mt-1 flex justify-between text-xs text-muted-foreground">
-                          <div>コンテンツ数: {category.content_count}</div>
+                          <div className="max-[499px]:hidden">コンテンツ数: {category.content_count}</div>
                           <div>{`${categoryProgressMap.get(category.id) || 0}% : 完了`}</div>
                         </div>
                       </div>
@@ -427,7 +427,7 @@ const MemberSiteView = () => {
           )}
 
           {currentView === 'content-list' && selectedCategory && (
-            <div className="p-6">
+            <div className="px-3 py-6">
               <div className="mb-8">
                 <h1 className="text-3xl font-bold mb-2 text-foreground">
                   {selectedCategory.name}
@@ -486,7 +486,7 @@ const MemberSiteView = () => {
           )}
 
           {currentView === 'content-detail' && selectedContent && (
-            <div className="p-6">
+            <div className="px-3 py-6">
               <article className="max-w-4xl mx-auto">
                 <header className="mb-8">
                   <h1 className="text-4xl font-bold mb-4 text-foreground">
