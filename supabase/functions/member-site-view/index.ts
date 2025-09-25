@@ -147,8 +147,7 @@ Deno.serve(async (req) => {
       headers: {
         ...corsHeaders,
         'Content-Type': 'text/html; charset=utf-8',
-        'Content-Security-Policy': "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; media-src 'self' https:; font-src 'self' data:; frame-ancestors 'none';",
-        'X-Frame-Options': 'DENY',
+        'Content-Security-Policy': "default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data: https:; media-src https:; font-src data:;",
         'X-Content-Type-Options': 'nosniff',
       },
       status: 200
@@ -163,10 +162,9 @@ Deno.serve(async (req) => {
         headers: { 
           ...corsHeaders, 
           'Content-Type': 'text/html; charset=utf-8',
-          'Content-Security-Policy': "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; media-src 'self' https:; font-src 'self' data:; frame-ancestors 'none';",
-          'X-Frame-Options': 'DENY',
+          'Content-Security-Policy': "default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data: https:; media-src https:; font-src data:;",
           'X-Content-Type-Options': 'nosniff',
-        } 
+        }
       }
     );
   }
