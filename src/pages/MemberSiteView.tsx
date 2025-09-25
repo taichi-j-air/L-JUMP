@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from "react";
 import { useParams, useSearchParams } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
@@ -48,6 +49,9 @@ const MemberSiteView = () => {
   const [sideMenuOpen, setSideMenuOpen] = useState(false);
   const [currentCategoryPage, setCurrentCategoryPage] = useState(1);
   const [isDesktop, setIsDesktop] = useState<boolean>(() => (typeof window !== "undefined" ? window.innerWidth >= 1024 : true));
+
+  // プログレスバーの色
+  const progressBarColor = "hsl(var(--primary))";
 
   // ページ状態の管理
   const currentView = searchParams.get('view') || 'categories'; // categories, content-list, content-detail
@@ -252,6 +256,18 @@ const MemberSiteView = () => {
   const categoryContents = contents.filter(c => c.category_id === categoryId);
   const selectedContent = contents.find(c => c.id === contentId);
 
+  // カテゴリごとの進捗率を計算
+  const categoryProgressMap = new Map<string, number>();
+  categories.forEach(category => {
+    const contentsInCategory = contents.filter(c => c.category_id === category.id);
+    if (contentsInCategory.length > 0) {
+      const totalProgress = contentsInCategory.reduce((acc, content) => acc + (content.progress_percentage || 0), 0);
+      categoryProgressMap.set(category.id, Math.round(totalProgress / contentsInCategory.length));
+    } else {
+      categoryProgressMap.set(category.id, 0);
+    }
+  });
+
   return (
     <div className="min-h-screen bg-background">
       {/* ヘッダー */}
@@ -312,8 +328,7 @@ const MemberSiteView = () => {
                   selectedCategoryId === category.id
                     ? 'bg-primary text-primary-foreground'
                     : 'hover:bg-muted text-foreground'
-                }`}
-              >
+                }`}>
                 <div className="font-medium">{category.name}</div>
                 <div className="text-sm text-muted-foreground">
                   {category.content_count}件のコンテンツ
@@ -336,12 +351,11 @@ const MemberSiteView = () => {
           {currentView === 'categories' && (
             <div className="p-6">
               
-              
               <div className="grid grid-cols-2 gap-4 justify-center lg:grid-cols-5 lg:gap-6">
                 {paginatedCategories.map((category) => (
                   <Card
                     key={category.id}
-                    className="cursor-pointer hover:shadow-lg transition-shadow overflow-hidden w-[280px] mx-auto flex flex-col"
+                    className="cursor-pointer hover:shadow-lg transition-shadow overflow-hidden w-[280px] flex flex-col"
                     onClick={() => navigateToContentList(category.id)}
                   >
                     <div className="h-48 w-full bg-muted/80">
@@ -357,17 +371,34 @@ const MemberSiteView = () => {
                         </div>
                       )}
                     </div>
-                    <CardContent className="flex flex-1 flex-col space-y-2 p-4">
-                      <h3 className="text-base font-semibold text-foreground">
-                        {category.name}
-                      </h3>
-                      {category.description && (
-                        <p className="text-sm text-muted-foreground leading-relaxed">
-                          {category.description}
-                        </p>
-                      )}
-                      <div className="pt-2 text-xs text-muted-foreground">
-                        コンテンツ数: {category.content_count}
+                    <CardContent className="flex flex-1 flex-col p-4">
+                      <div className="space-y-2">
+                        <h3 className="text-base font-semibold text-foreground">
+                          {category.name}
+                        </h3>
+                        {category.description && (
+                          <p className="text-sm text-muted-foreground leading-relaxed">
+                            {category.description}
+                          </p>
+                        )}
+                        <div className="pt-2 text-xs text-muted-foreground">
+                          コンテンツ数: {category.content_count}
+                        </div>
+                      </div>
+
+                      <div className="mt-auto pt-4">
+                        <div className="h-3 w-full rounded-full bg-muted">
+                          <div
+                            className="h-full rounded-full transition-all"
+                            style={{
+                              width: `${categoryProgressMap.get(category.id) || 0}%`,
+                              backgroundColor: progressBarColor,
+                            }}
+                          />
+                        </div>
+                        <div className="mt-1 text-right text-xs text-muted-foreground">
+                          {`${categoryProgressMap.get(category.id) || 0}% : 完了`}
+                        </div>
                       </div>
                     </CardContent>
                   </Card>
