@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { Button } from "@/components/ui/button";
@@ -60,6 +61,7 @@ const MemberSiteBuilder = () => {
 
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [activeTab, setActiveTab] = useState(siteId ? "content-list" : "site-settings");
 
   // Site data
   const [site, setSite] = useState<MemberSite | null>(null);
@@ -74,6 +76,8 @@ const MemberSiteBuilder = () => {
   const [price, setPrice] = useState(0);
   const [isPublished, setIsPublished] = useState(false);
   const [isPublic, setIsPublic] = useState(false);
+  const [headerBgColor, setHeaderBgColor] = useState("#ffffff");
+  const [headerFgColor, setHeaderFgColor] = useState("#000000");
 
   // Content editing
   const [selectedContentId, setSelectedContentId] = useState<string | null>(null);
@@ -105,6 +109,8 @@ const MemberSiteBuilder = () => {
       setPrice(0);
       setIsPublished(false);
       setIsPublic(false);
+      setHeaderBgColor("#ffffff");
+      setHeaderFgColor("#000000");
       setSelectedContentId(null);
       setContentTitle("");
       setContentText("");
@@ -133,6 +139,8 @@ const MemberSiteBuilder = () => {
       setPrice(0);
       setIsPublished(false);
       setIsPublic(false);
+      setHeaderBgColor("#ffffff");
+      setHeaderFgColor("#000000");
       setSiteContents([]);
       setSelectedContentId(null);
       setCategories([]);
@@ -175,6 +183,9 @@ const MemberSiteBuilder = () => {
       setPrice(data.price);
       setIsPublished(data.is_published);
       setIsPublic(data.is_public);
+      const theme = data.theme_config || {};
+      setHeaderBgColor(theme.headerBgColor || "#ffffff");
+      setHeaderFgColor(theme.headerFgColor || "#000000");
     } catch (error) {
       console.error("Error loading site:", error);
       toast({ title: "エラー", description: "サイト情報の読み込みに失敗しました", variant: "destructive" });
@@ -239,6 +250,7 @@ const MemberSiteBuilder = () => {
   const saveSite = async () => {
     setSaving(true);
     try {
+      const theme_config = { headerBgColor, headerFgColor };
       if (siteId && siteId !== "new") {
         const { error } = await supabase
           .from("member_sites")
@@ -250,6 +262,7 @@ const MemberSiteBuilder = () => {
             price,
             is_published: isPublished,
             is_public: isPublic,
+            theme_config,
           })
           .eq("id", siteId);
         if (error) throw error;
@@ -264,6 +277,7 @@ const MemberSiteBuilder = () => {
             price,
             is_published: isPublished,
             is_public: isPublic,
+            theme_config,
             user_id: (await supabase.auth.getUser()).data.user?.id,
           })
           .select()
@@ -631,7 +645,7 @@ const MemberSiteBuilder = () => {
 
             {/* Right Column */}
             <div className="col-span-12 md:col-span-9 space-y-6">
-              <Tabs defaultValue={siteId ? "content-list" : "site-settings"}>
+              <Tabs value={activeTab} onValueChange={setActiveTab}>
                 <TabsList className="grid w-full grid-cols-5">
                   <TabsTrigger value="content-list">コンテンツ一覧</TabsTrigger>
                   <TabsTrigger value="category-settings">カテゴリ設定</TabsTrigger>
@@ -1046,13 +1060,58 @@ const MemberSiteBuilder = () => {
                           <span>検索エンジンに表示</span>
                         </label>
                       </div>
-
-                      <Button onClick={saveSite} disabled={saving} className="w-full">
-                        <Save className="w-4 h-4 mr-2" />
-                        {saving ? "保存中..." : "サイト設定を保存"}
-                      </Button>
                     </CardContent>
                   </Card>
+                  <Card>
+                    <CardHeader>
+                      <CardTitle>デザイン設定</CardTitle>
+                      <CardDescription>公開ページのデザインを設定します</CardDescription>
+                    </CardHeader>
+                    <CardContent className="space-y-4">
+                      <div className="grid grid-cols-2 gap-4">
+                        <div className="space-y-2">
+                          <Label htmlFor="header-bg-color">ヘッダー背景色</Label>
+                          <div className="flex items-center gap-2">
+                            <Input
+                              id="header-bg-color"
+                              type="color"
+                              value={headerBgColor}
+                              onChange={(e) => setHeaderBgColor(e.target.value)}
+                              className="p-1 h-10 w-14"
+                            />
+                            <Input
+                              type="text"
+                              value={headerBgColor}
+                              onChange={(e) => setHeaderBgColor(e.target.value)}
+                              placeholder="#FFFFFF"
+                            />
+                          </div>
+                        </div>
+                        <div className="space-y-2">
+                          <Label htmlFor="header-fg-color">ヘッダー文字色</Label>
+                          <div className="flex items-center gap-2">
+                            <Input
+                              id="header-fg-color"
+                              type="color"
+                              value={headerFgColor}
+                              onChange={(e) => setHeaderFgColor(e.target.value)}
+                              className="p-1 h-10 w-14"
+                            />
+                            <Input
+                              type="text"
+                              value={headerFgColor}
+                              onChange={(e) => setHeaderFgColor(e.target.value)}
+                              placeholder="#000000"
+                            />
+                          </div>
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+                  <Button onClick={saveSite} disabled={saving} className="w-full">
+                    <Save className="w-4 h-4 mr-2" />
+                    {saving ? "保存中..." : "サイト設定を保存"}
+                  </Button>
                 </TabsContent>
               </Tabs>
             </div>

@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from "react";
 import { useParams, useSearchParams } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
@@ -48,14 +49,15 @@ const MemberSiteView = () => {
   const [sideMenuOpen, setSideMenuOpen] = useState(false);
   const [currentCategoryPage, setCurrentCategoryPage] = useState(1);
   const [isDesktop, setIsDesktop] = useState<boolean>(() => (typeof window !== "undefined" ? window.innerWidth >= 1024 : true));
+  const [themeConfig, setThemeConfig] = useState<any>({});
 
   // プログレスバーの色
   const progressBarColor = "hsl(var(--primary))";
 
-  // ヘッダーの色をここでカスタマイズできます
+  // ヘッダーの色
   const headerColors = {
-    background: "hsl(var(--card))",
-    foreground: "hsl(var(--card-foreground))",
+    background: themeConfig.headerBgColor || "hsl(var(--card))",
+    foreground: themeConfig.headerFgColor || "hsl(var(--card-foreground))",
   };
 
   // ページ状態の管理
@@ -80,6 +82,7 @@ const MemberSiteView = () => {
         if (!siteData) throw new Error('サイトが見つかりません');
 
         setSite(siteData);
+        setThemeConfig(siteData.theme_config || {});
 
         // カテゴリ情報を取得
         const { data: categoriesData, error: categoriesError } = await supabase
