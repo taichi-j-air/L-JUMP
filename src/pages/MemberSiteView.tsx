@@ -269,23 +269,12 @@ const MemberSiteView = () => {
   });
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className="min-h-screen bg-slate-100">
       {/* ヘッダー */}
       <header className="bg-card border-b border-border sticky top-0 z-40">
-        <div className="flex items-center justify-between px-4 py-3">
-          <div className="flex items-center gap-3">
-            <Button
-              variant="ghost"
-              size="sm"
-              className="md:hidden"
-              onClick={() => setSideMenuOpen(!sideMenuOpen)}
-            >
-              {sideMenuOpen ? <X className="h-4 w-4" /> : <Menu className="h-4 w-4" />}
-            </Button>
-            <h1 className="text-lg font-semibold text-foreground">{site.name}</h1>
-          </div>
+        <div className="flex items-center justify-between px-4 py-4">
+          <h1 className="text-lg font-semibold text-foreground">{site.name}</h1>
           
-          {/* ナビゲーション */}
           <div className="flex items-center gap-2">
             {currentView !== 'categories' && (
               <Button
@@ -304,6 +293,14 @@ const MemberSiteView = () => {
                 戻る
               </Button>
             )}
+            <Button
+              variant="ghost"
+              size="sm"
+              className="md:hidden"
+              onClick={() => setSideMenuOpen(!sideMenuOpen)}
+            >
+              {sideMenuOpen ? <X className="h-4 w-4" /> : <Menu className="h-4 w-4" />}
+            </Button>
           </div>
         </div>
       </header>
