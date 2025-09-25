@@ -305,6 +305,12 @@ const MemberSiteView = () => {
             color: ${sidebarColors.activeForeground};
             opacity: 0.8;
           }
+
+          @media (max-width: 639px) {
+            .learning-status-head {
+              font-size: clamp(0.75rem, 2vw, 1rem);
+            }
+          }
         `}
       </style>
       <div className="min-h-screen bg-slate-100">
@@ -505,10 +511,10 @@ const MemberSiteView = () => {
                   <Table className="border border-collapse bg-white">
                     <TableHeader>
                       <TableRow>
-                        <TableHead className="border w-5/6">下の項目からコンテンツを選択してください</TableHead>
-                        <TableHead className="border text-center w-1/6 text-xs sm:text-sm">
-                          <span className="hidden sm:inline">学習状況</span>
-                          <span className="sm:hidden">学習<br />状況</span>
+                        <TableHead className="border w-5/6 learning-status-head">下の項目からコンテンツを選択してください</TableHead>
+                        <TableHead className="border text-center w-1/6 learning-status-head">
+                          <span className="inline-block sm:hidden" style={{ whiteSpace: 'nowrap' }}>学習<br />状況</span>
+                          <span className="hidden sm:inline-block">学習状況</span>
                         </TableHead>
                       </TableRow>
                     </TableHeader>
@@ -524,9 +530,9 @@ const MemberSiteView = () => {
                           </TableCell>
                           <TableCell className="border text-center w-1/6">
                             {content.progress_percentage === 100 ? (
-                              <span className="font-bold" style={{ color: 'rgb(12, 179, 134)' }}>完了</span>
+                              <span className="font-bold" style={{ color: 'rgb(12, 179, 134)', whiteSpace: 'nowrap' }}>完了</span>
                             ) : (
-                              <span className="font-bold" style={{ color: '#EF4444' }}>未完了</span>
+                              <span className="font-bold" style={{ color: '#EF4444', whiteSpace: 'nowrap' }}>未完了</span>
                             )}
                           </TableCell>
                         </TableRow>
