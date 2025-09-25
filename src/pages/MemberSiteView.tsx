@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from "react";
 import { useParams, useSearchParams } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
@@ -52,6 +51,12 @@ const MemberSiteView = () => {
 
   // プログレスバーの色
   const progressBarColor = "hsl(var(--primary))";
+
+  // ヘッダーの色をここでカスタマイズできます
+  const headerColors = {
+    background: "hsl(var(--card))",
+    foreground: "hsl(var(--card-foreground))",
+  };
 
   // ページ状態の管理
   const currentView = searchParams.get('view') || 'categories'; // categories, content-list, content-detail
@@ -271,9 +276,15 @@ const MemberSiteView = () => {
   return (
     <div className="min-h-screen bg-slate-100">
       {/* ヘッダー */}
-      <header className="bg-card border-b border-border sticky top-0 z-40">
+      <header
+        className="border-b border-border sticky top-0 z-40"
+        style={{
+          backgroundColor: headerColors.background,
+          color: headerColors.foreground,
+        }}
+      >
         <div className="flex items-center justify-between px-4 py-4">
-          <h1 className="text-lg font-semibold text-foreground">{site.name}</h1>
+          <h1 className="text-lg font-semibold">{site.name}</h1>
           
           <div className="flex items-center gap-2">
             {currentView !== 'categories' && (
@@ -355,7 +366,7 @@ const MemberSiteView = () => {
                     className="cursor-pointer hover:shadow-lg transition-shadow overflow-hidden w-full flex flex-col border border-gray-300 rounded"
                     onClick={() => navigateToContentList(category.id)}
                   >
-                    <div className="aspect-[16/9] w-full bg-muted/80">
+                    <div className="aspect-[16/9] w-full bg-gray-200">
                       {category.thumbnail_url ? (
                         <img
                           src={category.thumbnail_url}
