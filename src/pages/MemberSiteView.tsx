@@ -514,8 +514,13 @@ const MemberSiteView = () => {
                         <TableRow key={content.id} className="cursor-pointer hover:bg-muted/50"
                           onClick={() => navigateToContentDetail(content.id)}
                         >
-                          <TableCell className="border font-medium w-5/6">{content.title}</TableCell>
-                          <TableCell className="border text-right w-1/6">
+                          <TableCell className="border font-medium w-5/6" style={{ color: 'rgb(43, 43, 43)' }}>{content.title}</TableCell>
+                          <TableCell className="border text-center w-1/6">
+                            {content.progress_percentage === 100 ? (
+                              <span className="font-bold" style={{ color: 'rgb(12, 179, 134)' }}>完了</span>
+                            ) : (
+                              <span className="font-bold" style={{ color: 'rgb(43, 43, 43)' }}>未完了</span>
+                            )}
                           </TableCell>
                         </TableRow>
                       ))}
