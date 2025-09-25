@@ -342,14 +342,14 @@ const MemberSiteView = () => {
                 )}
               </div>
               
-              <div className="grid grid-cols-2 gap-3 justify-center lg:grid-cols-5 lg:gap-6">
+              <div className="grid grid-cols-2 gap-4 justify-center lg:grid-cols-5 lg:gap-6">
                 {paginatedCategories.map((category) => (
                   <Card
                     key={category.id}
-                    className="cursor-pointer hover:shadow-lg transition-shadow overflow-hidden w-[150px] mx-auto flex flex-col"
+                    className="cursor-pointer hover:shadow-lg transition-shadow overflow-hidden w-[280px] mx-auto flex flex-col"
                     onClick={() => navigateToContentList(category.id)}
                   >
-                    <div className="h-32 w-full bg-muted/40">
+                    <div className="h-48 w-full bg-muted/40">
                       {category.thumbnail_url ? (
                         <img
                           src={category.thumbnail_url}
