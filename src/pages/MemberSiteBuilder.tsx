@@ -97,6 +97,7 @@ const MemberSiteBuilder = () => {
   const [contentPublished, setContentPublished] = useState(false);
   const [contentCategoryId, setContentCategoryId] = useState<string>("none");
   const [contentSortOrder, setContentSortOrder] = useState(0);
+  const [filterCategoryId, setFilterCategoryId] = useState("all");
 
   // Category editing
   const [categories, setCategories] = useState<Category[]>([]);
@@ -724,13 +725,31 @@ const MemberSiteBuilder = () => {
                           コンテンツ追加
                         </Button>
                       </div>
+                      <div className="bg-white py-2 px-4 border-b border-border">
+                        <div className="text-xs font-medium mb-2">カテゴリ別絞り込み</div>
+                        <Select value={filterCategoryId} onValueChange={setFilterCategoryId}>
+                          <SelectTrigger className="w-full h-8">
+                            <SelectValue placeholder="カテゴリで絞り込み" />
+                          </SelectTrigger>
+                          <SelectContent className="bg-background border z-50">
+                            <SelectItem value="all">すべて</SelectItem>
+                            {categories.map((category) => (
+                              <SelectItem key={category.id} value={category.id}>
+                                {category.name}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
                       <div className="flex-grow overflow-y-auto">
                         {siteContents.length === 0 ? (
                           <p className="text-xs text-muted-foreground">ページがありません</p>
                         ) : (
                           <Table className="w-full border-collapse">
                             <TableBody>
-                              {siteContents.map((content, index) => (
+                              {siteContents
+                                .filter((content) => filterCategoryId === "all" || content.category_id === filterCategoryId)
+                                .map((content, index) => (
                                 <div key={content.id} className={`border-t border-border ${index === 0 ? "border-t-0" : ""} ${index === siteContents.length - 1 ? "border-b" : ""}`}>
                                   <TableRow
                                     className={`cursor-pointer w-full ${selectedContentId === content.id ? "bg-[#0cb386]/20" : ""}`}
