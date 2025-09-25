@@ -15,6 +15,7 @@ import { Table, TableBody, TableCell, TableRow } from "@/components/ui/table";
 import { MediaLibrarySelector } from "@/components/MediaLibrarySelector";
 import { EnhancedBlockEditor } from "@/components/EnhancedBlockEditor";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Switch } from "@/components/ui/switch";
 
 // Data Interfaces
 interface MemberSite {
@@ -76,7 +77,6 @@ const MemberSiteBuilder = () => {
   const [accessType, setAccessType] = useState<"free" | "paid">("paid");
   const [price, setPrice] = useState(0);
   const [isPublished, setIsPublished] = useState(false);
-  const [isPublic, setIsPublic] = useState(false);
   const [headerBgColor, setHeaderBgColor] = useState("#ffffff");
   const [headerFgColor, setHeaderFgColor] = useState("#000000");
   const [sidebarBgColor, setSidebarBgColor] = useState("#ffffff");
@@ -118,7 +118,6 @@ const MemberSiteBuilder = () => {
       setAccessType("paid");
       setPrice(0);
       setIsPublished(false);
-      setIsPublic(false);
       setHeaderBgColor("#ffffff");
       setHeaderFgColor("#000000");
       setSidebarBgColor("#ffffff");
@@ -155,7 +154,6 @@ const MemberSiteBuilder = () => {
       setAccessType("paid");
       setPrice(0);
       setIsPublished(false);
-      setIsPublic(false);
       setHeaderBgColor("#ffffff");
       setHeaderFgColor("#000000");
       setSidebarBgColor("#ffffff");
@@ -206,7 +204,6 @@ const MemberSiteBuilder = () => {
       setAccessType((data.access_type as "free" | "paid") || "paid");
       setPrice(data.price);
       setIsPublished(data.is_published);
-      setIsPublic(data.is_public);
       const theme = data.theme_config || {};
       setHeaderBgColor(theme.headerBgColor || "#ffffff");
       setHeaderFgColor(theme.headerFgColor || "#000000");
@@ -314,7 +311,6 @@ const MemberSiteBuilder = () => {
             access_type: accessType,
             price,
             is_published: isPublished,
-            is_public: isPublic,
             theme_config,
           })
           .eq("id", siteId);
@@ -329,7 +325,6 @@ const MemberSiteBuilder = () => {
             access_type: accessType,
             price,
             is_published: isPublished,
-            is_public: isPublic,
             theme_config,
             user_id: (await supabase.auth.getUser()).data.user?.id,
           })
@@ -1139,13 +1134,10 @@ const MemberSiteBuilder = () => {
 
                       <div className="flex items-center gap-4">
                         <label className="flex items-center space-x-2">
-                          <input type="checkbox" checked={isPublished} onChange={(e) => setIsPublished(e.target.checked)} />
-                          <span>サイトを公開する</span>
+                          <Switch checked={isPublished} onCheckedChange={setIsPublished} id="is-published" />
+                          <Label htmlFor="is-published">サイトを公開する</Label>
                         </label>
-                        <label className="flex items-center space-x-2">
-                          <input type="checkbox" checked={isPublic} onChange={(e) => setIsPublic(e.target.checked)} />
-                          <span>検索エンジンに表示</span>
-                        </label>
+                        
                       </div>
                     </CardContent>
                   </Card>
