@@ -519,7 +519,7 @@ const MemberSiteView = () => {
                             {content.progress_percentage === 100 ? (
                               <span className="font-bold" style={{ color: 'rgb(12, 179, 134)' }}>完了</span>
                             ) : (
-                              <span className="font-bold" style={{ color: 'rgb(43, 43, 43)' }}>未完了</span>
+                              <span className="font-bold" style={{ color: '#EF4444' }}>未完了</span>
                             )}
                           </TableCell>
                         </TableRow>
