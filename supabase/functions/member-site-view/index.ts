@@ -144,7 +144,13 @@ Deno.serve(async (req) => {
     // Generate and return HTML
     const html = generateSiteHTML(siteData);
     return new Response(html, {
-      headers: { 'Content-Type': 'text/html' },
+      headers: {
+        ...corsHeaders,
+        'Content-Type': 'text/html; charset=utf-8',
+        'Content-Security-Policy': "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; media-src 'self' https:; font-src 'self' data:; frame-ancestors 'none';",
+        'X-Frame-Options': 'DENY',
+        'X-Content-Type-Options': 'nosniff',
+      },
       status: 200
     });
 
@@ -154,7 +160,13 @@ Deno.serve(async (req) => {
       generateErrorPage('エラーが発生しました', 'サイトの読み込み中にエラーが発生しました。'),
       { 
         status: 500, 
-        headers: { ...corsHeaders, 'Content-Type': 'text/html' } 
+        headers: { 
+          ...corsHeaders, 
+          'Content-Type': 'text/html; charset=utf-8',
+          'Content-Security-Policy': "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; media-src 'self' https:; font-src 'self' data:; frame-ancestors 'none';",
+          'X-Frame-Options': 'DENY',
+          'X-Content-Type-Options': 'nosniff',
+        } 
       }
     );
   }
@@ -269,7 +281,7 @@ function generateSiteHTML(site: any): string {
       <head>
         <meta charset="UTF-8">
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline' 'unsafe-eval'; img-src 'self' data: https:; media-src 'self' https:; script-src 'self' 'unsafe-inline';">
+        <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data: https:; media-src https:; font-src data:;">
         <title>${site.name}</title>
         <style>
           * {
