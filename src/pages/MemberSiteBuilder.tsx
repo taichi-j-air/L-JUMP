@@ -96,6 +96,7 @@ const MemberSiteBuilder = () => {
   const [contentAccessLevel, setContentAccessLevel] = useState<"public" | "member" | "premium">("member");
   const [contentPublished, setContentPublished] = useState(false);
   const [contentCategoryId, setContentCategoryId] = useState<string>("none");
+  const [contentSortOrder, setContentSortOrder] = useState(0);
 
   // Category editing
   const [categories, setCategories] = useState<Category[]>([]);
@@ -231,7 +232,7 @@ const MemberSiteBuilder = () => {
         .from("member_site_content")
         .select("*")
         .eq("site_id", siteId)
-        .order("sort_order", { ascending: true });
+        .order("sort_order", { ascending: false });
       if (error) throw error;
       setSiteContents((data || []).map(item => ({
         ...item,
@@ -364,6 +365,7 @@ const MemberSiteBuilder = () => {
           access_level: contentAccessLevel,
           is_published: contentPublished,
           category_id: contentCategoryId === "none" ? null : contentCategoryId,
+          sort_order: contentSortOrder,
         })
         .eq("id", selectedContentId);
       if (error) throw error;
@@ -459,6 +461,7 @@ const MemberSiteBuilder = () => {
     setContentAccessLevel(content.access_level);
     setContentPublished(content.is_published);
     setContentCategoryId(content.category_id || "none");
+    setContentSortOrder(content.sort_order);
   };
 
   const deleteContent = async (contentId: string) => {
@@ -835,6 +838,15 @@ const MemberSiteBuilder = () => {
                                   <input type="checkbox" checked={contentPublished} onChange={(e) => setContentPublished(e.target.checked)} />
                                   <span>公開する</span>
                                 </label>
+                              </div>
+                              <div className="space-y-2">
+                                <Label htmlFor="contentSortOrder">表示順位</Label>
+                                <Input
+                                  id="contentSortOrder"
+                                  type="number"
+                                  value={contentSortOrder}
+                                  onChange={(e) => setContentSortOrder(Number(e.target.value))}
+                                />
                               </div>
                             </div>
 
