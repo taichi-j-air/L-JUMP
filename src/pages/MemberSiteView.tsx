@@ -3,6 +3,7 @@ import { useParams, useSearchParams } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { Progress } from "@/components/ui/progress";
 import { ChevronLeft, Menu, X } from "lucide-react";
 
 interface MemberSite {
@@ -31,6 +32,7 @@ interface MemberSiteContent {
   is_published: boolean;
   sort_order: number;
   page_type: string;
+  progress_percentage?: number | null;
 }
 
 const MemberSiteView = () => {
@@ -44,6 +46,8 @@ const MemberSiteView = () => {
   const [selectedCategoryId, setSelectedCategoryId] = useState<string | null>(null);
   const [selectedContentId, setSelectedContentId] = useState<string | null>(null);
   const [sideMenuOpen, setSideMenuOpen] = useState(false);
+  const [currentCategoryPage, setCurrentCategoryPage] = useState(1);
+  const [isDesktop, setIsDesktop] = useState<boolean>(() => (typeof window !== "undefined" ? window.innerWidth >= 1024 : true));
 
   // ページ状態の管理
   const currentView = searchParams.get('view') || 'categories'; // categories, content-list, content-detail
@@ -100,11 +104,51 @@ const MemberSiteView = () => {
     loadSite();
   }, [slug]);
 
+  useEffect(() => {
+    if (typeof window === "undefined") {
+      return;
+    }
+
+    const handleResize = () => {
+      setIsDesktop(window.innerWidth >= 1024);
+    };
+
+    handleResize();
+    window.addEventListener("resize", handleResize);
+    return () => window.removeEventListener("resize", handleResize);
+  }, []);
+
+  const categoriesPerRow = isDesktop ? 5 : 2;
+  const rowsPerPage = isDesktop ? 2 : 4;
+  const categoriesPerPage = categoriesPerRow * rowsPerPage;
+
+  useEffect(() => {
+    setCurrentCategoryPage((prev) => {
+      const maxPage = Math.max(1, Math.ceil(categories.length / categoriesPerPage));
+      return Math.min(prev, maxPage);
+    });
+  }, [categories.length, categoriesPerPage]);
+
+  const totalCategoryPages = Math.max(1, Math.ceil(categories.length / categoriesPerPage));
+  const paginatedCategories = categories.slice(
+    (currentCategoryPage - 1) * categoriesPerPage,
+    currentCategoryPage * categoriesPerPage
+  );
+
+  const goToPreviousCategoryPage = () => {
+    setCurrentCategoryPage((prev) => Math.max(1, prev - 1));
+  };
+
+  const goToNextCategoryPage = () => {
+    setCurrentCategoryPage((prev) => Math.min(totalCategoryPages, prev + 1));
+  };
+
   // ナビゲーション関数
   const navigateToCategories = () => {
     setSearchParams({});
     setSelectedCategoryId(null);
     setSelectedContentId(null);
+    setCurrentCategoryPage(1);
   };
 
   const navigateToContentList = (categoryId: string) => {
@@ -298,39 +342,65 @@ const MemberSiteView = () => {
                 )}
               </div>
               
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                {categories.map((category) => (
+              <div className="grid grid-cols-2 gap-3 justify-center lg:grid-cols-5 lg:gap-6">
+                {paginatedCategories.map((category) => (
                   <Card
                     key={category.id}
-                    className="cursor-pointer hover:shadow-lg transition-shadow overflow-hidden"
+                    className="cursor-pointer hover:shadow-lg transition-shadow overflow-hidden w-[150px] mx-auto flex flex-col"
                     onClick={() => navigateToContentList(category.id)}
                   >
-                    <div className="w-full h-48 bg-muted/40">
+                    <div className="h-32 w-full bg-muted/40">
                       {category.thumbnail_url ? (
                         <img
                           src={category.thumbnail_url}
                           alt={`${category.name}のサムネイル`}
-                          className="w-full h-full object-cover"
+                          className="h-full w-full object-cover"
                         />
                       ) : (
-                        <div className="w-full h-full flex items-center justify-center text-sm text-muted-foreground">
+                        <div className="flex h-full w-full items-center justify-center text-xs text-muted-foreground">
                           サムネイルが設定されていません
                         </div>
                       )}
                     </div>
-                    <CardContent className="p-6 space-y-3">
-                      <h3 className="text-xl font-semibold text-foreground">
+                    <CardContent className="flex flex-1 flex-col space-y-2 p-4">
+                      <h3 className="text-base font-semibold text-foreground">
                         {category.name}
                       </h3>
                       {category.description && (
-                        <p className="text-muted-foreground leading-relaxed">
+                        <p className="text-sm text-muted-foreground leading-relaxed">
                           {category.description}
                         </p>
                       )}
+                      <div className="pt-2 text-xs text-muted-foreground">
+                        コンテンツ数: {category.content_count}
+                      </div>
                     </CardContent>
                   </Card>
                 ))}
               </div>
+              {totalCategoryPages > 1 && (
+                <div className="mt-6 flex items-center justify-center gap-4">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={goToPreviousCategoryPage}
+                    disabled={currentCategoryPage === 1}
+                  >
+                    前へ
+                  </Button>
+                  <span className="text-sm text-muted-foreground">
+                    {currentCategoryPage} / {totalCategoryPages}
+                  </span>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={goToNextCategoryPage}
+                    disabled={currentCategoryPage === totalCategoryPages}
+                  >
+                    次へ
+                  </Button>
+                </div>
+              )}
             </div>
           )}
 
@@ -341,27 +411,46 @@ const MemberSiteView = () => {
                   {selectedCategory.name}
                 </h1>
                 {selectedCategory.description && (
-                  <p className="text-muted-foreground">{selectedCategory.description}</p>
+                  <p className="text-sm text-muted-foreground">
+                    {selectedCategory.description}
+                  </p>
                 )}
+                <div className="mt-2 text-sm text-muted-foreground">
+                  コンテンツ数: {selectedCategory.content_count}
+                </div>
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                {categoryContents.map((content) => (
-                  <Card
-                    key={content.id}
-                    className="cursor-pointer hover:shadow-lg transition-shadow"
-                    onClick={() => navigateToContentDetail(content.id)}
-                  >
-                    <CardContent className="p-6">
-                      <h3 className="text-lg font-semibold mb-2 text-foreground">
-                        {content.title}
-                      </h3>
-                      <Button variant="outline" size="sm" className="mt-4">
-                        読む →
-                      </Button>
-                    </CardContent>
-                  </Card>
-                ))}
+              <div className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3">
+                {categoryContents.map((content) => {
+                  const contentProgress = Math.max(
+                    0,
+                    Math.min(100, Number(content.progress_percentage ?? 0))
+                  );
+
+                  return (
+                    <Card
+                      key={content.id}
+                      className="cursor-pointer hover:shadow-lg transition-shadow"
+                      onClick={() => navigateToContentDetail(content.id)}
+                    >
+                      <CardContent className="space-y-4 p-6">
+                        <h3 className="text-lg font-semibold text-foreground">
+                          {content.title}
+                        </h3>
+                        <div>
+                          <Progress value={contentProgress} className="h-2" />
+                          <div className="mt-2 flex items-center justify-between text-xs text-muted-foreground">
+                            <span>進捗</span>
+                            <span>{contentProgress}%</span>
+                          </div>
+                        </div>
+                        <Button variant="outline" size="sm">
+                          読む >
+                        </Button>
+                      </CardContent>
+                    </Card>
+                  );
+                })}
               </div>
 
               {categoryContents.length === 0 && (
