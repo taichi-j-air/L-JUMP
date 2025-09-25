@@ -382,7 +382,7 @@ const MemberSiteView = () => {
                       </div>
 
                       <div className="mt-auto pt-4">
-                        <div className="h-3 w-full rounded-full bg-muted">
+                        <div className="h-3 w-full rounded-full bg-gray-200">
                           <div
                             className="h-full rounded-full transition-all"
                             style={{
