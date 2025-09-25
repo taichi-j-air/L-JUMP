@@ -6,6 +6,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import { ChevronLeft, Menu, X } from "lucide-react";
+import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from "@/components/ui/table";
 
 interface MemberSite {
   id: string;
@@ -500,37 +501,26 @@ const MemberSiteView = () => {
                   </div>
                 </div>
 
-                <div className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3">
-                  {categoryContents.map((content) => {
-                    const contentProgress = Math.max(
-                      0,
-                      Math.min(100, Number(content.progress_percentage ?? 0))
-                    );
-
-                    return (
-                      <Card
-                        key={content.id}
-                        className="cursor-pointer hover:shadow-lg transition-shadow"
-                        onClick={() => navigateToContentDetail(content.id)}
-                      >
-                        <CardContent className="space-y-4 p-6">
-                          <h3 className="text-lg font-semibold text-foreground">
-                            {content.title}
-                          </h3>
-                          <div>
-                            <Progress value={contentProgress} className="h-2" />
-                            <div className="mt-2 flex items-center justify-between text-xs text-muted-foreground">
-                              <span>進捗</span>
-                              <span>{contentProgress}%</span>
-                            </div>
-                          </div>
-                          <Button variant="outline" size="sm">
-                            読む >
-                          </Button>
-                        </CardContent>
-                      </Card>
-                    );
-                  })}
+                <div className="max-w-4xl">
+                  <Table className="border border-collapse bg-white">
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead className="border w-5/6">タイトル</TableHead>
+                        <TableHead className="border text-center w-1/6">学習状況</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {categoryContents.map((content) => (
+                        <TableRow key={content.id} className="cursor-pointer hover:bg-muted/50"
+                          onClick={() => navigateToContentDetail(content.id)}
+                        >
+                          <TableCell className="border font-medium w-5/6">{content.title}</TableCell>
+                          <TableCell className="border text-right w-1/6">
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
                 </div>
 
                 {categoryContents.length === 0 && (
