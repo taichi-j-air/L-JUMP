@@ -55,7 +55,7 @@ serve(async (req) => {
       .from('line_friends')
       .select('id')
       .eq('line_user_id', lineUserId)
-      .eq('user_id', inviteData.step_scenarios.user_id)
+      .eq('user_id', (inviteData.step_scenarios as any)?.user_id)
       .single();
 
     const isFriend = !!friendData && !friendError;

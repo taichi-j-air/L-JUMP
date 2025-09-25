@@ -57,8 +57,8 @@ serve(async (req) => {
         .eq("is_active", true)
         .single();
 
-      const liffId = data?.step_scenarios?.profiles?.liff_id;
-      const channelId = data?.step_scenarios?.profiles?.line_login_channel_id;
+      const liffId = (data?.step_scenarios as any)?.profiles?.liff_id;
+      const channelId = (data?.step_scenarios as any)?.profiles?.line_login_channel_id;
 
       if (!liffId || !channelId) {
         return htmlError("Config Error", "LIFF ID / Channel ID not found");
@@ -92,7 +92,7 @@ serve(async (req) => {
     return new Response("Method Not Allowed", { status: 405, headers: cors });
   } catch (e) {
     console.error("[liff-handler] fatal:", e);
-    return htmlError("Server Error", e.message ?? "unknown");
+    return htmlError("Server Error", (e as Error)?.message ?? "unknown");
   }
 });
 

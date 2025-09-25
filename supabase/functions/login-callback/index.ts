@@ -177,7 +177,7 @@ serve(async (req) => {
       headers: { "Content-Type": "application/x-www-form-urlencoded" },
       body: new URLSearchParams({
         grant_type: "authorization_code",
-        code,
+        code: code || '',
         redirect_uri: redirectUri,
         client_id: profile.line_login_channel_id,
         client_secret: profile.line_login_channel_secret,

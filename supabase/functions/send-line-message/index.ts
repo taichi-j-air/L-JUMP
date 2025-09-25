@@ -74,7 +74,7 @@ serve(async (req) => {
       .rpc('get_line_credentials_for_user', { p_user_id: userId })
       .single()
 
-    if (credError || !credentials?.channel_access_token) {
+    if (credError || !(credentials as any)?.channel_access_token) {
       console.error('No LINE credentials found:', credError)
       return new Response('LINE API not configured', { 
         status: 400, 
@@ -159,7 +159,7 @@ serve(async (req) => {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${credentials.channel_access_token}`
+        'Authorization': `Bearer ${(credentials as any).channel_access_token}`
       },
       body: JSON.stringify(lineApiData)
     })
@@ -198,7 +198,7 @@ serve(async (req) => {
 
   } catch (error) {
     console.error('Function error:', error)
-    return new Response(`Internal server error: ${error.message}`, { 
+    return new Response(`Internal server error: ${(error as Error)?.message || 'Unknown error'}`, { 
       status: 500, 
       headers: corsHeaders 
     })
