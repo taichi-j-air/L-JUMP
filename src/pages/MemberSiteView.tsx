@@ -351,7 +351,7 @@ const MemberSiteView = () => {
           {currentView === 'categories' && (
             <div className="p-6">
               
-              <div className="grid grid-cols-2 gap-4 justify-center lg:grid-cols-5 lg:gap-6">
+              <div className="grid grid-cols-2 gap-y-4 gap-x-1 justify-center lg:grid-cols-5 lg:gap-y-6 lg:gap-x-2">
                 {paginatedCategories.map((category) => (
                   <Card
                     key={category.id}
