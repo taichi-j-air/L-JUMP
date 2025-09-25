@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from "react";
 import { useParams, useSearchParams } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
@@ -63,6 +62,7 @@ const MemberSiteView = () => {
     background: themeConfig.sidebarBgColor || "hsl(var(--card))",
     foreground: themeConfig.sidebarFgColor || "hsl(var(--card-foreground))",
     hoverBackground: themeConfig.sidebarHoverBgColor || "hsl(var(--muted))",
+    hoverForeground: themeConfig.sidebarHoverFgColor || "hsl(var(--card-foreground))",
   };
 
   // ページ状態の管理
@@ -287,6 +287,11 @@ const MemberSiteView = () => {
         {`
           .sidebar-button:hover {
             background-color: ${sidebarColors.hoverBackground};
+            color: ${sidebarColors.hoverForeground};
+          }
+          .sidebar-button:hover .text-muted-foreground {
+            color: ${sidebarColors.hoverForeground};
+            opacity: 0.8;
           }
         `}
       </style>
@@ -361,9 +366,11 @@ const MemberSiteView = () => {
                   }`}
                 >
                   <div className="font-medium">{category.name}</div>
-                  <div className="text-sm text-muted-foreground">
-                    {category.content_count}件のコンテンツ
-                  </div>
+                  {themeConfig.showContentCount !== false && (
+                    <div className="text-sm text-muted-foreground">
+                      {category.content_count}件のコンテンツ
+                    </div>
+                  )}
                 </button>
               ))}
             </nav>

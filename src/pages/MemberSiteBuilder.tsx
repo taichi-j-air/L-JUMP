@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { Button } from "@/components/ui/button";
@@ -14,6 +13,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { Table, TableBody, TableCell, TableRow } from "@/components/ui/table";
 import { MediaLibrarySelector } from "@/components/MediaLibrarySelector";
 import { EnhancedBlockEditor } from "@/components/EnhancedBlockEditor";
+import { Checkbox } from "@/components/ui/checkbox";
 
 // Data Interfaces
 interface MemberSite {
@@ -81,6 +81,8 @@ const MemberSiteBuilder = () => {
   const [sidebarBgColor, setSidebarBgColor] = useState("#ffffff");
   const [sidebarFgColor, setSidebarFgColor] = useState("#000000");
   const [sidebarHoverBgColor, setSidebarHoverBgColor] = useState("#f1f5f9");
+  const [sidebarHoverFgColor, setSidebarHoverFgColor] = useState("#000000");
+  const [showContentCount, setShowContentCount] = useState(true);
 
   // Content editing
   const [selectedContentId, setSelectedContentId] = useState<string | null>(null);
@@ -117,6 +119,8 @@ const MemberSiteBuilder = () => {
       setSidebarBgColor("#ffffff");
       setSidebarFgColor("#000000");
       setSidebarHoverBgColor("#f1f5f9");
+      setSidebarHoverFgColor("#000000");
+      setShowContentCount(true);
       setSelectedContentId(null);
       setContentTitle("");
       setContentText("");
@@ -150,6 +154,8 @@ const MemberSiteBuilder = () => {
       setSidebarBgColor("#ffffff");
       setSidebarFgColor("#000000");
       setSidebarHoverBgColor("#f1f5f9");
+      setSidebarHoverFgColor("#000000");
+      setShowContentCount(true);
       setSiteContents([]);
       setSelectedContentId(null);
       setCategories([]);
@@ -198,6 +204,8 @@ const MemberSiteBuilder = () => {
       setSidebarBgColor(theme.sidebarBgColor || "#ffffff");
       setSidebarFgColor(theme.sidebarFgColor || "#000000");
       setSidebarHoverBgColor(theme.sidebarHoverBgColor || "#f1f5f9");
+      setSidebarHoverFgColor(theme.sidebarHoverFgColor || "#000000");
+      setShowContentCount(theme.showContentCount !== false);
     } catch (error) {
       console.error("Error loading site:", error);
       toast({ title: "エラー", description: "サイト情報の読み込みに失敗しました", variant: "destructive" });
@@ -262,7 +270,15 @@ const MemberSiteBuilder = () => {
   const saveSite = async () => {
     setSaving(true);
     try {
-      const theme_config = { headerBgColor, headerFgColor, sidebarBgColor, sidebarFgColor, sidebarHoverBgColor };
+      const theme_config = { 
+        headerBgColor, 
+        headerFgColor, 
+        sidebarBgColor, 
+        sidebarFgColor, 
+        sidebarHoverBgColor, 
+        sidebarHoverFgColor,
+        showContentCount 
+      };
       if (siteId && siteId !== "new") {
         const { error } = await supabase
           .from("member_sites")
@@ -1156,22 +1172,58 @@ const MemberSiteBuilder = () => {
                           </div>
                         </div>
                       </div>
+                      <div className="grid grid-cols-2 gap-4">
+                        <div className="space-y-2">
+                          <Label htmlFor="sidebar-hover-bg-color">サイドバーホバー背景色</Label>
+                          <div className="flex items-center gap-2">
+                            <Input
+                              id="sidebar-hover-bg-color"
+                              type="color"
+                              value={sidebarHoverBgColor}
+                              onChange={(e) => setSidebarHoverBgColor(e.target.value)}
+                              className="p-1 h-10 w-14"
+                            />
+                            <Input
+                              type="text"
+                              value={sidebarHoverBgColor}
+                              onChange={(e) => setSidebarHoverBgColor(e.target.value)}
+                              placeholder="#f1f5f9"
+                            />
+                          </div>
+                        </div>
+                        <div className="space-y-2">
+                          <Label htmlFor="sidebar-hover-fg-color">サイドバーホバー文字色</Label>
+                          <div className="flex items-center gap-2">
+                            <Input
+                              id="sidebar-hover-fg-color"
+                              type="color"
+                              value={sidebarHoverFgColor}
+                              onChange={(e) => setSidebarHoverFgColor(e.target.value)}
+                              className="p-1 h-10 w-14"
+                            />
+                            <Input
+                              type="text"
+                              value={sidebarHoverFgColor}
+                              onChange={(e) => setSidebarHoverFgColor(e.target.value)}
+                              placeholder="#000000"
+                            />
+                          </div>
+                        </div>
+                      </div>
                       <div className="space-y-2">
-                        <Label htmlFor="sidebar-hover-bg-color">サイドバーホバー背景色</Label>
-                        <div className="flex items-center gap-2">
-                          <Input
-                            id="sidebar-hover-bg-color"
-                            type="color"
-                            value={sidebarHoverBgColor}
-                            onChange={(e) => setSidebarHoverBgColor(e.target.value)}
-                            className="p-1 h-10 w-14"
+                        <Label>その他</Label>
+                        <div className="flex items-center space-x-2">
+                          <Checkbox
+                            id="show-content-count"
+                            checked={showContentCount}
+                            onCheckedChange={(checked) => setShowContentCount(checked as boolean)}
                           />
-                          <Input
-                            type="text"
-                            value={sidebarHoverBgColor}
-                            onChange={(e) => setSidebarHoverBgColor(e.target.value)}
-                            placeholder="#f1f5f9"
-                          />
+                          <label
+                            htmlFor="show-content-count"
+                            className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
+                          >
+                            サイドバーにコンテンツ数を表示する
+                          </label>
                         </div>
                       </div>
                     </CardContent>
