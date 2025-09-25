@@ -348,7 +348,16 @@ const MemberSiteView = () => {
               color: sidebarColors.foreground,
             }}
           >
-            <div className="p-4 border-b border-border">
+            <button
+              onClick={() => {
+                navigateToCategories();
+                setSideMenuOpen(false);
+              }}
+              className={`sidebar-button w-full text-left px-4 py-3 transition-colors`}
+            >
+              <div className="font-medium">TOP</div>
+            </button>
+            <div className="p-4 border-t border-border">
               <h2 className="font-semibold">カテゴリ</h2>
             </div>
             <nav>
@@ -360,7 +369,7 @@ const MemberSiteView = () => {
                     setSideMenuOpen(false);
                   }}
                   className={`sidebar-button w-full text-left px-4 py-3 transition-colors ${
-                    selectedCategoryId === category.id
+                    categoryId === category.id
                       ? 'bg-primary text-primary-foreground'
                       : ''
                   }`}
