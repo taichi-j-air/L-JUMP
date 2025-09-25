@@ -19,6 +19,7 @@ interface MemberSiteCategory {
   description?: string;
   content_count: number;
   sort_order: number;
+  thumbnail_url?: string | null;
 }
 
 interface MemberSiteContent {
@@ -301,26 +302,31 @@ const MemberSiteView = () => {
                 {categories.map((category) => (
                   <Card
                     key={category.id}
-                    className="cursor-pointer hover:shadow-lg transition-shadow"
+                    className="cursor-pointer hover:shadow-lg transition-shadow overflow-hidden"
                     onClick={() => navigateToContentList(category.id)}
                   >
-                    <CardContent className="p-6">
-                      <h3 className="text-xl font-semibold mb-2 text-foreground">
+                    <div className="w-full h-48 bg-muted/40">
+                      {category.thumbnail_url ? (
+                        <img
+                          src={category.thumbnail_url}
+                          alt={`${category.name}のサムネイル`}
+                          className="w-full h-full object-cover"
+                        />
+                      ) : (
+                        <div className="w-full h-full flex items-center justify-center text-sm text-muted-foreground">
+                          サムネイルが設定されていません
+                        </div>
+                      )}
+                    </div>
+                    <CardContent className="p-6 space-y-3">
+                      <h3 className="text-xl font-semibold text-foreground">
                         {category.name}
                       </h3>
                       {category.description && (
-                        <p className="text-muted-foreground mb-4">
+                        <p className="text-muted-foreground leading-relaxed">
                           {category.description}
                         </p>
                       )}
-                      <div className="flex items-center justify-between">
-                        <span className="text-sm text-muted-foreground">
-                          {category.content_count}件のコンテンツ
-                        </span>
-                        <Button variant="outline" size="sm">
-                          表示 →
-                        </Button>
-                      </div>
                     </CardContent>
                   </Card>
                 ))}
