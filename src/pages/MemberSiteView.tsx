@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from "react";
 import { useParams, useSearchParams } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
@@ -63,6 +64,8 @@ const MemberSiteView = () => {
     foreground: themeConfig.sidebarFgColor || "hsl(var(--card-foreground))",
     hoverBackground: themeConfig.sidebarHoverBgColor || "hsl(var(--muted))",
     hoverForeground: themeConfig.sidebarHoverFgColor || "hsl(var(--card-foreground))",
+    activeBackground: themeConfig.sidebarActiveBgColor || "hsl(var(--primary))",
+    activeForeground: themeConfig.sidebarActiveFgColor || "hsl(var(--primary-foreground))",
   };
 
   // ページ状態の管理
@@ -293,6 +296,14 @@ const MemberSiteView = () => {
             color: ${sidebarColors.hoverForeground};
             opacity: 0.8;
           }
+          .sidebar-active {
+            background-color: ${sidebarColors.activeBackground};
+            color: ${sidebarColors.activeForeground};
+          }
+          .sidebar-active .text-muted-foreground {
+            color: ${sidebarColors.activeForeground};
+            opacity: 0.8;
+          }
         `}
       </style>
       <div className="min-h-screen bg-slate-100">
@@ -353,7 +364,9 @@ const MemberSiteView = () => {
                 navigateToCategories();
                 setSideMenuOpen(false);
               }}
-              className={`sidebar-button w-full text-left px-4 py-3 transition-colors`}
+              className={`sidebar-button w-full text-left px-4 py-3 transition-colors ${
+                currentView === 'categories' ? 'sidebar-active' : ''
+              }`}
             >
               <div className="font-medium">TOP</div>
             </button>
@@ -369,9 +382,7 @@ const MemberSiteView = () => {
                     setSideMenuOpen(false);
                   }}
                   className={`sidebar-button w-full text-left px-4 py-3 transition-colors ${
-                    categoryId === category.id
-                      ? 'bg-primary text-primary-foreground'
-                      : ''
+                    categoryId === category.id ? 'sidebar-active' : ''
                   }`}
                 >
                   <div className="font-medium">{category.name}</div>

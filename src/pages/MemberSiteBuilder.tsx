@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { Button } from "@/components/ui/button";
@@ -82,6 +83,8 @@ const MemberSiteBuilder = () => {
   const [sidebarFgColor, setSidebarFgColor] = useState("#000000");
   const [sidebarHoverBgColor, setSidebarHoverBgColor] = useState("#f1f5f9");
   const [sidebarHoverFgColor, setSidebarHoverFgColor] = useState("#000000");
+  const [sidebarActiveBgColor, setSidebarActiveBgColor] = useState("#60a5fa");
+  const [sidebarActiveFgColor, setSidebarActiveFgColor] = useState("#ffffff");
   const [showContentCount, setShowContentCount] = useState(true);
 
   // Content editing
@@ -120,6 +123,8 @@ const MemberSiteBuilder = () => {
       setSidebarFgColor("#000000");
       setSidebarHoverBgColor("#f1f5f9");
       setSidebarHoverFgColor("#000000");
+      setSidebarActiveBgColor("#60a5fa");
+      setSidebarActiveFgColor("#ffffff");
       setShowContentCount(true);
       setSelectedContentId(null);
       setContentTitle("");
@@ -155,6 +160,8 @@ const MemberSiteBuilder = () => {
       setSidebarFgColor("#000000");
       setSidebarHoverBgColor("#f1f5f9");
       setSidebarHoverFgColor("#000000");
+      setSidebarActiveBgColor("#60a5fa");
+      setSidebarActiveFgColor("#ffffff");
       setShowContentCount(true);
       setSiteContents([]);
       setSelectedContentId(null);
@@ -205,6 +212,8 @@ const MemberSiteBuilder = () => {
       setSidebarFgColor(theme.sidebarFgColor || "#000000");
       setSidebarHoverBgColor(theme.sidebarHoverBgColor || "#f1f5f9");
       setSidebarHoverFgColor(theme.sidebarHoverFgColor || "#000000");
+      setSidebarActiveBgColor(theme.sidebarActiveBgColor || "#60a5fa");
+      setSidebarActiveFgColor(theme.sidebarActiveFgColor || "#ffffff");
       setShowContentCount(theme.showContentCount !== false);
     } catch (error) {
       console.error("Error loading site:", error);
@@ -277,6 +286,8 @@ const MemberSiteBuilder = () => {
         sidebarFgColor, 
         sidebarHoverBgColor, 
         sidebarHoverFgColor,
+        sidebarActiveBgColor,
+        sidebarActiveFgColor,
         showContentCount 
       };
       if (siteId && siteId !== "new") {
@@ -1206,6 +1217,44 @@ const MemberSiteBuilder = () => {
                               value={sidebarHoverFgColor}
                               onChange={(e) => setSidebarHoverFgColor(e.target.value)}
                               placeholder="#000000"
+                            />
+                          </div>
+                        </div>
+                      </div>
+                      <div className="grid grid-cols-2 gap-4">
+                        <div className="space-y-2">
+                          <Label htmlFor="sidebar-active-bg-color">サイドバー選択中背景色</Label>
+                          <div className="flex items-center gap-2">
+                            <Input
+                              id="sidebar-active-bg-color"
+                              type="color"
+                              value={sidebarActiveBgColor}
+                              onChange={(e) => setSidebarActiveBgColor(e.target.value)}
+                              className="p-1 h-10 w-14"
+                            />
+                            <Input
+                              type="text"
+                              value={sidebarActiveBgColor}
+                              onChange={(e) => setSidebarActiveBgColor(e.target.value)}
+                              placeholder="#60a5fa"
+                            />
+                          </div>
+                        </div>
+                        <div className="space-y-2">
+                          <Label htmlFor="sidebar-active-fg-color">サイドバー選択中文字色</Label>
+                          <div className="flex items-center gap-2">
+                            <Input
+                              id="sidebar-active-fg-color"
+                              type="color"
+                              value={sidebarActiveFgColor}
+                              onChange={(e) => setSidebarActiveFgColor(e.target.value)}
+                              className="p-1 h-10 w-14"
+                            />
+                            <Input
+                              type="text"
+                              value={sidebarActiveFgColor}
+                              onChange={(e) => setSidebarActiveFgColor(e.target.value)}
+                              placeholder="#ffffff"
                             />
                           </div>
                         </div>
