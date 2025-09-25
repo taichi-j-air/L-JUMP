@@ -11,84 +11,141 @@ Deno.serve(async (req) => {
   }
 
   try {
+    // Parse query parameters
     const url = new URL(req.url);
     const slug = url.searchParams.get('slug');
-    const uid = url.searchParams.get('uid');
+    const uid = url.searchParams.get('uid'); // LINE friend short_uid for authentication
+    const passcode = url.searchParams.get('passcode'); // Optional passcode
 
     if (!slug) {
       return new Response(
-        JSON.stringify({ error: 'Missing slug parameter' }),
-        { 
-          status: 400, 
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
-        }
+        generateErrorPage('エラー', 'サイトが見つかりません'),
+        { headers: { 'Content-Type': 'text/html' }, status: 404 }
       );
     }
 
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
-    // Get member site with categories and content
-    let query = supabase
+    // Fetch member site data
+    const { data: site, error: siteError } = await supabase
       .from('member_sites')
-      .select(`
-        *,
-        member_site_categories(
-          id,
-          name,
-          description,
-          thumbnail_url,
-          content_count,
-          sort_order
-        ),
-        member_site_content(
-          id,
-          title,
-          content,
-          content_blocks,
-          page_type,
-          slug,
-          is_published,
-          access_level,
-          sort_order,
-          category_id
-        )
-      `)
+      .select('*')
       .eq('slug', slug)
-      .eq('is_published', true);
+      .eq('is_published', true)
+      .maybeSingle();
 
-    // Add UID verification if provided
-    if (uid) {
-      query = query.eq('site_uid', uid);
-    }
-
-    const { data: site, error: siteError } = await query.single();
-
-    if (siteError || !site) {
-      console.log('Site not found:', siteError);
+    if (siteError) {
+      console.error('Site fetch error:', siteError);
       return new Response(
-        generateErrorPage('サイトが見つかりません', 'お探しのサイトは存在しないか、公開されていません。'),
-        { 
-          status: 404, 
-          headers: { ...corsHeaders, 'Content-Type': 'text/html' } 
-        }
+        generateErrorPage('エラー', 'サイトの取得に失敗しました'),
+        { headers: { 'Content-Type': 'text/html' }, status: 500 }
       );
     }
 
-    // Check access control based on site type
-    if (site.access_type === 'paid') {
-      // For paid sites, additional access verification would be needed
-      // For now, we'll allow access if the UID is correct
+    if (!site) {
+      console.log('Site not found:', { slug, uid });
+      return new Response(
+        generateErrorPage('404', 'サイトが見つかりません'),
+        { headers: { 'Content-Type': 'text/html' }, status: 404 }
+      );
     }
 
-    // Generate the site HTML
-    const html = generateSiteHTML(site);
+    // Check UID-based authentication if provided
+    if (uid && uid !== '[UID]') {
+      // Find LINE friend by short_uid
+      const { data: friend, error: friendError } = await supabase
+        .from('line_friends')
+        .select('id, user_id')
+        .eq('short_uid_ci', uid.toUpperCase())
+        .eq('user_id', site.user_id)
+        .maybeSingle();
 
+      if (friendError || !friend) {
+        console.log('Friend not found or error:', { uid, error: friendError });
+        return new Response(
+          generateErrorPage('認証エラー', 'アクセス権限がありません'),
+          { headers: { 'Content-Type': 'text/html' }, status: 403 }
+        );
+      }
+
+      // Check passcode if required
+      if (site.passcode && site.passcode !== passcode) {
+        return new Response(
+          generatePasscodeInputPage(slug, uid),
+          { headers: { 'Content-Type': 'text/html' }, status: 200 }
+        );
+      }
+
+      // Check tag-based access control
+      if (site.allowed_tag_ids && site.allowed_tag_ids.length > 0) {
+        const { data: friendTags } = await supabase
+          .from('friend_tags')
+          .select('tag_id')
+          .eq('friend_id', friend.id);
+
+        const friendTagIds = friendTags?.map(ft => ft.tag_id) || [];
+        const hasAllowedTag = site.allowed_tag_ids.some(tagId => friendTagIds.includes(tagId));
+
+        if (!hasAllowedTag) {
+          return new Response(
+            generateErrorPage('アクセス拒否', 'このコンテンツにアクセスする権限がありません'),
+            { headers: { 'Content-Type': 'text/html' }, status: 403 }
+          );
+        }
+      }
+
+      // Check blocked tags
+      if (site.blocked_tag_ids && site.blocked_tag_ids.length > 0) {
+        const { data: friendTags } = await supabase
+          .from('friend_tags')
+          .select('tag_id')
+          .eq('friend_id', friend.id);
+
+        const friendTagIds = friendTags?.map(ft => ft.tag_id) || [];
+        const hasBlockedTag = site.blocked_tag_ids.some(tagId => friendTagIds.includes(tagId));
+
+        if (hasBlockedTag) {
+          return new Response(
+            generateErrorPage('アクセス拒否', 'このコンテンツにアクセスする権限がありません'),
+            { headers: { 'Content-Type': 'text/html' }, status: 403 }
+          );
+        }
+      }
+    }
+
+    // Fetch categories and content after authentication
+    const { data: categories, error: categoriesError } = await supabase
+      .from('member_site_categories')
+      .select('*')
+      .eq('site_id', site.id)
+      .order('sort_order');
+
+    const { data: content, error: contentError } = await supabase
+      .from('member_site_content')
+      .select('*')
+      .eq('site_id', site.id)
+      .eq('is_published', true)
+      .order('sort_order');
+
+    if (categoriesError || contentError) {
+      console.error('Content fetch error:', { categoriesError, contentError });
+      return new Response(
+        generateErrorPage('エラー', 'コンテンツの取得に失敗しました'),
+        { headers: { 'Content-Type': 'text/html' }, status: 500 }
+      );
+    }
+
+    const siteData = {
+      ...site,
+      member_site_categories: categories || [],
+      member_site_content: content || []
+    };
+
+    // Generate and return HTML
+    const html = generateSiteHTML(siteData);
     return new Response(html, {
-      status: 200,
-      headers: {
-        ...corsHeaders,
-        'Content-Type': 'text/html',
-      },
+      headers: { 'Content-Type': 'text/html' },
+      status: 200
     });
 
   } catch (error) {
@@ -498,22 +555,18 @@ function generateSiteHTML(site: any): string {
           }
           
           .no-content {
-            grid-column: 1 / -1;
+            color: #999;
             text-align: center;
-            color: #666;
-            padding: 3rem;
-            font-style: italic;
+            padding: 3rem 1rem;
           }
           
-          /* Article View */
+          /* Article Content */
           .article {
             max-width: 800px;
-            margin: 0 auto;
           }
           
           .article-header {
-            margin-bottom: 3rem;
-            text-align: center;
+            margin-bottom: 2rem;
           }
           
           .article-title {
@@ -529,71 +582,50 @@ function generateSiteHTML(site: any): string {
           }
           
           .content-heading {
-            color: ${primaryColor};
+            color: #333;
             margin: 2rem 0 1rem;
-            font-weight: 600;
+            line-height: 1.4;
           }
           
           .content-paragraph {
-            margin: 1.5rem 0;
-            color: #444;
+            margin-bottom: 1.5rem;
           }
           
-          .content-image, .content-video {
+          .content-image {
             max-width: 100%;
             height: auto;
-            border-radius: 8px;
             margin: 2rem 0;
+            border-radius: 8px;
             box-shadow: 0 4px 12px rgba(0,0,0,0.1);
           }
           
-          .content-block, .content-fallback {
-            margin: 1.5rem 0;
-            color: #444;
+          .content-video {
+            max-width: 100%;
+            height: auto;
+            margin: 2rem 0;
+            border-radius: 8px;
           }
           
-          /* Mobile Styles */
+          .content-block {
+            margin-bottom: 1.5rem;
+          }
+          
+          .content-fallback {
+            white-space: pre-wrap;
+          }
+          
+          /* Mobile Responsive */
           @media (max-width: 768px) {
-            .header-content {
-              padding: 0 1rem;
-            }
-            
-            .menu-toggle {
-              display: block;
-            }
-            
             .layout {
               flex-direction: column;
             }
             
             .sidebar {
-              position: fixed;
-              top: 70px;
-              left: 0;
-              width: 280px;
-              transform: translateX(-100%);
-              transition: transform 0.3s ease;
-              z-index: 90;
-              height: calc(100vh - 70px);
-            }
-            
-            .sidebar.open {
-              transform: translateX(0);
-            }
-            
-            .sidebar-overlay {
-              position: fixed;
-              top: 70px;
-              left: 0;
-              right: 0;
-              bottom: 0;
-              background: rgba(0,0,0,0.5);
-              z-index: 80;
-              display: none;
-            }
-            
-            .sidebar-overlay.show {
-              display: block;
+              width: 100%;
+              height: auto;
+              position: static;
+              border-right: none;
+              border-bottom: 1px solid #e0e0e0;
             }
             
             .main-content {
@@ -608,46 +640,62 @@ function generateSiteHTML(site: any): string {
               font-size: 2rem;
             }
             
-            .categories-grid {
-              grid-template-columns: 1fr;
+            .menu-toggle {
+              display: block;
             }
             
-            .content-grid {
-              grid-template-columns: 1fr;
+            .back-btn {
+              display: block;
             }
+            
+            .sidebar {
+              display: none;
+            }
+            
+            .sidebar.mobile-open {
+              display: block;
+            }
+          }
+          
+          /* Mobile menu styles */
+          .mobile-sidebar {
+            display: none;
+            position: fixed;
+            top: 70px;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: white;
+            z-index: 200;
+            overflow-y: auto;
+          }
+          
+          .mobile-sidebar.open {
+            display: block;
           }
         </style>
       </head>
       <body>
-        <!-- Header -->
         <header class="header">
           <div class="header-content">
-            <div style="display: flex; align-items: center; gap: 1rem;">
-              <button class="menu-toggle" onclick="toggleSidebar()">☰</button>
-              <h1 class="site-title">${site.name}</h1>
-            </div>
+            <h1 class="site-title">${site.name}</h1>
             <button class="back-btn" onclick="goBack()">← 戻る</button>
+            <button class="menu-toggle" onclick="toggleMobileMenu()">☰</button>
           </div>
         </header>
         
-        <!-- Sidebar Overlay (Mobile) -->
-        <div class="sidebar-overlay" onclick="closeSidebar()"></div>
-        
-        <!-- Layout -->
         <div class="layout">
-          <!-- Sidebar -->
-          <aside class="sidebar" id="sidebar">
+          <aside class="sidebar">
             <div class="sidebar-header">
-              <h2 class="sidebar-title">カテゴリ</h2>
+              <div class="sidebar-title">カテゴリ</div>
             </div>
-            <nav>
-              ${categoryNavHTML}
-            </nav>
+            <button onclick="showCategories()" class="category-nav-item active" id="categories-nav">
+              <div class="category-name">すべてのカテゴリ</div>
+            </button>
+            ${categoryNavHTML}
           </aside>
           
-          <!-- Main Content -->
           <main class="main-content">
-            <!-- Categories View -->
             <div id="categories-view" class="categories-view">
               <h1>${site.name}</h1>
               ${site.description ? `<p class="site-description">${site.description}</p>` : ''}
@@ -656,92 +704,128 @@ function generateSiteHTML(site: any): string {
               </div>
             </div>
             
-            <!-- Category Content Views -->
             ${categoryContentHTML}
-            
-            <!-- Individual Content Views -->
             ${contentPagesHTML}
           </main>
         </div>
         
+        <!-- Mobile Sidebar -->
+        <div class="mobile-sidebar" id="mobile-sidebar">
+          <div class="sidebar-header">
+            <div class="sidebar-title">カテゴリ</div>
+          </div>
+          <button onclick="showCategories(); closeMobileMenu();" class="category-nav-item active" id="categories-nav-mobile">
+            <div class="category-name">すべてのカテゴリ</div>
+          </button>
+          ${categoryNavHTML.replace(/onclick="showCategory/g, 'onclick="showCategory').replace(/\)"/g, '); closeMobileMenu();"')}
+        </div>
+        
         <script>
           let currentView = 'categories';
-          let currentCategory = null;
-          let currentContent = null;
           
-          function showView(viewId) {
-            // Hide all views
-            document.getElementById('categories-view').style.display = 'none';
-            document.querySelectorAll('.category-content').forEach(el => el.style.display = 'none');
-            document.querySelectorAll('.content-detail').forEach(el => el.style.display = 'none');
+          function showCategories() {
+            // Hide all content views
+            document.querySelectorAll('.category-content, .content-detail').forEach(el => {
+              el.style.display = 'none';
+            });
             
-            // Show target view
-            const targetView = document.getElementById(viewId);
-            if (targetView) {
-              targetView.style.display = 'block';
+            // Show categories view
+            document.getElementById('categories-view').style.display = 'block';
+            
+            // Update navigation
+            document.querySelectorAll('.category-nav-item').forEach(el => {
+              el.classList.remove('active');
+            });
+            document.getElementById('categories-nav').classList.add('active');
+            if (document.getElementById('categories-nav-mobile')) {
+              document.getElementById('categories-nav-mobile').classList.add('active');
             }
             
-            // Update back button
-            const backBtn = document.querySelector('.back-btn');
-            backBtn.style.display = viewId === 'categories-view' ? 'none' : 'block';
-            
-            // Update category nav active state
-            document.querySelectorAll('.category-nav-item').forEach(el => el.classList.remove('active'));
-            if (currentCategory) {
-              const activeNav = document.querySelector(\`[data-category="\${currentCategory}"]\`);
-              if (activeNav) activeNav.classList.add('active');
-            }
+            currentView = 'categories';
+            updateBackButton();
           }
           
           function showCategory(categoryId) {
+            // Hide all views
+            document.querySelectorAll('.categories-view, .category-content, .content-detail').forEach(el => {
+              el.style.display = 'none';
+            });
+            
+            // Show category content
+            const categoryElement = document.getElementById('category-' + categoryId);
+            if (categoryElement) {
+              categoryElement.style.display = 'block';
+            }
+            
+            // Update navigation
+            document.querySelectorAll('.category-nav-item').forEach(el => {
+              el.classList.remove('active');
+            });
+            document.querySelectorAll('[data-category="' + categoryId + '"]').forEach(el => {
+              el.classList.add('active');
+            });
+            
             currentView = 'category';
-            currentCategory = categoryId;
-            currentContent = null;
-            showView(\`category-\${categoryId}\`);
-            closeSidebar();
+            updateBackButton();
           }
           
           function showContent(contentId) {
+            // Hide all views
+            document.querySelectorAll('.categories-view, .category-content, .content-detail').forEach(el => {
+              el.style.display = 'none';
+            });
+            
+            // Show content detail
+            const contentElement = document.getElementById('content-' + contentId);
+            if (contentElement) {
+              contentElement.style.display = 'block';
+            }
+            
             currentView = 'content';
-            currentContent = contentId;
-            showView(\`content-\${contentId}\`);
+            updateBackButton();
+          }
+          
+          function updateBackButton() {
+            const backBtn = document.querySelector('.back-btn');
+            if (currentView === 'categories') {
+              backBtn.style.display = 'none';
+            } else {
+              backBtn.style.display = 'block';
+            }
           }
           
           function goBack() {
-            if (currentView === 'content' && currentCategory) {
-              showCategory(currentCategory);
-            } else {
-              currentView = 'categories';
-              currentCategory = null;
-              currentContent = null;
-              showView('categories-view');
+            if (currentView === 'content') {
+              // Go back to category view (find which category this content belongs to)
+              // For now, just go to categories view
+              showCategories();
+            } else if (currentView === 'category') {
+              showCategories();
             }
           }
           
-          function toggleSidebar() {
-            const sidebar = document.getElementById('sidebar');
-            const overlay = document.querySelector('.sidebar-overlay');
-            const isOpen = sidebar.classList.contains('open');
+          function toggleMobileMenu() {
+            const mobileSidebar = document.getElementById('mobile-sidebar');
+            mobileSidebar.classList.toggle('open');
+          }
+          
+          function closeMobileMenu() {
+            const mobileSidebar = document.getElementById('mobile-sidebar');
+            mobileSidebar.classList.remove('open');
+          }
+          
+          // Close mobile menu when clicking outside
+          document.addEventListener('click', function(event) {
+            const mobileSidebar = document.getElementById('mobile-sidebar');
+            const menuToggle = document.querySelector('.menu-toggle');
             
-            if (isOpen) {
-              closeSidebar();
-            } else {
-              sidebar.classList.add('open');
-              overlay.classList.add('show');
+            if (!mobileSidebar.contains(event.target) && !menuToggle.contains(event.target)) {
+              closeMobileMenu();
             }
-          }
-          
-          function closeSidebar() {
-            const sidebar = document.getElementById('sidebar');
-            const overlay = document.querySelector('.sidebar-overlay');
-            sidebar.classList.remove('open');
-            overlay.classList.remove('show');
-          }
-          
-          // Initialize
-          document.addEventListener('DOMContentLoaded', function() {
-            showView('categories-view');
           });
+          
+          // Initialize view
+          updateBackButton();
         </script>
       </body>
     </html>
@@ -752,48 +836,115 @@ function generateErrorPage(title: string, message: string): string {
   return `
     <!DOCTYPE html>
     <html lang="ja">
-      <head>
-        <meta charset="UTF-8">
-        <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <title>${title}</title>
-        <style>
-          body {
-            font-family: system-ui, sans-serif;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            min-height: 100vh;
-            margin: 0;
-            background-color: #f5f5f5;
-          }
-          
-          .error-container {
-            text-align: center;
-            padding: 2rem;
-            background: white;
-            border-radius: 8px;
-            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
-            max-width: 400px;
-          }
-          
-          .error-title {
-            font-size: 1.5rem;
-            color: #e74c3c;
-            margin-bottom: 1rem;
-          }
-          
-          .error-message {
-            color: #666;
-            line-height: 1.6;
-          }
-        </style>
-      </head>
-      <body>
-        <div class="error-container">
-          <h1 class="error-title">${title}</h1>
-          <p class="error-message">${message}</p>
-        </div>
-      </body>
+    <head>
+      <meta charset="UTF-8">
+      <meta name="viewport" content="width=device-width, initial-scale=1.0">
+      <title>${title}</title>
+      <style>
+        body {
+          font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+          margin: 0;
+          padding: 0;
+          background: #f5f5f5;
+          display: flex;
+          justify-content: center;
+          align-items: center;
+          min-height: 100vh;
+        }
+        .error-container {
+          background: white;
+          padding: 2rem;
+          border-radius: 8px;
+          box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+          text-align: center;
+          max-width: 400px;
+        }
+        h1 { color: #333; margin-bottom: 1rem; }
+        p { color: #666; }
+      </style>
+    </head>
+    <body>
+      <div class="error-container">
+        <h1>${title}</h1>
+        <p>${message}</p>
+      </div>
+    </body>
+    </html>
+  `;
+}
+
+function generatePasscodeInputPage(slug: string, uid: string): string {
+  return `
+    <!DOCTYPE html>
+    <html lang="ja">
+    <head>
+      <meta charset="UTF-8">
+      <meta name="viewport" content="width=device-width, initial-scale=1.0">
+      <title>パスコード入力</title>
+      <style>
+        body {
+          font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+          margin: 0;
+          padding: 0;
+          background: #f5f5f5;
+          display: flex;
+          justify-content: center;
+          align-items: center;
+          min-height: 100vh;
+        }
+        .passcode-container {
+          background: white;
+          padding: 2rem;
+          border-radius: 8px;
+          box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+          text-align: center;
+          max-width: 400px;
+          width: 100%;
+        }
+        h1 { color: #333; margin-bottom: 1rem; }
+        input {
+          width: 100%;
+          padding: 12px;
+          margin: 1rem 0;
+          border: 1px solid #ddd;
+          border-radius: 4px;
+          font-size: 16px;
+          box-sizing: border-box;
+        }
+        button {
+          background: #007bff;
+          color: white;
+          border: none;
+          padding: 12px 24px;
+          border-radius: 4px;
+          cursor: pointer;
+          font-size: 16px;
+          width: 100%;
+        }
+        button:hover { background: #0056b3; }
+        .error { color: #dc3545; margin-top: 1rem; }
+      </style>
+    </head>
+    <body>
+      <div class="passcode-container">
+        <h1>パスコード入力</h1>
+        <p>このコンテンツにアクセスするにはパスコードが必要です</p>
+        <form id="passcodeForm">
+          <input type="password" id="passcode" placeholder="パスコードを入力してください" required>
+          <button type="submit">認証</button>
+        </form>
+        <div id="error" class="error" style="display: none;"></div>
+      </div>
+      <script>
+        document.getElementById('passcodeForm').addEventListener('submit', function(e) {
+          e.preventDefault();
+          const passcode = document.getElementById('passcode').value;
+          const currentUrl = new URL(window.location.href);
+          currentUrl.searchParams.set('passcode', passcode);
+          window.location.href = currentUrl.toString();
+        });
+      </script>
+    </body>
     </html>
   `;
 }

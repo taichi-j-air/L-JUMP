@@ -662,9 +662,9 @@ const MemberSiteBuilder = () => {
                               className="h-6 w-6 p-0"
                               onClick={(e) => {
                                 e.stopPropagation();
-                                const publicUrl = `https://rtjxurmuaawyzjcdkqxt.supabase.co/functions/v1/member-site-view?slug=${s.slug}&uid=${(s as any).site_uid}`;
+                                const publicUrl = `https://rtjxurmuaawyzjcdkqxt.supabase.co/functions/v1/member-site-view?slug=${s.slug}&uid=[UID]`;
                                 navigator.clipboard.writeText(publicUrl);
-                                toast({ title: "URLをコピーしました", description: "公開URLをクリップボードにコピーしました" });
+                                toast({ title: "URLをコピーしました", description: "公開URLをクリップボードにコピーされました。[UID]をLINE友達のショートUIDに置き換えてください。" });
                               }}
                               title="公開URLをコピー"
                             >

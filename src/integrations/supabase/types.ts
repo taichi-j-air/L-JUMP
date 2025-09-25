@@ -957,6 +957,8 @@ export type Database = {
       member_sites: {
         Row: {
           access_type: string
+          allowed_tag_ids: string[] | null
+          blocked_tag_ids: string[] | null
           created_at: string
           currency: string | null
           description: string | null
@@ -965,6 +967,7 @@ export type Database = {
           is_public: boolean
           is_published: boolean
           name: string
+          passcode: string | null
           price: number | null
           public_url: string | null
           published_at: string | null
@@ -978,6 +981,8 @@ export type Database = {
         }
         Insert: {
           access_type?: string
+          allowed_tag_ids?: string[] | null
+          blocked_tag_ids?: string[] | null
           created_at?: string
           currency?: string | null
           description?: string | null
@@ -986,6 +991,7 @@ export type Database = {
           is_public?: boolean
           is_published?: boolean
           name: string
+          passcode?: string | null
           price?: number | null
           public_url?: string | null
           published_at?: string | null
@@ -999,6 +1005,8 @@ export type Database = {
         }
         Update: {
           access_type?: string
+          allowed_tag_ids?: string[] | null
+          blocked_tag_ids?: string[] | null
           created_at?: string
           currency?: string | null
           description?: string | null
@@ -1007,6 +1015,7 @@ export type Database = {
           is_public?: boolean
           is_published?: boolean
           name?: string
+          passcode?: string | null
           price?: number | null
           public_url?: string | null
           published_at?: string | null
