@@ -335,12 +335,7 @@ const MemberSiteView = () => {
         <main className="flex-1 min-h-screen">
           {currentView === 'categories' && (
             <div className="p-6">
-              <div className="mb-8">
-                <h1 className="text-3xl font-bold mb-2 text-foreground">{site.name}</h1>
-                {site.description && (
-                  <p className="text-muted-foreground">{site.description}</p>
-                )}
-              </div>
+              
               
               <div className="grid grid-cols-2 gap-4 justify-center lg:grid-cols-5 lg:gap-6">
                 {paginatedCategories.map((category) => (
@@ -349,12 +344,12 @@ const MemberSiteView = () => {
                     className="cursor-pointer hover:shadow-lg transition-shadow overflow-hidden w-[280px] mx-auto flex flex-col"
                     onClick={() => navigateToContentList(category.id)}
                   >
-                    <div className="h-48 w-full bg-muted/40">
+                    <div className="h-48 w-full bg-muted/80">
                       {category.thumbnail_url ? (
                         <img
                           src={category.thumbnail_url}
                           alt={`${category.name}のサムネイル`}
-                          className="h-full w-full object-cover"
+                          className="h-full w-full object-contain"
                         />
                       ) : (
                         <div className="flex h-full w-full items-center justify-center text-xs text-muted-foreground">
