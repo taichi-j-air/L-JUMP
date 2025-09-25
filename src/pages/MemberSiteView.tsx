@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from "react";
 import { useParams, useSearchParams } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
@@ -54,10 +53,14 @@ const MemberSiteView = () => {
   // プログレスバーの色
   const progressBarColor = "hsl(var(--primary))";
 
-  // ヘッダーの色
+  // テーマ設定
   const headerColors = {
     background: themeConfig.headerBgColor || "hsl(var(--card))",
     foreground: themeConfig.headerFgColor || "hsl(var(--card-foreground))",
+  };
+  const sidebarColors = {
+    background: themeConfig.sidebarBgColor || "hsl(var(--card))",
+    foreground: themeConfig.sidebarFgColor || "hsl(var(--card-foreground))",
   };
 
   // ページ状態の管理
@@ -321,11 +324,17 @@ const MemberSiteView = () => {
 
       <div className="flex">
         {/* サイドメニュー */}
-        <aside className={`fixed md:static inset-y-0 left-0 z-30 w-64 bg-card border-r border-border transform transition-transform duration-300 ease-in-out ${
-          sideMenuOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'
-        }`}>
+        <aside
+          className={`fixed md:static inset-y-0 left-0 z-30 w-64 border-r border-border transform transition-transform duration-300 ease-in-out ${
+            sideMenuOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'
+          }`}
+          style={{
+            backgroundColor: sidebarColors.background,
+            color: sidebarColors.foreground,
+          }}
+        >
           <div className="p-4 border-b border-border">
-            <h2 className="font-semibold text-foreground">カテゴリ</h2>
+            <h2 className="font-semibold">カテゴリ</h2>
           </div>
           <nav className="p-2">
             {categories.map((category) => (
@@ -338,8 +347,9 @@ const MemberSiteView = () => {
                 className={`w-full text-left p-3 rounded-lg transition-colors ${
                   selectedCategoryId === category.id
                     ? 'bg-primary text-primary-foreground'
-                    : 'hover:bg-muted text-foreground'
-                }`}>
+                    : 'hover:bg-muted'
+                }`}
+              >
                 <div className="font-medium">{category.name}</div>
                 <div className="text-sm text-muted-foreground">
                   {category.content_count}件のコンテンツ

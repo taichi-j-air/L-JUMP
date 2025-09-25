@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { Button } from "@/components/ui/button";
@@ -78,6 +77,8 @@ const MemberSiteBuilder = () => {
   const [isPublic, setIsPublic] = useState(false);
   const [headerBgColor, setHeaderBgColor] = useState("#ffffff");
   const [headerFgColor, setHeaderFgColor] = useState("#000000");
+  const [sidebarBgColor, setSidebarBgColor] = useState("#ffffff");
+  const [sidebarFgColor, setSidebarFgColor] = useState("#000000");
 
   // Content editing
   const [selectedContentId, setSelectedContentId] = useState<string | null>(null);
@@ -111,6 +112,8 @@ const MemberSiteBuilder = () => {
       setIsPublic(false);
       setHeaderBgColor("#ffffff");
       setHeaderFgColor("#000000");
+      setSidebarBgColor("#ffffff");
+      setSidebarFgColor("#000000");
       setSelectedContentId(null);
       setContentTitle("");
       setContentText("");
@@ -141,6 +144,8 @@ const MemberSiteBuilder = () => {
       setIsPublic(false);
       setHeaderBgColor("#ffffff");
       setHeaderFgColor("#000000");
+      setSidebarBgColor("#ffffff");
+      setSidebarFgColor("#000000");
       setSiteContents([]);
       setSelectedContentId(null);
       setCategories([]);
@@ -186,6 +191,8 @@ const MemberSiteBuilder = () => {
       const theme = data.theme_config || {};
       setHeaderBgColor(theme.headerBgColor || "#ffffff");
       setHeaderFgColor(theme.headerFgColor || "#000000");
+      setSidebarBgColor(theme.sidebarBgColor || "#ffffff");
+      setSidebarFgColor(theme.sidebarFgColor || "#000000");
     } catch (error) {
       console.error("Error loading site:", error);
       toast({ title: "エラー", description: "サイト情報の読み込みに失敗しました", variant: "destructive" });
@@ -250,7 +257,7 @@ const MemberSiteBuilder = () => {
   const saveSite = async () => {
     setSaving(true);
     try {
-      const theme_config = { headerBgColor, headerFgColor };
+      const theme_config = { headerBgColor, headerFgColor, sidebarBgColor, sidebarFgColor };
       if (siteId && siteId !== "new") {
         const { error } = await supabase
           .from("member_sites")
@@ -1101,6 +1108,44 @@ const MemberSiteBuilder = () => {
                               type="text"
                               value={headerFgColor}
                               onChange={(e) => setHeaderFgColor(e.target.value)}
+                              placeholder="#000000"
+                            />
+                          </div>
+                        </div>
+                      </div>
+                      <div className="grid grid-cols-2 gap-4">
+                        <div className="space-y-2">
+                          <Label htmlFor="sidebar-bg-color">サイドバー背景色</Label>
+                          <div className="flex items-center gap-2">
+                            <Input
+                              id="sidebar-bg-color"
+                              type="color"
+                              value={sidebarBgColor}
+                              onChange={(e) => setSidebarBgColor(e.target.value)}
+                              className="p-1 h-10 w-14"
+                            />
+                            <Input
+                              type="text"
+                              value={sidebarBgColor}
+                              onChange={(e) => setSidebarBgColor(e.target.value)}
+                              placeholder="#FFFFFF"
+                            />
+                          </div>
+                        </div>
+                        <div className="space-y-2">
+                          <Label htmlFor="sidebar-fg-color">サイドバー文字色</Label>
+                          <div className="flex items-center gap-2">
+                            <Input
+                              id="sidebar-fg-color"
+                              type="color"
+                              value={sidebarFgColor}
+                              onChange={(e) => setSidebarFgColor(e.target.value)}
+                              className="p-1 h-10 w-14"
+                            />
+                            <Input
+                              type="text"
+                              value={sidebarFgColor}
+                              onChange={(e) => setSidebarFgColor(e.target.value)}
                               placeholder="#000000"
                             />
                           </div>
