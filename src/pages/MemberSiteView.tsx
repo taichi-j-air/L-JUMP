@@ -355,7 +355,7 @@ const MemberSiteView = () => {
                 {paginatedCategories.map((category) => (
                   <Card
                     key={category.id}
-                    className="cursor-pointer hover:shadow-lg transition-shadow overflow-hidden w-[280px] flex flex-col"
+                    className="cursor-pointer hover:shadow-lg transition-shadow overflow-hidden w-[280px] flex flex-col border border-gray-300 rounded"
                     onClick={() => navigateToContentList(category.id)}
                   >
                     <div className="aspect-[16/9] w-full bg-muted/80">
