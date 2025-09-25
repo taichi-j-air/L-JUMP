@@ -358,7 +358,7 @@ const MemberSiteView = () => {
                     className="cursor-pointer hover:shadow-lg transition-shadow overflow-hidden w-[280px] flex flex-col"
                     onClick={() => navigateToContentList(category.id)}
                   >
-                    <div className="h-48 w-full bg-muted/80">
+                    <div className="aspect-[16/9] w-full bg-muted/80">
                       {category.thumbnail_url ? (
                         <img
                           src={category.thumbnail_url}
@@ -373,17 +373,12 @@ const MemberSiteView = () => {
                     </div>
                     <CardContent className="flex flex-1 flex-col p-4">
                       <div className="space-y-2">
-                        <h3 className="text-base font-semibold text-foreground">
+                        <h3 className="text-base font-semibold text-foreground truncate">
                           {category.name}
                         </h3>
-                        {category.description && (
-                          <p className="text-sm text-muted-foreground leading-relaxed">
-                            {category.description}
-                          </p>
-                        )}
-                        <div className="pt-2 text-xs text-muted-foreground">
-                          コンテンツ数: {category.content_count}
-                        </div>
+                        <p className="text-xs text-muted-foreground leading-relaxed line-clamp-2 h-10">
+                          {category.description}
+                        </p>
                       </div>
 
                       <div className="mt-auto pt-4">
@@ -396,8 +391,9 @@ const MemberSiteView = () => {
                             }}
                           />
                         </div>
-                        <div className="mt-1 text-right text-xs text-muted-foreground">
-                          {`${categoryProgressMap.get(category.id) || 0}% : 完了`}
+                        <div className="mt-1 flex justify-between text-xs text-muted-foreground">
+                          <div>コンテンツ数: {category.content_count}</div>
+                          <div>{`${categoryProgressMap.get(category.id) || 0}% : 完了`}</div>
                         </div>
                       </div>
                     </CardContent>
