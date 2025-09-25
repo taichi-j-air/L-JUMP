@@ -15,9 +15,9 @@ Deno.serve(async (req) => {
     const slug = url.searchParams.get('slug');
     const uid = url.searchParams.get('uid');
 
-    if (!slug || !uid) {
+    if (!slug) {
       return new Response(
-        JSON.stringify({ error: 'Missing slug or UID parameter' }),
+        JSON.stringify({ error: 'Missing slug parameter' }),
         { 
           status: 400, 
           headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
@@ -28,7 +28,7 @@ Deno.serve(async (req) => {
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
     // Get member site with categories and content
-    const { data: site, error: siteError } = await supabase
+    let query = supabase
       .from('member_sites')
       .select(`
         *,
@@ -54,9 +54,14 @@ Deno.serve(async (req) => {
         )
       `)
       .eq('slug', slug)
-      .eq('site_uid', uid)
-      .eq('is_published', true)
-      .single();
+      .eq('is_published', true);
+
+    // Add UID verification if provided
+    if (uid) {
+      query = query.eq('site_uid', uid);
+    }
+
+    const { data: site, error: siteError } = await query.single();
 
     if (siteError || !site) {
       console.log('Site not found:', siteError);

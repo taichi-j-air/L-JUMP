@@ -79,51 +79,90 @@ const MemberSiteView = () => {
       if (!slug) return;
       
       try {
-        // サイト情報を取得
-        const { data: siteData, error: siteError } = await supabase
-          .from('member_sites')
-          .select('*')
-          .eq('slug', slug)
-          .eq('is_published', true)
-          .maybeSingle();
+        const isOwnerPreview = searchParams.get('preview') === 'true';
+        const uid = searchParams.get('uid');
+        
+        if (isOwnerPreview) {
+          // オーナープレビュー - 直接Supabaseアクセス
+          const { data: siteData, error: siteError } = await supabase
+            .from('member_sites')
+            .select('*')
+            .eq('slug', slug)
+            .maybeSingle();
 
-        if (siteError) throw siteError;
-        if (!siteData) throw new Error('サイトが見つかりません');
+          if (siteError) throw siteError;
+          if (!siteData) throw new Error('サイトが見つかりません');
 
-        setSite(siteData);
-        setThemeConfig(siteData.theme_config || {});
+          setSite(siteData);
+          setThemeConfig(siteData.theme_config || {});
 
-        // カテゴリ情報を取得
-        const { data: categoriesData, error: categoriesError } = await supabase
-          .from('member_site_categories')
-          .select('*')
-          .eq('site_id', siteData.id)
-          .order('sort_order', { ascending: true });
+          // カテゴリ情報を取得
+          const { data: categoriesData, error: categoriesError } = await supabase
+            .from('member_site_categories')
+            .select('*')
+            .eq('site_id', siteData.id)
+            .order('sort_order', { ascending: true });
 
-        if (categoriesError) throw categoriesError;
-        setCategories(categoriesData || []);
+          if (categoriesError) throw categoriesError;
+          setCategories(categoriesData || []);
 
-        // コンテンツ情報を取得
-        const { data: contentsData, error: contentsError } = await supabase
-          .from('member_site_content')
-          .select('*')
-          .eq('site_id', siteData.id)
-          .eq('is_published', true)
-          .order('sort_order', { ascending: true });
+          // コンテンツ情報を取得
+          const { data: contentsData, error: contentsError } = await supabase
+            .from('member_site_content')
+            .select('*')
+            .eq('site_id', siteData.id)
+            .eq('is_published', true)
+            .order('sort_order', { ascending: true });
 
-        if (contentsError) throw contentsError;
-        setContents(contentsData || []);
+          if (contentsError) throw contentsError;
+          setContents(contentsData || []);
+        } else {
+          // 一般アクセス - Edge Function経由またはRLS経由
+          const { data: siteData, error: siteError } = await supabase
+            .from('member_sites')
+            .select('*')
+            .eq('slug', slug)
+            .eq('is_published', true)
+            .maybeSingle();
 
-      } catch (error) {
-        console.error('Error loading site:', error);
-        setError(error instanceof Error ? error.message : 'サイトが見つかりません');
+          if (siteError) throw siteError;
+          if (!siteData) throw new Error('サイトが見つかりません');
+
+          setSite(siteData);
+          setThemeConfig(siteData.theme_config || {});
+
+          // カテゴリ情報を取得
+          const { data: categoriesData, error: categoriesError } = await supabase
+            .from('member_site_categories')
+            .select('*')
+            .eq('site_id', siteData.id)
+            .order('sort_order', { ascending: true });
+
+          if (categoriesError) throw categoriesError;
+          setCategories(categoriesData || []);
+
+          // コンテンツ情報を取得
+          const { data: contentsData, error: contentsError } = await supabase
+            .from('member_site_content')
+            .select('*')
+            .eq('site_id', siteData.id)
+            .eq('is_published', true)
+            .order('sort_order', { ascending: true });
+
+          if (contentsError) throw contentsError;
+          setContents(contentsData || []);
+        }
+
+      } catch (err) {
+        console.error('Error loading site:', err);
+        setError(err instanceof Error ? err.message : '読み込みエラーが発生しました');
       } finally {
         setLoading(false);
       }
     };
 
     loadSite();
-  }, [slug]);
+  }, [slug, searchParams]);
 
   useEffect(() => {
     if (typeof window === "undefined") {

@@ -8,7 +8,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { ArrowLeft, Save, Eye, Plus, Trash2, Settings, Image as ImageIcon } from "lucide-react";
+import { ArrowLeft, Save, Eye, Plus, Trash2, Settings, Image as ImageIcon, ExternalLink } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { Table, TableBody, TableCell, TableRow } from "@/components/ui/table";
@@ -204,7 +204,7 @@ const MemberSiteBuilder = () => {
       setAccessType((data.access_type as "free" | "paid") || "paid");
       setPrice(data.price);
       setIsPublished(data.is_published);
-      const theme = data.theme_config || {};
+      const theme = (data.theme_config as any) || {};
       setHeaderBgColor(theme.headerBgColor || "#ffffff");
       setHeaderFgColor(theme.headerFgColor || "#000000");
       setSidebarBgColor(theme.sidebarBgColor || "#ffffff");
@@ -650,10 +650,25 @@ const MemberSiteBuilder = () => {
                               className="h-6 w-6 p-0"
                               onClick={(e) => {
                                 e.stopPropagation();
-                                window.open(`/member-site/${s.slug}`, "_blank");
+                                window.open(`/member-site/${s.slug}?preview=true`, "_blank");
                               }}
+                              title="プレビュー (オーナー特権)"
                             >
                               <Eye className="h-3 w-3" />
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="h-6 w-6 p-0"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                const publicUrl = `https://rtjxurmuaawyzjcdkqxt.supabase.co/functions/v1/member-site-view?slug=${s.slug}&uid=${(s as any).site_uid}`;
+                                navigator.clipboard.writeText(publicUrl);
+                                toast({ title: "URLをコピーしました", description: "公開URLをクリップボードにコピーしました" });
+                              }}
+                              title="公開URLをコピー"
+                            >
+                              <ExternalLink className="h-3 w-3" />
                             </Button>
                             <Button
                               size="sm"
