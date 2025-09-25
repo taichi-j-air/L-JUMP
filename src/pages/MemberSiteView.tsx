@@ -505,8 +505,11 @@ const MemberSiteView = () => {
                   <Table className="border border-collapse bg-white">
                     <TableHeader>
                       <TableRow>
-                        <TableHead className="border w-5/6">タイトル</TableHead>
-                        <TableHead className="border text-center w-1/6">学習状況</TableHead>
+                        <TableHead className="border w-5/6">下の項目からコンテンツを選択してください</TableHead>
+                        <TableHead className="border text-center w-1/6 text-xs sm:text-sm">
+                          <span className="hidden sm:inline">学習状況</span>
+                          <span className="sm:hidden">学習<br />状況</span>
+                        </TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
@@ -514,7 +517,11 @@ const MemberSiteView = () => {
                         <TableRow key={content.id} className="cursor-pointer hover:bg-muted/50"
                           onClick={() => navigateToContentDetail(content.id)}
                         >
-                          <TableCell className="border font-medium w-5/6" style={{ color: 'rgb(43, 43, 43)' }}>{content.title}</TableCell>
+                          <TableCell className="border font-medium w-5/6">
+                            <div className="line-clamp-2 sm:line-clamp-none">
+                              {content.title}
+                            </div>
+                          </TableCell>
                           <TableCell className="border text-center w-1/6">
                             {content.progress_percentage === 100 ? (
                               <span className="font-bold" style={{ color: 'rgb(12, 179, 134)' }}>完了</span>
