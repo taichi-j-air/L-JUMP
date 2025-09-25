@@ -483,9 +483,9 @@ async function handleFollow(event: LineEvent, supabase: any, req: Request) {
               console.log('友達をシナリオに正常に登録しました')
               
               // Start step delivery process in background
-              EdgeRuntime.waitUntil(
-                startStepDelivery(supabase, registrationResult.scenario_id, registrationResult.friend_id)
-              )
+              // EdgeRuntime.waitUntil(
+              //   startStepDelivery(supabase, registrationResult.scenario_id, registrationResult.friend_id)
+              // )
             } else {
               console.error('シナリオ登録に失敗:', registrationResult?.error)
             }
@@ -1246,7 +1246,7 @@ async function downloadLineMedia(messageId: string, lineUserId: string, supabase
 
   } catch (error) {
     console.error('Error downloading LINE media:', error)
-    return { success: false, error: error.message }
+    return { success: false, error: (error as Error)?.message || 'Unknown error' }
   }
 }
 
@@ -1285,6 +1285,6 @@ async function getStickerImageUrl(packageId: string, stickerId: string) {
 
   } catch (error) {
     console.error('Error getting sticker URL:', error)
-    return { success: false, error: error.message }
+    return { success: false, error: (error as Error)?.message || 'Unknown error' }
   }
 }

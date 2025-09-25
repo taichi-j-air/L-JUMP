@@ -1,12 +1,10 @@
-
-import { useState, useEffect } from "react";
-import { useParams, useSearchParams } from "react-router-dom";
-import { supabase } from "@/integrations/supabase/client";
-import { Card, CardContent } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Progress } from "@/components/ui/progress";
-import { ChevronLeft, Menu, X } from "lucide-react";
-import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from "@/components/ui/table";
+import React, { useEffect, useState } from 'react';
+import { useParams, useSearchParams } from 'react-router-dom';
+import { supabase } from '@/integrations/supabase/client';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { LoadingSpinner } from '@/components/LoadingSpinner';
+import { ChevronLeft, Home, Menu, X, Users, FileText, Search } from 'lucide-react';
 
 interface MemberSite {
   id: string;
@@ -14,6 +12,9 @@ interface MemberSite {
   description?: string;
   is_published: boolean;
   theme_config?: any;
+  require_passcode?: boolean;
+  passcode?: string;
+  user_id: string;
 }
 
 interface MemberSiteCategory {
@@ -40,583 +41,548 @@ interface MemberSiteContent {
 const MemberSiteView = () => {
   const { slug } = useParams();
   const [searchParams, setSearchParams] = useSearchParams();
+  const uid = searchParams.get('uid');
+  const passcode = searchParams.get('passcode');
+
   const [site, setSite] = useState<MemberSite | null>(null);
   const [categories, setCategories] = useState<MemberSiteCategory[]>([]);
-  const [contents, setContents] = useState<MemberSiteContent[]>([]);
+  const [content, setContent] = useState<MemberSiteContent[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [selectedCategoryId, setSelectedCategoryId] = useState<string | null>(null);
-  const [selectedContentId, setSelectedContentId] = useState<string | null>(null);
   const [sideMenuOpen, setSideMenuOpen] = useState(false);
-  const [currentCategoryPage, setCurrentCategoryPage] = useState(1);
-  const [isDesktop, setIsDesktop] = useState<boolean>(() => (typeof window !== "undefined" ? window.innerWidth >= 1024 : true));
-  const [themeConfig, setThemeConfig] = useState<any>({});
-
-  // プログレスバーの色
-  const progressBarColor = "hsl(var(--primary))";
-
-  // テーマ設定
-  const headerColors = {
-    background: themeConfig.headerBgColor || "hsl(var(--card))",
-    foreground: themeConfig.headerFgColor || "hsl(var(--card-foreground))",
-  };
-  const sidebarColors = {
-    background: themeConfig.sidebarBgColor || "hsl(var(--card))",
-    foreground: themeConfig.sidebarFgColor || "hsl(var(--card-foreground))",
-    hoverBackground: themeConfig.sidebarHoverBgColor || "hsl(var(--muted))",
-    hoverForeground: themeConfig.sidebarHoverFgColor || "hsl(var(--card-foreground))",
-    activeBackground: themeConfig.sidebarActiveBgColor || "hsl(var(--primary))",
-    activeForeground: themeConfig.sidebarActiveFgColor || "hsl(var(--primary-foreground))",
-  };
-
-  // ページ状態の管理
-  const currentView = searchParams.get('view') || 'categories'; // categories, content-list, content-detail
-  const categoryId = searchParams.get('category');
-  const contentId = searchParams.get('content');
+  const [currentView, setCurrentView] = useState<'categories' | 'content' | 'detail'>('categories');
+  const [selectedCategory, setSelectedCategory] = useState<MemberSiteCategory | null>(null);
+  const [selectedContent, setSelectedContent] = useState<MemberSiteContent | null>(null);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [currentPage, setCurrentPage] = useState(1);
+  const [isOwnerPreview, setIsOwnerPreview] = useState(false);
+  const [requirePasscode, setRequirePasscode] = useState(false);
+  const [passcodeInput, setPasscodeInput] = useState('');
 
   useEffect(() => {
-    const loadSite = async () => {
-      if (!slug) return;
-      
+    const fetchData = async () => {
       try {
-        const isOwnerPreview = searchParams.get('preview') === 'true';
-        const uid = searchParams.get('uid');
-        
-        if (isOwnerPreview) {
-          // オーナープレビュー - 直接Supabaseアクセス
-          const { data: siteData, error: siteError } = await supabase
+        const isPreview = searchParams.get('preview') === 'true';
+        setIsOwnerPreview(isPreview);
+
+        if (isPreview) {
+          // Owner preview mode - fetch from Supabase directly
+          const { data: siteResult, error: siteError } = await supabase
             .from('member_sites')
             .select('*')
             .eq('slug', slug)
-            .maybeSingle();
+            .single();
 
           if (siteError) throw siteError;
-          if (!siteData) throw new Error('サイトが見つかりません');
 
-          setSite(siteData);
-          setThemeConfig(siteData.theme_config || {});
-
-          // カテゴリ情報を取得
-          const { data: categoriesData, error: categoriesError } = await supabase
+          const { data: categoriesResult, error: categoriesError } = await supabase
             .from('member_site_categories')
             .select('*')
-            .eq('site_id', siteData.id)
-            .order('sort_order', { ascending: true });
+            .eq('site_id', siteResult.id)
+            .order('sort_order');
 
           if (categoriesError) throw categoriesError;
-          setCategories(categoriesData || []);
 
-          // コンテンツ情報を取得
-          const { data: contentsData, error: contentsError } = await supabase
+          const { data: contentResult, error: contentError } = await supabase
             .from('member_site_content')
             .select('*')
-            .eq('site_id', siteData.id)
-            .eq('is_published', true)
-            .order('sort_order', { ascending: true });
+            .eq('site_id', siteResult.id)
+            .order('created_at', { ascending: false });
 
-          if (contentsError) throw contentsError;
-          setContents(contentsData || []);
+          if (contentError) throw contentError;
+
+          setSite(siteResult);
+          setCategories(categoriesResult || []);
+          setContent(contentResult || []);
         } else {
-          // 一般アクセス - Edge Function経由またはRLS経由
-          const { data: siteData, error: siteError } = await supabase
-            .from('member_sites')
-            .select('*')
-            .eq('slug', slug)
-            .eq('is_published', true)
-            .maybeSingle();
+          // Public access mode - use edge function
+          const params = new URLSearchParams({ slug });
+          if (uid) params.append('uid', uid);
+          if (passcode || passcodeInput) params.append('passcode', passcode || passcodeInput);
 
-          if (siteError) throw siteError;
-          if (!siteData) throw new Error('サイトが見つかりません');
+          const response = await fetch(
+            `https://rtjxurmuaawyzjcdkqxt.supabase.co/functions/v1/member-site-view?${params}`,
+            {
+              method: 'GET',
+              headers: {
+                'Content-Type': 'application/json',
+              },
+            }
+          );
 
-          setSite(siteData);
-          setThemeConfig(siteData.theme_config || {});
+          const result = await response.json();
+          
+          if (!result.success) {
+            if (result.requirePasscode) {
+              setRequirePasscode(true);
+              setLoading(false);
+              return;
+            }
+            throw new Error(result.error || 'Failed to load site');
+          }
 
-          // カテゴリ情報を取得
-          const { data: categoriesData, error: categoriesError } = await supabase
-            .from('member_site_categories')
-            .select('*')
-            .eq('site_id', siteData.id)
-            .order('sort_order', { ascending: true });
-
-          if (categoriesError) throw categoriesError;
-          setCategories(categoriesData || []);
-
-          // コンテンツ情報を取得
-          const { data: contentsData, error: contentsError } = await supabase
-            .from('member_site_content')
-            .select('*')
-            .eq('site_id', siteData.id)
-            .eq('is_published', true)
-            .order('sort_order', { ascending: true });
-
-          if (contentsError) throw contentsError;
-          setContents(contentsData || []);
+          setSite(result.site);
+          setCategories(result.categories || []);
+          setContent(result.content || []);
         }
 
+        // Handle view from URL params
+        const viewParam = searchParams.get('view');
+        const categoryIdParam = searchParams.get('categoryId');
+        const contentIdParam = searchParams.get('contentId');
+
+        if (contentIdParam) {
+          const contentItem = content.find((c: MemberSiteContent) => c.id === contentIdParam);
+          if (contentItem) {
+            setSelectedContent(contentItem);
+            setCurrentView('detail');
+          }
+        } else if (categoryIdParam) {
+          const category = categories.find((c: MemberSiteCategory) => c.id === categoryIdParam);
+          if (category) {
+            setSelectedCategory(category);
+            setCurrentView('content');
+          }
+        } else if (viewParam === 'categories') {
+          setCurrentView('categories');
+        }
+
+        setRequirePasscode(false);
       } catch (err) {
-        console.error('Error loading site:', err);
-        setError(err instanceof Error ? err.message : '読み込みエラーが発生しました');
+        console.error('Error fetching member site data:', err);
+        setError(err instanceof Error ? err.message : 'An error occurred');
       } finally {
         setLoading(false);
       }
     };
 
-    loadSite();
-  }, [slug, searchParams]);
-
-  useEffect(() => {
-    if (typeof window === "undefined") {
-      return;
+    if (slug) {
+      fetchData();
     }
+  }, [slug, uid, passcode, passcodeInput, searchParams]);
 
-    const handleResize = () => {
-      setIsDesktop(window.innerWidth >= 1024);
-    };
-
-    handleResize();
-    window.addEventListener("resize", handleResize);
-    return () => window.removeEventListener("resize", handleResize);
-  }, []);
-
-  const categoriesPerRow = isDesktop ? 5 : 2;
-  const rowsPerPage = isDesktop ? 2 : 4;
-  const categoriesPerPage = categoriesPerRow * rowsPerPage;
-
-  useEffect(() => {
-    setCurrentCategoryPage((prev) => {
-      const maxPage = Math.max(1, Math.ceil(categories.length / categoriesPerPage));
-      return Math.min(prev, maxPage);
-    });
-  }, [categories.length, categoriesPerPage]);
-
-  const totalCategoryPages = Math.max(1, Math.ceil(categories.length / categoriesPerPage));
-  const paginatedCategories = categories.slice(
-    (currentCategoryPage - 1) * categoriesPerPage,
-    currentCategoryPage * categoriesPerPage
-  );
-
-  const goToPreviousCategoryPage = () => {
-    setCurrentCategoryPage((prev) => Math.max(1, prev - 1));
-  };
-
-  const goToNextCategoryPage = () => {
-    setCurrentCategoryPage((prev) => Math.min(totalCategoryPages, prev + 1));
-  };
-
-  // ナビゲーション関数
   const navigateToCategories = () => {
-    setSearchParams({});
-    setSelectedCategoryId(null);
-    setSelectedContentId(null);
-    setCurrentCategoryPage(1);
+    setCurrentView('categories');
+    setSelectedCategory(null);
+    setSelectedContent(null);
+    setSearchParams(prev => {
+      const newParams = new URLSearchParams(prev);
+      newParams.set('view', 'categories');
+      newParams.delete('categoryId');
+      newParams.delete('contentId');
+      return newParams;
+    });
   };
 
-  const navigateToContentList = (categoryId: string) => {
-    setSearchParams({ view: 'content-list', category: categoryId });
-    setSelectedCategoryId(categoryId);
-    setSelectedContentId(null);
+  const navigateToContentList = (category: MemberSiteCategory) => {
+    setCurrentView('content');
+    setSelectedCategory(category);
+    setSelectedContent(null);
+    setSearchParams(prev => {
+      const newParams = new URLSearchParams(prev);
+      newParams.set('view', 'content');
+      newParams.set('categoryId', category.id);
+      newParams.delete('contentId');
+      return newParams;
+    });
   };
 
-  const navigateToContentDetail = (contentId: string) => {
-    const content = contents.find(c => c.id === contentId);
-    const params: any = { view: 'content-detail', content: contentId };
-    if (content?.category_id) {
-      params.category = content.category_id;
-    }
-    setSearchParams(params);
-    setSelectedContentId(contentId);
-  };
-
-  // コンテンツブロックのレンダリング
-  const renderContentBlocks = (blocks: any) => {
-    if (!blocks) return null;
-    
-    // JSON文字列の場合はパース
-    let blocksArray = blocks;
-    if (typeof blocks === 'string') {
-      try {
-        blocksArray = JSON.parse(blocks);
-      } catch (e) {
-        return null;
+  const navigateToContentDetail = (contentItem: MemberSiteContent) => {
+    setCurrentView('detail');
+    setSelectedContent(contentItem);
+    setSearchParams(prev => {
+      const newParams = new URLSearchParams(prev);
+      newParams.set('view', 'detail');
+      newParams.set('contentId', contentItem.id);
+      if (contentItem.category_id) {
+        newParams.set('categoryId', contentItem.category_id);
       }
-    }
-    
-    if (!Array.isArray(blocksArray)) return null;
+      return newParams;
+    });
+  };
 
-    return blocksArray.map((block: any, index: number) => {
+  const renderContentBlocks = (blocks: any[]) => {
+    if (!blocks || !Array.isArray(blocks)) return null;
+
+    return blocks.map((block, index) => {
       switch (block.type) {
         case 'heading':
           const HeadingTag = `h${block.level || 2}` as keyof JSX.IntrinsicElements;
           return (
-            <HeadingTag key={index} className="text-2xl font-bold mb-4 text-foreground">
+            <HeadingTag 
+              key={index} 
+              className={`font-bold mb-4 ${
+                block.level === 1 ? 'text-3xl' :
+                block.level === 3 ? 'text-lg' : 'text-xl'
+              }`}
+            >
               {block.content}
             </HeadingTag>
           );
         case 'paragraph':
           return (
-            <p key={index} className="mb-4 text-foreground leading-relaxed">
+            <p key={index} className="mb-4 leading-relaxed">
               {block.content}
             </p>
           );
         case 'image':
           return (
-            <img
-              key={index}
-              src={block.src}
-              alt={block.alt || ''}
-              className="w-full max-w-2xl mx-auto rounded-lg mb-6"
-            />
+            <div key={index} className="mb-4">
+              <img 
+                src={block.url} 
+                alt={block.alt || '画像'} 
+                className="max-w-full h-auto rounded-lg"
+              />
+              {block.caption && (
+                <p className="text-sm text-muted-foreground mt-2">{block.caption}</p>
+              )}
+            </div>
           );
         case 'video':
           return (
-            <video
-              key={index}
-              controls
-              className="w-full max-w-2xl mx-auto rounded-lg mb-6"
-            >
-              <source src={block.src} type="video/mp4" />
-            </video>
-          );
-        default:
-          return (
-            <div key={index} className="mb-4 text-foreground">
-              {block.content}
+            <div key={index} className="mb-4">
+              <video 
+                controls 
+                className="max-w-full h-auto rounded-lg"
+                src={block.url}
+              >
+                お使いのブラウザは動画再生に対応していません。
+              </video>
+              {block.caption && (
+                <p className="text-sm text-muted-foreground mt-2">{block.caption}</p>
+              )}
             </div>
           );
+        default:
+          return null;
       }
     });
   };
 
+  const handlePasscodeSubmit = () => {
+    setPasscodeInput(passcodeInput);
+    // Trigger re-fetch with passcode
+    window.location.reload();
+  };
+
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-background">
-        <div className="text-foreground">読み込み中...</div>
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <LoadingSpinner />
       </div>
     );
   }
 
-  if (error || !site) {
+  if (requirePasscode) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-background">
-        <Card>
-          <CardContent className="p-8 text-center">
-            <h1 className="text-2xl font-bold mb-4">404 - ページが見つかりません</h1>
-            <p className="text-muted-foreground">{error}</p>
-          </CardContent>
-        </Card>
-      </div>
-    );
-  }
-
-  const selectedCategory = categories.find(c => c.id === categoryId);
-  const categoryContents = contents.filter(c => c.category_id === categoryId);
-  const selectedContent = contents.find(c => c.id === contentId);
-
-  // カテゴリごとの進捗率を計算
-  const categoryProgressMap = new Map<string, number>();
-  categories.forEach(category => {
-    const contentsInCategory = contents.filter(c => c.category_id === category.id);
-    if (contentsInCategory.length > 0) {
-      const totalProgress = contentsInCategory.reduce((acc, content) => acc + (content.progress_percentage || 0), 0);
-      categoryProgressMap.set(category.id, Math.round(totalProgress / contentsInCategory.length));
-    } else {
-      categoryProgressMap.set(category.id, 0);
-    }
-  });
-
-  return (
-    <>
-      <style>
-        {`
-          .sidebar-button:hover {
-            background-color: ${sidebarColors.hoverBackground};
-            color: ${sidebarColors.hoverForeground};
-          }
-          .sidebar-button:hover .text-muted-foreground {
-            color: ${sidebarColors.hoverForeground};
-            opacity: 0.8;
-          }
-          .sidebar-active {
-            background-color: ${sidebarColors.activeBackground};
-            color: ${sidebarColors.activeForeground};
-          }
-          .sidebar-active .text-muted-foreground {
-            color: ${sidebarColors.activeForeground};
-            opacity: 0.8;
-          }
-
-          @media (max-width: 639px) {
-            .learning-status-head {
-              font-size: clamp(0.75rem, 2vw, 1rem);
-            }
-          }
-        `}
-      </style>
-      <div className="min-h-screen bg-slate-100">
-        {/* ヘッダー */}
-        <header
-          className="border-b border-border sticky top-0 z-40"
-          style={{
-            backgroundColor: headerColors.background,
-            color: headerColors.foreground,
-          }}
-        >
-          <div className="flex items-center justify-between px-4 py-4">
-            <h1 className="text-lg font-semibold">{site.name}</h1>
-            
-            <div className="flex items-center gap-2">
-              {currentView !== 'categories' && (
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => {
-                    if (currentView === 'content-detail' && categoryId) {
-                      navigateToContentList(categoryId);
-                    } else {
-                      navigateToCategories();
-                    }
-                  }}
-                  className="flex items-center gap-1"
-                >
-                  <ChevronLeft className="h-4 w-4" />
-                  戻る
-                </Button>
-              )}
-              <Button
-                variant="ghost"
-                size="sm"
-                className="md:hidden"
-                onClick={() => setSideMenuOpen(!sideMenuOpen)}
+      <div className="min-h-screen bg-background flex items-center justify-center p-4">
+        <div className="max-w-md w-full">
+          <div className="bg-card rounded-lg p-6 shadow-lg">
+            <h1 className="text-2xl font-bold mb-4 text-center">パスコード入力</h1>
+            <p className="text-muted-foreground mb-6 text-center">
+              このサイトにアクセスするにはパスコードが必要です。
+            </p>
+            <div className="space-y-4">
+              <Input
+                type="password"
+                placeholder="パスコードを入力"
+                value={passcodeInput}
+                onChange={(e) => setPasscodeInput(e.target.value)}
+                onKeyPress={(e) => e.key === 'Enter' && handlePasscodeSubmit()}
+              />
+              <Button 
+                onClick={handlePasscodeSubmit}
+                className="w-full"
+                disabled={!passcodeInput.trim()}
               >
-                {sideMenuOpen ? <X className="h-4 w-4" /> : <Menu className="h-4 w-4" />}
+                アクセス
               </Button>
             </div>
           </div>
-        </header>
-
-        <div className="flex">
-          {/* サイドメニュー */}
-          <aside
-            className={`fixed md:static inset-y-0 left-0 z-30 w-64 border-r border-border transform transition-transform duration-300 ease-in-out ${
-              sideMenuOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'
-            }`}
-            style={{
-              backgroundColor: sidebarColors.background,
-              color: sidebarColors.foreground,
-            }}
-          >
-            <button
-              onClick={() => {
-                navigateToCategories();
-                setSideMenuOpen(false);
-              }}
-              className={`sidebar-button w-full text-left px-4 py-3 transition-colors ${
-                currentView === 'categories' ? 'sidebar-active' : ''
-              }`}
-            >
-              <div className="font-medium">TOP</div>
-            </button>
-            <div className="p-4 border-t border-border">
-              <h2 className="font-semibold">カテゴリ</h2>
-            </div>
-            <nav>
-              {categories.map((category) => (
-                <button
-                  key={category.id}
-                  onClick={() => {
-                    navigateToContentList(category.id);
-                    setSideMenuOpen(false);
-                  }}
-                  className={`sidebar-button w-full text-left px-4 py-3 transition-colors ${
-                    categoryId === category.id ? 'sidebar-active' : ''
-                  }`}
-                >
-                  <div className="font-medium">{category.name}</div>
-                  {themeConfig.showContentCount !== false && (
-                    <div className="text-sm text-muted-foreground">
-                      {category.content_count}件のコンテンツ
-                    </div>
-                  )}
-                </button>
-              ))}
-            </nav>
-          </aside>
-
-          {/* オーバーレイ（モバイル用） */}
-          {sideMenuOpen && (
-            <div
-              className="fixed inset-0 bg-black/50 z-20 md:hidden"
-              onClick={() => setSideMenuOpen(false)}
-            />
-          )}
-
-          {/* メインコンテンツ */}
-          <main className="flex-1 min-h-screen">
-            {currentView === 'categories' && (
-              <div className="px-3 py-6">
-                
-                <div className="grid grid-cols-2 gap-3 justify-center lg:grid-cols-5 lg:gap-y-6 lg:gap-x-2">
-                  {paginatedCategories.map((category) => (
-                    <Card
-                      key={category.id}
-                      className="cursor-pointer hover:shadow-lg transition-shadow overflow-hidden w-full flex flex-col border border-gray-300 rounded"
-                      onClick={() => navigateToContentList(category.id)}
-                    >
-                      <div className="aspect-[16/9] w-full bg-gray-200">
-                        {category.thumbnail_url ? (
-                          <img
-                            src={category.thumbnail_url}
-                            alt={`${category.name}のサムネイル`}
-                            className="h-full w-full object-contain"
-                          />
-                        ) : (
-                          <div className="flex h-full w-full items-center justify-center text-xs text-muted-foreground">
-                            サムネイルが設定されていません
-                          </div>
-                        )}
-                      </div>
-                      <CardContent className="flex flex-1 flex-col p-4">
-                        <div className="space-y-2">
-                          <h3 className="text-base font-semibold text-foreground truncate">
-                            {category.name}
-                          </h3>
-                          <p className="text-xs text-muted-foreground leading-relaxed line-clamp-2 h-10">
-                            {category.description}
-                          </p>
-                        </div>
-
-                        <div className="mt-auto pt-4">
-                          <div className="h-3 w-full rounded-full bg-gray-200">
-                            <div
-                              className="h-full rounded-full transition-all"
-                              style={{
-                                width: `${categoryProgressMap.get(category.id) || 0}%`,
-                                backgroundColor: progressBarColor,
-                              }}
-                            />
-                          </div>
-                          <div className="mt-1 flex justify-between text-xs text-muted-foreground">
-                            <div className="max-[499px]:hidden">コンテンツ数: {category.content_count}</div>
-                            <div>{`${categoryProgressMap.get(category.id) || 0}% : 完了`}</div>
-                          </div>
-                        </div>
-                      </CardContent>
-                    </Card>
-                  ))}
-                </div>
-                {totalCategoryPages > 1 && (
-                  <div className="mt-6 flex items-center justify-center gap-4">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={goToPreviousCategoryPage}
-                      disabled={currentCategoryPage === 1}
-                    >
-                      前へ
-                    </Button>
-                    <span className="text-sm text-muted-foreground">
-                      {currentCategoryPage} / {totalCategoryPages}
-                    </span>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={goToNextCategoryPage}
-                      disabled={currentCategoryPage === totalCategoryPages}
-                    >
-                      次へ
-                    </Button>
-                  </div>
-                )}
-              </div>
-            )}
-
-            {currentView === 'content-list' && selectedCategory && (
-              <div className="px-3 py-6">
-                <div className="mb-8">
-                  <h1 className="text-3xl font-bold mb-2 text-foreground">
-                    {selectedCategory.name}
-                  </h1>
-                  {selectedCategory.description && (
-                    <p className="text-sm text-muted-foreground">
-                      {selectedCategory.description}
-                    </p>
-                  )}
-                  <div className="mt-2 text-sm text-muted-foreground">
-                    コンテンツ数: {selectedCategory.content_count}
-                  </div>
-                </div>
-
-                <div className="max-w-4xl">
-                  <Table className="border border-collapse bg-white">
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead className="border w-5/6 learning-status-head">下の項目からコンテンツを選択してください</TableHead>
-                        <TableHead className="border text-center w-1/6 learning-status-head">
-                          <span className="inline-block sm:hidden" style={{ whiteSpace: 'nowrap' }}>学習<br />状況</span>
-                          <span className="hidden sm:inline-block">学習状況</span>
-                        </TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {categoryContents.map((content) => (
-                        <TableRow key={content.id} className="cursor-pointer hover:bg-muted/50"
-                          onClick={() => navigateToContentDetail(content.id)}
-                        >
-                          <TableCell className="border font-medium w-5/6">
-                            <div className="line-clamp-2 sm:line-clamp-none">
-                              {content.title}
-                            </div>
-                          </TableCell>
-                          <TableCell className="border text-center w-1/6">
-                            {content.progress_percentage === 100 ? (
-                              <span className="font-bold" style={{ color: 'rgb(12, 179, 134)', whiteSpace: 'nowrap' }}>完了</span>
-                            ) : (
-                              <span className="font-bold" style={{ color: '#EF4444', whiteSpace: 'nowrap' }}>未完了</span>
-                            )}
-                          </TableCell>
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
-                </div>
-
-                {categoryContents.length === 0 && (
-                  <div className="text-center py-12">
-                    <p className="text-muted-foreground">
-                      このカテゴリにはまだコンテンツがありません。
-                    </p>
-                  </div>
-                )}
-              </div>
-            )}
-
-            {currentView === 'content-detail' && selectedContent && (
-              <div className="px-3 py-6">
-                <article className="max-w-4xl mx-auto">
-                  <header className="mb-8">
-                    <h1 className="text-4xl font-bold mb-4 text-foreground">
-                      {selectedContent.title}
-                    </h1>
-                  </header>
-
-                  <div className="prose prose-lg max-w-none">
-                    {selectedContent.content_blocks && selectedContent.content_blocks.length > 0 ? (
-                      renderContentBlocks(selectedContent.content_blocks)
-                    ) : selectedContent.content ? (
-                      <div className="text-foreground leading-relaxed">
-                        {selectedContent.content}
-                      </div>
-                    ) : (
-                      <p className="text-muted-foreground">コンテンツが準備中です。</p>
-                    )}
-                  </div>
-                </article>
-              </div>
-            )}
-          </main>
         </div>
       </div>
-    </>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center p-4">
+        <div className="text-center">
+          <h1 className="text-2xl font-bold mb-4">エラーが発生しました</h1>
+          <p className="text-muted-foreground mb-6">{error}</p>
+          <Button onClick={() => window.location.reload()}>
+            再読み込み
+          </Button>
+        </div>
+      </div>
+    );
+  }
+
+  if (!site) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center p-4">
+        <div className="text-center">
+          <h1 className="text-2xl font-bold mb-4">サイトが見つかりません</h1>
+          <p className="text-muted-foreground">指定されたサイトは存在しないか、公開されていません。</p>
+        </div>
+      </div>
+    );
+  }
+
+  const filteredContent = content.filter(c => 
+    !selectedCategory || c.category_id === selectedCategory.id
+  ).filter(c => 
+    !searchQuery || c.title.toLowerCase().includes(searchQuery.toLowerCase())
+  );
+
+  const itemsPerPage = 6;
+  const totalPages = Math.ceil(filteredContent.length / itemsPerPage);
+  const startIndex = (currentPage - 1) * itemsPerPage;
+  const paginatedContent = filteredContent.slice(startIndex, startIndex + itemsPerPage);
+
+  const themeConfig = site.theme_config || {};
+  const headerStyle = themeConfig.header_color ? { backgroundColor: themeConfig.header_color } : {};
+  const sidebarStyle = themeConfig.sidebar_color ? { backgroundColor: themeConfig.sidebar_color } : {};
+
+  return (
+    <div className="min-h-screen bg-background">
+      {/* Header */}
+      <header 
+        className="bg-primary text-primary-foreground p-4 flex items-center justify-between relative z-50"
+        style={headerStyle}
+      >
+        <div className="flex items-center gap-4">
+          {currentView !== 'categories' && (
+            <Button 
+              variant="ghost" 
+              size="sm"
+              onClick={() => {
+                if (currentView === 'detail') {
+                  if (selectedContent?.category_id) {
+                    const category = categories.find(c => c.id === selectedContent.category_id);
+                    if (category) {
+                      navigateToContentList(category);
+                    } else {
+                      navigateToCategories();
+                    }
+                  } else {
+                    navigateToCategories();
+                  }
+                } else {
+                  navigateToCategories();
+                }
+              }}
+              className="text-primary-foreground hover:bg-primary-foreground/20"
+            >
+              <ChevronLeft className="w-4 h-4" />
+            </Button>
+          )}
+          
+          <Button 
+            variant="ghost" 
+            size="sm"
+            onClick={navigateToCategories}
+            className="text-primary-foreground hover:bg-primary-foreground/20"
+          >
+            <Home className="w-4 h-4" />
+          </Button>
+          
+          <h1 className="text-lg font-semibold truncate">{site.name}</h1>
+        </div>
+        
+        <Button 
+          variant="ghost" 
+          size="sm"
+          onClick={() => setSideMenuOpen(!sideMenuOpen)}
+          className="text-primary-foreground hover:bg-primary-foreground/20"
+        >
+          <Menu className="w-4 h-4" />
+        </Button>
+      </header>
+
+      {/* Side Menu */}
+      {sideMenuOpen && (
+        <div className="fixed inset-0 z-40">
+          <div className="absolute inset-0 bg-black/50" onClick={() => setSideMenuOpen(false)} />
+          <div 
+            className="absolute right-0 top-0 h-full w-80 bg-card shadow-lg"
+            style={sidebarStyle}
+          >
+            <div className="p-4 border-b flex items-center justify-between">
+              <h2 className="font-semibold">メニュー</h2>
+              <Button 
+                variant="ghost" 
+                size="sm"
+                onClick={() => setSideMenuOpen(false)}
+              >
+                <X className="w-4 h-4" />
+              </Button>
+            </div>
+            
+            <div className="p-4 space-y-2">
+              <Button
+                variant="ghost"
+                className="w-full justify-start"
+                onClick={() => {
+                  navigateToCategories();
+                  setSideMenuOpen(false);
+                }}
+              >
+                <Home className="w-4 h-4 mr-2" />
+                ホーム
+              </Button>
+              
+              {categories.map(category => (
+                <Button
+                  key={category.id}
+                  variant="ghost"
+                  className="w-full justify-start"
+                  onClick={() => {
+                    navigateToContentList(category);
+                    setSideMenuOpen(false);
+                  }}
+                >
+                  <Users className="w-4 h-4 mr-2" />
+                  {category.name}
+                </Button>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Main Content */}
+      <main className="container mx-auto p-4">
+        {currentView === 'categories' && (
+          <div>
+            <div className="mb-6">
+              <h2 className="text-2xl font-bold mb-2">カテゴリ一覧</h2>
+              {site.description && (
+                <p className="text-muted-foreground">{site.description}</p>
+              )}
+            </div>
+            
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {categories.map(category => (
+                <div
+                  key={category.id}
+                  className="bg-card rounded-lg p-6 shadow-sm hover:shadow-md transition-shadow cursor-pointer"
+                  onClick={() => navigateToContentList(category)}
+                >
+                  {category.thumbnail_url && (
+                    <img 
+                      src={category.thumbnail_url} 
+                      alt={category.name}
+                      className="w-full h-48 object-cover rounded-lg mb-4"
+                    />
+                  )}
+                  <h3 className="text-xl font-semibold mb-2">{category.name}</h3>
+                  {category.description && (
+                    <p className="text-muted-foreground mb-4">{category.description}</p>
+                  )}
+                  <div className="flex items-center text-sm text-muted-foreground">
+                    <FileText className="w-4 h-4 mr-1" />
+                    {category.content_count} 件のコンテンツ
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {currentView === 'content' && selectedCategory && (
+          <div>
+            <div className="mb-6">
+              <h2 className="text-2xl font-bold mb-2">{selectedCategory.name}</h2>
+              {selectedCategory.description && (
+                <p className="text-muted-foreground">{selectedCategory.description}</p>
+              )}
+            </div>
+            
+            {/* Search */}
+            <div className="mb-6">
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground w-4 h-4" />
+                <Input
+                  placeholder="コンテンツを検索..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="pl-10"
+                />
+              </div>
+            </div>
+            
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {paginatedContent.map(contentItem => (
+                <div
+                  key={contentItem.id}
+                  className="bg-card rounded-lg p-6 shadow-sm hover:shadow-md transition-shadow cursor-pointer"
+                  onClick={() => navigateToContentDetail(contentItem)}
+                >
+                  <h3 className="text-xl font-semibold mb-2">{contentItem.title}</h3>
+                  {contentItem.progress_percentage !== null && (
+                    <div className="mb-4">
+                      <div className="flex justify-between text-sm mb-1">
+                        <span>進捗</span>
+                        <span>{contentItem.progress_percentage}%</span>
+                      </div>
+                      <div className="w-full bg-secondary rounded-full h-2">
+                        <div 
+                          className="bg-primary h-2 rounded-full transition-all duration-300"
+                          style={{ width: `${contentItem.progress_percentage}%` }}
+                        />
+                      </div>
+                    </div>
+                  )}
+                  <div className="text-sm text-muted-foreground">
+                    タイプ: {contentItem.page_type}
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            {/* Pagination */}
+            {totalPages > 1 && (
+              <div className="flex justify-center mt-8 gap-2">
+                {Array.from({ length: totalPages }, (_, i) => i + 1).map(page => (
+                  <Button
+                    key={page}
+                    variant={currentPage === page ? "default" : "outline"}
+                    size="sm"
+                    onClick={() => setCurrentPage(page)}
+                  >
+                    {page}
+                  </Button>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
+        {currentView === 'detail' && selectedContent && (
+          <div>
+            <div className="mb-6">
+              <h1 className="text-3xl font-bold mb-4">{selectedContent.title}</h1>
+            </div>
+            
+            <div className="bg-card rounded-lg p-6">
+              {selectedContent.content_blocks ? (
+                <div className="prose max-w-none">
+                  {renderContentBlocks(selectedContent.content_blocks)}
+                </div>
+              ) : selectedContent.content ? (
+                <div 
+                  className="prose max-w-none"
+                  dangerouslySetInnerHTML={{ __html: selectedContent.content }}
+                />
+              ) : (
+                <p className="text-muted-foreground">コンテンツがありません。</p>
+              )}
+            </div>
+          </div>
+        )}
+      </main>
+    </div>
   );
 };
 

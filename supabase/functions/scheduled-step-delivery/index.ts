@@ -128,7 +128,7 @@ Deno.serve(async (req) => {
     // Schedule next check if we processed the maximum, or if a waiting step is due soon
     if (stepsToDeliver && stepsToDeliver.length === 100) {
       console.log('🔄 Scheduling next check due to max steps processed')
-      EdgeRuntime.waitUntil(scheduleNextCheck(supabase, 2))
+      // EdgeRuntime.waitUntil(scheduleNextCheck(supabase, 2))
     } else {
       // Check for any waiting steps due within the next 60 seconds
       let upcomingQuery = supabase
@@ -148,7 +148,7 @@ Deno.serve(async (req) => {
         if (dueAt.getTime() > nowDate.getTime()) {
           const delay = Math.max(1, Math.min(55, Math.ceil((dueAt.getTime() - Date.now()) / 1000) + 1))
           console.log(`⏭️ Scheduling next check in ${delay}s for upcoming delivery at ${dueAt.toISOString()}`)
-          EdgeRuntime.waitUntil(scheduleNextCheck(supabase, delay))
+          // EdgeRuntime.waitUntil(scheduleNextCheck(supabase, delay))
         } else {
           console.log(`⏹️ Upcoming delivery time is in the past (${dueAt.toISOString()}), not self-triggering`)
         }
@@ -173,7 +173,7 @@ Deno.serve(async (req) => {
   } catch (error) {
     console.error('💥 Scheduled delivery error:', error)
     return new Response(
-      JSON.stringify({ error: 'Internal server error', details: error.message }),
+      JSON.stringify({ error: 'Internal server error', details: (error as Error)?.message || 'Unknown error' }),
       { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     )
   }

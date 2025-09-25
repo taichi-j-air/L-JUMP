@@ -136,7 +136,7 @@ serve(async (req) => {
 
   } catch (error) {
     console.error('Function error:', error)
-    return new Response(`Internal server error: ${error.message}`, { 
+    return new Response(`Internal server error: ${(error as Error)?.message || 'Unknown error'}`, { 
       status: 500, 
       headers: corsHeaders 
     })

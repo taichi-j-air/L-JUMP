@@ -108,7 +108,7 @@ const handler = async (req: Request): Promise<Response> => {
         console.log("  - ✅ Direct JSON parsing successful");
       } catch (jsonError) {
         console.log("  - ❌ JSON parsing failed:", jsonError);
-        throw new Error(`Failed to parse request data: ${jsonError.message}`);
+        throw new Error(`Failed to parse request data: ${(jsonError as Error)?.message || 'Unknown error'}`);
       }
     }
 

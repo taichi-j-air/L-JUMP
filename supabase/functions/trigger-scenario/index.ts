@@ -111,13 +111,13 @@ serve(async (req) => {
 
   } catch (error) {
     console.error('=== CRITICAL ERROR ===')
-    console.error('Error:', error.message)
-    console.error('Stack:', error.stack)
+    console.error('Error:', (error as Error)?.message || 'Unknown error')
+    console.error('Stack:', (error as Error)?.stack || 'No stack trace')
     
     return new Response(JSON.stringify({ 
       error: 'Server error', 
-      details: error.message 
-    }), { 
+      details: (error as Error)?.message || 'Unknown error'
+    }), {
       status: 500,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' }
     })

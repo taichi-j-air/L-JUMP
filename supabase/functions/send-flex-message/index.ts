@@ -80,7 +80,7 @@ serve(async (req) => {
     try {
       body = await req.json();
     } catch (e) {
-      return new Response(JSON.stringify({ error: "JSON解析失敗", details: e.message }), {
+      return new Response(JSON.stringify({ error: "JSON解析失敗", details: (e as Error)?.message || 'Unknown error' }), {
         headers: { ...cors, "Content-Type": "application/json" },
         status: 400,
       });
@@ -99,7 +99,7 @@ serve(async (req) => {
       try {
         flex = JSON.parse(rawFlex);
       } catch (e) {
-        return new Response(JSON.stringify({ error: "flexMessage JSONが不正です", details: e.message }), {
+        return new Response(JSON.stringify({ error: "flexMessage JSONが不正です", details: (e as Error)?.message || 'Unknown error' }), {
           headers: { ...cors, "Content-Type": "application/json" },
           status: 400,
         });
@@ -216,7 +216,7 @@ serve(async (req) => {
         }
       } catch (fetchError) {
         console.error(`Network error when sending to ${line_user_id}:`, fetchError);
-        results.push({ lineUserId: line_user_id, success: false, error: `Network error: ${fetchError.message}` });
+        results.push({ lineUserId: line_user_id, success: false, error: `Network error: ${(fetchError as Error)?.message || 'Unknown error'}` });
       }
     }
 

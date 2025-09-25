@@ -126,7 +126,7 @@ export async function processPaymentSuccessActions(
         if (scenarioError) {
           console.error('[stripe-webhook] Failed to get exitable scenarios:', scenarioError);
         } else if (exitableScenarios && exitableScenarios.length > 0) {
-          const scenarioIds = exitableScenarios.map(s => s.id);
+          const scenarioIds = exitableScenarios.map((s: any) => s.id);
           
           // Stop existing scenarios except those with prevent_auto_exit = true
           await supabaseClient

@@ -51,7 +51,7 @@ serve(async (req) => {
   } catch (error) {
     console.error('Enhanced step delivery error:', error);
     return new Response(
-      JSON.stringify({ error: error.message }),
+      JSON.stringify({ error: (error as Error)?.message || 'Unknown error' }),
       { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
   }
@@ -170,7 +170,7 @@ async function processReadySteps(supabase: any) {
         .from('step_delivery_tracking')
         .update({
           error_count: tracking.error_count + 1,
-          last_error: error.message,
+          last_error: (error as Error)?.message || 'Unknown error',
           updated_at: new Date().toISOString()
         })
         .eq('id', tracking.id);

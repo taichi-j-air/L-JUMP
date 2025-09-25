@@ -83,7 +83,7 @@ Deno.serve(async (req) => {
     const results = await Promise.allSettled(updatePromises);
     
     // Collect successful updates
-    const successfulUpdates = [];
+    const successfulUpdates: any[] = [];
     let errorCount = 0;
     
     results.forEach((result, index) => {
@@ -118,7 +118,7 @@ Deno.serve(async (req) => {
     console.error('❌ Unexpected error:', error);
     return new Response(JSON.stringify({ 
       success: false, 
-      error: `Internal server error: ${error.message}` 
+      error: `Internal server error: ${(error as Error)?.message || 'Unknown error'}` 
     }), {
       status: 500,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' }
