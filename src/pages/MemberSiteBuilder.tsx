@@ -733,6 +733,7 @@ const MemberSiteBuilder = () => {
                           </SelectTrigger>
                           <SelectContent className="bg-background border z-50">
                             <SelectItem value="all">すべて</SelectItem>
+                            <SelectItem value="unassigned">未設定</SelectItem>
                             {categories.map((category) => (
                               <SelectItem key={category.id} value={category.id}>
                                 {category.name}
@@ -748,7 +749,11 @@ const MemberSiteBuilder = () => {
                           <Table className="w-full border-collapse">
                             <TableBody>
                               {siteContents
-                                .filter((content) => filterCategoryId === "all" || content.category_id === filterCategoryId)
+                                .filter((content) =>
+                                  filterCategoryId === "all" ||
+                                  (filterCategoryId === "unassigned" && !content.category_id) ||
+                                  (content.category_id === filterCategoryId)
+                                )
                                 .map((content, index) => (
                                 <div key={content.id} className={`border-t border-border ${index === 0 ? "border-t-0" : ""} ${index === siteContents.length - 1 ? "border-b" : ""}`}>
                                   <TableRow
