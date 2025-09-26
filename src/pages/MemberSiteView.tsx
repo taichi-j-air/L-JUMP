@@ -408,23 +408,7 @@ const MemberSiteView: React.FC = () => {
       >
         <div className="flex items-center justify-between px-4 py-4">
           <div className="flex items-center gap-2">
-            {currentView !== 'categories' && (
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => {
-                  if (currentView === 'content-detail' && selectedContent?.category_id) {
-                    navigateToContentList(selectedContent.category_id);
-                  } else {
-                    navigateToCategories();
-                  }
-                }}
-                className="flex items-center gap-1"
-              >
-                <ChevronLeft className="h-4 w-4" />
-                戻る
-              </Button>
-            )}
+            
             <h1 className="text-lg font-semibold">{site.name}</h1>
           </div>
 
@@ -550,6 +534,15 @@ const MemberSiteView: React.FC = () => {
           {/* コンテンツ一覧（テーブル） */}
           {currentView === 'content-list' && selectedCategory && (
             <div className="px-3 py-6">
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => navigateToCategories()}
+                className="flex items-center gap-1 mb-4"
+              >
+                <ChevronLeft className="h-4 w-4" />
+                戻る
+              </Button>
               <div className="mb-8">
                 <h1 className="text-3xl font-bold mb-2 text-foreground">{selectedCategory.name}</h1>
                 {selectedCategory.description && <p className="text-sm text-muted-foreground">{selectedCategory.description}</p>}
@@ -609,6 +602,15 @@ const MemberSiteView: React.FC = () => {
           {/* コンテンツ詳細 */}
           {currentView === 'content-detail' && selectedContent && (
             <div className="px-3 py-6">
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => navigateToContentList(selectedContent.category_id || '')}
+                className="flex items-center gap-1 mb-4"
+              >
+                <ChevronLeft className="h-4 w-4" />
+                戻る
+              </Button>
               <article className="max-w-4xl mx-auto">
                 <header className="mb-8">
                   <h1 className="text-4xl font-bold mb-4 text-foreground">{selectedContent.title}</h1>
