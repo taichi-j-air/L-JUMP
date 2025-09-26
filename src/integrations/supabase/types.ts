@@ -971,6 +971,7 @@ export type Database = {
           price: number | null
           public_url: string | null
           published_at: string | null
+          require_passcode: boolean
           seo_config: Json | null
           site_uid: string | null
           slug: string
@@ -995,6 +996,7 @@ export type Database = {
           price?: number | null
           public_url?: string | null
           published_at?: string | null
+          require_passcode?: boolean
           seo_config?: Json | null
           site_uid?: string | null
           slug: string
@@ -1019,6 +1021,7 @@ export type Database = {
           price?: number | null
           public_url?: string | null
           published_at?: string | null
+          require_passcode?: boolean
           seo_config?: Json | null
           site_uid?: string | null
           slug?: string

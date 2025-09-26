@@ -23,12 +23,15 @@ interface MemberSite {
 
 interface MemberSiteCategory {
   id: string;
+  site_id: string;
   name: string;
   description?: string;
   content_count: number;
   sort_order: number;
   thumbnail_url?: string | null;
-  content_blocks?: any[] | string | null;
+  content_blocks: any;
+  created_at: string;
+  updated_at: string;
 }
 
 interface MemberSiteContent {
