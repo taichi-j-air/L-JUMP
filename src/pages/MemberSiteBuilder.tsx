@@ -751,7 +751,18 @@ const MemberSiteBuilder = () => {
     setCategoryName(category.name);
     setCategoryDescription(category.description || "");
     setCategoryThumbnailUrl(category.thumbnail_url ?? null);
-    setCategoryBlocks(Array.isArray(category.content_blocks) ? categoryBlocks : []);
+    if (Array.isArray(category.content_blocks)) {
+      setCategoryBlocks(category.content_blocks);
+    } else if (typeof category.content_blocks === 'string') {
+      try {
+        const parsed = JSON.parse(category.content_blocks);
+        setCategoryBlocks(Array.isArray(parsed) ? parsed : []);
+      } catch {
+        setCategoryBlocks([]);
+      }
+    } else {
+      setCategoryBlocks([]);
+    }
   };
 
   const deleteCategory = async (categoryId: string) => {
