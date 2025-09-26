@@ -55,6 +55,8 @@ All colors MUST be HSL.
     --sidebar-border: 220 8% 25%;
 
     --sidebar-ring: 217.2 91.2% 59.8%;
+    --sidebar-hover-background: 0 0% 96.1%; /* デフォルト値 */
+    --sidebar-hover-foreground: 215.4 16.3% 46.9%; /* デフォルト値 */
   }
 
   .dark {
@@ -95,6 +97,8 @@ All colors MUST be HSL.
     --sidebar-accent-foreground: 240 4.8% 95.9%;
     --sidebar-border: 240 3.7% 15.9%;
     --sidebar-ring: 217.2 91.2% 59.8%;
+    --sidebar-hover-background: 217.2 32.6% 17.5%; /* デフォルト値 */
+    --sidebar-hover-foreground: 215 20.2% 65.1%; /* デフォルト値 */
   }
 }
 

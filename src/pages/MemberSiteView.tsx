@@ -398,6 +398,10 @@ const MemberSiteView: React.FC = () => {
               font-size: clamp(0.75rem, 2vw, 1rem);
             }
           }
+          :root {
+            --sidebar-hover-background: ${sidebarColors.hoverBackground};
+            --sidebar-hover-foreground: ${sidebarColors.hoverForeground};
+          }
         `}
       </style>
 
@@ -413,9 +417,8 @@ const MemberSiteView: React.FC = () => {
           </div>
 
           <Button
-            variant="ghost"
             size="sm"
-            className={`md:hidden ${sideMenuOpen ? 'rounded-md' : ''}`}
+            className={`md:hidden ${sideMenuOpen ? 'rounded-md' : ''} bg-transparent hover:bg-[var(--sidebar-hover-background)] hover:text-[var(--sidebar-hover-foreground)]`}
             onClick={() => setSideMenuOpen(!sideMenuOpen)}
             style={sideMenuOpen ? { backgroundColor: sidebarColors.activeBackground, color: sidebarColors.activeForeground } : {}}
           >
