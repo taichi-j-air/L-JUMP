@@ -471,9 +471,7 @@ const MemberSiteView: React.FC = () => {
           {currentView === 'categories' && (
             <div className="px-3 py-6">
               <div className="grid grid-cols-2 gap-3 justify-center lg:grid-cols-5 lg:gap-y-6 lg:gap-x-2">
-                {paginatedCategories.map((cat) => {
-                  const catBlocks = categoryBlocksMap.get(cat.id);
-                  return (
+                {paginatedCategories.map((cat) => (
                   <Card
                     key={cat.id}
                     className="cursor-pointer hover:shadow-lg transition-shadow overflow-hidden w-full flex flex-col border border-gray-300 rounded"
@@ -493,11 +491,6 @@ const MemberSiteView: React.FC = () => {
                         <h3 className="text-base font-semibold text-foreground truncate">{cat.name}</h3>
                         <p className="text-xs text-muted-foreground leading-relaxed line-clamp-2 h-10">{cat.description}</p>
                       </div>
-                      {catBlocks && (
-                        <div className="prose prose-sm max-w-none text-foreground mt-4">
-                          {renderContentBlocks(catBlocks)}
-                        </div>
-                      )}
                       <div className="mt-auto pt-4">
                         <div className="h-3 w-full rounded-full bg-gray-200">
                           <div
@@ -512,8 +505,7 @@ const MemberSiteView: React.FC = () => {
                       </div>
                     </CardContent>
                   </Card>
-                  );
-                })}
+                ))}
 
               </div>
 
@@ -549,64 +541,67 @@ const MemberSiteView: React.FC = () => {
                 <ChevronLeft className="h-4 w-4" />
                 戻る
               </Button>
-              <div className="mb-8">
-                <h1 className="text-3xl font-bold mb-2 text-foreground">{selectedCategory.name}</h1>
-                {selectedCategory.description && <p className="text-sm text-muted-foreground">{selectedCategory.description}</p>}
-                <div className="mt-2 text-sm text-muted-foreground">コンテンツ数: {selectedCategory.content_count}</div>
-                {selectedCategoryBlocks && (
-                  <div className="prose prose-sm max-w-none text-foreground mt-6">
-                    {renderContentBlocks(selectedCategoryBlocks)}
+              <div className="max-w-4xl mx-auto">
+                <div className="bg-white border rounded-lg shadow-sm p-6 space-y-8">
+                  <div>
+                    <h1 className="text-3xl font-bold mb-2 text-foreground">{selectedCategory.name}</h1>
+                    {selectedCategory.description && <p className="text-sm text-muted-foreground">{selectedCategory.description}</p>}
+                    <div className="mt-2 text-sm text-muted-foreground">コンテンツ数: {selectedCategory.content_count}</div>
+                    {selectedCategoryBlocks && (
+                      <div className="prose prose-sm max-w-none text-foreground mt-6">
+                        {renderContentBlocks(selectedCategoryBlocks)}
+                      </div>
+                    )}
                   </div>
-                )}
-              </div>
 
-              <div className="max-w-4xl">
-                <Table className="border border-collapse bg-white">
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead className="border w-5/6 learning-status-head">下の項目からコンテンツを選択してください</TableHead>
-                      <TableHead className="border text-center w-1/6 learning-status-head">
-                        <span className="inline-block sm:hidden" style={{ whiteSpace: 'nowrap' }}>
-                          学習<br />状況
-                        </span>
-                        <span className="hidden sm:inline-block">学習状況</span>
-                      </TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {contents
-                      .filter(c => c.category_id === selectedCategory.id)
-                      .map(item => (
-                        <TableRow
-                          key={item.id}
-                          className="cursor-pointer hover:bg-muted/50"
-                          onClick={() => navigateToContentDetail(item.id)}
-                        >
-                          <TableCell className="border font-medium w-5/6">
-                            <div className="line-clamp-2 sm:line-clamp-none">{item.title}</div>
-                          </TableCell>
-                          <TableCell className="border text-center w-1/6">
-                            {item.progress_percentage === 100 ? (
-                              <span className="font-bold" style={{ color: 'rgb(12, 179, 134)', whiteSpace: 'nowrap' }}>
-                                完了
-                              </span>
-                            ) : (
-                              <span className="font-bold" style={{ color: '#EF4444', whiteSpace: 'nowrap' }}>
-                                未完了
-                              </span>
-                            )}
-                          </TableCell>
-                        </TableRow>
-                      ))}
-                  </TableBody>
-                </Table>
-              </div>
+                  <Table className="border border-collapse bg-white w-full">
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead className="border w-5/6 learning-status-head">下の項目からコンテンツを選択してください</TableHead>
+                        <TableHead className="border text-center w-1/6 learning-status-head">
+                          <span className="inline-block sm:hidden" style={{ whiteSpace: 'nowrap' }}>
+                            学習<br />状況
+                          </span>
+                          <span className="hidden sm:inline-block">学習状況</span>
+                        </TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {contents
+                        .filter(c => c.category_id === selectedCategory.id)
+                        .map(item => (
+                          <TableRow
+                            key={item.id}
+                            className="cursor-pointer hover:bg-muted/50"
+                            onClick={() => navigateToContentDetail(item.id)}
+                          >
+                            <TableCell className="border font-medium w-5/6">
+                              <div className="line-clamp-2 sm:line-clamp-none">{item.title}</div>
+                            </TableCell>
+                            <TableCell className="border text-center w-1/6">
+                              {item.progress_percentage === 100 ? (
+                                <span className="font-bold" style={{ color: 'rgb(12, 179, 134)', whiteSpace: 'nowrap' }}>
+                                  完了
+                                </span>
+                              ) : (
+                                <span className="font-bold" style={{ color: '#EF4444', whiteSpace: 'nowrap' }}>
+                                  未完了
+                                </span>
+                              )}
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                    </TableBody>
+                  </Table>
 
-              {contents.filter(c => c.category_id === selectedCategory.id).length === 0 && (
-                <div className="text-center py-12">
-                  <p className="text-muted-foreground">このカテゴリにはまだコンテンツがありません。</p>
+                  {contents.filter(c => c.category_id === selectedCategory.id).length === 0 && (
+                    <div className="text-center py-12">
+                      <p className="text-muted-foreground">このカテゴリにはまだコンテンツがありません。</p>
+                    </div>
+                  )}
                 </div>
-              )}
+
+              </div>
             </div>
           )}
 
@@ -622,18 +617,20 @@ const MemberSiteView: React.FC = () => {
                 戻る
               </Button>
               <article className="max-w-4xl mx-auto">
-                <header className="mb-8">
-                  <h1 className="text-4xl font-bold mb-4 text-foreground">{selectedContent.title}</h1>
-                </header>
+                <div className="bg-white border rounded-lg shadow-sm p-6 space-y-6">
+                  <header className="mb-8">
+                    <h1 className="text-4xl font-bold mb-4 text-foreground">{selectedContent.title}</h1>
+                  </header>
 
-                <div className="prose prose-lg max-w-none">
-                  {selectedContentBlocks ? (
-                    renderContentBlocks(selectedContentBlocks)
-                  ) : selectedContent.content ? (
-                    <div className="text-foreground leading-relaxed" dangerouslySetInnerHTML={{ __html: selectedContent.content }} />
-                  ) : (
-                    <p className="text-muted-foreground">コンテンツが準備中です。</p>
-                  )}
+                  <div className="prose prose-lg max-w-none">
+                    {selectedContentBlocks ? (
+                      renderContentBlocks(selectedContentBlocks)
+                    ) : selectedContent.content ? (
+                      <div className="text-foreground leading-relaxed" dangerouslySetInnerHTML={{ __html: selectedContent.content }} />
+                    ) : (
+                      <p className="text-muted-foreground">コンテンツが準備中です。</p>
+                    )}
+                  </div>
                 </div>
               </article>
             </div>
