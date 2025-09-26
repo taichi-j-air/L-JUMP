@@ -62,11 +62,8 @@ const MemberSiteView: React.FC = () => {
   const [contents, setContents] = useState<MemberSiteContent[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
+  const [authFailed, setAuthFailed] = useState<boolean>(false);
   const [sideMenuOpen, setSideMenuOpen] = useState<boolean>(false);
-
-  // パスコード
-  const [requirePasscode, setRequirePasscode] = useState<boolean>(false);
-  const [passcodeInput, setPasscodeInput] = useState<string>('');
 
   // レイアウトレスポンシブ
   const [isDesktop, setIsDesktop] = useState<boolean>(() =>
@@ -98,41 +95,30 @@ const MemberSiteView: React.FC = () => {
       if (!slug) return;
       setLoading(true);
       setError(null);
+      setAuthFailed(false);
 
       try {
         const preview = searchParams.get('preview') === 'true';
 
         if (preview) {
-          // オーナープレビュー：直接取得
-          const { data: siteData, error: siteError } = await supabase
-            .from('member_sites')
-            .select('*')
-            .eq('slug', slug)
-            .maybeSingle();
+          // Preview logic
+          const { data: siteData, error: siteError } = await supabase.from('member_sites').select('*').eq('slug', slug).maybeSingle();
           if (siteError) throw siteError;
           if (!siteData) throw new Error('サイトが見つかりません。');
 
-          const { data: categoryData, error: categoriesError } = await supabase
-            .from('member_site_categories')
-            .select('*')
-            .eq('site_id', siteData.id)
-            .order('sort_order');
-          if (categoriesError) throw categoriesError;
+          const { data: categoryData, error: catError } = await supabase.from('member_site_categories').select('*').eq('site_id', siteData.id).order('sort_order');
+          if (catError) throw catError;
 
-          const { data: contentData, error: contentError } = await supabase
-            .from('member_site_content')
-            .select('*')
-            .eq('site_id', siteData.id)
-            .order('sort_order');
-          if (contentError) throw contentError;
+          const { data: contentData, error: contError } = await supabase.from('member_site_content').select('*').eq('site_id', siteData.id).order('sort_order');
+          if (contError) throw contError;
 
-          if (!isMounted) return;
-          setSite(siteData);
-          setCategories(categoryData || []);
-          setContents(contentData || []);
-          setRequirePasscode(false);
+          if (isMounted) {
+            setSite(siteData);
+            setCategories(categoryData || []);
+            setContents(contentData || []);
+          }
         } else {
-          // 公開アクセス：Edge Function 経由（UID/パスコード/タグ制御対応）
+          // Public access via Edge Function
           const params = new URLSearchParams({ slug });
           if (uid) params.append('uid', uid);
           if (passcodeParam) params.append('passcode', passcodeParam);
@@ -141,33 +127,29 @@ const MemberSiteView: React.FC = () => {
             `https://rtjxurmuaawyzjcdkqxt.supabase.co/functions/v1/member-site-view?${params.toString()}`,
             { method: 'GET', headers: { 'Content-Type': 'application/json' } }
           );
-          const result = await res.json();
 
-          if (!res.ok || !result.success) {
-            if (res.status === 401 || res.status === 403 || result.requirePasscode) {
-              if (!isMounted) return;
-              setSite(null);
-              setCategories([]);
-              setContents([]);
-              setRequirePasscode(true);
-              setLoading(false);
-              return;
-            }
-            throw new Error(result.error || 'サイトの読み込みに失敗しました。');
+          if (!res.ok) {
+            // Any auth error will lead to the generic auth failed screen
+            setAuthFailed(true);
+            return;
           }
 
-          if (!isMounted) return;
-          setSite(result.site as MemberSite);
-          setCategories((result.categories || []) as MemberSiteCategory[]);
-          setContents((result.content || []) as MemberSiteContent[]);
-          setRequirePasscode(false);
+          const result = await res.json();
+          if (isMounted) {
+            setSite(result.site as MemberSite);
+            setCategories((result.categories || []) as MemberSiteCategory[]);
+            setContents((result.content || []) as MemberSiteContent[]);
+          }
         }
       } catch (err) {
         console.error('Error fetching member site data:', err);
-        if (!isMounted) return;
-        setError(err instanceof Error ? err.message : 'エラーが発生しました。');
+        if (isMounted) {
+          setError(err instanceof Error ? err.message : 'エラーが発生しました。');
+        }
       } finally {
-        if (isMounted) setLoading(false);
+        if (isMounted) {
+          setLoading(false);
+        }
       }
     };
 
@@ -176,7 +158,7 @@ const MemberSiteView: React.FC = () => {
       isMounted = false;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [slug, uid, passcodeParam, searchParams.toString()]);
+  }, [slug, uid, passcodeParam]);
 
   // レスポンシブ
   useEffect(() => {
@@ -297,42 +279,28 @@ const MemberSiteView: React.FC = () => {
     return renderBlocks(arr);
   };
 
-  // パスコード画面
-  if (requirePasscode) {
+  if (authFailed) {
     return (
-      <div className="min-h-screen bg-background flex items-center justify-center p-4">
-        <div className="max-w-md w-full">
-          <div className="bg-card rounded-lg p-6 shadow-lg">
-            <h1 className="text-2xl font-bold mb-4 text-center">パスコード入力</h1>
-            <p className="text-muted-foreground mb-6 text-center">このサイトにアクセスするにはパスコードが必要です。</p>
-            <div className="space-y-4">
-              <Input
-                type="password"
-                placeholder="パスコードを入力"
-                value={passcodeInput}
-                onChange={(e) => setPasscodeInput(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter' && passcodeInput.trim()) {
-                    const p = new URLSearchParams(searchParams);
-                    p.set('passcode', passcodeInput.trim());
-                    setSearchParams(p);
-                  }
-                }}
-              />
-              <Button
-                className="w-full"
-                disabled={!passcodeInput.trim()}
-                onClick={() => {
-                  const p = new URLSearchParams(searchParams);
-                  p.set('passcode', passcodeInput.trim());
-                  setSearchParams(p);
-                }}
-              >
-                アクセス
-              </Button>
-            </div>
+      <div className="min-h-screen bg-background flex flex-col">
+        <main className="flex-1 flex justify-center items-center p-4">
+          <div className="pb-20">
+            <Card className="w-full max-w-md">
+            <CardContent className="p-8">
+              <h1 className="text-2xl font-bold mb-6 text-center">会員サイトを表示できません</h1>
+              <p className="text-sm text-muted-foreground mb-4">
+                表示できない理由として、以下が考えられます。
+              </p>
+              <ul className="list-disc list-inside text-sm text-muted-foreground space-y-2">
+                <li>LINE友達限定で公開されている</li>
+                <li>ページの閲覧条件を満たしていない</li>
+              </ul>
+            </CardContent>
+          </Card>
           </div>
-        </div>
+        </main>
+        <footer className="text-center text-sm text-muted-foreground py-4">
+          © {new Date().getFullYear()}
+        </footer>
       </div>
     );
   }

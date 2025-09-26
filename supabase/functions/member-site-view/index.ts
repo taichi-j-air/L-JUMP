@@ -4,6 +4,18 @@ import { corsHeaders } from '../_shared/cors.ts'
 const supabaseUrl = Deno.env.get('SUPABASE_URL')!
 const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
 
+// Helper to create a standardized error response
+function errorResponse(message: string, status: number, errorCode: string) {
+  return new Response(JSON.stringify({
+    success: false,
+    error: message,
+    errorCode,
+  }), {
+    status,
+    headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+  });
+}
+
 Deno.serve(async (req) => {
   // Handle CORS preflight requests
   if (req.method === 'OPTIONS') {
@@ -11,19 +23,18 @@ Deno.serve(async (req) => {
   }
 
   try {
-    // Parse query parameters
     const url = new URL(req.url);
     const slug = url.searchParams.get('slug');
-    const uid = url.searchParams.get('uid'); // LINE friend short_uid for authentication
-    const passcode = url.searchParams.get('passcode'); // Optional passcode
+    const uid = url.searchParams.get('uid');
+    const passcode = url.searchParams.get('passcode');
 
     if (!slug) {
-      return errorResponse('Site slug is required', 400);
+      return errorResponse('Site slug is required', 400, 'BAD_REQUEST');
     }
 
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
-    // Fetch member site data
+    // 1. Fetch Site
     const { data: site, error: siteError } = await supabase
       .from('member_sites')
       .select('*')
@@ -31,123 +42,84 @@ Deno.serve(async (req) => {
       .eq('is_published', true)
       .maybeSingle();
 
-    if (siteError) {
-      console.error('Site fetch error:', siteError);
-      return errorResponse('Failed to fetch site data', 500);
-    }
-
+    if (siteError) throw siteError;
     if (!site) {
-      return errorResponse('Site not found or not published', 404);
+      return errorResponse('Site not found or not published', 404, 'NOT_FOUND');
     }
 
-    // Check if passcode is required
-    if (site.require_passcode && !passcode) {
-      return errorResponse('Passcode required', 401, { requirePasscode: true });
+    // 2. UID Authentication
+    if (!uid) {
+        return errorResponse('UID is required for this site', 401, 'UID_AUTH_FAILED');
     }
 
-    // Verify passcode if provided
-    if (site.require_passcode && site.passcode && passcode !== site.passcode) {
-      return errorResponse('Invalid passcode', 403);
-    }
-
-    // Authentication check for UID if provided
-    if (uid) {
-      // Verify friend exists and has access
-      const { data: friendData, error: friendError } = await supabase
+    const { data: friendData, error: friendError } = await supabase
         .from('line_friends')
         .select('id, user_id')
         .eq('short_uid_ci', uid.toUpperCase())
         .eq('user_id', site.user_id)
         .maybeSingle();
 
-      if (friendError || !friendData) {
-        return errorResponse('Authentication required - LINE friend status needed', 401);
-      }
+    if (friendError || !friendData) {
+        return errorResponse('Invalid UID', 401, 'UID_AUTH_FAILED');
+    }
 
-      // Check tag-based access control if configured
-      if (site.allowed_tag_ids && site.allowed_tag_ids.length > 0) {
-        const { data: friendTags } = await supabase
-          .from('friend_tags')
-          .select('tag_id')
-          .eq('friend_id', friendData.id);
+    // 3. Tag Control
+    const hasAllowedTags = site.allowed_tag_ids && site.allowed_tag_ids.length > 0;
+    const hasBlockedTags = site.blocked_tag_ids && site.blocked_tag_ids.length > 0;
 
-        const friendTagIds = friendTags?.map(ft => ft.tag_id) || [];
-        const hasRequiredTag = site.allowed_tag_ids.some((tagId: string) => 
-          friendTagIds.includes(tagId)
-        );
+    if (hasAllowedTags || hasBlockedTags) {
+      const { data: friendTags } = await supabase
+        .from('friend_tags')
+        .select('tag_id')
+        .eq('friend_id', friendData.id);
+      const friendTagIds = friendTags?.map(ft => ft.tag_id) || [];
 
+      if (hasAllowedTags) {
+        const hasRequiredTag = site.allowed_tag_ids.some((tagId: string) => friendTagIds.includes(tagId));
         if (!hasRequiredTag) {
-          return errorResponse('Access denied - required tags not found', 403);
+          return errorResponse('Access denied by tag policy', 403, 'TAG_AUTH_FAILED');
         }
       }
 
-      // Check blocked tags
-      if (site.blocked_tag_ids && site.blocked_tag_ids.length > 0) {
-        const { data: friendTags } = await supabase
-          .from('friend_tags')
-          .select('tag_id')
-          .eq('friend_id', friendData.id);
-
-        const friendTagIds = friendTags?.map(ft => ft.tag_id) || [];
-        const hasBlockedTag = site.blocked_tag_ids.some((tagId: string) => 
-          friendTagIds.includes(tagId)
-        );
-
+      if (hasBlockedTags) {
+        const hasBlockedTag = site.blocked_tag_ids.some((tagId: string) => friendTagIds.includes(tagId));
         if (hasBlockedTag) {
-          return errorResponse('Access denied - blocked tags found', 403);
+          return errorResponse('Access denied by tag policy', 403, 'TAG_AUTH_FAILED');
         }
       }
     }
 
-    // Fetch categories
-    const { data: categories, error: categoriesError } = await supabase
-      .from('member_site_categories')
-      .select('*')
-      .eq('site_id', site.id)
-      .order('sort_order');
-
-    if (categoriesError) {
-      console.error('Categories fetch error:', categoriesError);
-      return errorResponse('Failed to fetch categories', 500);
+    // 4. Passcode Check
+    if (site.require_passcode) {
+      if (!passcode) {
+        return errorResponse('Passcode required', 401, 'PASSCODE_REQUIRED');
+      }
+      if (passcode !== site.passcode) {
+        return errorResponse('Invalid passcode', 403, 'INVALID_PASSCODE');
+      }
     }
 
-    // Fetch content
-    const { data: content, error: contentError } = await supabase
-      .from('member_site_content')
-      .select('*')
-      .eq('site_id', site.id)
-      .eq('is_published', true)
-      .order('sort_order');
+    // 5. Success - Fetch data and return
+    const [{ data: categories, error: catError }, { data: content, error: contError }] = await Promise.all([
+      supabase.from('member_site_categories').select('*').eq('site_id', site.id).order('sort_order'),
+      supabase.from('member_site_content').select('*').eq('site_id', site.id).eq('is_published', true).order('sort_order'),
+    ]);
 
-    if (contentError) {
-      console.error('Content fetch error:', contentError);
-      return errorResponse('Failed to fetch content', 500);
-    }
+    if (catError) throw catError;
+    if (contError) throw contError;
 
-    // Return JSON data for React to render
     return new Response(JSON.stringify({
       success: true,
       site,
       categories: categories || [],
-      content: content || []
+      content: content || [],
     }), {
       status: 200,
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
 
   } catch (error) {
-    console.error('Unexpected error:', error);
-    return errorResponse('Internal server error', 500);
+    console.error('Internal Server Error:', error.message);
+    return errorResponse('Internal server error', 500, 'SERVER_ERROR');
   }
 });
-
-function errorResponse(message: string, status: number = 400, extra: any = {}) {
-  return new Response(JSON.stringify({
-    success: false,
-    error: message,
-    ...extra
-  }), {
-    status,
-    headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-  });
-}
