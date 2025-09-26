@@ -535,10 +535,9 @@ const MemberSiteView: React.FC = () => {
           {currentView === 'content-list' && selectedCategory && (
             <div className="px-3 py-6">
               <Button
-                variant="ghost"
                 size="sm"
                 onClick={() => navigateToCategories()}
-                className="flex items-center gap-1 mb-4"
+                className="flex items-center gap-1 mb-4 bg-transparent text-[#292929] hover:bg-transparent hover:opacity-70"
               >
                 <ChevronLeft className="h-4 w-4" />
                 戻る
@@ -603,10 +602,9 @@ const MemberSiteView: React.FC = () => {
           {currentView === 'content-detail' && selectedContent && (
             <div className="px-3 py-6">
               <Button
-                variant="ghost"
                 size="sm"
                 onClick={() => navigateToContentList(selectedContent.category_id || '')}
-                className="flex items-center gap-1 mb-4"
+                className="flex items-center gap-1 mb-4 bg-transparent text-[#292929] hover:bg-transparent hover:opacity-70"
               >
                 <ChevronLeft className="h-4 w-4" />
                 戻る
