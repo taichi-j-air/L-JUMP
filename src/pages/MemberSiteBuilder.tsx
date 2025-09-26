@@ -917,7 +917,8 @@ const MemberSiteBuilder = () => {
                               className="h-6 w-6 p-0"
                               onClick={(e) => {
                                 e.stopPropagation();
-                                const publicUrl = `https://rtjxurmuaawyzjcdkqxt.supabase.co/functions/v1/member-site-view?slug=${s.slug}&uid=[UID]`;
+                                const publicUrl = `${window.location.origin}/member-site/${s.slug}?uid=[UID]`;
+
                                 navigator.clipboard.writeText(publicUrl);
                                 toast({
                                   title: "URLをコピーしました",
