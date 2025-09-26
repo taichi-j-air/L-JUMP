@@ -6,6 +6,8 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { Block } from '@/components/EnhancedBlockEditor';
+import { HeadingDesignStyles, renderBlocks } from '@/lib/blockRenderer';
 import { ChevronLeft, Menu, X } from 'lucide-react';
 
 interface MemberSite {
@@ -26,6 +28,7 @@ interface MemberSiteCategory {
   content_count: number;
   sort_order: number;
   thumbnail_url?: string | null;
+  content_blocks?: any[] | string | null;
 }
 
 interface MemberSiteContent {
@@ -253,7 +256,7 @@ const MemberSiteView: React.FC = () => {
   };
 
   // コンテンツブロック描画
-  const renderContentBlocks = (blocks: any) => {
+  const normalizeBlocks = (blocks: any): Block[] | null => {
     if (!blocks) return null;
     let arr = blocks;
     if (typeof blocks === 'string') {
@@ -263,47 +266,35 @@ const MemberSiteView: React.FC = () => {
         return null;
       }
     }
-    if (!Array.isArray(arr)) return null;
+    if (!Array.isArray(arr) || arr.length === 0) return null;
 
-    return arr.map((block: any, idx: number) => {
-      switch (block.type) {
-        case 'heading': {
-          const Tag = (`h${block.level || 2}` as unknown) as keyof JSX.IntrinsicElements;
-          return (
-            <Tag key={idx} className="text-2xl font-bold mb-4 text-foreground">
-              {block.content}
-            </Tag>
-          );
+    return (arr as any[])
+      .map((block: any, index: number) => {
+        if (block && typeof block === 'object') {
+          const withId = block.id ? block : { ...block, id: `${block.type || 'block'}-${index}` };
+          return withId as Block;
         }
-        case 'paragraph':
-          return (
-            <p key={idx} className="mb-4 text-foreground leading-relaxed">
-              {block.content}
-            </p>
-          );
-        case 'image':
-          return (
-            <img
-              key={idx}
-              src={block.src || block.url}
-              alt={block.alt || ''}
-              className="w-full max-w-2xl mx-auto rounded-lg mb-6"
-            />
-          );
-        case 'video':
-          return (
-            <video key={idx} controls className="w-full max-w-2xl mx-auto rounded-lg mb-6">
-              <source src={block.src || block.url} type="video/mp4" />
-            </video>
-          );
-        default:
-          return (
-            <div key={idx} className="mb-4 text-foreground">
-              {block.content || ''}
-            </div>
-          );
+        return null;
+      })
+      .filter((item): item is Block => item !== null);
+  };
+
+  const categoryBlocksMap = useMemo(() => {
+    const map = new Map<string, Block[]>();
+    categories.forEach((cat) => {
+      const normalized = normalizeBlocks(cat.content_blocks);
+      if (normalized) {
+        map.set(cat.id, normalized);
       }
     });
+    return map;
+  }, [categories]);
+
+  // コンテンツブロック描画
+  const renderContentBlocks = (blocks: any) => {
+    const arr = Array.isArray(blocks) ? (blocks as Block[]) : normalizeBlocks(blocks);
+    if (!arr) return null;
+    return renderBlocks(arr);
   };
 
   // パスコード画面
@@ -372,9 +363,13 @@ const MemberSiteView: React.FC = () => {
   const categoryContents = contents.filter(c => (categoryId ? c.category_id === categoryId : true));
   const selectedContent = contents.find(c => c.id === contentId);
 
+  const selectedCategoryBlocks = selectedCategory ? categoryBlocksMap.get(selectedCategory.id) || normalizeBlocks(selectedCategory.content_blocks) : null;
+  const selectedContentBlocks = selectedContent ? normalizeBlocks(selectedContent.content_blocks) : null;
+
   return (
     <>
       {/* サイドバー用の微調整スタイル */}
+      {HeadingDesignStyles}
       <style>
         {`
           .sidebar-button:hover {
@@ -476,7 +471,9 @@ const MemberSiteView: React.FC = () => {
           {currentView === 'categories' && (
             <div className="px-3 py-6">
               <div className="grid grid-cols-2 gap-3 justify-center lg:grid-cols-5 lg:gap-y-6 lg:gap-x-2">
-                {paginatedCategories.map((cat) => (
+                {paginatedCategories.map((cat) => {
+                  const catBlocks = categoryBlocksMap.get(cat.id);
+                  return (
                   <Card
                     key={cat.id}
                     className="cursor-pointer hover:shadow-lg transition-shadow overflow-hidden w-full flex flex-col border border-gray-300 rounded"
@@ -496,6 +493,11 @@ const MemberSiteView: React.FC = () => {
                         <h3 className="text-base font-semibold text-foreground truncate">{cat.name}</h3>
                         <p className="text-xs text-muted-foreground leading-relaxed line-clamp-2 h-10">{cat.description}</p>
                       </div>
+                      {catBlocks && (
+                        <div className="prose prose-sm max-w-none text-foreground mt-4">
+                          {renderContentBlocks(catBlocks)}
+                        </div>
+                      )}
                       <div className="mt-auto pt-4">
                         <div className="h-3 w-full rounded-full bg-gray-200">
                           <div
@@ -510,7 +512,9 @@ const MemberSiteView: React.FC = () => {
                       </div>
                     </CardContent>
                   </Card>
-                ))}
+                  );
+                })}
+
               </div>
 
               {totalCategoryPages > 1 && (
@@ -549,6 +553,11 @@ const MemberSiteView: React.FC = () => {
                 <h1 className="text-3xl font-bold mb-2 text-foreground">{selectedCategory.name}</h1>
                 {selectedCategory.description && <p className="text-sm text-muted-foreground">{selectedCategory.description}</p>}
                 <div className="mt-2 text-sm text-muted-foreground">コンテンツ数: {selectedCategory.content_count}</div>
+                {selectedCategoryBlocks && (
+                  <div className="prose prose-sm max-w-none text-foreground mt-6">
+                    {renderContentBlocks(selectedCategoryBlocks)}
+                  </div>
+                )}
               </div>
 
               <div className="max-w-4xl">
@@ -618,8 +627,8 @@ const MemberSiteView: React.FC = () => {
                 </header>
 
                 <div className="prose prose-lg max-w-none">
-                  {selectedContent.content_blocks && selectedContent.content_blocks.length > 0 ? (
-                    renderContentBlocks(selectedContent.content_blocks)
+                  {selectedContentBlocks ? (
+                    renderContentBlocks(selectedContentBlocks)
                   ) : selectedContent.content ? (
                     <div className="text-foreground leading-relaxed" dangerouslySetInnerHTML={{ __html: selectedContent.content }} />
                   ) : (
