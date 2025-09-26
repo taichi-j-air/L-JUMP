@@ -284,6 +284,13 @@ const MemberSiteBuilder = () => {
   const [sidebarActiveFgColor, setSidebarActiveFgColor] = useState("#ffffff");
   const [showContentCount, setShowContentCount] = useState(true);
 
+  // Access control state
+  const [requirePasscode, setRequirePasscode] = useState(false);
+  const [passcode, setPasscode] = useState("");
+  const [allTags, setAllTags] = useState<{id: string, name: string}[]>([]);
+  const [allowedTagIds, setAllowedTagIds] = useState<string[]>([]);
+  const [blockedTagIds, setBlockedTagIds] = useState<string[]>([]);
+
   // Content editing
   const [selectedContentId, setSelectedContentId] = useState<string | null>(null);
   const [contentTitle, setContentTitle] = useState("");
@@ -324,6 +331,10 @@ const MemberSiteBuilder = () => {
       setSidebarActiveBgColor("#60a5fa");
       setSidebarActiveFgColor("#ffffff");
       setShowContentCount(true);
+      setRequirePasscode(false);
+      setPasscode("");
+      setAllowedTagIds([]);
+      setBlockedTagIds([]);
       setSelectedContentId(null);
       setContentTitle("");
       setContentText("");
@@ -342,6 +353,7 @@ const MemberSiteBuilder = () => {
       loadSiteData();
       loadSiteContents();
       loadCategories();
+      loadTags();
     } else {
       // reset all when no site selected
       setSite(null);
@@ -360,6 +372,10 @@ const MemberSiteBuilder = () => {
       setSidebarActiveBgColor("#60a5fa");
       setSidebarActiveFgColor("#ffffff");
       setShowContentCount(true);
+      setRequirePasscode(false);
+      setPasscode("");
+      setAllowedTagIds([]);
+      setBlockedTagIds([]);
       setSiteContents([]);
       setSelectedContentId(null);
       setCategories([]);
@@ -382,6 +398,17 @@ const MemberSiteBuilder = () => {
       toast({ title: "エラー", description: "サイト一覧の読み込みに失敗しました", variant: "destructive" });
     } finally {
       setLoading(false);
+    }
+  };
+
+  const loadTags = async () => {
+    try {
+      const { data, error } = await supabase.from("tags").select("id, name");
+      if (error) throw error;
+      setAllTags(data || []);
+    } catch (error) {
+      console.error("Error loading tags:", error);
+      toast({ title: "エラー", description: "タグの読み込みに失敗しました", variant: "destructive" });
     }
   };
 
@@ -408,6 +435,12 @@ const MemberSiteBuilder = () => {
       setSidebarActiveBgColor(theme.sidebarActiveBgColor || "#60a5fa");
       setSidebarActiveFgColor(theme.sidebarActiveFgColor || "#ffffff");
       setShowContentCount(theme.showContentCount !== false);
+
+      // Load access control settings
+      setRequirePasscode(data.require_passcode || false);
+      setPasscode(data.passcode || "");
+      setAllowedTagIds(data.allowed_tag_ids || []);
+      setBlockedTagIds(data.blocked_tag_ids || []);
     } catch (error) {
       console.error("Error loading site:", error);
       toast({ title: "エラー", description: "サイト情報の読み込みに失敗しました", variant: "destructive" });
@@ -506,6 +539,10 @@ const MemberSiteBuilder = () => {
             price,
             is_published: isPublished,
             theme_config,
+            require_passcode: requirePasscode,
+            passcode: passcode,
+            allowed_tag_ids: allowedTagIds,
+            blocked_tag_ids: blockedTagIds,
           })
           .eq("id", siteId);
         if (error) throw error;
@@ -1398,6 +1435,74 @@ const MemberSiteBuilder = () => {
                       </div>
                     </CardContent>
                   </Card>
+
+                  {/* Access Control Card */}
+                  <Card>
+                    <CardHeader>
+                      <CardTitle>アクセス設定</CardTitle>
+                      <CardDescription>パスコードやLINE友だちのタグでサイトへのアクセスを制御します。</CardDescription>
+                    </CardHeader>
+                    <CardContent className="space-y-6">
+                      {/* Passcode Settings */}
+                      <div className="space-y-4 p-4 border rounded-lg">
+                        <h4 className="font-semibold">パスコード設定</h4>
+                        <div className="flex items-center space-x-2">
+                          <Switch id="require-passcode" checked={requirePasscode} onCheckedChange={setRequirePasscode} />
+                          <Label htmlFor="require-passcode">パスコードを必須にする</Label>
+                        </div>
+                        {requirePasscode && (
+                          <div className="space-y-2">
+                            <Label htmlFor="passcode">パスコード</Label>
+                            <Input id="passcode" type="text" value={passcode} onChange={(e) => setPasscode(e.target.value)} placeholder="パスコードを入力" />
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Tag Settings */}
+                      <div className="space-y-4 p-4 border rounded-lg">
+                        <h4 className="font-semibold">タグ設定</h4>
+                        <div className="space-y-2">
+                          <Label>閲覧を許可するタグ（いずれか1つ以上持っている場合にアクセスを許可）</Label>
+                          <div className="p-2 border rounded-md h-32 overflow-y-auto space-y-1">
+                            {allTags.map(tag => (
+                              <div key={tag.id} className="flex items-center space-x-2">
+                                <Checkbox
+                                  id={`allowed-${tag.id}`}
+                                  checked={allowedTagIds.includes(tag.id)}
+                                  onCheckedChange={(checked) => {
+                                    setAllowedTagIds(prev => 
+                                      checked ? [...prev, tag.id] : prev.filter(id => id !== tag.id)
+                                    );
+                                  }}
+                                />
+                                <Label htmlFor={`allowed-${tag.id}`} className="font-normal">{tag.name}</Label>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                        <div className="space-y-2">
+                          <Label>閲覧をブロックするタグ（いずれか1つでも持っている場合にアクセスを拒否）</Label>
+                          <div className="p-2 border rounded-md h-32 overflow-y-auto space-y-1">
+                            {allTags.map(tag => (
+                              <div key={tag.id} className="flex items-center space-x-2">
+                                <Checkbox
+                                  id={`blocked-${tag.id}`}
+                                  checked={blockedTagIds.includes(tag.id)}
+                                  onCheckedChange={(checked) => {
+                                    setBlockedTagIds(prev => 
+                                      checked ? [...prev, tag.id] : prev.filter(id => id !== tag.id)
+                                    );
+                                  }}
+                                />
+                                <Label htmlFor={`blocked-${tag.id}`} className="font-normal">{tag.name}</Label>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+
                   <Card>
                     <CardHeader>
                       <CardTitle>デザイン設定</CardTitle>
