@@ -536,7 +536,7 @@ const MemberSiteView: React.FC = () => {
 
           {/* コンテンツ一覧（テーブル） */}
           {currentView === 'content-list' && selectedCategory && (
-            <div className="px-3 py-3">
+            <div className="px-3 py-6">
               <Button
                 size="sm"
                 onClick={() => navigateToCategories()}
@@ -603,7 +603,7 @@ const MemberSiteView: React.FC = () => {
 
           {/* コンテンツ詳細 */}
           {currentView === 'content-detail' && selectedContent && (
-            <div className="px-3 py-3">
+            <div className="px-3 py-6">
               <Button
                 size="sm"
                 onClick={() => navigateToContentList(selectedContent.category_id || '')}

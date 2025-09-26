@@ -16,6 +16,10 @@ import { MediaLibrarySelector } from "@/components/MediaLibrarySelector";
 import { EnhancedBlockEditor } from "@/components/EnhancedBlockEditor";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Switch } from "@/components/ui/switch";
+import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors } from '@dnd-kit/core';
+import { SortableContext, verticalListSortingStrategy, useSortable, arrayMove } from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
+import { GripVertical } from "lucide-react";
 
 // Data Interfaces
 interface MemberSite {
@@ -55,11 +59,64 @@ interface Category {
   content_blocks?: any[] | null; // JSON array
 }
 
+interface SortableCategoryItemProps {
+  category: Category;
+  selectedCategoryId: string | null;
+  selectCategory: (category: Category) => void;
+  deleteCategory: (categoryId: string) => void;
+}
+
+const SortableCategoryItem: React.FC<SortableCategoryItemProps> = ({ category, selectedCategoryId, selectCategory, deleteCategory }) => {
+  const { attributes, listeners, setNodeRef, transform, transition } = useSortable({ id: category.id });
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+  };
+
+  return (
+    <div ref={setNodeRef} style={style} {...attributes} {...listeners} className="border-b border-border">
+      <TableRow
+        className={`cursor-pointer w-full ${selectedCategoryId === category.id ? "bg-[#0cb386]/20" : ""}`}
+        onClick={() => selectCategory(category)}
+      >
+        <TableCell className="py-2 text-left w-full">
+          <div className="flex items-center gap-2">
+            {category.thumbnail_url && <img src={category.thumbnail_url} className="w-6 h-6 object-cover rounded" alt="" />}
+            <div className="text-xs font-medium">{category.name}</div>
+          </div>
+          <div className="text-xs text-muted-foreground">{category.content_count}件のコンテンツ</div>
+        </TableCell>
+        <TableCell className="py-2 text-right w-1/4">
+          <div className="flex items-center justify-end gap-1">
+            <Button
+              size="sm"
+              variant="ghost"
+              className="h-5 w-5 p-0 text-destructive hover:text-destructive"
+              onClick={(e) => {
+                e.stopPropagation();
+                deleteCategory(category.id);
+              }}
+            >
+              <Trash2 className="w-3.5 h-3.5" />
+            </Button>
+          </div>
+        </TableCell>
+      </TableRow>
+    </div>
+  );
+};
+
 const MemberSiteBuilder = () => {
   const navigate = useNavigate();
   const { toast } = useToast();
   const [searchParams, setSearchParams] = useSearchParams();
   const siteId = searchParams.get("site");
+
+  const sensors = useSensors(
+    useSensor(PointerSensor),
+    useSensor(KeyboardSensor)
+  );
 
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -586,6 +643,35 @@ const MemberSiteBuilder = () => {
     }
   };
 
+  const handleDragEnd = async (event: any) => {
+    const { active, over } = event;
+
+    if (active.id !== over.id) {
+      const oldIndex = categories.findIndex(cat => cat.id === active.id);
+      const newIndex = categories.findIndex(cat => cat.id === over.id);
+
+      const newCategories = arrayMove(categories, oldIndex, newIndex);
+      setCategories(newCategories);
+
+      // データベースのsort_orderを更新
+      setSaving(true);
+      try {
+        for (let i = 0; i < newCategories.length; i++) {
+          await supabase
+            .from("member_site_categories")
+            .update({ sort_order: i })
+            .eq("id", newCategories[i].id);
+        }
+        toast({ title: "並べ替え完了", description: "カテゴリの順序を保存しました" });
+      } catch (error) {
+        console.error("Error updating category sort order:", error);
+        toast({ title: "エラー", description: "カテゴリの順序の保存に失敗しました", variant: "destructive" });
+      } finally {
+        setSaving(false);
+      }
+    }
+  };
+
   const selectedContent = siteContents.find((c) => c.id === selectedContentId);
   const selectedCategory = categories.find((c) => c.id === selectedCategoryId);
 
@@ -938,41 +1024,17 @@ const MemberSiteBuilder = () => {
                         {categories.length === 0 ? (
                           <p className="text-xs text-muted-foreground p-4">カテゴリがありません</p>
                         ) : (
-                          <Table className="w-full border-collapse">
-                            <TableBody>
-                              {categories.map((category, index) => (
-                                <div key={category.id} className={`border-t border-border ${index === 0 ? "border-t-0" : ""} ${index === categories.length - 1 ? "border-b" : ""}`}>
-                                  <TableRow
-                                    className={`cursor-pointer w-full ${selectedCategoryId === category.id ? "bg-[#0cb386]/20" : ""}`}
-                                    onClick={() => selectCategory(category)}
-                                  >
-                                    <TableCell className="py-2 text-left w-full">
-                                      <div className="flex items-center gap-2">
-                                        {category.thumbnail_url && <img src={category.thumbnail_url} className="w-6 h-6 object-cover rounded" alt="" />}
-                                        <div className="text-xs font-medium">{category.name}</div>
-                                      </div>
-                                      <div className="text-xs text-muted-foreground">{category.content_count}件のコンテンツ</div>
-                                    </TableCell>
-                                    <TableCell className="py-2 text-right w-1/4">
-                                      <div className="flex items-center justify-end gap-1">
-                                        <Button
-                                          size="sm"
-                                          variant="ghost"
-                                          className="h-5 w-5 p-0 text-destructive hover:text-destructive"
-                                          onClick={(e) => {
-                                            e.stopPropagation();
-                                            deleteCategory(category.id);
-                                          }}
-                                        >
-                                          <Trash2 className="w-3.5 h-3.5" />
-                                        </Button>
-                                      </div>
-                                    </TableCell>
-                                  </TableRow>
-                                </div>
-                              ))}
-                            </TableBody>
-                          </Table>
+                          <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+                            <SortableContext items={categories.map(c => c.id)} strategy={verticalListSortingStrategy}>
+                              <Table className="w-full border-collapse">
+                                <TableBody className="border-t border-border">
+                                  {categories.map((category) => (
+                                    <SortableCategoryItem key={category.id} category={category} selectedCategoryId={selectedCategoryId} selectCategory={selectCategory} deleteCategory={deleteCategory} />
+                                  ))}
+                                </TableBody>
+                              </Table>
+                            </SortableContext>
+                          </DndContext>
                         )}
                       </div>
                     </div>
