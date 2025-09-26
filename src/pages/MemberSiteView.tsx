@@ -466,7 +466,7 @@ const MemberSiteView: React.FC = () => {
         {sideMenuOpen && <div className="fixed inset-0 bg-black/50 z-20 md:hidden" onClick={() => setSideMenuOpen(false)} />}
 
         {/* メイン */}
-        <main className="flex-1 min-h-screen">
+        <main className={`flex-1 min-h-screen ${currentView !== 'categories' ? 'max-[500px]:bg-white' : ''}`}>
           {/* カテゴリ一覧 */}
           {currentView === 'categories' && (
             <div className="px-3 py-6">
@@ -532,17 +532,17 @@ const MemberSiteView: React.FC = () => {
 
           {/* コンテンツ一覧（テーブル） */}
           {currentView === 'content-list' && selectedCategory && (
-            <div className="px-3 py-6">
+            <div className="md:px-3 py-6">
               <Button
                 size="sm"
                 onClick={() => navigateToCategories()}
-                className="flex items-center gap-1 mb-2 bg-transparent text-[#292929] hover:bg-transparent hover:opacity-70"
+                className="flex items-center gap-1 mb-2 bg-transparent text-[#292929] hover:bg-transparent hover:opacity-70 px-3 md:px-0"
               >
                 <ChevronLeft className="h-4 w-4" />
                 戻る
               </Button>
-              <div className="max-w-4xl mx-auto">
-                <div className="bg-white border rounded-lg shadow-sm p-6 space-y-8">
+              <div className="w-full md:max-w-4xl md:mx-auto">
+                <div className="bg-white shadow-sm p-6 space-y-8 min-[500px]:border min-[500px]:rounded-lg">
                   <div>
                     <h1 className="text-3xl font-bold mb-2 text-foreground">{selectedCategory.name}</h1>
                     {selectedCategory.description && <p className="text-sm text-muted-foreground">{selectedCategory.description}</p>}
