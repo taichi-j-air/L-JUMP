@@ -431,8 +431,9 @@ const MemberSiteView: React.FC = () => {
           <Button
             variant="ghost"
             size="sm"
-            className="md:hidden"
+            className={`md:hidden ${sideMenuOpen ? 'rounded-md' : ''}`}
             onClick={() => setSideMenuOpen(!sideMenuOpen)}
+            style={sideMenuOpen ? { backgroundColor: sidebarColors.activeBackground, color: sidebarColors.activeForeground } : {}}
           >
             {sideMenuOpen ? <X className="h-4 w-4" /> : <Menu className="h-4 w-4" />}
           </Button>
