@@ -427,7 +427,7 @@ const MemberSiteView: React.FC = () => {
       <div className="flex">
         {/* サイドバー */}
         <aside
-          className={`fixed md:static inset-y-0 left-0 z-30 w-64 border-r border-border transform transition-transform duration-300 ease-in-out ${
+          className={`fixed md:static inset-y-0 left-0 z-30 w-64 border-r border-border transform transition-transform duration-300 ease-in-out top-16 ${
             sideMenuOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'
           }`}
           style={{ backgroundColor: sidebarColors.background, color: sidebarColors.foreground }}
@@ -533,11 +533,11 @@ const MemberSiteView: React.FC = () => {
 
           {/* コンテンツ一覧（テーブル） */}
           {currentView === 'content-list' && selectedCategory && (
-            <div className="px-3 py-6">
+            <div className="px-3 py-3">
               <Button
                 size="sm"
                 onClick={() => navigateToCategories()}
-                className="flex items-center gap-1 mb-4 bg-transparent text-[#292929] hover:bg-transparent hover:opacity-70"
+                className="flex items-center gap-1 mb-2 bg-transparent text-[#292929] hover:bg-transparent hover:opacity-70"
               >
                 <ChevronLeft className="h-4 w-4" />
                 戻る
@@ -600,11 +600,11 @@ const MemberSiteView: React.FC = () => {
 
           {/* コンテンツ詳細 */}
           {currentView === 'content-detail' && selectedContent && (
-            <div className="px-3 py-6">
+            <div className="px-3 py-3">
               <Button
                 size="sm"
                 onClick={() => navigateToContentList(selectedContent.category_id || '')}
-                className="flex items-center gap-1 mb-4 bg-transparent text-[#292929] hover:bg-transparent hover:opacity-70"
+                className="flex items-center gap-1 mb-2 bg-transparent text-[#292929] hover:bg-transparent hover:opacity-70"
               >
                 <ChevronLeft className="h-4 w-4" />
                 戻る
