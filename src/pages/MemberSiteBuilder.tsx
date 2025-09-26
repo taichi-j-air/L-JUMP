@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { Button } from "@/components/ui/button";
@@ -8,7 +7,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { ArrowLeft, Save, Eye, Plus, Trash2, Settings, Image as ImageIcon, ExternalLink } from "lucide-react";
+import { ArrowLeft, Save, Eye, Plus, Trash2, Settings, Image as ImageIcon, ExternalLink, GripVertical } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { Table, TableBody, TableCell, TableRow } from "@/components/ui/table";
@@ -16,10 +15,47 @@ import { MediaLibrarySelector } from "@/components/MediaLibrarySelector";
 import { EnhancedBlockEditor } from "@/components/EnhancedBlockEditor";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Switch } from "@/components/ui/switch";
-import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors } from '@dnd-kit/core';
-import { SortableContext, verticalListSortingStrategy, useSortable, arrayMove } from '@dnd-kit/sortable';
-import { CSS } from '@dnd-kit/utilities';
-import { GripVertical } from "lucide-react";
+import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors } from "@dnd-kit/core";
+import { SortableContext, verticalListSortingStrategy, useSortable, arrayMove } from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
+
+/* =========================
+   追加インストール不要のローカル Modifiers
+   ========================= */
+// clamp ユーティリティ
+const clamp = (v: number, min: number, max: number) => Math.min(Math.max(v, min), max);
+
+/** 水平方向の移動を禁止（上下のみ） */
+const restrictToVerticalAxis = ({ transform }: any) => {
+  return { ...transform, x: 0 };
+};
+
+/** 親コンテナの枠内に移動を制限（上下のみ） */
+const restrictToParentElement = (args: any) => {
+  const { transform } = args;
+  // dnd-kit の実装差異に備え、いくつかの候補から枠矩形・要素矩形を拾う
+  const container =
+    args.scrollableAncestorRects?.[0] ??
+    args.containerNodeRect ??
+    args.windowRect ??
+    null;
+  const activeRect = args.draggingNodeRect ?? args.activeNodeRect ?? null;
+
+  if (!container || !activeRect) {
+    // 情報が取れない環境でも横移動は殺しておく
+    return { ...transform, x: 0 };
+  }
+
+  const offsetTop = activeRect.top - container.top;
+  const minY = -offsetTop; // これ以上上だと枠外
+  const maxY = container.height - activeRect.height - offsetTop; // これ以上下だと枠外
+
+  return {
+    ...transform,
+    x: 0,
+    y: clamp(transform.y, minY, maxY),
+  };
+};
 
 // Data Interfaces
 interface MemberSite {
@@ -59,36 +95,66 @@ interface Category {
   content_blocks?: any[] | null; // JSON array
 }
 
+/* ========== Sortables: 共通スタイル ========== */
+const useSortableStyle = (transform: any, transition: string | undefined, isDragging: boolean) =>
+  ({
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.9 : 1,
+  } as React.CSSProperties);
+
+/* ========== カテゴリ行（ドラッグハンドル左） ========== */
 interface SortableCategoryItemProps {
   category: Category;
   selectedCategoryId: string | null;
   selectCategory: (category: Category) => void;
   deleteCategory: (categoryId: string) => void;
 }
-
-const SortableCategoryItem: React.FC<SortableCategoryItemProps> = ({ category, selectedCategoryId, selectCategory, deleteCategory }) => {
-  const { attributes, listeners, setNodeRef, transform, transition } = useSortable({ id: category.id });
-
-  const style = {
-    transform: CSS.Transform.toString(transform),
-    transition,
-  };
+const SortableCategoryItem: React.FC<SortableCategoryItemProps> = ({
+  category,
+  selectedCategoryId,
+  selectCategory,
+  deleteCategory,
+}) => {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: category.id });
+  const style = useSortableStyle(transform, transition, isDragging);
 
   return (
-    <div ref={setNodeRef} style={style} {...attributes} {...listeners} className="border-b border-border">
+    <div ref={setNodeRef} style={style} className="border-b border-border">
       <TableRow
         className={`cursor-pointer w-full ${selectedCategoryId === category.id ? "bg-[#0cb386]/20" : ""}`}
         onClick={() => selectCategory(category)}
       >
+        {/* ← 左端ハンドル */}
+        <TableCell className="py-2 w-8 align-middle">
+          <button
+            type="button"
+            aria-label="ドラッグで並び替え"
+            {...attributes}
+            {...listeners}
+            onClick={(e) => e.stopPropagation()}
+            className="h-6 w-6 flex items-center justify-center rounded hover:bg-muted cursor-grab active:cursor-grabbing"
+            style={{ touchAction: "none" }}
+            title="ドラッグで並び替え"
+          >
+            <GripVertical className="w-3.5 h-3.5" />
+          </button>
+        </TableCell>
+
+        {/* 本文 */}
         <TableCell className="py-2 text-left w-full">
           <div className="flex items-center gap-2">
-            {category.thumbnail_url && <img src={category.thumbnail_url} className="w-6 h-6 object-cover rounded" alt="" />}
+            {category.thumbnail_url && (
+              <img src={category.thumbnail_url} className="w-6 h-6 object-cover rounded" alt="" draggable={false} />
+            )}
             <div className="text-xs font-medium">{category.name}</div>
           </div>
           <div className="text-xs text-muted-foreground">{category.content_count}件のコンテンツ</div>
         </TableCell>
+
+        {/* 右端アクション */}
         <TableCell className="py-2 text-right w-1/4">
-          <div className="flex items-center justify-end gap-1">
+          <div className="flex items-center justify-end gap-2">
             <Button
               size="sm"
               variant="ghost"
@@ -97,6 +163,7 @@ const SortableCategoryItem: React.FC<SortableCategoryItemProps> = ({ category, s
                 e.stopPropagation();
                 deleteCategory(category.id);
               }}
+              title="削除"
             >
               <Trash2 className="w-3.5 h-3.5" />
             </Button>
@@ -107,14 +174,87 @@ const SortableCategoryItem: React.FC<SortableCategoryItemProps> = ({ category, s
   );
 };
 
+/* ========== コンテンツ行（ドラッグハンドル左） ========== */
+interface SortableContentItemProps {
+  content: SiteContent;
+  selectedContentId: string | null;
+  selectContent: (content: SiteContent) => void;
+  deleteContent: (contentId: string) => void;
+}
+const SortableContentItem: React.FC<SortableContentItemProps> = ({
+  content,
+  selectedContentId,
+  selectContent,
+  deleteContent,
+}) => {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: content.id });
+  const style = useSortableStyle(transform, transition, isDragging);
+
+  return (
+    <div ref={setNodeRef} style={style} className="border-t border-border first:border-t-0">
+      <TableRow
+        className={`cursor-pointer w-full ${selectedContentId === content.id ? "bg-[#0cb386]/20" : ""}`}
+        onClick={() => selectContent(content)}
+      >
+        {/* ← 左端ハンドル */}
+        <TableCell className="py-1 w-8 align-top">
+          <button
+            type="button"
+            aria-label="ドラッグで並び替え"
+            {...attributes}
+            {...listeners}
+            onClick={(e) => e.stopPropagation()}
+            className="h-5 w-5 flex items-center justify-center rounded hover:bg-muted cursor-grab active:cursor-grabbing"
+            style={{ touchAction: "none" }}
+            title="ドラッグで並び替え"
+          >
+            <GripVertical className="w-3.5 h-3.5" />
+          </button>
+        </TableCell>
+
+        {/* 本文 */}
+        <TableCell className="py-1 text-left align-top w-full">
+          <div className="flex items-center gap-2">
+            <span className={`h-2 w-2 rounded-full ${content.is_published ? "bg-green-500" : "bg-red-500"}`}></span>
+            <div className="h-4 w-px bg-border"></div>
+            <div className="min-w-0 flex-1">
+              <div className="text-xs font-medium truncate">{content.title}</div>
+            </div>
+          </div>
+        </TableCell>
+
+        {/* 右端アクション */}
+        <TableCell className="py-1 text-right align-top w-1/4">
+          <div className="flex items-center justify-end gap-1">
+            <Button
+              size="sm"
+              variant="ghost"
+              className="h-5 w-5 p-0 text-destructive hover:text-destructive"
+              onClick={(e) => {
+                e.stopPropagation();
+                deleteContent(content.id);
+              }}
+              title="削除"
+            >
+              <Trash2 className="h-3 w-3" />
+            </Button>
+          </div>
+        </TableCell>
+      </TableRow>
+    </div>
+  );
+};
+
+/* ========== メイン ========== */
 const MemberSiteBuilder = () => {
   const navigate = useNavigate();
   const { toast } = useToast();
   const [searchParams, setSearchParams] = useSearchParams();
   const siteId = searchParams.get("site");
 
+  /** ハンドル運用向け：2px移動でドラッグ開始（誤作動防止） */
   const sensors = useSensors(
-    useSensor(PointerSensor),
+    useSensor(PointerSensor, { activationConstraint: { distance: 2 } }),
     useSensor(KeyboardSensor)
   );
 
@@ -234,10 +374,7 @@ const MemberSiteBuilder = () => {
   const loadSites = async () => {
     setLoading(true);
     try {
-      const { data, error } = await supabase
-        .from("member_sites")
-        .select("*")
-        .order("created_at", { ascending: false });
+      const { data, error } = await supabase.from("member_sites").select("*").order("created_at", { ascending: false });
       if (error) throw error;
       setSites((data || []).map((d: any) => ({ ...d, access_type: (d.access_type || "paid") as "free" | "paid" })));
     } catch (error) {
@@ -289,11 +426,13 @@ const MemberSiteBuilder = () => {
         .eq("site_id", siteId)
         .order("sort_order", { ascending: true });
       if (error) throw error;
-      setSiteContents((data || []).map(item => ({
-        ...item,
-        page_type: item.page_type as "page" | "post" | "landing",
-        access_level: item.access_level as "public" | "premium" | "member"
-      })));
+      setSiteContents(
+        (data || []).map((item) => ({
+          ...item,
+          page_type: item.page_type as "page" | "post" | "landing",
+          access_level: item.access_level as "public" | "premium" | "member",
+        }))
+      );
     } catch (error) {
       console.error("Error loading contents:", error);
     }
@@ -320,9 +459,7 @@ const MemberSiteBuilder = () => {
           created_at: cat.created_at,
           thumbnail_url: cat.thumbnail_url ?? null,
           content_blocks: Array.isArray(cat.content_blocks) ? cat.content_blocks : [],
-          content_count: Array.isArray(cat.member_site_content)
-            ? cat.member_site_content.length
-            : cat.member_site_content?.[0]?.count ?? 0,
+          content_count: Array.isArray(cat.member_site_content) ? cat.member_site_content.length : cat.member_site_content?.[0]?.count ?? 0,
         })) ?? [];
 
       setCategories(formatted);
@@ -347,16 +484,16 @@ const MemberSiteBuilder = () => {
   const saveSite = async () => {
     setSaving(true);
     try {
-      const theme_config = { 
-        headerBgColor, 
-        headerFgColor, 
-        sidebarBgColor, 
-        sidebarFgColor, 
-        sidebarHoverBgColor, 
+      const theme_config = {
+        headerBgColor,
+        headerFgColor,
+        sidebarBgColor,
+        sidebarFgColor,
+        sidebarHoverBgColor,
         sidebarHoverFgColor,
         sidebarActiveBgColor,
         sidebarActiveFgColor,
-        showContentCount 
+        showContentCount,
       };
       if (siteId && siteId !== "new") {
         const { error } = await supabase
@@ -376,12 +513,12 @@ const MemberSiteBuilder = () => {
         const { data, error } = await supabase
           .from("member_sites")
           .insert({
-            name: siteName,
-            description: siteDescription,
-            slug: siteSlug,
-            access_type: accessType,
-            price,
-            is_published: isPublished,
+            name: "新しいサイト",
+            description: "",
+            slug: `site-${Date.now()}`,
+            access_type: "paid",
+            price: 0,
+            is_published: false,
             theme_config,
             user_id: (await supabase.auth.getUser()).data.user?.id,
           })
@@ -553,7 +690,7 @@ const MemberSiteBuilder = () => {
           site_id: siteId,
           sort_order: categories.length,
           thumbnail_url: null,
-          content_blocks: [], // 空配列で作成
+          content_blocks: [],
         })
         .select()
         .single();
@@ -588,7 +725,7 @@ const MemberSiteBuilder = () => {
         site_id: siteId,
         sort_order: categories.length,
         thumbnail_url: categoryThumbnailUrl,
-        content_blocks: Array.isArray(categoryBlocks) ? categoryBlocks : [], // 常に配列
+        content_blocks: Array.isArray(categoryBlocks) ? categoryBlocks : [],
       };
 
       if (selectedCategoryId) {
@@ -614,7 +751,7 @@ const MemberSiteBuilder = () => {
     setCategoryName(category.name);
     setCategoryDescription(category.description || "");
     setCategoryThumbnailUrl(category.thumbnail_url ?? null);
-    setCategoryBlocks(Array.isArray(category.content_blocks) ? category.content_blocks : []);
+    setCategoryBlocks(Array.isArray(category.content_blocks) ? categoryBlocks : []);
   };
 
   const deleteCategory = async (categoryId: string) => {
@@ -643,32 +780,53 @@ const MemberSiteBuilder = () => {
     }
   };
 
-  const handleDragEnd = async (event: any) => {
+  /** ▼▼ 並べ替え（カテゴリ）上下のみ＆枠内のみ ▼▼ */
+  const handleCategoryDragEnd = async (event: any) => {
     const { active, over } = event;
+    if (!over || active.id === over.id) return;
 
-    if (active.id !== over.id) {
-      const oldIndex = categories.findIndex(cat => cat.id === active.id);
-      const newIndex = categories.findIndex(cat => cat.id === over.id);
+    const oldIndex = categories.findIndex((cat) => cat.id === active.id);
+    const newIndex = categories.findIndex((cat) => cat.id === over.id);
 
-      const newCategories = arrayMove(categories, oldIndex, newIndex);
-      setCategories(newCategories);
+    const newCategories = arrayMove(categories, oldIndex, newIndex);
+    setCategories(newCategories);
 
-      // データベースのsort_orderを更新
-      setSaving(true);
-      try {
-        for (let i = 0; i < newCategories.length; i++) {
-          await supabase
-            .from("member_site_categories")
-            .update({ sort_order: i })
-            .eq("id", newCategories[i].id);
-        }
-        toast({ title: "並べ替え完了", description: "カテゴリの順序を保存しました" });
-      } catch (error) {
-        console.error("Error updating category sort order:", error);
-        toast({ title: "エラー", description: "カテゴリの順序の保存に失敗しました", variant: "destructive" });
-      } finally {
-        setSaving(false);
+    setSaving(true);
+    try {
+      for (let i = 0; i < newCategories.length; i++) {
+        await supabase.from("member_site_categories").update({ sort_order: i }).eq("id", newCategories[i].id);
       }
+      toast({ title: "並べ替え完了", description: "カテゴリの順序を保存しました" });
+    } catch (error) {
+      console.error("Error updating category sort order:", error);
+      toast({ title: "エラー", description: "カテゴリの順序の保存に失敗しました", variant: "destructive" });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  /** ▼▼ 並べ替え（コンテンツ）上下のみ＆枠内のみ ▼▼ */
+  const handleContentDragEnd = async (event: any) => {
+    const { active, over } = event;
+    if (!over || active.id === over.id) return;
+
+    const oldIndex = siteContents.findIndex((c) => c.id === active.id);
+    const newIndex = siteContents.findIndex((c) => c.id === over.id);
+
+    const newList = arrayMove(siteContents, oldIndex, newIndex).map((c, i) => ({ ...c, sort_order: i }));
+    setSiteContents(newList);
+
+    setSaving(true);
+    try {
+      for (let i = 0; i < newList.length; i++) {
+        await supabase.from("member_site_content").update({ sort_order: i }).eq("id", newList[i].id);
+      }
+      toast({ title: "並べ替え完了", description: "コンテンツの順序を保存しました" });
+    } catch (error) {
+      console.error("Error updating content sort order:", error);
+      toast({ title: "エラー", description: "コンテンツの順序の保存に失敗しました", variant: "destructive" });
+    } finally {
+      setSaving(false);
     }
   };
 
@@ -750,7 +908,10 @@ const MemberSiteBuilder = () => {
                                 e.stopPropagation();
                                 const publicUrl = `https://rtjxurmuaawyzjcdkqxt.supabase.co/functions/v1/member-site-view?slug=${s.slug}&uid=[UID]`;
                                 navigator.clipboard.writeText(publicUrl);
-                                toast({ title: "URLをコピーしました", description: "公開URLをクリップボードにコピーされました。[UID]をLINE友達のショートUIDに置き換えてください。" });
+                                toast({
+                                  title: "URLをコピーしました",
+                                  description: "公開URLをクリップボードにコピーされました。[UID]をLINE友達のショートUIDに置き換えてください。",
+                                });
                               }}
                               title="公開URLをコピー"
                             >
@@ -840,51 +1001,48 @@ const MemberSiteBuilder = () => {
                       </div>
                       <div className="flex-grow overflow-y-auto">
                         {siteContents.length === 0 ? (
-                          <p className="text-xs text-muted-foreground">ページがありません</p>
+                          <p className="text-xs text-muted-foreground p-2">ページがありません</p>
                         ) : (
-                          <Table className="w-full border-collapse">
-                            <TableBody>
-                              {siteContents
-                                .filter((content) =>
-                                  filterCategoryId === "all" ||
-                                  (filterCategoryId === "unassigned" && !content.category_id) ||
-                                  (content.category_id === filterCategoryId)
+                          <DndContext
+                            sensors={sensors}
+                            collisionDetection={closestCenter}
+                            onDragEnd={handleContentDragEnd}
+                            /* ← 上下のみ＆親枠内のみ（ローカル実装） */
+                            modifiers={[restrictToVerticalAxis, restrictToParentElement]}
+                          >
+                            <SortableContext
+                              items={siteContents
+                                .filter(
+                                  (content) =>
+                                    filterCategoryId === "all" ||
+                                    (filterCategoryId === "unassigned" && !content.category_id) ||
+                                    content.category_id === filterCategoryId
                                 )
-                                .map((content, index) => (
-                                <div key={content.id} className={`border-t border-border ${index === 0 ? "border-t-0" : ""} ${index === siteContents.length - 1 ? "border-b" : ""}`}>
-                                  <TableRow
-                                    className={`cursor-pointer w-full ${selectedContentId === content.id ? "bg-[#0cb386]/20" : ""}`}
-                                    onClick={() => selectContent(content)}
-                                  >
-                                    <TableCell className="py-1 text-left align-top w-full">
-                                      <div className="flex items-center gap-2">
-                                        <span className={`h-2 w-2 rounded-full ${content.is_published ? "bg-green-500" : "bg-red-500"}`}></span>
-                                        <div className="h-4 w-px bg-border"></div>
-                                        <div className="min-w-0 flex-1">
-                                          <div className="text-xs font-medium truncate">{content.title}</div>
-                                        </div>
-                                      </div>
-                                    </TableCell>
-                                    <TableCell className="py-1 text-right align-top w-1/4">
-                                      <div className="flex items-center justify-end gap-1">
-                                        <Button
-                                          size="sm"
-                                          variant="ghost"
-                                          className="h-5 w-5 p-0 text-destructive hover:text-destructive"
-                                          onClick={(e) => {
-                                            e.stopPropagation();
-                                            deleteContent(content.id);
-                                          }}
-                                        >
-                                          <Trash2 className="h-3 w-3" />
-                                        </Button>
-                                      </div>
-                                    </TableCell>
-                                  </TableRow>
-                                </div>
-                              ))}
-                            </TableBody>
-                          </Table>
+                                .map((c) => c.id)}
+                              strategy={verticalListSortingStrategy}
+                            >
+                              <Table className="w-full border-collapse">
+                                <TableBody>
+                                  {siteContents
+                                    .filter(
+                                      (content) =>
+                                        filterCategoryId === "all" ||
+                                        (filterCategoryId === "unassigned" && !content.category_id) ||
+                                        content.category_id === filterCategoryId
+                                    )
+                                    .map((content) => (
+                                      <SortableContentItem
+                                        key={content.id}
+                                        content={content}
+                                        selectedContentId={selectedContentId}
+                                        selectContent={selectContent}
+                                        deleteContent={deleteContent}
+                                      />
+                                    ))}
+                                </TableBody>
+                              </Table>
+                            </SortableContext>
+                          </DndContext>
                         )}
                       </div>
                     </div>
@@ -1024,12 +1182,24 @@ const MemberSiteBuilder = () => {
                         {categories.length === 0 ? (
                           <p className="text-xs text-muted-foreground p-4">カテゴリがありません</p>
                         ) : (
-                          <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
-                            <SortableContext items={categories.map(c => c.id)} strategy={verticalListSortingStrategy}>
+                          <DndContext
+                            sensors={sensors}
+                            collisionDetection={closestCenter}
+                            onDragEnd={handleCategoryDragEnd}
+                            /* ← 上下のみ＆親枠内のみ（ローカル実装） */
+                            modifiers={[restrictToVerticalAxis, restrictToParentElement]}
+                          >
+                            <SortableContext items={categories.map((c) => c.id)} strategy={verticalListSortingStrategy}>
                               <Table className="w-full border-collapse">
                                 <TableBody className="border-t border-border">
                                   {categories.map((category) => (
-                                    <SortableCategoryItem key={category.id} category={category} selectedCategoryId={selectedCategoryId} selectCategory={selectCategory} deleteCategory={deleteCategory} />
+                                    <SortableCategoryItem
+                                      key={category.id}
+                                      category={category}
+                                      selectedCategoryId={selectedCategoryId}
+                                      selectCategory={selectCategory}
+                                      deleteCategory={deleteCategory}
+                                    />
                                   ))}
                                 </TableBody>
                               </Table>
@@ -1073,7 +1243,6 @@ const MemberSiteBuilder = () => {
                                 value={categoryThumbnailUrl ?? ""}
                                 onChange={(e) => setCategoryThumbnailUrl(e.target.value || null)}
                               />
-                              <p className="text-xs text-muted-foreground">直接URLを入力するか、下の「画像を選択」ボタンからメディアライブラリを開いて設定できます。</p>
                             </div>
 
                             <div className="space-y-2">
@@ -1214,7 +1383,6 @@ const MemberSiteBuilder = () => {
                           <Switch checked={isPublished} onCheckedChange={setIsPublished} id="is-published" />
                           <Label htmlFor="is-published">サイトを公開する</Label>
                         </label>
-                        
                       </div>
                     </CardContent>
                   </Card>
@@ -1228,37 +1396,15 @@ const MemberSiteBuilder = () => {
                         <div className="space-y-2">
                           <Label htmlFor="header-bg-color">ヘッダー背景色</Label>
                           <div className="flex items-center gap-2">
-                            <Input
-                              id="header-bg-color"
-                              type="color"
-                              value={headerBgColor}
-                              onChange={(e) => setHeaderBgColor(e.target.value)}
-                              className="p-1 h-10 w-14"
-                            />
-                            <Input
-                              type="text"
-                              value={headerBgColor}
-                              onChange={(e) => setHeaderBgColor(e.target.value)}
-                              placeholder="#FFFFFF"
-                            />
+                            <Input id="header-bg-color" type="color" value={headerBgColor} onChange={(e) => setHeaderBgColor(e.target.value)} className="p-1 h-10 w-14" />
+                            <Input type="text" value={headerBgColor} onChange={(e) => setHeaderBgColor(e.target.value)} placeholder="#FFFFFF" />
                           </div>
                         </div>
                         <div className="space-y-2">
                           <Label htmlFor="header-fg-color">ヘッダー文字色</Label>
                           <div className="flex items-center gap-2">
-                            <Input
-                              id="header-fg-color"
-                              type="color"
-                              value={headerFgColor}
-                              onChange={(e) => setHeaderFgColor(e.target.value)}
-                              className="p-1 h-10 w-14"
-                            />
-                            <Input
-                              type="text"
-                              value={headerFgColor}
-                              onChange={(e) => setHeaderFgColor(e.target.value)}
-                              placeholder="#000000"
-                            />
+                            <Input id="header-fg-color" type="color" value={headerFgColor} onChange={(e) => setHeaderFgColor(e.target.value)} className="p-1 h-10 w-14" />
+                            <Input type="text" value={headerFgColor} onChange={(e) => setHeaderFgColor(e.target.value)} placeholder="#000000" />
                           </div>
                         </div>
                       </div>
@@ -1266,37 +1412,15 @@ const MemberSiteBuilder = () => {
                         <div className="space-y-2">
                           <Label htmlFor="sidebar-bg-color">サイドバー背景色</Label>
                           <div className="flex items-center gap-2">
-                            <Input
-                              id="sidebar-bg-color"
-                              type="color"
-                              value={sidebarBgColor}
-                              onChange={(e) => setSidebarBgColor(e.target.value)}
-                              className="p-1 h-10 w-14"
-                            />
-                            <Input
-                              type="text"
-                              value={sidebarBgColor}
-                              onChange={(e) => setSidebarBgColor(e.target.value)}
-                              placeholder="#FFFFFF"
-                            />
+                            <Input id="sidebar-bg-color" type="color" value={sidebarBgColor} onChange={(e) => setSidebarBgColor(e.target.value)} className="p-1 h-10 w-14" />
+                            <Input type="text" value={sidebarBgColor} onChange={(e) => setSidebarBgColor(e.target.value)} placeholder="#FFFFFF" />
                           </div>
                         </div>
                         <div className="space-y-2">
                           <Label htmlFor="sidebar-fg-color">サイドバー文字色</Label>
                           <div className="flex items-center gap-2">
-                            <Input
-                              id="sidebar-fg-color"
-                              type="color"
-                              value={sidebarFgColor}
-                              onChange={(e) => setSidebarFgColor(e.target.value)}
-                              className="p-1 h-10 w-14"
-                            />
-                            <Input
-                              type="text"
-                              value={sidebarFgColor}
-                              onChange={(e) => setSidebarFgColor(e.target.value)}
-                              placeholder="#000000"
-                            />
+                            <Input id="sidebar-fg-color" type="color" value={sidebarFgColor} onChange={(e) => setSidebarFgColor(e.target.value)} className="p-1 h-10 w-14" />
+                            <Input type="text" value={sidebarFgColor} onChange={(e) => setSidebarFgColor(e.target.value)} placeholder="#000000" />
                           </div>
                         </div>
                       </div>
@@ -1311,12 +1435,7 @@ const MemberSiteBuilder = () => {
                               onChange={(e) => setSidebarHoverBgColor(e.target.value)}
                               className="p-1 h-10 w-14"
                             />
-                            <Input
-                              type="text"
-                              value={sidebarHoverBgColor}
-                              onChange={(e) => setSidebarHoverBgColor(e.target.value)}
-                              placeholder="#f1f5f9"
-                            />
+                            <Input type="text" value={sidebarHoverBgColor} onChange={(e) => setSidebarHoverBgColor(e.target.value)} placeholder="#f1f5f9" />
                           </div>
                         </div>
                         <div className="space-y-2">
@@ -1329,12 +1448,7 @@ const MemberSiteBuilder = () => {
                               onChange={(e) => setSidebarHoverFgColor(e.target.value)}
                               className="p-1 h-10 w-14"
                             />
-                            <Input
-                              type="text"
-                              value={sidebarHoverFgColor}
-                              onChange={(e) => setSidebarHoverFgColor(e.target.value)}
-                              placeholder="#000000"
-                            />
+                            <Input type="text" value={sidebarHoverFgColor} onChange={(e) => setSidebarHoverFgColor(e.target.value)} placeholder="#000000" />
                           </div>
                         </div>
                       </div>
@@ -1349,12 +1463,7 @@ const MemberSiteBuilder = () => {
                               onChange={(e) => setSidebarActiveBgColor(e.target.value)}
                               className="p-1 h-10 w-14"
                             />
-                            <Input
-                              type="text"
-                              value={sidebarActiveBgColor}
-                              onChange={(e) => setSidebarActiveBgColor(e.target.value)}
-                              placeholder="#60a5fa"
-                            />
+                            <Input type="text" value={sidebarActiveBgColor} onChange={(e) => setSidebarActiveBgColor(e.target.value)} placeholder="#60a5fa" />
                           </div>
                         </div>
                         <div className="space-y-2">
@@ -1367,27 +1476,15 @@ const MemberSiteBuilder = () => {
                               onChange={(e) => setSidebarActiveFgColor(e.target.value)}
                               className="p-1 h-10 w-14"
                             />
-                            <Input
-                              type="text"
-                              value={sidebarActiveFgColor}
-                              onChange={(e) => setSidebarActiveFgColor(e.target.value)}
-                              placeholder="#ffffff"
-                            />
+                            <Input type="text" value={sidebarActiveFgColor} onChange={(e) => setSidebarActiveFgColor(e.target.value)} placeholder="#ffffff" />
                           </div>
                         </div>
                       </div>
                       <div className="space-y-2">
                         <Label>その他</Label>
                         <div className="flex items-center space-x-2">
-                          <Checkbox
-                            id="show-content-count"
-                            checked={showContentCount}
-                            onCheckedChange={(checked) => setShowContentCount(checked as boolean)}
-                          />
-                          <label
-                            htmlFor="show-content-count"
-                            className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
-                          >
+                          <Checkbox id="show-content-count" checked={showContentCount} onCheckedChange={(checked) => setShowContentCount(checked as boolean)} />
+                          <label htmlFor="show-content-count" className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70">
                             サイドバーにコンテンツ数を表示する
                           </label>
                         </div>
