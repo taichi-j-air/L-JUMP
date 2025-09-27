@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useParams, useSearchParams } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { LoadingSpinner } from '@/components/LoadingSpinner';
@@ -66,7 +66,20 @@ const MemberSiteView: React.FC = () => {
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
   const [authFailed, setAuthFailed] = useState<boolean>(false);
+  const [requirePasscode, setRequirePasscode] = useState<boolean>(false);
+  const [passcode, setPasscode] = useState<string>(passcodeParam || '');
+  const [passcodeError, setPasscodeError] = useState<string | null>(null);
+  const [submittingPasscode, setSubmittingPasscode] = useState<boolean>(false);
   const [sideMenuOpen, setSideMenuOpen] = useState<boolean>(false);
+
+  const preview = searchParams.get('preview') === 'true';
+
+  const isMountedRef = useRef(true);
+  useEffect(() => {
+    return () => {
+      isMountedRef.current = false;
+    };
+  }, []);
 
   // レイアウトレスポンシブ
   const [isDesktop, setIsDesktop] = useState<boolean>(() =>
@@ -91,77 +104,154 @@ const MemberSiteView: React.FC = () => {
     activeForeground: themeConfig.sidebarActiveFgColor || 'hsl(var(--primary-foreground))',
   };
 
-  // フェッチ
-  useEffect(() => {
-    let isMounted = true;
-    const fetchData = async () => {
-      if (!slug) return;
+  // フェッチと認証
+  const fetchData = useCallback(async (providedPasscode?: string) => {
+    if (!slug) {
+      return;
+    }
+
+    if (isMountedRef.current) {
       setLoading(true);
       setError(null);
       setAuthFailed(false);
+      setRequirePasscode(false);
+      setPasscodeError(null);
+    }
 
-      try {
-        const preview = searchParams.get('preview') === 'true';
+    try {
+      if (preview) {
+        const { data: siteData, error: siteError } = await supabase
+          .from('member_sites')
+          .select('*')
+          .eq('slug', slug)
+          .maybeSingle();
+        if (siteError) throw siteError;
+        if (!siteData) throw new Error('サイトが見つかりません。');
 
-        if (preview) {
-          // Preview logic
-          const { data: siteData, error: siteError } = await supabase.from('member_sites').select('*').eq('slug', slug).maybeSingle();
-          if (siteError) throw siteError;
-          if (!siteData) throw new Error('サイトが見つかりません。');
+        const { data: categoryData, error: catError } = await supabase
+          .from('member_site_categories')
+          .select('*')
+          .eq('site_id', siteData.id)
+          .order('sort_order');
+        if (catError) throw catError;
 
-          const { data: categoryData, error: catError } = await supabase.from('member_site_categories').select('*').eq('site_id', siteData.id).order('sort_order');
-          if (catError) throw catError;
+        const { data: contentData, error: contError } = await supabase
+          .from('member_site_content')
+          .select('*')
+          .eq('site_id', siteData.id)
+          .order('sort_order');
+        if (contError) throw contError;
 
-          const { data: contentData, error: contError } = await supabase.from('member_site_content').select('*').eq('site_id', siteData.id).order('sort_order');
-          if (contError) throw contError;
-
-          if (isMounted) {
-            setSite(siteData);
-            setCategories(categoryData || []);
-            setContents(contentData || []);
-          }
-        } else {
-          // Public access via Edge Function
-          const params = new URLSearchParams({ slug });
-          if (uid) params.append('uid', uid);
-          if (passcodeParam) params.append('passcode', passcodeParam);
-
-          const res = await fetch(
-            `https://rtjxurmuaawyzjcdkqxt.supabase.co/functions/v1/member-site-view?${params.toString()}`,
-            { method: 'GET', headers: { 'Content-Type': 'application/json' } }
-          );
-
-          if (!res.ok) {
-            // Any auth error will lead to the generic auth failed screen
-            setAuthFailed(true);
-            return;
-          }
-
-          const result = await res.json();
-          if (isMounted) {
-            setSite(result.site as MemberSite);
-            setCategories((result.categories || []) as MemberSiteCategory[]);
-            setContents((result.content || []) as MemberSiteContent[]);
-          }
+        if (isMountedRef.current) {
+          setSite(siteData);
+          setCategories(categoryData || []);
+          setContents(contentData || []);
         }
-      } catch (err) {
-        console.error('Error fetching member site data:', err);
-        if (isMounted) {
-          setError(err instanceof Error ? err.message : 'エラーが発生しました。');
-        }
-      } finally {
-        if (isMounted) {
-          setLoading(false);
-        }
+        return;
       }
-    };
 
-    fetchData();
-    return () => {
-      isMounted = false;
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [slug, uid, passcodeParam]);
+      const params = new URLSearchParams({ slug });
+      if (uid) params.append('uid', uid);
+
+      const passcodeToUse = providedPasscode ?? passcodeParam;
+      if (passcodeToUse) {
+        params.append('passcode', passcodeToUse);
+      }
+
+      const res = await fetch(
+        `https://rtjxurmuaawyzjcdkqxt.supabase.co/functions/v1/member-site-view?${params.toString()}`,
+        { method: 'GET', headers: { 'Content-Type': 'application/json' } }
+      );
+
+      if (!res.ok) {
+        let parsed: any = null;
+        try {
+          parsed = await res.json();
+        } catch {
+          parsed = null;
+        }
+
+        if (isMountedRef.current) {
+          setSite(null);
+          setCategories([]);
+          setContents([]);
+        }
+
+        const rawCode = parsed?.errorCode ?? parsed?.error ?? parsed?.code;
+        const normalizedCode = typeof rawCode === 'string' ? rawCode.toUpperCase() : undefined;
+        const message = typeof parsed?.message === 'string' ? parsed.message : (typeof parsed?.error === 'string' ? parsed.error : undefined);
+        const messageLower = message?.toLowerCase() || '';
+        const isPasscodeRequired = normalizedCode === 'PASSCODE_REQUIRED' || messageLower.includes('passcode required');
+        const isInvalidPasscode = normalizedCode === 'INVALID_PASSCODE' || messageLower.includes('invalid passcode');
+
+        if (isPasscodeRequired) {
+          if (isMountedRef.current) {
+            setRequirePasscode(true);
+          }
+          return;
+        }
+
+        if (isInvalidPasscode) {
+          if (isMountedRef.current) {
+            setRequirePasscode(true);
+            setPasscodeError('パスコードが正しくありません');
+          }
+          return;
+        }
+
+        if (isMountedRef.current) {
+          setAuthFailed(true);
+        }
+        return;
+      }
+
+      const result = await res.json();
+      if (isMountedRef.current) {
+        setSite(result.site as MemberSite);
+        setCategories((result.categories || []) as MemberSiteCategory[]);
+        setContents((result.content || []) as MemberSiteContent[]);
+        setRequirePasscode(false);
+        setPasscodeError(null);
+      }
+    } catch (error) {
+      console.error('Error fetching member site data:', error);
+      if (isMountedRef.current) {
+        setError(error instanceof Error ? error.message : 'エラーが発生しました。時間を置いてから再度アクセスしてください。');
+      }
+    } finally {
+      if (isMountedRef.current) {
+        setLoading(false);
+      }
+    }
+  }, [slug, uid, passcodeParam, preview]);
+
+  useEffect(() => {
+    void fetchData();
+  }, [fetchData]);
+
+  useEffect(() => {
+    if (passcodeParam) {
+      setPasscode(passcodeParam);
+    }
+  }, [passcodeParam]);
+
+  const handlePasscodeSubmit = useCallback(async () => {
+    const trimmed = passcode.trim();
+    if (!trimmed) {
+      setPasscodeError('パスコードを入力してください');
+      return;
+    }
+
+    setPasscodeError(null);
+    setSubmittingPasscode(true);
+    try {
+      await fetchData(trimmed);
+    } finally {
+      if (isMountedRef.current) {
+        setSubmittingPasscode(false);
+      }
+    }
+  }, [passcode, fetchData]);
 
   // レスポンシブ
   useEffect(() => {
@@ -309,6 +399,49 @@ const MemberSiteView: React.FC = () => {
   }
 
   // ローディング／エラー
+  if (requirePasscode) {
+    return (
+      <div className="min-h-screen bg-background flex flex-col">
+        <main className="flex-1 flex items-center justify-center px-4">
+          <Card className="w-full max-w-md">
+            <CardContent className="p-8 space-y-6">
+              <div className="space-y-2 text-center">
+                <h1 className="text-2xl font-bold">パスコードを入力してください</h1>
+                <p className="text-sm text-muted-foreground">会員サイトの閲覧にはパスコードの入力が必要です。</p>
+              </div>
+              <div className="space-y-3">
+                <Input
+                  type="password"
+                  value={passcode}
+                  onChange={(e) => setPasscode(e.target.value)}
+                  placeholder="パスコードを入力"
+                  disabled={submittingPasscode}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      e.preventDefault();
+                      void handlePasscodeSubmit();
+                    }
+                  }}
+                />
+                {passcodeError && <p className="text-sm text-destructive text-left">{passcodeError}</p>}
+                <Button
+                  className="w-full"
+                  onClick={() => void handlePasscodeSubmit()}
+                  disabled={submittingPasscode}
+                >
+                  {submittingPasscode ? '確認中...' : '送信'}
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        </main>
+        <footer className="text-center text-sm text-muted-foreground py-4">
+          © {new Date().getFullYear()}
+        </footer>
+      </div>
+    );
+  }
+
   if (loading) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
