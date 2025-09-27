@@ -729,8 +729,6 @@ const MemberSiteView: React.FC = () => {
                   <div className="prose prose-lg max-w-none">
                     {selectedContentBlocks ? (
                       renderContentBlocks(selectedContentBlocks)
-                    ) : selectedContent.content ? (
-                      <div className="text-foreground leading-relaxed" dangerouslySetInnerHTML={{ __html: selectedContent.content }} />
                     ) : (
                       <p className="text-muted-foreground">コンテンツが準備中です。</p>
                     )}

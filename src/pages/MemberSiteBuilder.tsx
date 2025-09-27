@@ -250,7 +250,7 @@ const MemberSiteBuilder = () => {
   // Content editing
   const [selectedContentId, setSelectedContentId] = useState<string | null>(null);
   const [contentTitle, setContentTitle] = useState("");
-  const [contentText, setContentText] = useState("");
+  const [contentBlocks, setContentBlocks] = useState<any[]>([]);
   const [contentSlug, setContentSlug] = useState("");
   const [contentPublished, setContentPublished] = useState(false);
   const [contentCategoryId, setContentCategoryId] = useState<string>("none");
@@ -291,7 +291,7 @@ const MemberSiteBuilder = () => {
       setBlockedTagIds([]);
       setSelectedContentId(null);
       setContentTitle("");
-      setContentText("");
+      setContentBlocks([]);
       setContentSlug("");
       setContentPublished(false);
       setContentCategoryId("none");
@@ -544,7 +544,8 @@ const MemberSiteBuilder = () => {
         .from("member_site_content")
         .update({
           title: contentTitle,
-          content: contentText,
+          content_blocks: contentBlocks, // Save new block data
+          content: "", // Clear legacy field
           slug: contentSlug,
           is_published: contentPublished,
           category_id: contentCategoryId === "none" ? null : contentCategoryId,
@@ -605,7 +606,7 @@ const MemberSiteBuilder = () => {
         .insert({
           site_id: siteId,
           title: "新しいページ",
-          content: "",
+          content_blocks: [], // Initialize with empty blocks array
           slug: `page-${Date.now()}`,
           is_published: false,
           sort_order: siteContents.length,
@@ -636,11 +637,24 @@ const MemberSiteBuilder = () => {
   const selectContent = (content: SiteContent) => {
     setSelectedContentId(content.id);
     setContentTitle(content.title);
-    setContentText(content.content || "");
     setContentSlug(content.slug);
     setContentPublished(content.is_published);
     setContentCategoryId(content.category_id || "none");
     setContentSortOrder(content.sort_order);
+
+    // Handle content_blocks (new) and content (legacy)
+    if (content.content_blocks && Array.isArray(content.content_blocks) && content.content_blocks.length > 0) {
+      setContentBlocks(content.content_blocks);
+    } else if (content.content) {
+      // Convert legacy text content to a single paragraph block
+      setContentBlocks([{
+        id: `block-${Date.now()}`,
+        type: 'paragraph',
+        data: { text: content.content }
+      }]);
+    } else {
+      setContentBlocks([]);
+    }
   };
 
   const deleteContent = async (contentId: string) => {
@@ -1096,14 +1110,13 @@ const MemberSiteBuilder = () => {
                             </div>
 
                             <div className="space-y-2">
-                              <Label htmlFor="contentText">コンテンツ</Label>
-                              <Textarea
-                                id="contentText"
-                                value={contentText}
-                                onChange={(e) => setContentText(e.target.value)}
-                                rows={15}
-                                placeholder="ページの内容を入力してください"
-                              />
+                              <Label>コンテンツ</Label>
+                              <div className="p-2 border rounded-md min-h-[300px]">
+                                <EnhancedBlockEditor
+                                  blocks={contentBlocks}
+                                  onChange={setContentBlocks}
+                                />
+                              </div>
                             </div>
 
                             <Button onClick={saveContent} disabled={saving} className="w-full">
