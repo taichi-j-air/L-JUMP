@@ -962,7 +962,7 @@ const MemberSiteBuilder = () => {
                         {siteContents.length === 0 ? (
                           <p className="text-xs text-muted-foreground p-2">ページがありません</p>
                         ) : (
-                          <Table className="w-full border-collapse">
+                          <Table className="w-full border-collapse table-fixed">
                             <TableBody>
                               {siteContents
                                 .filter(
