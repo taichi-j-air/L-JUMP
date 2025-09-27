@@ -225,8 +225,6 @@ const MemberSiteBuilder = () => {
   const [contentTitle, setContentTitle] = useState("");
   const [contentText, setContentText] = useState("");
   const [contentSlug, setContentSlug] = useState("");
-  const [contentType, setContentType] = useState<"page" | "post" | "landing">("page");
-  const [contentAccessLevel, setContentAccessLevel] = useState<"public" | "member" | "premium">("member");
   const [contentPublished, setContentPublished] = useState(false);
   const [contentCategoryId, setContentCategoryId] = useState<string>("none");
   const [contentSortOrder, setContentSortOrder] = useState(0);
@@ -268,8 +266,6 @@ const MemberSiteBuilder = () => {
       setContentTitle("");
       setContentText("");
       setContentSlug("");
-      setContentType("page");
-      setContentAccessLevel("member");
       setContentPublished(false);
       setContentCategoryId("none");
       setSelectedCategoryId(null);
@@ -523,8 +519,6 @@ const MemberSiteBuilder = () => {
           title: contentTitle,
           content: contentText,
           slug: contentSlug,
-          page_type: contentType,
-          access_level: contentAccessLevel,
           is_published: contentPublished,
           category_id: contentCategoryId === "none" ? null : contentCategoryId,
           sort_order: contentSortOrder,
@@ -586,8 +580,6 @@ const MemberSiteBuilder = () => {
           title: "新しいページ",
           content: "",
           slug: `page-${Date.now()}`,
-          page_type: "page",
-          access_level: "member",
           is_published: false,
           sort_order: siteContents.length,
         })
@@ -619,8 +611,6 @@ const MemberSiteBuilder = () => {
     setContentTitle(content.title);
     setContentText(content.content || "");
     setContentSlug(content.slug);
-    setContentType(content.page_type);
-    setContentAccessLevel(content.access_level);
     setContentPublished(content.is_published);
     setContentCategoryId(content.category_id || "none");
     setContentSortOrder(content.sort_order);
@@ -1030,33 +1020,7 @@ const MemberSiteBuilder = () => {
                               </div>
                             </div>
 
-                            <div className="grid grid-cols-4 gap-4">
-                              <div className="space-y-2">
-                                <Label htmlFor="contentType">ページタイプ</Label>
-                                <Select value={contentType} onValueChange={(v: "page" | "post" | "landing") => setContentType(v)}>
-                                  <SelectTrigger>
-                                    <SelectValue />
-                                  </SelectTrigger>
-                                  <SelectContent className="bg-background border z-50">
-                                    <SelectItem value="page">ページ</SelectItem>
-                                    <SelectItem value="post">投稿</SelectItem>
-                                    <SelectItem value="landing">ランディング</SelectItem>
-                                  </SelectContent>
-                                </Select>
-                              </div>
-                              <div className="space-y-2">
-                                <Label htmlFor="contentAccessLevel">アクセスレベル</Label>
-                                <Select value={contentAccessLevel} onValueChange={(v: "public" | "member" | "premium") => setContentAccessLevel(v)}>
-                                  <SelectTrigger>
-                                    <SelectValue />
-                                  </SelectTrigger>
-                                  <SelectContent className="bg-background border z-50">
-                                    <SelectItem value="public">パブリック</SelectItem>
-                                    <SelectItem value="member">会員限定</SelectItem>
-                                    <SelectItem value="premium">プレミアム会員限定</SelectItem>
-                                  </SelectContent>
-                                </Select>
-                              </div>
+                            <div className="grid grid-cols-3 gap-4">
                               <div className="space-y-2">
                                 <Label htmlFor="category">カテゴリ</Label>
                                 <Select value={contentCategoryId} onValueChange={setContentCategoryId}>
@@ -1073,11 +1037,10 @@ const MemberSiteBuilder = () => {
                                   </SelectContent>
                                 </Select>
                               </div>
-                              <div className="space-y-2">
-                                <Label>公開設定</Label>
-                                <label className="flex items-center space-x-2">
-                                  <input type="checkbox" checked={contentPublished} onChange={(e) => setContentPublished(e.target.checked)} />
-                                  <span>公開する</span>
+                              <div className="space-y-2 flex items-end">
+                                <label className="flex items-center space-x-2 pb-2">
+                                  <Switch checked={contentPublished} onCheckedChange={setContentPublished} id="content-published" />
+                                  <Label htmlFor="content-published">公開する</Label>
                                 </label>
                               </div>
                               <div className="space-y-2">
