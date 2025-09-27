@@ -511,15 +511,44 @@ export const EnhancedBlockEditor: React.FC<EnhancedBlockEditorProps> = (props) =
           <Button size="sm" variant={block.content.alignment === 'right' ? "default" : "ghost"} className="h-8 w-8 p-0" onClick={() => updateBlock(block.id, { ...block.content, alignment: 'right' })}><AlignRight className="h-3 w-3" /></Button>
         </div>
 
-        <Input
-          type="number"
-          placeholder="サイズ"
-          value={parseInt(block.content.fontSize || '16') || 16}
-          onChange={(e) => updateBlock(block.id, { ...block.content, fontSize: `${e.target.value}px` })}
-          className="w-20 h-8"
-          min={8}
-          max={72}
-        />
+        <div className="flex items-center space-x-1">
+          <Button
+            size="sm"
+            variant="outline"
+            className="h-8 w-8 p-0"
+            onClick={() => {
+              const currentSize = parseInt(block.content.fontSize || '16') || 16;
+              const newSize = Math.max(8, currentSize - 1); // min 8
+              updateBlock(block.id, { ...block.content, fontSize: `${newSize}px` });
+            }}
+          >
+            <Minus className="h-3 w-3" />
+          </Button>
+          <Input
+            type="number"
+            placeholder="サイズ"
+            value={parseInt(block.content.fontSize || '16') || 16}
+            onChange={(e) => {
+                const newSize = Math.max(8, Math.min(72, Number(e.target.value))); // min 8, max 72
+                updateBlock(block.id, { ...block.content, fontSize: `${newSize}px` })
+            }}
+            className="w-16 h-8 text-center"
+            min={8}
+            max={72}
+          />
+          <Button
+            size="sm"
+            variant="outline"
+            className="h-8 w-8 p-0"
+            onClick={() => {
+              const currentSize = parseInt(block.content.fontSize || '16') || 16;
+              const newSize = Math.min(72, currentSize + 1); // max 72
+              updateBlock(block.id, { ...block.content, fontSize: `${newSize}px` });
+            }}
+          >
+            <Plus className="h-3 w-3" />
+          </Button>
+        </div>
 
         <div className="flex items-center space-x-1">
           <Palette className="h-3 w-3" />
