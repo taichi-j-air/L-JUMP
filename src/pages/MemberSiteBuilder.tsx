@@ -1117,6 +1117,8 @@ const MemberSiteBuilder = () => {
                                 <EnhancedBlockEditor
                                   blocks={contentBlocks}
                                   onChange={setContentBlocks}
+                                  hideBackgroundBlockButton={true}
+                                  hideTemplateButton={true}
                                 />
                               </div>
                             </div>

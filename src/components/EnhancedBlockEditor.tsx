@@ -67,6 +67,8 @@ interface EnhancedBlockEditorProps {
   blocks?: Block[];
   value?: Block[];
   onChange: (blocks: Block[]) => void;
+  hideBackgroundBlockButton?: boolean; // 追加
+  hideTemplateButton?: boolean;       // 追加
 }
 
 /* =========================
@@ -1422,24 +1424,28 @@ export const EnhancedBlockEditor: React.FC<EnhancedBlockEditorProps> = (props) =
             <Button variant="ghost" className="flex flex-col h-auto py-2" onClick={() => addBlock('video')}><Video className="h-5 w-5 mb-1" /><span className="text-xs">動画</span></Button>
             <Button variant="ghost" className="flex flex-col h-auto py-2" onClick={() => addBlock('button')}><Link className="h-5 w-5 mb-1" /><span className="text-xs">ボタン</span></Button>
             <Button variant="ghost" className="flex flex-col h-auto py-2" onClick={() => addBlock('form_embed')}><FileText className="h-5 w-5 mb-1" /><span className="text-xs">フォーム</span></Button>
-            <Button variant="ghost" className="flex flex-col h-auto py-2 hover:bg-[#0cb386] group" onClick={() => addBlock('background')} disabled={hasBackgroundBlock}>
-              <Palette className="h-5 w-5 mb-1 text-[#0cb386] group-hover:text-white" />
-              <span className="text-xs text-[#0cb386] group-hover:text-white">背景色</span>
-            </Button>
-            <Dialog>
-              <DialogTrigger asChild>
-                <Button variant="ghost" className="flex flex-col h-auto py-2 hover:bg-[#0cb386] group">
-                  <Folder className="h-5 w-5 mb-1 text-[#0cb386] group-hover:text-white" />
-                  <span className="text-xs text-[#0cb386] group-hover:text-white">テンプレート</span>
-                </Button>
-              </DialogTrigger>
-              <DialogContent>
-                <DialogHeader>
-                  <DialogTitle>テンプレートを選択</DialogTitle>
-                </DialogHeader>
-                <p>ポップアップウィンドウの内容は後で指定されます。</p>
-              </DialogContent>
-            </Dialog>
+            {!props.hideBackgroundBlockButton && (
+              <Button variant="ghost" className="flex flex-col h-auto py-2 hover:bg-[#0cb386] group" onClick={() => addBlock('background')} disabled={hasBackgroundBlock}>
+                <Palette className="h-5 w-5 mb-1 text-[#0cb386] group-hover:text-white" />
+                <span className="text-xs text-[#0cb386] group-hover:text-white">背景色</span>
+              </Button>
+            )}
+            {!props.hideTemplateButton && (
+              <Dialog>
+                <DialogTrigger asChild>
+                  <Button variant="ghost" className="flex flex-col h-auto py-2 hover:bg-[#0cb386] group">
+                    <Folder className="h-5 w-5 mb-1 text-[#0cb386] group-hover:text-white" />
+                    <span className="text-xs text-[#0cb386] group-hover:text-white">テンプレート</span>
+                  </Button>
+                </DialogTrigger>
+                <DialogContent>
+                  <DialogHeader>
+                    <DialogTitle>テンプレートを選択</DialogTitle>
+                  </DialogHeader>
+                  <p>ポップアップウィンドウの内容は後で指定されます。</p>
+                </DialogContent>
+              </Dialog>
+            )}
           </div>
         </div>
       </div>
