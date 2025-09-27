@@ -84,3 +84,6 @@ verify_jwt = true
 
 [functions.member-site-view]
 verify_jwt = false
+
+[functions.member-site-progress]
+verify_jwt = false

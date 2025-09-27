@@ -142,7 +142,7 @@ Deno.serve(async (req) => {
     });
 
   } catch (error) {
-    console.error('Internal Server Error:', error.message);
+    console.error('Internal Server Error:', error instanceof Error ? error.message : error);
     return errorResponse('Internal server error', 500, 'SERVER_ERROR');
   }
 });

@@ -32,6 +32,8 @@ Deno.serve(async (req) => {
   }
 
   const { slug, uid, contentId, completed } = payload || {}
+  
+  console.log('Progress update request:', { slug, uid, contentId, completed })
 
   if (!slug || typeof slug !== 'string') {
     return errorResponse('Site slug is required', 400, 'BAD_REQUEST')
