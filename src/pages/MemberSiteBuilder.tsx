@@ -82,6 +82,7 @@ interface SiteContent {
   access_level: "public" | "member" | "premium";
   sort_order: number;
   category_id?: string | null;
+  content_blocks?: any[] | null;
 }
 
 interface Category {
@@ -422,6 +423,7 @@ const MemberSiteBuilder = () => {
           ...item,
           page_type: item.page_type as "page" | "post" | "landing",
           access_level: item.access_level as "public" | "premium" | "member",
+          content_blocks: Array.isArray(item.content_blocks) ? item.content_blocks : [],
         }))
       );
     } catch (error) {
@@ -621,7 +623,7 @@ const MemberSiteBuilder = () => {
       setContentPublished(data.is_published);
       setContentCategoryId(data.category_id || "none");
       setContentSortOrder(data.sort_order);
-      setContentBlocks(data.content_blocks || []);
+      setContentBlocks(Array.isArray(data.content_blocks) ? data.content_blocks : []);
 
       loadSiteContents();
       toast({ title: "作成完了", description: "新しいページを作成しました" });

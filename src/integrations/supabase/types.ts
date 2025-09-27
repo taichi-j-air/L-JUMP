@@ -723,6 +723,8 @@ export type Database = {
       }
       member_site_categories: {
         Row: {
+          allowed_tag_ids: string[] | null
+          blocked_tag_ids: string[] | null
           content_blocks: Json
           content_count: number | null
           created_at: string
@@ -735,6 +737,8 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          allowed_tag_ids?: string[] | null
+          blocked_tag_ids?: string[] | null
           content_blocks?: Json
           content_count?: number | null
           created_at?: string
@@ -747,6 +751,8 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          allowed_tag_ids?: string[] | null
+          blocked_tag_ids?: string[] | null
           content_blocks?: Json
           content_count?: number | null
           created_at?: string
@@ -763,6 +769,8 @@ export type Database = {
       member_site_content: {
         Row: {
           access_level: string
+          allowed_tag_ids: string[] | null
+          blocked_tag_ids: string[] | null
           category_id: string | null
           content: string | null
           content_blocks: Json | null
@@ -778,6 +786,8 @@ export type Database = {
         }
         Insert: {
           access_level?: string
+          allowed_tag_ids?: string[] | null
+          blocked_tag_ids?: string[] | null
           category_id?: string | null
           content?: string | null
           content_blocks?: Json | null
@@ -793,6 +803,8 @@ export type Database = {
         }
         Update: {
           access_level?: string
+          allowed_tag_ids?: string[] | null
+          blocked_tag_ids?: string[] | null
           category_id?: string | null
           content?: string | null
           content_blocks?: Json | null
