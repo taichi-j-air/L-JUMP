@@ -44,6 +44,7 @@ interface MemberSiteContent {
   sort_order: number;
   page_type: string;
   progress_percentage?: number | null;
+  progress_status?: 'completed' | 'incomplete';
 }
 
 const MemberSiteView: React.FC = () => {
@@ -71,8 +72,25 @@ const MemberSiteView: React.FC = () => {
   const [passcodeError, setPasscodeError] = useState<string | null>(null);
   const [submittingPasscode, setSubmittingPasscode] = useState<boolean>(false);
   const [sideMenuOpen, setSideMenuOpen] = useState<boolean>(false);
+  const [updatingProgress, setUpdatingProgress] = useState<boolean>(false);
+  const [progressUpdateError, setProgressUpdateError] = useState<string | null>(null);
 
   const preview = searchParams.get('preview') === 'true';
+
+  const selectedCategory = useMemo(
+    () => categories.find((c) => c.id === categoryId),
+    [categories, categoryId]
+  );
+
+  const selectedContent = useMemo(
+    () => contents.find((c) => c.id === contentId),
+    [contents, contentId]
+  );
+
+  const isContentCompleted = useMemo(
+    () => (selectedContent ? (selectedContent.progress_percentage ?? 0) >= 100 : false),
+    [selectedContent]
+  );
 
   const isMountedRef = useRef(true);
   useEffect(() => {
@@ -235,6 +253,10 @@ const MemberSiteView: React.FC = () => {
     }
   }, [passcodeParam]);
 
+  useEffect(() => {
+    setProgressUpdateError(null);
+  }, [contentId]);
+
   const handlePasscodeSubmit = useCallback(async () => {
     const trimmed = passcode.trim();
     if (!trimmed) {
@@ -329,6 +351,101 @@ const MemberSiteView: React.FC = () => {
     });
     setSideMenuOpen(false);
   };
+
+  const handleToggleCompletion = useCallback(async () => {
+    if (!selectedContent || !slug) {
+      return;
+    }
+
+    if (!uid) {
+      setProgressUpdateError('UIDが指定されていないため、学習状況を記録できません。');
+      return;
+    }
+
+    if (updatingProgress) {
+      return;
+    }
+
+    const contentIdCurrent = selectedContent.id;
+    const wasCompleted = (selectedContent.progress_percentage ?? 0) >= 100;
+    const nextCompleted = !wasCompleted;
+
+    setProgressUpdateError(null);
+    setUpdatingProgress(true);
+
+    setContents(prev =>
+      prev.map(item =>
+        item.id === contentIdCurrent
+          ? {
+              ...item,
+              progress_percentage: nextCompleted ? 100 : 0,
+              progress_status: nextCompleted ? 'completed' : 'incomplete',
+            }
+          : item
+      )
+    );
+
+    try {
+      const response = await fetch(
+        'https://rtjxurmuaawyzjcdkqxt.supabase.co/functions/v1/member-site-progress',
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            slug,
+            uid,
+            contentId: contentIdCurrent,
+            completed: nextCompleted,
+          }),
+        }
+      );
+
+      const result = await response.json().catch(() => null);
+
+      if (!response.ok || !result?.success) {
+        throw new Error(
+          (result && typeof result.error === 'string' && result.error) || '学習状況の更新に失敗しました'
+        );
+      }
+
+      setContents(prev =>
+        prev.map(item =>
+          item.id === contentIdCurrent
+            ? {
+                ...item,
+                progress_percentage:
+                  typeof result.progress_percentage === 'number'
+                    ? result.progress_percentage
+                    : nextCompleted
+                      ? 100
+                      : 0,
+                progress_status:
+                  (result.status as 'completed' | 'incomplete' | undefined) ??
+                  (nextCompleted ? 'completed' : 'incomplete'),
+              }
+            : item
+        )
+      );
+    } catch (error) {
+      console.error('Failed to toggle completion:', error);
+      setProgressUpdateError(
+        error instanceof Error ? error.message : '学習状況の更新に失敗しました'
+      );
+      setContents(prev =>
+        prev.map(item =>
+          item.id === contentIdCurrent
+            ? {
+                ...item,
+                progress_percentage: wasCompleted ? 100 : 0,
+                progress_status: wasCompleted ? 'completed' : 'incomplete',
+              }
+            : item
+        )
+      );
+    } finally {
+      setUpdatingProgress(false);
+    }
+  }, [selectedContent, slug, uid, updatingProgress]);
 
   // コンテンツブロック描画
   const normalizeBlocks = (blocks: any): Block[] | null => {
@@ -462,10 +579,6 @@ const MemberSiteView: React.FC = () => {
       </div>
     );
   }
-
-  const selectedCategory = categories.find(c => c.id === categoryId);
-  const categoryContents = contents.filter(c => (categoryId ? c.category_id === categoryId : true));
-  const selectedContent = contents.find(c => c.id === contentId);
 
   const selectedCategoryBlocks = selectedCategory ? categoryBlocksMap.get(selectedCategory.id) || normalizeBlocks(selectedCategory.content_blocks) : null;
   const selectedContentBlocks = selectedContent ? normalizeBlocks(selectedContent.content_blocks) : null;
@@ -731,6 +844,26 @@ const MemberSiteView: React.FC = () => {
                       renderContentBlocks(selectedContentBlocks)
                     ) : (
                       <p className="text-muted-foreground">コンテンツが準備中です。</p>
+                    )}
+                  </div>
+                  <div className="border-t pt-6 flex flex-col gap-3">
+                    <span className="text-sm text-muted-foreground">
+                      学習状況: <span className="font-semibold text-foreground">{isContentCompleted ? "完了" : "未完了"}</span>
+                    </span>
+                    <Button
+                      onClick={() => void handleToggleCompletion()}
+                      disabled={updatingProgress || !uid}
+                      className={`w-full sm:w-auto ${isContentCompleted ? "bg-emerald-500 hover:bg-emerald-600 text-white" : ""}`}
+                    >
+                      {updatingProgress ? "更新中..." : isContentCompleted ? "完了" : "完了を押す"}
+                    </Button>
+                    {!uid && (
+                      <p className="text-xs text-muted-foreground">
+                        UIDが指定されていないため、学習状況は保存されません。
+                      </p>
+                    )}
+                    {progressUpdateError && (
+                      <p className="text-sm text-destructive">{progressUpdateError}</p>
                     )}
                   </div>
                 </div>

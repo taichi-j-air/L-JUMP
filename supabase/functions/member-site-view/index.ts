@@ -100,19 +100,42 @@ Deno.serve(async (req) => {
     }
 
     // 5. Success - Fetch data and return
-    const [{ data: categories, error: catError }, { data: content, error: contError }] = await Promise.all([
+    const [{ data: categories, error: catError }, { data: content, error: contError }, { data: progressRows, error: progressError }] = await Promise.all([
       supabase.from('member_site_categories').select('*').eq('site_id', site.id).order('sort_order'),
       supabase.from('member_site_content').select('*').eq('site_id', site.id).eq('is_published', true).order('sort_order'),
+      supabase
+        .from('member_site_content_progress')
+        .select('content_id, status, progress_percentage')
+        .eq('site_id', site.id)
+        .eq('friend_id', friendData.id),
     ]);
 
     if (catError) throw catError;
     if (contError) throw contError;
+    if (progressError) throw progressError;
+
+    const progressMap = new Map<string, { status: string; progress_percentage: number }>();
+    (progressRows || []).forEach((row) => {
+      progressMap.set(row.content_id, {
+        status: row.status ?? 'completed',
+        progress_percentage: typeof row.progress_percentage === 'number' ? row.progress_percentage : 100,
+      });
+    });
+
+    const enrichedContent = (content || []).map((item) => {
+      const progress = progressMap.get(item.id) || { status: 'incomplete', progress_percentage: 0 };
+      return {
+        ...item,
+        progress_status: progress.status,
+        progress_percentage: progress.progress_percentage,
+      };
+    });
 
     return new Response(JSON.stringify({
       success: true,
       site,
       categories: categories || [],
-      content: content || [],
+      content: enrichedContent,
     }), {
       status: 200,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
