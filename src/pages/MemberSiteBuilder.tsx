@@ -390,7 +390,13 @@ const MemberSiteBuilder = () => {
   const loadSites = async () => {
     setLoading(true);
     try {
-      const { data, error } = await supabase.from("member_sites").select("*").order("created_at", { ascending: false });
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) {
+        setSites([]);
+        toast({ title: "エラー", description: "ユーザー情報が取得できませんでした。", variant: "destructive" });
+        return;
+      }
+      const { data, error } = await supabase.from("member_sites").select("*").eq("user_id", user.id).order("created_at", { ascending: false });
       if (error) throw error;
       setSites((data || []).map((d: any) => ({ ...d, access_type: (d.access_type || "paid") as "free" | "paid" })));
     } catch (error) {
