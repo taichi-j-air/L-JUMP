@@ -174,77 +174,6 @@ const SortableCategoryItem: React.FC<SortableCategoryItemProps> = ({
   );
 };
 
-/* ========== コンテンツ行（ドラッグハンドル左） ========== */
-interface SortableContentItemProps {
-  content: SiteContent;
-  selectedContentId: string | null;
-  selectContent: (content: SiteContent) => void;
-  deleteContent: (contentId: string) => void;
-}
-const SortableContentItem: React.FC<SortableContentItemProps> = ({
-  content,
-  selectedContentId,
-  selectContent,
-  deleteContent,
-}) => {
-  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: content.id });
-  const style = useSortableStyle(transform, transition, isDragging);
-
-  return (
-    <div ref={setNodeRef} style={style} className="border-t border-border first:border-t-0">
-      <TableRow
-        className={`cursor-pointer w-full ${selectedContentId === content.id ? "bg-[#0cb386]/20" : ""}`}
-        onClick={() => selectContent(content)}
-      >
-        {/* ← 左端ハンドル */}
-        <TableCell className="py-1 w-8 align-top">
-          <button
-            type="button"
-            aria-label="ドラッグで並び替え"
-            {...attributes}
-            {...listeners}
-            onClick={(e) => e.stopPropagation()}
-            className="h-5 w-5 flex items-center justify-center rounded hover:bg-muted cursor-grab active:cursor-grabbing"
-            style={{ touchAction: "none" }}
-            title="ドラッグで並び替え"
-          >
-            <GripVertical className="w-3.5 h-3.5" />
-          </button>
-        </TableCell>
-
-        {/* 本文 */}
-        <TableCell className="py-1 text-left align-top w-full">
-          <div className="flex items-center gap-2">
-            <span className={`h-2 w-2 rounded-full ${content.is_published ? "bg-green-500" : "bg-red-500"}`}></span>
-            <div className="h-4 w-px bg-border"></div>
-            <div className="min-w-0 flex-1">
-              <div className="text-xs font-medium truncate">{content.title}</div>
-            </div>
-          </div>
-        </TableCell>
-
-        {/* 右端アクション */}
-        <TableCell className="py-1 text-right align-top w-1/4">
-          <div className="flex items-center justify-end gap-1">
-            <Button
-              size="sm"
-              variant="ghost"
-              className="h-5 w-5 p-0 text-destructive hover:text-destructive"
-              onClick={(e) => {
-                e.stopPropagation();
-                deleteContent(content.id);
-              }}
-              title="削除"
-            >
-              <Trash2 className="h-3 w-3" />
-            </Button>
-          </div>
-        </TableCell>
-      </TableRow>
-    </div>
-  );
-};
-
 /* ========== メイン ========== */
 const MemberSiteBuilder = () => {
   const navigate = useNavigate();
@@ -859,31 +788,6 @@ const MemberSiteBuilder = () => {
     }
   };
 
-  /** ▼▼ 並べ替え（コンテンツ）上下のみ＆枠内のみ ▼▼ */
-  const handleContentDragEnd = async (event: any) => {
-    const { active, over } = event;
-    if (!over || active.id === over.id) return;
-
-    const oldIndex = siteContents.findIndex((c) => c.id === active.id);
-    const newIndex = siteContents.findIndex((c) => c.id === over.id);
-
-    const newList = arrayMove(siteContents, oldIndex, newIndex).map((c, i) => ({ ...c, sort_order: i }));
-    setSiteContents(newList);
-
-    setSaving(true);
-    try {
-      for (let i = 0; i < newList.length; i++) {
-        await supabase.from("member_site_content").update({ sort_order: i }).eq("id", newList[i].id);
-      }
-      toast({ title: "並べ替え完了", description: "コンテンツの順序を保存しました" });
-    } catch (error) {
-      console.error("Error updating content sort order:", error);
-      toast({ title: "エラー", description: "コンテンツの順序の保存に失敗しました", variant: "destructive" });
-    } finally {
-      setSaving(false);
-    }
-  };
-
   const selectedContent = siteContents.find((c) => c.id === selectedContentId);
   const selectedCategory = categories.find((c) => c.id === selectedCategoryId);
 
@@ -1058,46 +962,50 @@ const MemberSiteBuilder = () => {
                         {siteContents.length === 0 ? (
                           <p className="text-xs text-muted-foreground p-2">ページがありません</p>
                         ) : (
-                          <DndContext
-                            sensors={sensors}
-                            collisionDetection={closestCenter}
-                            onDragEnd={handleContentDragEnd}
-                            /* ← 上下のみ＆親枠内のみ（ローカル実装） */
-                            modifiers={[restrictToVerticalAxis, restrictToParentElement]}
-                          >
-                            <SortableContext
-                              items={siteContents
+                          <Table className="w-full border-collapse">
+                            <TableBody>
+                              {siteContents
                                 .filter(
                                   (content) =>
                                     filterCategoryId === "all" ||
                                     (filterCategoryId === "unassigned" && !content.category_id) ||
                                     content.category_id === filterCategoryId
                                 )
-                                .map((c) => c.id)}
-                              strategy={verticalListSortingStrategy}
-                            >
-                              <Table className="w-full border-collapse">
-                                <TableBody>
-                                  {siteContents
-                                    .filter(
-                                      (content) =>
-                                        filterCategoryId === "all" ||
-                                        (filterCategoryId === "unassigned" && !content.category_id) ||
-                                        content.category_id === filterCategoryId
-                                    )
-                                    .map((content) => (
-                                      <SortableContentItem
-                                        key={content.id}
-                                        content={content}
-                                        selectedContentId={selectedContentId}
-                                        selectContent={selectContent}
-                                        deleteContent={deleteContent}
-                                      />
-                                    ))}
-                                </TableBody>
-                              </Table>
-                            </SortableContext>
-                          </DndContext>
+                                .map((content) => (
+                                  <TableRow
+                                    key={content.id}
+                                    className={`cursor-pointer w-full ${selectedContentId === content.id ? "bg-[#0cb386]/20" : ""}`}
+                                    onClick={() => selectContent(content)}
+                                  >
+                                    <TableCell className="py-1 pl-4 text-left align-top w-full">
+                                      <div className="flex items-center gap-2">
+                                        <span className={`h-2 w-2 rounded-full ${content.is_published ? "bg-green-500" : "bg-red-500"}`}></span>
+                                        <div className="h-4 w-px bg-border"></div>
+                                        <div className="min-w-0 flex-1">
+                                          <div className="text-xs font-medium truncate">{content.title}</div>
+                                        </div>
+                                      </div>
+                                    </TableCell>
+                                    <TableCell className="py-1 text-right align-top w-1/4">
+                                      <div className="flex items-center justify-end gap-1">
+                                        <Button
+                                          size="sm"
+                                          variant="ghost"
+                                          className="h-5 w-5 p-0 text-destructive hover:text-destructive"
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            deleteContent(content.id);
+                                          }}
+                                          title="削除"
+                                        >
+                                          <Trash2 className="h-3 w-3" />
+                                        </Button>
+                                      </div>
+                                    </TableCell>
+                                  </TableRow>
+                                ))}
+                            </TableBody>
+                          </Table>
                         )}
                       </div>
                     </div>
