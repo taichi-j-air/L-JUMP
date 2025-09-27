@@ -356,7 +356,7 @@ export const EnhancedBlockEditor: React.FC<EnhancedBlockEditorProps> = (props) =
       case 'heading': return {
         ...baseContent, text: '', level: 1, design_style: 1,
         color1: '#2589d0', color2: '#f2f2f2', color3: '#333333',
-        fontSize: '24px', color: '#454545', bold: false, italic: false, underline: false, alignment: 'left'
+        fontSize: '24px', color: '#454545', backgroundColor: 'transparent', bold: false, italic: false, underline: false, alignment: 'left'
       };
       case 'image': return {
         ...baseContent, url: '', alt: '', caption: '', size: 'medium',
@@ -369,7 +369,7 @@ export const EnhancedBlockEditor: React.FC<EnhancedBlockEditorProps> = (props) =
       case 'code': return { ...baseContent, code: '', language: 'javascript' };
       case 'separator': return { ...baseContent };
       case 'form_embed': return { ...baseContent, formId: '', title: 'フォーム埋め込み', description: 'ここにフォームが埋め込まれます。' };
-      case 'note': return { ...baseContent, text: '', fontSize: '16px', color: '#454545', bold: false, italic: false, underline: false, alignment: 'left' };
+      case 'note': return { ...baseContent, text: '', fontSize: '16px', color: '#454545', backgroundColor: 'transparent', bold: false, italic: false, underline: false, alignment: 'left' };
       case 'dialogue': return {
         ...baseContent, leftIcon: '/placeholder.svg', rightIcon: '/placeholder.svg',
         leftName: '左の名前', rightName: '右の名前', bubbleBackgroundColor: '#f2f2f2',
@@ -552,7 +552,10 @@ export const EnhancedBlockEditor: React.FC<EnhancedBlockEditorProps> = (props) =
 
         <div className="flex items-center space-x-1">
           <Palette className="h-3 w-3" />
-          <input type="color" value={block.content.color || '#000000'} onChange={(e) => updateBlock(block.id, { ...block.content, color: e.target.value })} className="w-8 h-8 rounded border" />
+          <span className="text-xs">文字色:</span>
+          <input type="color" value={block.content.color || '#000000'} onChange={(e) => updateBlock(block.id, { ...block.content, color: e.target.value })} className="w-8 h-8 rounded border" title="文字色" />
+          <span className="text-xs ml-2">背景色:</span>
+          <input type="color" value={block.content.backgroundColor || '#FFFFFF'} onChange={(e) => updateBlock(block.id, { ...block.content, backgroundColor: e.target.value })} className="w-8 h-8 rounded border" title="背景色" />
         </div>
 
         {block.type === 'heading' && (
@@ -576,6 +579,7 @@ export const EnhancedBlockEditor: React.FC<EnhancedBlockEditorProps> = (props) =
       ? ({
           fontSize: block.content.fontSize,
           color: block.content.color,
+          backgroundColor: block.content.backgroundColor,
           fontWeight: block.content.bold ? 'bold' : 'normal',
           fontStyle: block.content.italic ? 'italic' : 'normal',
           textDecoration: block.content.underline ? 'underline' : 'none',

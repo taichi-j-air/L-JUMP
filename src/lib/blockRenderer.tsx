@@ -93,18 +93,19 @@ export const renderBlock = (block: Block) => {
   if (!type) return null;
 
   const textStyle: React.CSSProperties =
-    type === "paragraph" || type === "heading" || type === "note"
-      ? {
-          fontSize: content.fontSize,
-          color: content.color,
-          fontWeight: content.bold ? "bold" : "normal",
-          fontStyle: content.italic ? "italic" : "normal",
-          textDecoration: content.underline ? "underline" : "none",
-          textAlign: content.alignment || "left",
-          whiteSpace: "pre-wrap",
-          wordBreak: "break-word",
-        }
-      : {};
+        type === "paragraph" || type === "heading" || type === "note"
+          ? {
+              fontSize: content.fontSize,
+              color: content.color,
+              backgroundColor: content.backgroundColor,
+              fontWeight: content.bold ? "bold" : "normal",
+              fontStyle: content.italic ? "italic" : "normal",
+              textDecoration: content.underline ? "underline" : "none",
+              textAlign: content.alignment || "left",
+              whiteSpace: "pre-wrap",
+              wordBreak: "break-word",
+            }
+          : {};
 
   switch (type) {
     case "background":
