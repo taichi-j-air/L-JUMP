@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { Button } from "@/components/ui/button";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -103,77 +104,6 @@ const useSortableStyle = (transform: any, transition: string | undefined, isDrag
     opacity: isDragging ? 0.9 : 1,
   } as React.CSSProperties);
 
-/* ========== カテゴリ行（ドラッグハンドル左） ========== */
-interface SortableCategoryItemProps {
-  category: Category;
-  selectedCategoryId: string | null;
-  selectCategory: (category: Category) => void;
-  deleteCategory: (categoryId: string) => void;
-}
-const SortableCategoryItem: React.FC<SortableCategoryItemProps> = ({
-  category,
-  selectedCategoryId,
-  selectCategory,
-  deleteCategory,
-}) => {
-  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: category.id });
-  const style = useSortableStyle(transform, transition, isDragging);
-
-  return (
-    <div ref={setNodeRef} style={style} className="border-b border-border">
-      <TableRow
-        className={`cursor-pointer w-full ${selectedCategoryId === category.id ? "bg-[#0cb386]/20" : ""}`}
-        onClick={() => selectCategory(category)}
-      >
-        {/* ← 左端ハンドル */}
-        <TableCell className="py-2 w-8 align-middle">
-          <button
-            type="button"
-            aria-label="ドラッグで並び替え"
-            {...attributes}
-            {...listeners}
-            onClick={(e) => e.stopPropagation()}
-            className="h-6 w-6 flex items-center justify-center rounded hover:bg-muted cursor-grab active:cursor-grabbing"
-            style={{ touchAction: "none" }}
-            title="ドラッグで並び替え"
-          >
-            <GripVertical className="w-3.5 h-3.5" />
-          </button>
-        </TableCell>
-
-        {/* 本文 */}
-        <TableCell className="py-2 text-left w-full">
-          <div className="flex items-center gap-2">
-            {category.thumbnail_url && (
-              <img src={category.thumbnail_url} className="w-6 h-6 object-cover rounded" alt="" draggable={false} />
-            )}
-            <div className="text-xs font-medium">{category.name}</div>
-          </div>
-          <div className="text-xs text-muted-foreground">{category.content_count}件のコンテンツ</div>
-        </TableCell>
-
-        {/* 右端アクション */}
-        <TableCell className="py-2 text-right w-1/4">
-          <div className="flex items-center justify-end gap-2">
-            <Button
-              size="sm"
-              variant="ghost"
-              className="h-5 w-5 p-0 text-destructive hover:text-destructive"
-              onClick={(e) => {
-                e.stopPropagation();
-                deleteCategory(category.id);
-              }}
-              title="削除"
-            >
-              <Trash2 className="w-3.5 h-3.5" />
-            </Button>
-          </div>
-        </TableCell>
-      </TableRow>
-    </div>
-  );
-};
-
 /* ========== メイン ========== */
 const MemberSiteBuilder = () => {
   const navigate = useNavigate();
@@ -186,6 +116,103 @@ const MemberSiteBuilder = () => {
     useSensor(PointerSensor, { activationConstraint: { distance: 2 } }),
     useSensor(KeyboardSensor)
   );
+
+  // A new inline component for the sortable row to use hooks correctly
+  const SortableCategoryRow = ({ category }: { category: Category }) => {
+    const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: category.id });
+    const style = useSortableStyle(transform, transition, isDragging);
+
+    return (
+      <div ref={setNodeRef} style={style} className="border-b border-border">
+        <TableRow
+          className={`cursor-pointer w-full ${selectedCategoryId === category.id ? "bg-[#0cb386]/20" : ""}`}
+          onClick={() => selectCategory(category)}
+        >
+          <TableCell className="py-2 w-8 align-middle">
+            <button
+              type="button"
+              aria-label="ドラッグで並び替え"
+              {...attributes}
+              {...listeners}
+              onClick={(e) => e.stopPropagation()}
+              className="h-6 w-6 flex items-center justify-center rounded hover:bg-muted cursor-grab active:cursor-grabbing"
+              style={{ touchAction: "none" }}
+              title="ドラッグで並び替え"
+            >
+              <GripVertical className="w-3.5 h-3.5" />
+            </button>
+          </TableCell>
+          <TableCell className="py-2 text-left w-full">
+            <div className="flex items-center gap-2">
+              {category.thumbnail_url && (
+                <img src={category.thumbnail_url} className="w-6 h-6 object-cover rounded" alt="" draggable={false} />
+              )}
+              <div className="text-xs font-medium">{category.name}</div>
+            </div>
+            <div className="text-xs text-muted-foreground">{category.content_count}件のコンテンツ</div>
+          </TableCell>
+          <TableCell className="py-2 text-right w-1/4">
+            <div className="flex items-center justify-end gap-2">
+              <AlertDialog>
+                <AlertDialogTrigger asChild>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    className="h-5 w-5 p-0 text-destructive hover:bg-destructive hover:text-destructive-foreground"
+                    onClick={(e) => e.stopPropagation()}
+                    title="削除"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                  </Button>
+                </AlertDialogTrigger>
+                <AlertDialogContent onClick={(e) => e.stopPropagation()}>
+                  <AlertDialogHeader>
+                    <AlertDialogTitle>本当にこのカテゴリを削除しますか？</AlertDialogTitle>
+                    <AlertDialogDescription>
+                      「{category.name}」を削除します。このカテゴリに属するコンテンツは「カテゴリなし」に移動されます。この操作は元に戻せません。
+                    </AlertDialogDescription>
+                  </AlertDialogHeader>
+                  <AlertDialogFooter>
+                    <AlertDialogCancel>キャンセル</AlertDialogCancel>
+                    <AlertDialogAction
+                      className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                      onClick={async (e) => {
+                        e.stopPropagation();
+                        setSaving(true);
+                        try {
+                          await supabase.from("member_site_content").update({ category_id: null }).eq("category_id", category.id);
+                          const { error } = await supabase.from("member_site_categories").delete().eq("id", category.id);
+                          if (error) throw error;
+                          if (selectedCategoryId === category.id) {
+                            setSelectedCategoryId(null);
+                            setCategoryName("");
+                            setCategoryDescription("");
+                            setCategoryThumbnailUrl(null);
+                            setCategoryBlocks([]);
+                          }
+                          loadCategories();
+                          loadSiteContents();
+                          toast({ title: "削除完了", description: "カテゴリを削除しました" });
+                        } catch (error) {
+                          console.error("Error deleting category:", error);
+                          toast({ title: "エラー", description: "カテゴリの削除に失敗しました", variant: "destructive" });
+                        } finally {
+                          setSaving(false);
+                        }
+                      }}
+                    >
+                      削除
+                    </AlertDialogAction>
+                  </AlertDialogFooter>
+                </AlertDialogContent>
+              </AlertDialog>
+            </div>
+          </TableCell>
+        </TableRow>
+      </div>
+    );
+  }
+
 
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -617,24 +644,7 @@ const MemberSiteBuilder = () => {
   };
 
   const deleteContent = async (contentId: string) => {
-    if (!confirm("本当にこのページを削除しますか？")) return;
-    try {
-      const { error } = await supabase.from("member_site_content").delete().eq("id", contentId);
-      if (error) throw error;
-
-      if (selectedContentId === contentId) {
-        setSelectedContentId(null);
-        setContentTitle("");
-        setContentText("");
-        setContentSlug("");
-      }
-      loadSiteContents();
-      loadCategories();
-      toast({ title: "削除完了", description: "ページを削除しました" });
-    } catch (error) {
-      console.error("Error deleting content:", error);
-      toast({ title: "エラー", description: "ページの削除に失敗しました", variant: "destructive" });
-    }
+    // This logic has been moved to the AlertDialog
   };
 
   const createNewCategory = async () => {
@@ -728,29 +738,7 @@ const MemberSiteBuilder = () => {
   };
 
   const deleteCategory = async (categoryId: string) => {
-    if (!confirm("本当にこのカテゴリを削除しますか？このカテゴリに属するコンテンツは「カテゴリなし」に移動されます。")) return;
-    setSaving(true);
-    try {
-      await supabase.from("member_site_content").update({ category_id: null }).eq("category_id", categoryId);
-      const { error } = await supabase.from("member_site_categories").delete().eq("id", categoryId);
-      if (error) throw error;
-
-      if (selectedCategoryId === categoryId) {
-        setSelectedCategoryId(null);
-        setCategoryName("");
-        setCategoryDescription("");
-        setCategoryThumbnailUrl(null);
-        setCategoryBlocks([]);
-      }
-      loadCategories();
-      loadSiteContents();
-      toast({ title: "削除完了", description: "カテゴリを削除しました" });
-    } catch (error) {
-      console.error("Error deleting category:", error);
-      toast({ title: "エラー", description: "カテゴリの削除に失敗しました", variant: "destructive" });
-    } finally {
-      setSaving(false);
-    }
+    // This logic has been moved to the AlertDialog
   };
 
   /** ▼▼ 並べ替え（カテゴリ）上下のみ＆枠内のみ ▼▼ */
@@ -866,35 +854,52 @@ const MemberSiteBuilder = () => {
                             >
                               <ExternalLink className="h-3 w-3" />
                             </Button>
-                            <Button
-                              size="sm"
-                              variant="ghost"
-                              className="h-6 w-6 p-0 text-destructive hover:text-destructive"
-                              disabled={saving}
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                (async () => {
-                                  if (!confirm("本当にこのサイトを削除しますか？関連するコンテンツも全て削除されます。")) return;
-                                  try {
-                                    await supabase.from("member_site_content").delete().eq("site_id", s.id);
-                                    await supabase.from("member_site_categories").delete().eq("site_id", s.id);
-                                    await supabase.from("member_site_payments").delete().eq("site_id", s.id);
-                                    await supabase.from("member_site_subscriptions").delete().eq("site_id", s.id);
-                                    await supabase.from("member_site_users").delete().eq("site_id", s.id);
-                                    const { error } = await supabase.from("member_sites").delete().eq("id", s.id);
-                                    if (error) throw error;
-                                    if (s.id === searchParams.get("site")) setSearchParams({});
-                                    await loadSites();
-                                    toast({ title: "削除完了", description: "サイトを削除しました" });
-                                  } catch (err) {
-                                    console.error(err);
-                                    toast({ title: "エラー", description: "サイトの削除に失敗しました", variant: "destructive" });
-                                  }
-                                })();
-                              }}
-                            >
-                              <Trash2 className="h-3 w-3" />
-                            </Button>
+                            <AlertDialog>
+                              <AlertDialogTrigger asChild>
+                                <Button
+                                  size="sm"
+                                  variant="ghost"
+                                  className="h-6 w-6 p-0 text-destructive hover:bg-destructive hover:text-destructive-foreground"
+                                  disabled={saving}
+                                  onClick={(e) => e.stopPropagation()}
+                                >
+                                  <Trash2 className="h-3 w-3" />
+                                </Button>
+                              </AlertDialogTrigger>
+                              <AlertDialogContent onClick={(e) => e.stopPropagation()}>
+                                <AlertDialogHeader>
+                                  <AlertDialogTitle>本当にこのサイトを削除しますか？</AlertDialogTitle>
+                                  <AlertDialogDescription>
+                                    「{s.name}」に関連するすべてのコンテンツ、カテゴリ、設定が完全に削除されます。この操作は元に戻せません。
+                                  </AlertDialogDescription>
+                                </AlertDialogHeader>
+                                <AlertDialogFooter>
+                                  <AlertDialogCancel>キャンセル</AlertDialogCancel>
+                                  <AlertDialogAction
+                                    className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                                    onClick={async () => {
+                                      try {
+                                        await supabase.from("member_site_content").delete().eq("site_id", s.id);
+                                        await supabase.from("member_site_categories").delete().eq("site_id", s.id);
+                                        await supabase.from("member_site_payments").delete().eq("site_id", s.id);
+                                        await supabase.from("member_site_subscriptions").delete().eq("site_id", s.id);
+                                        await supabase.from("member_site_users").delete().eq("site_id", s.id);
+                                        const { error } = await supabase.from("member_sites").delete().eq("id", s.id);
+                                        if (error) throw error;
+                                        if (s.id === searchParams.get("site")) setSearchParams({});
+                                        await loadSites();
+                                        toast({ title: "削除完了", description: "サイトを削除しました" });
+                                      } catch (err) {
+                                        console.error(err);
+                                        toast({ title: "エラー", description: "サイトの削除に失敗しました", variant: "destructive" });
+                                      }
+                                    }}
+                                  >
+                                    削除
+                                  </AlertDialogAction>
+                                </AlertDialogFooter>
+                              </AlertDialogContent>
+                            </AlertDialog>
                           </div>
                         </div>
                       ))}
@@ -978,18 +983,54 @@ const MemberSiteBuilder = () => {
                                     </TableCell>
                                     <TableCell className="py-1 text-right align-top w-1/4">
                                       <div className="flex items-center justify-end gap-1">
-                                        <Button
-                                          size="sm"
-                                          variant="ghost"
-                                          className="h-5 w-5 p-0 text-destructive hover:text-destructive"
-                                          onClick={(e) => {
-                                            e.stopPropagation();
-                                            deleteContent(content.id);
-                                          }}
-                                          title="削除"
-                                        >
-                                          <Trash2 className="h-3 w-3" />
-                                        </Button>
+                                        <AlertDialog>
+                                          <AlertDialogTrigger asChild>
+                                            <Button
+                                              size="sm"
+                                              variant="ghost"
+                                              className="h-5 w-5 p-0 text-destructive hover:bg-destructive hover:text-destructive-foreground"
+                                              onClick={(e) => e.stopPropagation()}
+                                              title="削除"
+                                            >
+                                              <Trash2 className="h-3 w-3" />
+                                            </Button>
+                                          </AlertDialogTrigger>
+                                          <AlertDialogContent onClick={(e) => e.stopPropagation()}>
+                                            <AlertDialogHeader>
+                                              <AlertDialogTitle>本当にこのページを削除しますか？</AlertDialogTitle>
+                                              <AlertDialogDescription>
+                                                「{content.title}」は完全に削除されます。この操作は元に戻せません。
+                                              </AlertDialogDescription>
+                                            </AlertDialogHeader>
+                                            <AlertDialogFooter>
+                                              <AlertDialogCancel>キャンセル</AlertDialogCancel>
+                                              <AlertDialogAction
+                                                className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                                                onClick={async (e) => {
+                                                  e.stopPropagation();
+                                                  try {
+                                                    const { error } = await supabase.from("member_site_content").delete().eq("id", content.id);
+                                                    if (error) throw error;
+                                                    if (selectedContentId === content.id) {
+                                                      setSelectedContentId(null);
+                                                      setContentTitle("");
+                                                      setContentText("");
+                                                      setContentSlug("");
+                                                    }
+                                                    loadSiteContents();
+                                                    loadCategories();
+                                                    toast({ title: "削除完了", description: "ページを削除しました" });
+                                                  } catch (error) {
+                                                    console.error("Error deleting content:", error);
+                                                    toast({ title: "エラー", description: "ページの削除に失敗しました", variant: "destructive" });
+                                                  }
+                                                }}
+                                              >
+                                                削除
+                                              </AlertDialogAction>
+                                            </AlertDialogFooter>
+                                          </AlertDialogContent>
+                                        </AlertDialog>
                                       </div>
                                     </TableCell>
                                   </TableRow>
@@ -1112,20 +1153,13 @@ const MemberSiteBuilder = () => {
                             sensors={sensors}
                             collisionDetection={closestCenter}
                             onDragEnd={handleCategoryDragEnd}
-                            /* ← 上下のみ＆親枠内のみ（ローカル実装） */
                             modifiers={[restrictToVerticalAxis, restrictToParentElement]}
                           >
                             <SortableContext items={categories.map((c) => c.id)} strategy={verticalListSortingStrategy}>
                               <Table className="w-full border-collapse">
                                 <TableBody className="border-t border-border">
                                   {categories.map((category) => (
-                                    <SortableCategoryItem
-                                      key={category.id}
-                                      category={category}
-                                      selectedCategoryId={selectedCategoryId}
-                                      selectCategory={selectCategory}
-                                      deleteCategory={deleteCategory}
-                                    />
+                                    <SortableCategoryRow key={category.id} category={category} />
                                   ))}
                                 </TableBody>
                               </Table>
