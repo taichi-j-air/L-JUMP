@@ -828,6 +828,42 @@ export type Database = {
           },
         ]
       }
+      member_site_content_progress: {
+        Row: {
+          completed_at: string | null
+          content_id: string
+          created_at: string
+          friend_id: string
+          id: string
+          progress_percentage: number
+          site_id: string
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          completed_at?: string | null
+          content_id: string
+          created_at?: string
+          friend_id: string
+          id?: string
+          progress_percentage?: number
+          site_id: string
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          completed_at?: string | null
+          content_id?: string
+          created_at?: string
+          friend_id?: string
+          id?: string
+          progress_percentage?: number
+          site_id?: string
+          status?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       member_site_payments: {
         Row: {
           billing_interval: string | null
