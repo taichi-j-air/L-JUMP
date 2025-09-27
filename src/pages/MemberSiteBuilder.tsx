@@ -617,12 +617,11 @@ const MemberSiteBuilder = () => {
 
       setSelectedContentId(data.id);
       setContentTitle(data.title);
-      setContentText(data.content || "");
       setContentSlug(data.slug);
-      setContentType(data.page_type as "page" | "post" | "landing");
-      setContentAccessLevel(data.access_level as "public" | "premium" | "member");
       setContentPublished(data.is_published);
-      setContentCategoryId("none");
+      setContentCategoryId(data.category_id || "none");
+      setContentSortOrder(data.sort_order);
+      setContentBlocks(data.content_blocks || []);
 
       loadSiteContents();
       toast({ title: "作成完了", description: "新しいページを作成しました" });
@@ -1028,8 +1027,11 @@ const MemberSiteBuilder = () => {
                                                     if (selectedContentId === content.id) {
                                                       setSelectedContentId(null);
                                                       setContentTitle("");
-                                                      setContentText("");
                                                       setContentSlug("");
+                                                      setContentBlocks([]);
+                                                      setContentPublished(false);
+                                                      setContentCategoryId("none");
+                                                      setContentSortOrder(0);
                                                     }
                                                     loadSiteContents();
                                                     loadCategories();
