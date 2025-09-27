@@ -213,14 +213,16 @@ export const renderBlock = (block: Block) => {
       const url = content.url || legacyValue;
       if (!url) return null;
       return (
-        <figure className="my-4 aspect-video">
-          <iframe
-            src={convertYouTubeUrl(url)}
-            className={`w-full h-full ${content.rounded ? "rounded-lg" : ""}`}
-            style={{ border: `3px solid ${content.borderColor || "#000000"}` }}
-            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-            allowFullScreen
-          ></iframe>
+        <figure className={`my-4 mx-auto ${sizeClasses[content.size] || 'w-1/2'}`}>
+          <div className="aspect-video w-full">
+            <iframe
+              src={convertYouTubeUrl(url)}
+              className={`w-full h-full ${content.rounded ? "rounded-lg" : ""}`}
+              style={{ border: content.borderEnabled !== false ? `3px solid ${content.borderColor || "#000000"}` : 'none' }}
+              allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+              allowFullScreen
+            ></iframe>
+          </div>
           {content.caption && (
             <figcaption className="text-center text-sm text-gray-600 mt-2">{content.caption}</figcaption>
           )}

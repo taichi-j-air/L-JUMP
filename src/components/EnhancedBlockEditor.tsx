@@ -363,7 +363,7 @@ export const EnhancedBlockEditor: React.FC<EnhancedBlockEditorProps> = (props) =
         linkUrl: '', alignment: 'center', rounded: true, hoverEffect: false, removeMargins: false
       };
       case 'video': return {
-        ...baseContent, url: '', caption: '', borderColor: '#000000', rounded: true, size: 'medium'
+        ...baseContent, url: '', caption: '', borderColor: '#000000', rounded: true, size: 'medium', borderEnabled: true
       };
       case 'list': return { ...baseContent, items: [''], type: 'bullet' };
       case 'code': return { ...baseContent, code: '', language: 'javascript' };
@@ -922,19 +922,11 @@ export const EnhancedBlockEditor: React.FC<EnhancedBlockEditorProps> = (props) =
         return (
           <div className="space-y-2">
             <Input placeholder="動画URL (YouTube対応)" value={block.content.url || ''} onChange={(e) => updateBlock(block.id, { ...block.content, url: e.target.value })} />
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="flex items-center space-x-2">
-                <span className="text-sm">枠線色:</span>
-                <input type="color" value={block.content.borderColor || '#000000'} onChange={(e) => updateBlock(block.id, { ...block.content, borderColor: e.target.value })} className="w-8 h-8 rounded border" />
-              </div>
-              <div className="flex items-center space-x-2">
-                <Switch id={`rounded-video-${block.id}`} checked={block.content.rounded !== false} onCheckedChange={(checked) => updateBlock(block.id, { ...block.content, rounded: checked })} />
-                <Label htmlFor={`rounded-video-${block.id}`} className="text-sm">角丸</Label>
-              </div>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <div className="space-y-2">
                 <Label className="text-sm font-medium">サイズ</Label>
                 <Select value={block.content.size || 'medium'} onValueChange={(value) => updateBlock(block.id, { ...block.content, size: value })}>
-                  <SelectTrigger className="w-full md:w-40"><SelectValue placeholder="サイズ" /></SelectTrigger>
+                  <SelectTrigger className="w-full"><SelectValue placeholder="サイズ" /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="small">25%</SelectItem>
                     <SelectItem value="medium">50%</SelectItem>
@@ -943,15 +935,38 @@ export const EnhancedBlockEditor: React.FC<EnhancedBlockEditorProps> = (props) =
                   </SelectContent>
                 </Select>
               </div>
+              <div className="space-y-2">
+                <Label className="text-sm font-medium">オプション</Label>
+                <div className="flex items-center space-x-4 pt-2">
+                  <div className="flex items-center space-x-2">
+                    <Switch id={`border-video-${block.id}`} checked={block.content.borderEnabled !== false} onCheckedChange={(checked) => updateBlock(block.id, { ...block.content, borderEnabled: checked })} />
+                    <Label htmlFor={`border-video-${block.id}`} className="text-sm font-normal">枠線</Label>
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <Switch id={`rounded-video-${block.id}`} checked={block.content.rounded !== false} onCheckedChange={(checked) => updateBlock(block.id, { ...block.content, rounded: checked })} />
+                    <Label htmlFor={`rounded-video-${block.id}`} className="text-sm font-normal">角丸</Label>
+                  </div>
+                </div>
+              </div>
+              {block.content.borderEnabled !== false && (
+                <div className="space-y-2">
+                  <Label className="text-sm font-medium">枠線色</Label>
+                  <div className="flex items-center">
+                    <input type="color" value={block.content.borderColor || '#000000'} onChange={(e) => updateBlock(block.id, { ...block.content, borderColor: e.target.value })} className="w-10 h-10 rounded border p-1" />
+                  </div>
+                </div>
+              )}
             </div>
             {block.content.url && (
-              <div className="aspect-video">
-                <iframe
-                  src={convertYouTubeUrl(block.content.url)}
-                  className="w-full h-full rounded-lg"
-                  style={{ border: `3px solid ${block.content.borderColor || '#000000'}` }}
-                  allowFullScreen
-                />
+              <div className={`mx-auto ${sizeClasses[block.content.size] || 'w-1/2'}`}>
+                <div className="aspect-video w-full">
+                  <iframe
+                    src={convertYouTubeUrl(block.content.url)}
+                    className="w-full h-full rounded-lg"
+                    style={{ border: block.content.borderEnabled !== false ? `3px solid ${block.content.borderColor || '#000000'}` : 'none' }}
+                    allowFullScreen
+                  />
+                </div>
               </div>
             )}
             <Input placeholder="キャプション" value={block.content.caption || ''} onChange={(e) => updateBlock(block.id, { ...block.content, caption: e.target.value })} />
