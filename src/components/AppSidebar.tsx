@@ -543,6 +543,41 @@ export function AppSidebar({ user }: AppSidebarProps) {
                       </NavLink>
                     </SidebarMenuButton>
                   </SidebarMenuItem>
+
+                  {/* Affiliate Management dropdown */}
+                  <SidebarMenuItem>
+                    <Collapsible>
+                      <CollapsibleTrigger asChild>
+                        <SidebarMenuButton>
+                          <Users className="h-4 w-4" />
+                          {!collapsed && (
+                            <span className="flex items-center gap-1">
+                              アフィリエイト管理
+                              <ChevronDown className="h-3 w-3" />
+                            </span>
+                          )}
+                        </SidebarMenuButton>
+                      </CollapsibleTrigger>
+                      <CollapsibleContent>
+                        <SidebarMenuSub>
+                          <SidebarMenuSubItem>
+                            <SidebarMenuSubButton asChild>
+                              <NavLink to="/developer/affiliate/management" end className={({ isActive }) => getNavClass({ isActive })}>
+                                <span>アフィリエイト一覧</span>
+                              </NavLink>
+                            </SidebarMenuSubButton>
+                          </SidebarMenuSubItem>
+                          <SidebarMenuSubItem>
+                            <SidebarMenuSubButton asChild>
+                              <NavLink to="/developer/affiliate/settings" end className={({ isActive }) => getNavClass({ isActive })}>
+                                <span>プログラム設定</span>
+                              </NavLink>
+                            </SidebarMenuSubButton>
+                          </SidebarMenuSubItem>
+                        </SidebarMenuSub>
+                      </CollapsibleContent>
+                    </Collapsible>
+                  </SidebarMenuItem>
                  </SidebarMenu>
                </SidebarGroupContent>
              </SidebarGroup>

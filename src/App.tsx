@@ -70,6 +70,8 @@ const CMSFriendsPublicView = lazy(() => import('./pages/CMSFriendsPublicView'));
 const ExternalWebPageBuilder = lazy(() => import('./pages/ExternalWebPageBuilder'));
 const ExternalWebPageView = lazy(() => import('./pages/ExternalWebPageView'));
 const AffiliatePage = lazy(() => import('./pages/Affiliate'));
+const AffiliateManagementPage = lazy(() => import('./pages/developer/AffiliateManagement'));
+const AffiliateSettingsPage = lazy(() => import('./pages/developer/AffiliateSettings'));
 const queryClient = new QueryClient();
 
 function AppContent() {
@@ -301,6 +303,8 @@ function AppContent() {
                   <Route path="/stripe-settings" element={<StripeSettings />} />
                   <Route path="/payment-management" element={<PaymentManagement />} />
                   <Route path="/developer/maintenance" element={<MaintenanceSettings />} />
+                  <Route path="/developer/affiliate/management" element={<AffiliateManagementPage />} />
+                  <Route path="/developer/affiliate/settings" element={<AffiliateSettingsPage />} />
                   <Route path="/step-delivery" element={<StepDeliveryPage />} />
                   <Route path="/chat-inbox" element={<ChatInboxPage />} />
                   <Route path="/chat/:friendId" element={<IndividualChatPage />} />
