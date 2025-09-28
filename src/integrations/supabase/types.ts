@@ -14,6 +14,186 @@ export type Database = {
   }
   public: {
     Tables: {
+      affiliate_commissions: {
+        Row: {
+          affiliate_id: string
+          amount: number
+          approved_at: string | null
+          created_at: string
+          id: number
+          payout_id: number | null
+          referral_id: number | null
+          source_event: string
+          status: Database["public"]["Enums"]["affiliate_commission_status"]
+        }
+        Insert: {
+          affiliate_id: string
+          amount: number
+          approved_at?: string | null
+          created_at?: string
+          id?: number
+          payout_id?: number | null
+          referral_id?: number | null
+          source_event: string
+          status?: Database["public"]["Enums"]["affiliate_commission_status"]
+        }
+        Update: {
+          affiliate_id?: string
+          amount?: number
+          approved_at?: string | null
+          created_at?: string
+          id?: number
+          payout_id?: number | null
+          referral_id?: number | null
+          source_event?: string
+          status?: Database["public"]["Enums"]["affiliate_commission_status"]
+        }
+        Relationships: [
+          {
+            foreignKeyName: "affiliate_commissions_referral_id_fkey"
+            columns: ["referral_id"]
+            isOneToOne: false
+            referencedRelation: "affiliate_referrals"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "fk_affiliate_commissions_payout"
+            columns: ["payout_id"]
+            isOneToOne: false
+            referencedRelation: "affiliate_payouts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      affiliate_payout_settings: {
+        Row: {
+          account_holder_name: string | null
+          account_number: string | null
+          account_type: string | null
+          affiliate_id: string
+          bank_name: string | null
+          branch_name: string | null
+          payout_method: string
+          updated_at: string
+        }
+        Insert: {
+          account_holder_name?: string | null
+          account_number?: string | null
+          account_type?: string | null
+          affiliate_id: string
+          bank_name?: string | null
+          branch_name?: string | null
+          payout_method?: string
+          updated_at?: string
+        }
+        Update: {
+          account_holder_name?: string | null
+          account_number?: string | null
+          account_type?: string | null
+          affiliate_id?: string
+          bank_name?: string | null
+          branch_name?: string | null
+          payout_method?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      affiliate_payouts: {
+        Row: {
+          affiliate_id: string
+          completed_at: string | null
+          created_at: string
+          id: number
+          status: Database["public"]["Enums"]["affiliate_payout_status"]
+          total_amount: number
+        }
+        Insert: {
+          affiliate_id: string
+          completed_at?: string | null
+          created_at?: string
+          id?: number
+          status?: Database["public"]["Enums"]["affiliate_payout_status"]
+          total_amount: number
+        }
+        Update: {
+          affiliate_id?: string
+          completed_at?: string | null
+          created_at?: string
+          id?: number
+          status?: Database["public"]["Enums"]["affiliate_payout_status"]
+          total_amount?: number
+        }
+        Relationships: []
+      }
+      affiliate_program_settings: {
+        Row: {
+          description: string | null
+          key: string
+          updated_at: string
+          value: string
+        }
+        Insert: {
+          description?: string | null
+          key: string
+          updated_at?: string
+          value: string
+        }
+        Update: {
+          description?: string | null
+          key?: string
+          updated_at?: string
+          value?: string
+        }
+        Relationships: []
+      }
+      affiliate_ranks: {
+        Row: {
+          commission_signup_amount: number
+          commission_subscription_rate: number
+          created_at: string
+          description: string | null
+          id: number
+          rank_name: string
+        }
+        Insert: {
+          commission_signup_amount?: number
+          commission_subscription_rate?: number
+          created_at?: string
+          description?: string | null
+          id?: number
+          rank_name: string
+        }
+        Update: {
+          commission_signup_amount?: number
+          commission_subscription_rate?: number
+          created_at?: string
+          description?: string | null
+          id?: number
+          rank_name?: string
+        }
+        Relationships: []
+      }
+      affiliate_referrals: {
+        Row: {
+          created_at: string
+          id: number
+          referred_id: string
+          referrer_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: number
+          referred_id: string
+          referrer_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: number
+          referred_id?: string
+          referrer_id?: string
+        }
+        Relationships: []
+      }
       announcements: {
         Row: {
           author_id: string
@@ -1366,6 +1546,7 @@ export type Database = {
       profiles: {
         Row: {
           add_friend_url: string | null
+          affiliate_rank_id: number | null
           avatar_url: string | null
           birth_date: string | null
           created_at: string
@@ -1409,6 +1590,7 @@ export type Database = {
         }
         Insert: {
           add_friend_url?: string | null
+          affiliate_rank_id?: number | null
           avatar_url?: string | null
           birth_date?: string | null
           created_at?: string
@@ -1452,6 +1634,7 @@ export type Database = {
         }
         Update: {
           add_friend_url?: string | null
+          affiliate_rank_id?: number | null
           avatar_url?: string | null
           birth_date?: string | null
           created_at?: string
@@ -1493,7 +1676,15 @@ export type Database = {
           user_suspended?: boolean
           webhook_url?: string | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "profiles_affiliate_rank_id_fkey"
+            columns: ["affiliate_rank_id"]
+            isOneToOne: false
+            referencedRelation: "affiliate_ranks"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       rate_limit_log: {
         Row: {
@@ -2747,6 +2938,8 @@ export type Database = {
       }
     }
     Enums: {
+      affiliate_commission_status: "pending" | "approved" | "paid" | "cancelled"
+      affiliate_payout_status: "processing" | "completed" | "failed"
       message_kind: "incoming" | "outgoing"
       page_visibility: "friends_only" | "public"
       plan_type: "free" | "basic" | "premium" | "developer"
@@ -2878,6 +3071,8 @@ export type CompositeTypes<
 export const Constants = {
   public: {
     Enums: {
+      affiliate_commission_status: ["pending", "approved", "paid", "cancelled"],
+      affiliate_payout_status: ["processing", "completed", "failed"],
       message_kind: ["incoming", "outgoing"],
       page_visibility: ["friends_only", "public"],
       plan_type: ["free", "basic", "premium", "developer"],
