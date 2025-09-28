@@ -487,6 +487,22 @@ export function AppSidebar({ user }: AppSidebarProps) {
           </SidebarGroupContent>
         </SidebarGroup>
 
+        <SidebarSeparator className="my-2" />
+        <SidebarGroup>
+          <SidebarGroupContent>
+            <SidebarMenu>
+              <SidebarMenuItem>
+                <SidebarMenuButton asChild>
+                  <NavLink to="/affiliate" end className={getNavClass}>
+                    <DollarSign className="h-4 w-4" />
+                    {!collapsed && <span>アフィリエイト</span>}
+                  </NavLink>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+            </SidebarMenu>
+          </SidebarGroupContent>
+        </SidebarGroup>
+
         {/* Developer menu */}
         {(isDeveloper || isAdmin) && (
           <>

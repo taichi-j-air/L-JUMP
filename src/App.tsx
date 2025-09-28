@@ -69,6 +69,7 @@ const CMSPublicPageBuilder = lazy(() => import('./pages/CMSPublicPageBuilder'));
 const CMSFriendsPublicView = lazy(() => import('./pages/CMSFriendsPublicView'));
 const ExternalWebPageBuilder = lazy(() => import('./pages/ExternalWebPageBuilder'));
 const ExternalWebPageView = lazy(() => import('./pages/ExternalWebPageView'));
+const AffiliatePage = lazy(() => import('./pages/Affiliate'));
 const queryClient = new QueryClient();
 
 function AppContent() {
@@ -308,6 +309,7 @@ function AppContent() {
                   <Route path="/cms/friends-page" element={<CMSFriendsPageBuilder />} />
                   <Route path="/cms/public-page" element={<CMSPublicPageBuilder />} />
                   <Route path="/external-web-page" element={<ExternalWebPageBuilder />} />
+                  <Route path="/affiliate" element={<AffiliatePage />} />
                   <Route path="*" element={<NotFound />} />
                 </Routes>
               </Suspense>
