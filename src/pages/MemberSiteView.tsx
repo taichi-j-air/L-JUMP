@@ -93,6 +93,27 @@ const MemberSiteView: React.FC = () => {
     [selectedContent]
   );
 
+  const visibleContents = useMemo(() => {
+    if (!selectedCategory) return [];
+    
+    const categoryContents = contents.filter(c => c.category_id === selectedCategory.id);
+
+    // In preview mode, always show all content
+    if (preview) {
+      return categoryContents;
+    }
+
+    if (site?.theme_config?.sequentialProgression) {
+      const firstUncompletedIndex = categoryContents.findIndex(c => (c.progress_percentage ?? 0) < 100);
+      
+      if (firstUncompletedIndex !== -1) {
+        return categoryContents.slice(0, firstUncompletedIndex + 1);
+      }
+    }
+    
+    return categoryContents;
+  }, [contents, selectedCategory, site, preview]);
+
   const isMountedRef = useRef(true);
   useEffect(() => {
     return () => {
@@ -786,9 +807,7 @@ const MemberSiteView: React.FC = () => {
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {contents
-                        .filter(c => c.category_id === selectedCategory.id)
-                        .map(item => (
+                      {visibleContents.map(item => (
                           <TableRow
                             key={item.id}
                             className="cursor-pointer hover:bg-muted/50"
@@ -813,7 +832,7 @@ const MemberSiteView: React.FC = () => {
                     </TableBody>
                   </Table>
 
-                  {contents.filter(c => c.category_id === selectedCategory.id).length === 0 && (
+                  {visibleContents.length === 0 && (
                     <div className="text-center py-12">
                       <p className="text-muted-foreground">このカテゴリにはまだコンテンツがありません。</p>
                     </div>

@@ -240,6 +240,7 @@ const MemberSiteBuilder = () => {
   const [sidebarActiveBgColor, setSidebarActiveBgColor] = useState("#60a5fa");
   const [sidebarActiveFgColor, setSidebarActiveFgColor] = useState("#ffffff");
   const [showContentCount, setShowContentCount] = useState(true);
+  const [sequentialProgression, setSequentialProgression] = useState(false);
 
   // Access control state
   const [requirePasscode, setRequirePasscode] = useState(false);
@@ -286,6 +287,7 @@ const MemberSiteBuilder = () => {
       setSidebarActiveBgColor("#60a5fa");
       setSidebarActiveFgColor("#ffffff");
       setShowContentCount(true);
+      setSequentialProgression(false);
       setRequirePasscode(false);
       setPasscode("");
       setAllowedTagIds([]);
@@ -325,6 +327,7 @@ const MemberSiteBuilder = () => {
       setSidebarActiveBgColor("#60a5fa");
       setSidebarActiveFgColor("#ffffff");
       setShowContentCount(true);
+      setSequentialProgression(false);
       setRequirePasscode(false);
       setPasscode("");
       setAllowedTagIds([]);
@@ -394,6 +397,7 @@ const MemberSiteBuilder = () => {
       setSidebarActiveBgColor(theme.sidebarActiveBgColor || "#60a5fa");
       setSidebarActiveFgColor(theme.sidebarActiveFgColor || "#ffffff");
       setShowContentCount(theme.showContentCount !== false);
+      setSequentialProgression(theme.sequentialProgression || false);
 
       // Load access control settings
       setRequirePasscode(data.require_passcode || false);
@@ -487,6 +491,7 @@ const MemberSiteBuilder = () => {
         sidebarActiveBgColor,
         sidebarActiveFgColor,
         showContentCount,
+        sequentialProgression,
       };
       if (siteId && siteId !== "new") {
         const { error } = await supabase
@@ -1325,10 +1330,22 @@ const MemberSiteBuilder = () => {
                   <Card>
                     <CardHeader>
                       <CardTitle>コンテンツ表示方法</CardTitle>
-                      <CardDescription>この機能は開発中です。</CardDescription>
+                      <CardDescription>会員サイトでのコンテンツの表示順序や条件を設定します。</CardDescription>
                     </CardHeader>
-                    <CardContent>
-                      <p className="text-muted-foreground">この機能は開発中です。</p>
+                    <CardContent className="space-y-4">
+                      <div className="flex items-center space-x-2 p-4 border rounded-lg">
+                        <Switch
+                          id="sequential-progression"
+                          checked={sequentialProgression}
+                          onCheckedChange={setSequentialProgression}
+                        />
+                        <div className="space-y-0.5">
+                          <Label htmlFor="sequential-progression">シーケンシャル・プログレッション</Label>
+                          <p className="text-xs text-muted-foreground">
+                            前のコンテンツを完了しないと、次のコンテンツが表示されないようにします。
+                          </p>
+                        </div>
+                      </div>
                     </CardContent>
                   </Card>
                 </TabsContent>
