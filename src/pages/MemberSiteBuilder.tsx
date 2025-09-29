@@ -1082,38 +1082,10 @@ const MemberSiteBuilder = () => {
                           </CardHeader>
                           <CardContent className="space-y-4">
                             <div className="grid grid-cols-2 gap-4">
-                              <div className="space-y-2">
-                                <Label htmlFor="contentTitle">ページタイトル</Label>
-                                <Input id="contentTitle" value={contentTitle} onChange={(e) => setContentTitle(e.target.value)} />
-                              </div>
-                              <div className="space-y-2">
-                                <Label htmlFor="contentSlug">URL スラッグ</Label>
-                                <Input id="contentSlug" value={contentSlug} onChange={(e) => setContentSlug(e.target.value)} />
-                                <p className="text-xs text-muted-foreground">URLスラッグは変更しないでください</p>
-                              </div>
-                            </div>
-
-                            <div className="grid grid-cols-3 gap-4">
-                              <div className="space-y-2">
-                                <Label htmlFor="category">カテゴリ</Label>
-                                <Select value={contentCategoryId} onValueChange={setContentCategoryId}>
-                                  <SelectTrigger>
-                                    <SelectValue placeholder="カテゴリを選択" />
-                                  </SelectTrigger>
-                                  <SelectContent className="bg-background border z-50">
-                                    <SelectItem value="none">カテゴリなし</SelectItem>
-                                    {categories.map((category) => (
-                                      <SelectItem key={category.id} value={category.id}>
-                                        {category.name}
-                                      </SelectItem>
-                                    ))}
-                                  </SelectContent>
-                                </Select>
-                              </div>
                               <div className="space-y-2 flex items-end">
                                 <label className="flex items-center space-x-2 pb-2">
                                   <Switch checked={contentPublished} onCheckedChange={setContentPublished} id="content-published" />
-                                  <Label htmlFor="content-published">公開する</Label>
+                                  <Label htmlFor="content-published">コンテンツを公開する</Label>
                                 </label>
                               </div>
                               <div className="space-y-2">
@@ -1125,6 +1097,35 @@ const MemberSiteBuilder = () => {
                                   onChange={(e) => setContentSortOrder(Number(e.target.value))}
                                 />
                               </div>
+                            </div>
+
+                            <div className="grid grid-cols-2 gap-4">
+                              <div className="space-y-2">
+                                <Label htmlFor="contentTitle">ページタイトル</Label>
+                                <Input id="contentTitle" value={contentTitle} onChange={(e) => setContentTitle(e.target.value)} />
+                              </div>
+                              <div className="space-y-2">
+                                <Label htmlFor="contentSlug">URL スラッグ</Label>
+                                <Input id="contentSlug" value={contentSlug} onChange={(e) => setContentSlug(e.target.value)} />
+                                <p className="text-xs text-muted-foreground">URLスラッグは変更しないでください</p>
+                              </div>
+                            </div>
+
+                            <div className="space-y-2">
+                              <Label htmlFor="category">カテゴリ</Label>
+                              <Select value={contentCategoryId} onValueChange={setContentCategoryId}>
+                                <SelectTrigger>
+                                  <SelectValue placeholder="カテゴリを選択" />
+                                </SelectTrigger>
+                                <SelectContent className="bg-background border z-50">
+                                  <SelectItem value="none">カテゴリなし</SelectItem>
+                                  {categories.map((category) => (
+                                    <SelectItem key={category.id} value={category.id}>
+                                      {category.name}
+                                    </SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
                             </div>
 
                             <div className="space-y-2">
@@ -1211,22 +1212,6 @@ const MemberSiteBuilder = () => {
                             <CardDescription>{selectedCategory ? `${selectedCategory.name} の編集` : "新しいカテゴリを作成"}</CardDescription>
                           </CardHeader>
                           <CardContent className="space-y-6">
-                            <div className="space-y-2">
-                              <Label htmlFor="categoryName">カテゴリ名</Label>
-                              <Input id="categoryName" value={categoryName} onChange={(e) => setCategoryName(e.target.value)} placeholder="カテゴリ名を入力してください" />
-                            </div>
-
-                            <div className="space-y-2">
-                              <Label htmlFor="categoryDescription">説明</Label>
-                              <Textarea
-                                id="categoryDescription"
-                                value={categoryDescription}
-                                onChange={(e) => setCategoryDescription(e.target.value)}
-                                placeholder="カテゴリの説明を入力してください（任意）"
-                                rows={4}
-                              />
-                            </div>
-
                             <div className="flex items-center space-x-2 p-4 border rounded-lg">
                               <Switch
                                 id="ignore-sequential"
@@ -1278,7 +1263,22 @@ const MemberSiteBuilder = () => {
                               </div>
                             </div>
 
-                            {/* ブロックエディタ */}
+                            <div className="space-y-2">
+                              <Label htmlFor="categoryName">カテゴリ名</Label>
+                              <Input id="categoryName" value={categoryName} onChange={(e) => setCategoryName(e.target.value)} placeholder="カテゴリ名を入力してください" />
+                            </div>
+
+                            <div className="space-y-2">
+                              <Label htmlFor="categoryDescription">説明</Label>
+                              <Textarea
+                                id="categoryDescription"
+                                value={categoryDescription}
+                                onChange={(e) => setCategoryDescription(e.target.value)}
+                                placeholder="カテゴリの説明を入力してください（任意）"
+                                rows={4}
+                              />
+                            </div>
+
                             <div className="space-y-2">
                               <Label>詳細コンテンツ（ブロックエディタ）</Label>
                               <EnhancedBlockEditor
