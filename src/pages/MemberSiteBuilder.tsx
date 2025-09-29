@@ -1089,6 +1089,7 @@ const MemberSiteBuilder = () => {
                               <div className="space-y-2">
                                 <Label htmlFor="contentSlug">URL スラッグ</Label>
                                 <Input id="contentSlug" value={contentSlug} onChange={(e) => setContentSlug(e.target.value)} />
+                                <p className="text-xs text-muted-foreground">URLスラッグは変更しないでください</p>
                               </div>
                             </div>
 
@@ -1394,6 +1395,7 @@ const MemberSiteBuilder = () => {
                         <div className="space-y-2">
                           <Label htmlFor="site-slug">URL スラッグ</Label>
                           <Input id="site-slug" value={siteSlug} onChange={(e) => setSiteSlug(e.target.value)} placeholder="url-slug" />
+                          <p className="text-xs text-muted-foreground">URLスラッグは変更しないでください</p>
                         </div>
                       </div>
 
