@@ -33,6 +33,7 @@ interface MemberSiteCategory {
   content_blocks: any;
   created_at: string;
   updated_at: string;
+  ignore_sequential?: boolean;
 }
 
 interface MemberSiteContent {
@@ -103,7 +104,7 @@ const MemberSiteView: React.FC = () => {
       return categoryContents;
     }
 
-    if (site?.theme_config?.sequentialProgression) {
+    if (site?.theme_config?.sequentialProgression && !selectedCategory.ignore_sequential) {
       const firstUncompletedIndex = categoryContents.findIndex(c => (c.progress_percentage ?? 0) < 100);
       
       if (firstUncompletedIndex !== -1) {

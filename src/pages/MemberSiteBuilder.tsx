@@ -95,6 +95,7 @@ interface Category {
   created_at: string;
   thumbnail_url: string | null;
   content_blocks?: any[] | null; // JSON array
+  ignore_sequential?: boolean;
 }
 
 /* ========== Sortables: 共通スタイル ========== */
@@ -266,6 +267,7 @@ const MemberSiteBuilder = () => {
   const [categoryDescription, setCategoryDescription] = useState("");
   const [categoryThumbnailUrl, setCategoryThumbnailUrl] = useState<string | null>(null);
   const [categoryBlocks, setCategoryBlocks] = useState<any[]>([]); // JSON array
+  const [ignoreSequential, setIgnoreSequential] = useState(false);
 
   useEffect(() => {
     loadSites();
@@ -303,12 +305,14 @@ const MemberSiteBuilder = () => {
       setCategoryDescription("");
       setCategoryThumbnailUrl(null);
       setCategoryBlocks([]);
+      setIgnoreSequential(false);
 
       // load fresh
       loadSiteData();
       loadSiteContents();
       loadCategories();
       loadTags();
+      setIgnoreSequential(false);
     } else {
       // reset all when no site selected
       setSite(null);
@@ -340,6 +344,7 @@ const MemberSiteBuilder = () => {
       setCategoryDescription("");
       setCategoryThumbnailUrl(null);
       setCategoryBlocks([]);
+      setIgnoreSequential(false);
     }
   }, [siteId]);
 
@@ -457,6 +462,7 @@ const MemberSiteBuilder = () => {
           thumbnail_url: cat.thumbnail_url ?? null,
           content_blocks: Array.isArray(cat.content_blocks) ? cat.content_blocks : [],
           content_count: Array.isArray(cat.member_site_content) ? cat.member_site_content.length : cat.member_site_content?.[0]?.count ?? 0,
+          ignore_sequential: cat.ignore_sequential,
         })) ?? [];
 
       setCategories(formatted);
@@ -718,6 +724,7 @@ const MemberSiteBuilder = () => {
         sort_order: categories.length,
         thumbnail_url: categoryThumbnailUrl,
         content_blocks: Array.isArray(categoryBlocks) ? categoryBlocks : [],
+        ignore_sequential: ignoreSequential,
       };
 
       if (selectedCategoryId) {
@@ -755,6 +762,7 @@ const MemberSiteBuilder = () => {
     } else {
       setCategoryBlocks([]);
     }
+    setIgnoreSequential(category.ignore_sequential || false);
   };
 
   const deleteCategory = async (categoryId: string) => {
@@ -1216,6 +1224,20 @@ const MemberSiteBuilder = () => {
                                 placeholder="カテゴリの説明を入力してください（任意）"
                                 rows={4}
                               />
+                            </div>
+
+                            <div className="flex items-center space-x-2 p-4 border rounded-lg">
+                              <Switch
+                                id="ignore-sequential"
+                                checked={ignoreSequential}
+                                onCheckedChange={setIgnoreSequential}
+                              />
+                              <div className="space-y-0.5">
+                                <Label htmlFor="ignore-sequential">シーケンシャル設定を無視</Label>
+                                <p className="text-xs text-muted-foreground">
+                                  このカテゴリでは、サイト全体のシーケンシャル設定を無視して常に全てのコンテンツを表示します。
+                                </p>
+                              </div>
                             </div>
 
                             {/* URL入力 + MediaLibrary ボタン */}
