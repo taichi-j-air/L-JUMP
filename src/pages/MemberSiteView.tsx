@@ -9,7 +9,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Block } from '@/components/EnhancedBlockEditor';
 import { HeadingDesignStyles, renderBlocks } from '@/lib/blockRenderer';
 import { ChevronLeft, Menu, X } from 'lucide-react';
-import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import { Popover, PopoverTrigger, PopoverContent } from "@/components/ui/popover";
 
 interface MemberSite {
   id: string;
@@ -852,18 +852,18 @@ const MemberSiteView: React.FC = () => {
                       <span className="text-sm text-muted-foreground">
                         学習状況: <span className={`font-semibold ${isContentCompleted ? "text-emerald-500" : "text-destructive"}`}>{isContentCompleted ? "完了" : "未完了"}</span>
                       </span>
-                      <Tooltip delayDuration={0}>
-                        <TooltipTrigger asChild>
+                      <Popover>
+                        <PopoverTrigger asChild>
                           <div className="bg-gray-400 rounded-full flex items-center justify-center h-4 w-4 cursor-pointer">
                             <span className="text-white font-bold text-xs">!</span>
                           </div>
-                        </TooltipTrigger>
-                        <TooltipContent>
+                        </PopoverTrigger>
+                        <PopoverContent side="top" align="center" className="w-auto p-2">
                           <p className="text-xs text-muted-foreground">
                             学習が完了したら、下のボタンを押してください。<br/>間違えて押した場合はもう一度押すと元に戻せます。
                           </p>
-                        </TooltipContent>
-                      </Tooltip>
+                        </PopoverContent>
+                      </Popover>
                     </div>
                     <Button
                       onClick={() => void handleToggleCompletion()}
