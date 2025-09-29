@@ -940,12 +940,11 @@ const MemberSiteBuilder = () => {
             {/* Right Column */}
             <div className="col-span-12 md:col-span-9 space-y-6">
               <Tabs value={activeTab} onValueChange={setActiveTab}>
-                <TabsList className="grid w-full grid-cols-5">
-                  <TabsTrigger value="content-list">コンテンツ一覧</TabsTrigger>
-                  <TabsTrigger value="category-settings">カテゴリ設定</TabsTrigger>
-                  <TabsTrigger value="plan-settings">プラン設定</TabsTrigger>
-                  <TabsTrigger value="content-display">コンテンツ表示方法</TabsTrigger>
-                  <TabsTrigger value="site-settings">サイト設定</TabsTrigger>
+                <TabsList className="grid w-full grid-cols-4 bg-background mb-4">
+                  <TabsTrigger value="content-list" className="py-3 rounded-none hover:opacity-70 data-[state=inactive]:bg-[rgb(12,34,54)] data-[state=inactive]:text-white data-[state=active]:bg-gray-200">コンテンツ一覧</TabsTrigger>
+                  <TabsTrigger value="category-settings" className="py-3 rounded-none hover:opacity-70 data-[state=inactive]:bg-[rgb(12,34,54)] data-[state=inactive]:text-white data-[state=active]:bg-gray-200">カテゴリ設定</TabsTrigger>
+                  <TabsTrigger value="content-display" className="py-3 rounded-none hover:opacity-70 data-[state=inactive]:bg-[rgb(12,34,54)] data-[state=inactive]:text-white data-[state=active]:bg-gray-200">コンテンツ表示方法</TabsTrigger>
+                  <TabsTrigger value="site-settings" className="py-3 rounded-none hover:opacity-70 data-[state=inactive]:bg-[rgb(12,34,54)] data-[state=inactive]:text-white data-[state=active]:bg-gray-200">サイト設定</TabsTrigger>
                 </TabsList>
 
                 {/* Content List */}
@@ -1318,35 +1317,7 @@ const MemberSiteBuilder = () => {
                   </div>
                 </TabsContent>
 
-                {/* Plan Settings */}
-                <TabsContent value="plan-settings" className="space-y-6">
-                  <Card>
-                    <CardHeader>
-                      <CardTitle>プラン設定</CardTitle>
-                      <CardDescription>このサイトの料金プランを設定します</CardDescription>
-                    </CardHeader>
-                    <CardContent className="space-y-4">
-                      <div className="grid grid-cols-2 gap-4">
-                        <div className="space-y-2">
-                          <Label htmlFor="access-type">アクセス種別</Label>
-                          <Select value={accessType} onValueChange={(v: "free" | "paid") => setAccessType(v)}>
-                            <SelectTrigger>
-                              <SelectValue />
-                            </SelectTrigger>
-                            <SelectContent className="bg-background border z-50">
-                              <SelectItem value="free">無料</SelectItem>
-                              <SelectItem value="paid">有料</SelectItem>
-                            </SelectContent>
-                          </Select>
-                        </div>
-                        <div className="space-y-2">
-                          <Label htmlFor="price">価格（円）</Label>
-                          <Input id="price" type="number" value={price} onChange={(e) => setPrice(Number(e.target.value))} disabled={accessType === "free"} />
-                        </div>
-                      </div>
-                    </CardContent>
-                  </Card>
-                </TabsContent>
+                
 
                 {/* Content Display */}
                 <TabsContent value="content-display" className="space-y-6">
