@@ -749,7 +749,7 @@ const MemberSiteView: React.FC = () => {
 
           {/* コンテンツ一覧（テーブル） */}
           {currentView === 'content-list' && selectedCategory && (
-            <div className="md:px-3 py-6">
+            <div className="px-4 md:px-3 py-6">
               <Button
                 size="sm"
                 onClick={() => navigateToCategories()}
@@ -759,7 +759,7 @@ const MemberSiteView: React.FC = () => {
                 戻る
               </Button>
               <div className="w-full md:max-w-4xl md:mx-auto">
-                <div className="bg-white shadow-sm p-6 space-y-8 min-[500px]:border min-[500px]:rounded-lg">
+                <div className="bg-white space-y-8 min-[500px]:shadow-sm min-[500px]:p-6 min-[500px]:border min-[500px]:rounded-lg">
                   <div>
                     <h1 className="text-3xl font-bold mb-2 text-foreground">{selectedCategory.name}</h1>
                     {selectedCategory.description && <p className="text-sm text-muted-foreground">{selectedCategory.description}</p>}
@@ -824,7 +824,7 @@ const MemberSiteView: React.FC = () => {
 
           {/* コンテンツ詳細 */}
           {currentView === 'content-detail' && selectedContent && (
-            <div className="px-3 py-6">
+            <div className="px-4 py-6">
               <Button
                 size="sm"
                 onClick={() => navigateToContentList(selectedContent.category_id || '')}
@@ -834,7 +834,7 @@ const MemberSiteView: React.FC = () => {
                 戻る
               </Button>
               <article className="max-w-4xl mx-auto">
-                <div className="bg-white border rounded-lg shadow-sm p-6 space-y-6">
+                <div className="bg-white space-y-6 min-[500px]:border min-[500px]:rounded-lg min-[500px]:shadow-sm min-[500px]:p-6">
                   <header className="mb-8">
                     <h1 className="text-4xl font-bold mb-4 text-foreground">{selectedContent.title}</h1>
                   </header>
@@ -848,8 +848,11 @@ const MemberSiteView: React.FC = () => {
                   </div>
                   <div className="border-t pt-6 flex flex-col gap-3">
                     <span className="text-sm text-muted-foreground">
-                      学習状況: <span className="font-semibold text-foreground">{isContentCompleted ? "完了" : "未完了"}</span>
+                      学習状況: <span className={`font-semibold ${isContentCompleted ? "text-emerald-500" : "text-destructive"}`}>{isContentCompleted ? "完了" : "未完了"}</span>
                     </span>
+                    <p className="text-xs text-muted-foreground -mt-2">
+                      学習が完了したら、下のボタンを押してください。(間違えて押した場合はもう一度押すと元に戻せます)
+                    </p>
                     <Button
                       onClick={() => void handleToggleCompletion()}
                       disabled={updatingProgress || !uid}
