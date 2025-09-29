@@ -625,8 +625,9 @@ const MemberSiteView: React.FC = () => {
       >
         <div className="flex items-center justify-between px-4 py-4">
           <div className="flex items-center gap-2">
-            
-            <h1 className="text-lg font-semibold">{site.name}</h1>
+            <button onClick={navigateToCategories} className="cursor-pointer hover:opacity-80 transition-opacity">
+              <h1 className="text-lg font-semibold">{site.name}</h1>
+            </button>
           </div>
 
           <Button
