@@ -8,7 +8,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { ArrowLeft, Save, Eye, Plus, Trash2, Settings, Image as ImageIcon, ExternalLink, GripVertical } from "lucide-react";
+import { ArrowLeft, Save, Eye, Plus, Trash2, Settings, Image as ImageIcon, ExternalLink, GripVertical, Copy as CopyIcon } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { Table, TableBody, TableCell, TableRow } from "@/components/ui/table";
@@ -70,6 +70,11 @@ interface MemberSite {
   is_published: boolean;
   is_public: boolean;
   created_at: string;
+  user_id?: string;
+  require_passcode?: boolean;
+  passcode?: string | null;
+  allowed_tag_ids?: string[] | null;
+  blocked_tag_ids?: string[] | null;
 }
 
 interface SiteContent {
@@ -578,6 +583,116 @@ const MemberSiteBuilder = () => {
     }
   };
 
+  const handleDuplicateSite = async (site: MemberSite) => {
+    setSaving(true);
+    try {
+      const { data: authData } = await supabase.auth.getUser();
+      const userId = authData.user?.id;
+      if (!userId) throw new Error("認証が確認できませんでした");
+
+      const timestamp = Date.now();
+      const { data: newSite, error: insertError } = await supabase
+        .from("member_sites")
+        .insert({
+          name: `${site.name} (コピー)`,
+          description: site.description,
+          slug: `${site.slug}-${timestamp}`,
+          access_type: site.access_type,
+          price: site.price,
+          theme_config: site.theme_config || {},
+          is_published: false,
+          is_public: site.is_public ?? false,
+          require_passcode: site.require_passcode ?? false,
+          passcode: site.passcode ?? null,
+          allowed_tag_ids: site.allowed_tag_ids ?? [],
+          blocked_tag_ids: site.blocked_tag_ids ?? [],
+          user_id: userId,
+        })
+        .select()
+        .single();
+      if (insertError) throw insertError;
+
+      const newSiteId: string = newSite.id;
+
+      const normalizeBlocks = (blocks: any) => {
+        if (Array.isArray(blocks)) return blocks;
+        if (typeof blocks === "string" && blocks.trim()) {
+          try {
+            const parsed = JSON.parse(blocks);
+            return Array.isArray(parsed) ? parsed : [];
+          } catch (error) {
+            console.warn("Failed to parse blocks during duplication", error);
+            return [];
+          }
+        }
+        return [];
+      };
+
+      const { data: categories, error: categoriesError } = await supabase
+        .from("member_site_categories")
+        .select("*")
+        .eq("site_id", site.id)
+        .order("sort_order", { ascending: true });
+      if (categoriesError) throw categoriesError;
+
+      const categoryIdMap: Record<string, string> = {};
+      if (Array.isArray(categories)) {
+        for (const category of categories) {
+          const { data: newCategory, error: insertCategoryError } = await supabase
+            .from("member_site_categories")
+            .insert({
+              site_id: newSiteId,
+              name: category.name,
+              description: category.description,
+              sort_order: category.sort_order,
+              thumbnail_url: category.thumbnail_url,
+              content_blocks: normalizeBlocks(category.content_blocks),
+              ignore_sequential: category.ignore_sequential ?? false,
+            })
+            .select()
+            .single();
+          if (insertCategoryError) throw insertCategoryError;
+          categoryIdMap[category.id] = newCategory.id;
+        }
+      }
+
+      const { data: contents, error: contentsError } = await supabase
+        .from("member_site_content")
+        .select("*")
+        .eq("site_id", site.id)
+        .order("sort_order", { ascending: true });
+      if (contentsError) throw contentsError;
+
+      if (Array.isArray(contents)) {
+        for (const [index, content] of contents.entries()) {
+          const { error: insertContentError } = await supabase
+            .from("member_site_content")
+            .insert({
+              site_id: newSiteId,
+              title: content.title,
+              content: content.content,
+              content_blocks: normalizeBlocks(content.content_blocks),
+              slug: `${content.slug}-${timestamp + index}`,
+              is_published: content.is_published,
+              sort_order: content.sort_order,
+              page_type: content.page_type ?? "page",
+              access_level: content.access_level ?? "member",
+              category_id: content.category_id ? categoryIdMap[content.category_id] ?? null : null,
+            });
+          if (insertContentError) throw insertContentError;
+        }
+      }
+
+      await loadSites();
+      setSearchParams({ site: newSiteId });
+      toast({ title: "複製完了", description: `「${site.name}」のコピーを作成しました。` });
+    } catch (error) {
+      console.error("Error duplicating site:", error);
+      toast({ title: "エラー", description: "サイトの複製に失敗しました", variant: "destructive" });
+    } finally {
+      setSaving(false);
+    }
+  };
   const handleCreateSite = async () => {
     setSaving(true);
     try {
@@ -863,6 +978,19 @@ const MemberSiteBuilder = () => {
                               title="プレビュー (オーナー特権)"
                             >
                               <Eye className="h-3 w-3" />
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="h-6 w-6 p-0"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleDuplicateSite(s);
+                              }}
+                              disabled={saving}
+                              title="複製"
+                            >
+                              <CopyIcon className="h-3 w-3" />
                             </Button>
                             <Button
                               variant="ghost"
