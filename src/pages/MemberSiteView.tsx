@@ -128,7 +128,7 @@ const MemberSiteView: React.FC = () => {
   );
 
   // 進捗バー色
-  const progressBarColor = 'hsl(var(--primary))';
+  const progressBarColor = 'rgb(12, 179, 134)';
 
   // テーマ
   const themeConfig = site?.theme_config || {};
