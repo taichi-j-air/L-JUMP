@@ -244,8 +244,17 @@ serve(async (req) => {
         p_invite_code : scenarioCode,
         p_display_name: display,
         p_picture_url : lineProfile.pictureUrl ?? null,
+        p_registration_source: 'invite_link',
       },
     );
+
+    // 既に登録済みの場合の処理
+    if (!regErr && reg?.error === 'already_registered') {
+      console.log("User already registered to scenario:", reg);
+      const message = encodeURIComponent(reg.message || 'このシナリオには既に登録済みです');
+      const redirectUrl = `https://74048ab5-8d5a-425a-ab29-bd5cc50dc2fe.lovableproject.com/login-success?user_name=${encodeURIComponent(display)}&scenario=${scenarioCode}&message=${message}&already_registered=true`;
+      return Response.redirect(redirectUrl, 302);
+    }
 
     if (regErr || !reg?.success) {
       console.error("Scenario registration failed:", regErr, reg);

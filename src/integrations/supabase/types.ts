@@ -1808,26 +1808,35 @@ export type Database = {
       scenario_friend_logs: {
         Row: {
           added_at: string
+          exit_reason: string | null
+          exited_at: string | null
           friend_id: string | null
           id: string
           invite_code: string
           line_user_id: string | null
+          registration_source: string | null
           scenario_id: string
         }
         Insert: {
           added_at?: string
+          exit_reason?: string | null
+          exited_at?: string | null
           friend_id?: string | null
           id?: string
           invite_code: string
           line_user_id?: string | null
+          registration_source?: string | null
           scenario_id: string
         }
         Update: {
           added_at?: string
+          exit_reason?: string | null
+          exited_at?: string | null
           friend_id?: string | null
           id?: string
           invite_code?: string
           line_user_id?: string | null
+          registration_source?: string | null
           scenario_id?: string
         }
         Relationships: [
@@ -1877,33 +1886,42 @@ export type Database = {
       }
       scenario_invite_codes: {
         Row: {
+          allow_re_registration: boolean | null
           created_at: string
           id: string
           invite_code: string
           is_active: boolean
           max_usage: number | null
+          re_registration_action: string | null
+          re_registration_message: string | null
           scenario_id: string
           updated_at: string
           usage_count: number
           user_id: string
         }
         Insert: {
+          allow_re_registration?: boolean | null
           created_at?: string
           id?: string
           invite_code: string
           is_active?: boolean
           max_usage?: number | null
+          re_registration_action?: string | null
+          re_registration_message?: string | null
           scenario_id: string
           updated_at?: string
           usage_count?: number
           user_id: string
         }
         Update: {
+          allow_re_registration?: boolean | null
           created_at?: string
           id?: string
           invite_code?: string
           is_active?: boolean
           max_usage?: number | null
+          re_registration_action?: string | null
+          re_registration_message?: string | null
           scenario_id?: string
           updated_at?: string
           usage_count?: number
@@ -2884,12 +2902,20 @@ export type Database = {
         Returns: Json
       }
       register_friend_to_scenario: {
-        Args: {
-          p_display_name?: string
-          p_invite_code: string
-          p_line_user_id: string
-          p_picture_url?: string
-        }
+        Args:
+          | {
+              p_display_name?: string
+              p_invite_code: string
+              p_line_user_id: string
+              p_picture_url?: string
+            }
+          | {
+              p_display_name?: string
+              p_invite_code: string
+              p_line_user_id: string
+              p_picture_url?: string
+              p_registration_source?: string
+            }
         Returns: Json
       }
       register_friend_with_scenario: {
