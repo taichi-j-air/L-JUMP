@@ -555,7 +555,7 @@ async function markStepAsDelivered(supabase: any, trackingId: string, scenarioId
     // Fetch next step (currentStepOrder + 1)
     const { data: nextStep, error: nextStepErr } = await supabase
       .from('steps')
-      .select('id, delivery_type, delivery_days, delivery_hours, delivery_minutes, delivery_seconds, delivery_time_of_day, specific_time, delivery_relative_to_previous')
+      .select('id, step_order, delivery_type, delivery_days, delivery_hours, delivery_minutes, delivery_seconds, delivery_time_of_day, specific_time')
       .eq('scenario_id', scenarioId)
       .eq('step_order', currentStepOrder + 1)
       .maybeSingle()
@@ -594,7 +594,7 @@ async function markStepAsDelivered(supabase: any, trackingId: string, scenarioId
       // 遷移先の最初のステップ詳細を取得
       const { data: firstStep, error: firstErr } = await supabase
         .from('steps')
-        .select('id, delivery_type, delivery_days, delivery_hours, delivery_minutes, delivery_seconds, delivery_time_of_day, specific_time, delivery_relative_to_previous')
+        .select('id, step_order, delivery_type, delivery_days, delivery_hours, delivery_minutes, delivery_seconds, delivery_time_of_day, specific_time')
         .eq('scenario_id', transition.to_scenario_id)
         .order('step_order', { ascending: true })
         .limit(1)
@@ -611,18 +611,22 @@ async function markStepAsDelivered(supabase: any, trackingId: string, scenarioId
         .eq('id', friendId)
         .maybeSingle()
 
-      // delivery_typeのマッピング
+      // delivery_typeのマッピング（遷移先の最初のステップ）
       let effectiveType = (firstStep as any).delivery_type as string
+      console.log(`Transition first step original delivery_type: ${effectiveType}`)
       if (effectiveType === 'immediate') effectiveType = 'immediately'
-      if (effectiveType === 'specific') effectiveType = 'specific_time'
-      if (effectiveType === 'time_of_day') effectiveType = 'time_of_day'
-      const hasOffset = ((firstStep as any).delivery_seconds || 0) + ((firstStep as any).delivery_minutes || 0) + ((firstStep as any).delivery_hours || 0) + ((firstStep as any).delivery_days || 0) > 0
-      if (effectiveType === 'relative' && (((firstStep as any).delivery_relative_to_previous) || hasOffset)) effectiveType = 'relative_to_previous'
+      else if (effectiveType === 'specific') effectiveType = 'specific_time'
+      else if (effectiveType === 'time_of_day') effectiveType = 'time_of_day'
+      else if (effectiveType === 'relative') {
+        // 遷移先の最初のステップは常に登録時刻からの相対時間として扱う
+        effectiveType = 'relative'
+      }
+      console.log(`Transition first step mapped delivery_type: ${effectiveType}`)
 
       // 次回配信時刻を算出
       let scheduledIso: string | null = null
       try {
-        const { data: sched } = await supabase.rpc('calculate_scheduled_delivery_time', {
+        const rpcParams = {
           p_friend_added_at: deliveredAt, // 遷移時の登録時刻 = 直前の配信完了時刻
           p_delivery_type: effectiveType,
           p_delivery_seconds: (firstStep as any).delivery_seconds || 0,
@@ -632,14 +636,22 @@ async function markStepAsDelivered(supabase: any, trackingId: string, scenarioId
           p_specific_time: (firstStep as any).specific_time || null,
           p_previous_step_delivered_at: deliveredAt,
           p_delivery_time_of_day: (firstStep as any).delivery_time_of_day || null,
-        })
-        if (sched) scheduledIso = new Date(sched).toISOString()
-      } catch (_) {}
+        }
+        console.log('Calculating transition schedule with params:', JSON.stringify(rpcParams))
+        const { data: sched, error: schedErr } = await supabase.rpc('calculate_scheduled_delivery_time', rpcParams)
+        if (schedErr) {
+          console.error('Schedule calculation error:', schedErr)
+        } else if (sched) {
+          scheduledIso = new Date(sched).toISOString()
+          console.log(`Transition scheduled time calculated: ${scheduledIso}`)
+        }
+      } catch (err) {
+        console.error('Schedule calculation exception:', err)
+      }
 
       const now = new Date()
-      const scheduled = scheduledIso ? new Date(scheduledIso) : now
-      // 修正: 将来の時刻であっても、readyにしないようにする
-      const isReady = false // 常にwaitingから始める
+      const scheduled = scheduledIso ? new Date(scheduledIso) : new Date(now.getTime() + 30000) // デフォルトは30秒後
+      console.log(`Transition scheduled time: ${scheduled.toISOString()}, now: ${now.toISOString()}`)
 
       // 既存があれば更新、なければ作成
       const { data: existing, error: exErr } = await supabase
@@ -747,12 +759,22 @@ async function markStepAsDelivered(supabase: any, trackingId: string, scenarioId
       } else {
         // Map UI delivery_type to DB function expected values
         let effectiveType = nextStep.delivery_type as string
-        if (effectiveType === 'immediate') effectiveType = 'immediately'
-        if (effectiveType === 'specific') effectiveType = 'specific_time'
-        if (effectiveType === 'time_of_day') effectiveType = 'time_of_day'
-        const isNotFirstStep = (currentStepOrder + 1) >= 1 // scheduling for next step
-        const hasOffset = (nextStep.delivery_seconds || 0) + (nextStep.delivery_minutes || 0) + (nextStep.delivery_hours || 0) + (nextStep.delivery_days || 0) > 0
-        if (effectiveType === 'relative' && ((nextStep as any).delivery_relative_to_previous || isNotFirstStep)) effectiveType = 'relative_to_previous'
+        console.log(`Next step (order ${currentStepOrder + 1}) original delivery_type: ${effectiveType}`)
+        
+        if (effectiveType === 'immediate') {
+          effectiveType = 'immediately'
+        } else if (effectiveType === 'specific') {
+          effectiveType = 'specific_time'
+        } else if (effectiveType === 'time_of_day') {
+          effectiveType = 'time_of_day'
+        } else if (effectiveType === 'relative') {
+          // 2番目以降のステップはrelative_to_previousとして扱う
+          const nextStepOrder = (nextStep as any).step_order || (currentStepOrder + 1)
+          if (nextStepOrder > 0) {
+            effectiveType = 'relative_to_previous'
+          }
+        }
+        console.log(`Next step mapped delivery_type: ${effectiveType}`)
 
         // シナリオ登録時刻（この友だちがこのシナリオに登録された時刻 = 最初のトラッキング作成時刻）
         const { data: regBase } = await supabase
@@ -765,7 +787,7 @@ async function markStepAsDelivered(supabase: any, trackingId: string, scenarioId
           .maybeSingle()
         const baseTime = regBase?.created_at || deliveredAt
 
-        const { data: newScheduledTime, error: calcError } = await supabase.rpc('calculate_scheduled_delivery_time', {
+        const rpcParams = {
           p_friend_added_at: baseTime,
           p_delivery_type: effectiveType,
           p_delivery_seconds: nextStep.delivery_seconds || 0,
@@ -775,31 +797,43 @@ async function markStepAsDelivered(supabase: any, trackingId: string, scenarioId
           p_specific_time: nextStep.specific_time || null,
           p_previous_step_delivered_at: deliveredAt,
           p_delivery_time_of_day: nextStep.delivery_time_of_day || null
-        })
+        }
+        console.log(`Calculating next step schedule with params:`, JSON.stringify(rpcParams))
+        
+        const { data: newScheduledTime, error: calcError } = await supabase.rpc('calculate_scheduled_delivery_time', rpcParams)
 
-        if (!calcError && newScheduledTime) {
-          const scheduled = new Date(newScheduledTime)
-          const now = new Date()
-          console.log(`Next step scheduled for: ${scheduled.toISOString()}, current time: ${now.toISOString()}`)
-
-          if (scheduled <= now) {
-            // If the calculated time is in the past or now, set to ready for immediate delivery
-            updates.status = 'ready'
-            // Use the current time for scheduled_delivery_at to ensure it's picked up promptly
-            updates.scheduled_delivery_at = now.toISOString() 
-          } else {
-            // If the calculated time is in the future, set to waiting
-            updates.status = 'waiting'
-            updates.scheduled_delivery_at = scheduled.toISOString()
-          }
-          updates.next_check_at = new Date(scheduled.getTime() - 5000).toISOString()
-        } else {
-          console.warn('Failed to calculate next scheduled time, using default timing', calcError)
+        if (calcError) {
+          console.error('Failed to calculate next scheduled time:', calcError)
           // 失敗した場合は30秒後に配信
           const defaultScheduled = new Date(Date.now() + 30000)
           updates.status = 'waiting'
           updates.scheduled_delivery_at = defaultScheduled.toISOString()
           updates.next_check_at = new Date(defaultScheduled.getTime() - 5000).toISOString()
+        } else if (!newScheduledTime) {
+          console.warn('No scheduled time returned from RPC, using default timing')
+          // 失敗した場合は30秒後に配信
+          const defaultScheduled = new Date(Date.now() + 30000)
+          updates.status = 'waiting'
+          updates.scheduled_delivery_at = defaultScheduled.toISOString()
+          updates.next_check_at = new Date(defaultScheduled.getTime() - 5000).toISOString()
+        } else {
+          const scheduled = new Date(newScheduledTime)
+          const now = new Date()
+          console.log(`✓ Next step scheduled for: ${scheduled.toISOString()}, current time: ${now.toISOString()}, diff: ${Math.round((scheduled.getTime() - now.getTime()) / 1000)}s`)
+
+          if (scheduled <= now) {
+            // If the calculated time is in the past or now, set to ready for immediate delivery
+            updates.status = 'ready'
+            updates.scheduled_delivery_at = now.toISOString() 
+            updates.next_check_at = now.toISOString()
+            console.log('→ Status set to READY (scheduled time is now or in the past)')
+          } else {
+            // If the calculated time is in the future, set to waiting
+            updates.status = 'waiting'
+            updates.scheduled_delivery_at = scheduled.toISOString()
+            updates.next_check_at = new Date(scheduled.getTime() - 5000).toISOString()
+            console.log('→ Status set to WAITING (scheduled for future)')
+          }
         }
       }
     } catch (calcCatch) {
