@@ -327,11 +327,53 @@ serve(async (req) => {
       },
     );
 
-    // 既に登録済みの場合の処理
-    if (!regErr && reg?.error === 'already_registered') {
-      console.log("User already registered to scenario:", reg);
-      const message = encodeURIComponent(reg.message || 'このシナリオには既に登録済みです');
-      const redirectUrl = `https://74048ab5-8d5a-425a-ab29-bd5cc50dc2fe.lovableproject.com/login-success?user_name=${encodeURIComponent(display)}&scenario=${scenarioCode}&message=${message}&already_registered=true`;
+    // 既に登録済みの場合の処理（エラーではなく正常な既存友だちとして扱う）
+    if (!regErr && reg?.already_registered === true) {
+      console.log("✅ User already registered to scenario (existing friend):", {
+        friend_id: reg.friend_id,
+        scenario_id: reg.scenario_id,
+        line_user_id: lineProfile.userId
+      });
+      
+      // 既存友だちの即時配信トリガーを実行
+      try {
+        const deliveryPayload = {
+          trigger: 'login_callback_existing',
+          scenario_code: scenarioCode,
+          line_user_id: lineProfile.userId,
+          friend_id: reg.friend_id,
+          scenario_id: reg.scenario_id,
+          is_existing_friend: true,
+          timestamp: new Date().toISOString()
+        };
+
+        console.log("Triggering step delivery for existing friend:", deliveryPayload);
+
+        await fetch('https://rtjxurmuaawyzjcdkqxt.supabase.co/functions/v1/scheduled-step-delivery', {
+          method: 'POST',
+          headers: { 
+            'Content-Type': 'application/json', 
+            'Authorization': `Bearer ${Deno.env.get('SUPABASE_ANON_KEY')}` 
+          },
+          body: JSON.stringify(deliveryPayload)
+        });
+      } catch (triggerErr) {
+        console.warn('Failed to trigger delivery for existing friend:', triggerErr);
+      }
+      
+      // LINEトーク画面へリダイレクト（ディープリンク優先）
+      let redirectUrl: string;
+      if (isMobile && profile.line_bot_id) {
+        redirectUrl = `line://ti/p/${encodeURIComponent(profile.line_bot_id)}`;
+      } else if (profile.add_friend_url && profile.add_friend_url.startsWith('https://')) {
+        redirectUrl = profile.add_friend_url;
+      } else if (profile.line_bot_id) {
+        redirectUrl = `https://line.me/R/ti/p/${encodeURIComponent(profile.line_bot_id)}`;
+      } else {
+        redirectUrl = `https://74048ab5-8d5a-425a-ab29-bd5cc50dc2fe.lovableproject.com/login-success?user_name=${encodeURIComponent(display)}&scenario=${scenarioCode}&already_registered=true`;
+      }
+      
+      console.log("Redirecting existing friend to:", redirectUrl);
       return Response.redirect(redirectUrl, 302);
     }
 
