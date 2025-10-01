@@ -653,7 +653,7 @@ const MemberSiteBuilder = () => {
               sort_order: category.sort_order,
               thumbnail_url: category.thumbnail_url,
               content_blocks: normalizeBlocks(category.content_blocks),
-              ignore_sequential: category.ignore_sequential ?? false,
+              ignore_sequential: (category as any).ignore_sequential ?? false,
             })
             .select()
             .single();
