@@ -150,13 +150,13 @@ Deno.serve(async (req) => {
     if (stepsToDeliver && stepsToDeliver.length >= batchSize) {
       // Hit batch limit, check again immediately
       shouldScheduleNext = true
-      nextCheckDelay = 2
+      nextCheckDelay = 1
       console.log('🔄 Hit batch limit, scheduling immediate next check')
     } else {
       // Check for any waiting steps due within the next 2 minutes
       let upcomingQuery = supabase
         .from('step_delivery_tracking')
-        .select('scheduled_delivery_at')
+        .select('scheduled_delivery_at, friend_id, scenario_id')
         .eq('status', 'waiting')
         .not('friend_id', 'is', null)
         .lte('scheduled_delivery_at', new Date(Date.now() + 120000).toISOString())
@@ -170,10 +170,43 @@ Deno.serve(async (req) => {
       if (upcoming && upcoming.length > 0) {
         const dueAt = new Date(upcoming[0].scheduled_delivery_at)
         const nowDate = new Date()
-        if (dueAt.getTime() > nowDate.getTime()) {
+        const delayMs = dueAt.getTime() - nowDate.getTime()
+        
+        if (delayMs > 0 && delayMs <= 120000) {
           shouldScheduleNext = true
-          nextCheckDelay = Math.max(5, Math.min(60, Math.ceil((dueAt.getTime() - Date.now()) / 1000) - 5))
-          console.log(`⏭️ Next delivery due at ${dueAt.toISOString()}, scheduling check in ${nextCheckDelay}s`)
+          // For precise timing: schedule exactly when needed
+          nextCheckDelay = Math.max(1, Math.ceil(delayMs / 1000))
+          console.log(`⏭️ Next delivery due at ${dueAt.toISOString()}, will trigger in ${nextCheckDelay}s`)
+          
+          // Trigger self-invocation with precise delay as background task
+          const functionUrl = `${Deno.env.get('SUPABASE_URL')}/functions/v1/scheduled-step-delivery`
+          const authHeader = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')
+          
+          // Use background task to ensure execution even after response is sent
+          const triggerNextCheck = async () => {
+            await new Promise(resolve => setTimeout(resolve, nextCheckDelay * 1000))
+            try {
+              console.log(`🔔 Triggering scheduled check after ${nextCheckDelay}s delay`)
+              const response = await fetch(functionUrl, {
+                method: 'POST',
+                headers: {
+                  'Authorization': `Bearer ${authHeader}`,
+                  'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                  scenario_id: scenarioIdFilter || upcoming[0].scenario_id,
+                  friend_id: friendIdFilter || upcoming[0].friend_id,
+                  trigger: 'auto_scheduled'
+                })
+              })
+              console.log(`✅ Next check triggered, status: ${response.status}`)
+            } catch (err) {
+              console.error('❌ Failed to trigger next scheduled check:', err)
+            }
+          }
+          
+          // Start background task without awaiting
+          EdgeRuntime.waitUntil(triggerNextCheck())
         }
       } else {
         console.log('⏹️ No upcoming deliveries within 2 minutes, skipping next check')
