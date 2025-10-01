@@ -780,11 +780,18 @@ async function markStepAsDelivered(supabase: any, trackingId: string, scenarioId
         if (!calcError && newScheduledTime) {
           const scheduled = new Date(newScheduledTime)
           const now = new Date()
-          // 修正: 即座に配信可能であっても、常にwaitingから始める
           console.log(`Next step scheduled for: ${scheduled.toISOString()}, current time: ${now.toISOString()}`)
-          
-          updates.status = 'waiting'
-          updates.scheduled_delivery_at = scheduled.toISOString()
+
+          if (scheduled <= now) {
+            // If the calculated time is in the past or now, set to ready for immediate delivery
+            updates.status = 'ready'
+            // Use the current time for scheduled_delivery_at to ensure it's picked up promptly
+            updates.scheduled_delivery_at = now.toISOString() 
+          } else {
+            // If the calculated time is in the future, set to waiting
+            updates.status = 'waiting'
+            updates.scheduled_delivery_at = scheduled.toISOString()
+          }
           updates.next_check_at = new Date(scheduled.getTime() - 5000).toISOString()
         } else {
           console.warn('Failed to calculate next scheduled time, using default timing', calcError)
