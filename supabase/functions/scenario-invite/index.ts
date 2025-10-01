@@ -8,6 +8,16 @@ const cors = {
     "authorization, x-client-info, apikey, content-type",
 };
 
+// User-Agent判定ヘルパー
+function getUserAgentInfo(userAgent: string) {
+  const ua = userAgent.toLowerCase();
+  const isLINEApp = ua.includes('line/');
+  const isMobile = /mobile|android|iphone|ipad|ipod/.test(ua);
+  const isDesktop = !isMobile;
+  
+  return { isLINEApp, isMobile, isDesktop };
+}
+
 serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: cors });
 
@@ -28,7 +38,7 @@ serve(async (req) => {
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
     );
     
-    // 招待コードと関連ユーザーを取得（埋め込みを避けて明示クエリ）
+    // 招待コードと関連ユーザーを取得
     const { data: invite, error: inviteErr } = await db
       .from("scenario_invite_codes")
       .select("scenario_id, user_id, max_usage, usage_count, is_active")
@@ -44,7 +54,7 @@ serve(async (req) => {
     // プロファイル（LINE Login設定）取得
     const { data: profile, error: profileErr } = await db
       .from("profiles")
-      .select("line_login_channel_id, line_login_channel_secret, line_api_status, display_name")
+      .select("line_login_channel_id, line_login_channel_secret, line_api_status, display_name, line_bot_id, add_friend_url")
       .eq("user_id", invite.user_id)
       .single();
 
@@ -53,29 +63,15 @@ serve(async (req) => {
       return new Response("Profile not found", { status: 404, headers: cors });
     }
 
-    // LINE Login設定確認
-    if (!profile.line_login_channel_id || !profile.line_login_channel_secret) {
-      console.error("Missing LINE Login config for invite:", inviteCode, {
-        hasChannelId: !!profile.line_login_channel_id,
-        hasChannelSecret: !!profile.line_login_channel_secret,
-      });
-      return new Response("LINE Login not configured", { status: 500, headers: cors });
-    }
-
     // 使用制限チェック
     if (invite.max_usage && invite.usage_count >= invite.max_usage) {
       console.warn("Usage limit exceeded for invite:", inviteCode);
       return new Response("Usage limit exceeded", { status: 410, headers: cors });
     }
 
-    // API状態確認 - 'configured' も許可
+    // API状態確認
     if (profile.line_api_status !== "active" && profile.line_api_status !== "configured") {
-      console.warn(
-        "LINE API not configured for invite:",
-        inviteCode,
-        "Status:",
-        profile.line_api_status,
-      );
+      console.warn("LINE API not configured:", profile.line_api_status);
       return new Response("Service not available", { status: 503, headers: cors });
     }
 
@@ -90,12 +86,13 @@ serve(async (req) => {
     }
 
     // クリックログを記録
+    const userAgent = req.headers.get('user-agent') || 'unknown';
     const { error: clickError } = await db
       .from("invite_clicks")
       .insert({
         invite_code: inviteCode,
         ip: req.headers.get('x-forwarded-for') || req.headers.get('x-real-ip') || 'unknown',
-        user_agent: req.headers.get('user-agent') || 'unknown',
+        user_agent: userAgent,
         referer: req.headers.get('referer') || null
       });
 
@@ -103,29 +100,65 @@ serve(async (req) => {
       console.error('Click log insert error:', clickError);
     }
 
-    // 招待ページへリダイレクト（ドメインは優先順で決定: 環境変数 > Referer > 既定）
-    const envBase = Deno.env.get('FE_BASE_URL');
-    const referer = req.headers.get('referer');
-    let feBase = envBase || null;
-    if (!feBase && referer) {
-      try { feBase = new URL(referer).origin; } catch {}
+    // User-Agent判定
+    const { isLINEApp, isMobile, isDesktop } = getUserAgentInfo(userAgent);
+    console.log("Device info:", { isLINEApp, isMobile, isDesktop });
+
+    // LINE Login設定がある場合はOAuth認証へ
+    if (profile.line_login_channel_id && profile.line_login_channel_secret) {
+      const channelId = profile.line_login_channel_id;
+      const callbackUrl = `https://rtjxurmuaawyzjcdkqxt.supabase.co/functions/v1/login-callback`;
+      
+      // state parameterに招待コードとシナリオIDを含める
+      const state = btoa(JSON.stringify({
+        inviteCode,
+        scenarioId: invite.scenario_id,
+        userId: invite.user_id
+      }));
+
+      const authUrl = `https://access.line.me/oauth2/v2.1/authorize?` +
+        `response_type=code&` +
+        `client_id=${channelId}&` +
+        `redirect_uri=${encodeURIComponent(callbackUrl)}&` +
+        `state=${encodeURIComponent(state)}&` +
+        `scope=profile%20openid`;
+
+      console.log("Redirecting to LINE OAuth:", { authUrl, isMobile, isDesktop });
+
+      // モバイルは直接リダイレクト、デスクトップはQRコード表示用にJSON返却
+      if (isMobile || isLINEApp) {
+        return new Response(null, {
+          status: 302,
+          headers: { ...cors, Location: authUrl }
+        });
+      } else {
+        // デスクトップの場合はJSONで返す（将来的にQRコード表示ページを作る場合に備えて）
+        return new Response(
+          JSON.stringify({ 
+            success: true, 
+            authUrl,
+            displayName: profile.display_name 
+          }),
+          {
+            status: 200,
+            headers: { ...cors, "Content-Type": "application/json" }
+          }
+        );
+      }
     }
-    // TODO: 必要に応じて既定値をあなたのフロントエンドURLに変更してください
-    feBase = feBase || "https://74048ab5-8d5a-425a-ab29-bd5cc50dc2fe.lovableproject.com";
 
-    const redirectUrl = `${feBase}/invite/${encodeURIComponent(inviteCode)}`;
+    // LINE Login設定がない場合は友だち追加URLへフォールバック
+    if (profile.add_friend_url) {
+      console.log("Fallback to add friend URL:", profile.add_friend_url);
+      return new Response(null, {
+        status: 302,
+        headers: { ...cors, Location: profile.add_friend_url }
+      });
+    }
 
-    console.log("Redirect to invite page:", redirectUrl);
-    console.log("Profile info:", {
-      userId: invite.user_id,
-      displayName: profile.display_name,
-      hasLineLogin: !!profile.line_login_channel_id,
-    });
-
-    return new Response(null, {
-      status: 302,
-      headers: { ...cors, Location: redirectUrl },
-    });
+    // 設定が不完全な場合
+    console.error("Incomplete LINE configuration for invite:", inviteCode);
+    return new Response("LINE configuration incomplete", { status: 500, headers: cors });
 
   } catch (error) {
     console.error("Scenario invite error:", error);
