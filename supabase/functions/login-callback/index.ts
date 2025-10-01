@@ -382,7 +382,12 @@ serve(async (req) => {
       throw new Error("register_friend_to_scenario failed: " + (regErr?.message || reg?.error || "Unknown error"));
     }
 
-    console.log("Scenario registration successful:", reg);
+    console.log("✅ Scenario registration successful:", {
+      friend_id: reg.friend_id,
+      scenario_id: reg.scenario_id,
+      re_registration_allowed: reg.re_registration_allowed,
+      is_re_registration: !!reg.re_registration_allowed
+    });
 
     // Tag campaign/source to friend and tracking rows
     try {
@@ -410,18 +415,23 @@ serve(async (req) => {
       console.warn('Failed to tag campaign/source:', tagErr);
     }
 
-    // ── 10. ステップ1の配信スケジュールを設定（開始時間を厳密に反映） ──
+    // ── 10. 最初のステップ（step_order = 0）の配信スケジュールを設定 ──
     try {
-      // ステップ1取得
+      // step_order = 0 の最初のステップを取得
       const { data: firstStep } = await supabase
         .from('steps')
-        .select('id, delivery_type, delivery_seconds, delivery_minutes, delivery_hours, delivery_days, specific_time, delivery_time_of_day, delivery_relative_to_previous')
+        .select('id, step_order, delivery_type, delivery_seconds, delivery_minutes, delivery_hours, delivery_days, specific_time, delivery_time_of_day, delivery_relative_to_previous')
         .eq('scenario_id', reg.scenario_id)
-        .order('step_order', { ascending: true })
-        .limit(1)
+        .eq('step_order', 0)
         .maybeSingle();
 
       if (firstStep) {
+        console.log("📋 First step found:", {
+          step_id: firstStep.id,
+          step_order: firstStep.step_order,
+          delivery_type: firstStep.delivery_type
+        });
+
         // 配信種別をRPCに合わせて正規化
         let effectiveType = firstStep.delivery_type as string;
         if (effectiveType === 'immediate') effectiveType = 'immediately';
@@ -446,18 +456,30 @@ serve(async (req) => {
 
         if (scheduledAt) {
           const sched = new Date(scheduledAt as unknown as string);
-          // 常に waiting から開始（即時でもスケジューラがreadyへ反映）
+          const now = new Date();
+          
+          // 即時配信（スケジュール時刻が現在時刻以前）の場合は ready、それ以外は waiting
+          const initialStatus = sched <= now ? 'ready' : 'waiting';
+          
+          console.log("⏰ Setting step schedule:", {
+            scheduled_at: sched.toISOString(),
+            status: initialStatus,
+            is_immediate: effectiveType === 'immediately'
+          });
+
           await supabase
             .from('step_delivery_tracking')
             .update({
               scheduled_delivery_at: sched.toISOString(),
               next_check_at: new Date(sched.getTime() - 5000).toISOString(),
-              status: 'waiting'
+              status: initialStatus
             })
             .eq('scenario_id', reg.scenario_id)
             .eq('friend_id', reg.friend_id)
             .eq('step_id', firstStep.id);
         }
+      } else {
+        console.warn("⚠️ No step with step_order = 0 found for scenario:", reg.scenario_id);
       }
     } catch (schedErr) {
       console.warn('Failed to set first step schedule:', schedErr);
