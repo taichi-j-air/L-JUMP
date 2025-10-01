@@ -490,6 +490,7 @@ const MemberSiteBuilder = () => {
     setSidebarHoverFgColor("#212121");
     setSidebarActiveBgColor("#828282");
     setSidebarActiveFgColor("#21242c");
+    setMainBgColor("#e0e7f0");
     toast({ title: "デザイン設定をデフォルトに戻しました", description: "保存ボタンを押して変更を適用してください" });
   };
 

@@ -957,7 +957,7 @@ export const EnhancedBlockEditor: React.FC<EnhancedBlockEditorProps> = (props) =
         return (
           <div className="space-y-2">
             <Input placeholder="動画URL (YouTube対応)" value={block.content.url || ''} onChange={(e) => updateBlock(block.id, { ...block.content, url: e.target.value })} />
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div className="flex flex-col gap-4">
               <div className="space-y-2">
                 <Label className="text-sm font-medium">サイズ</Label>
                 <Select value={block.content.size || 'medium'} onValueChange={(value) => updateBlock(block.id, { ...block.content, size: value })}>
@@ -970,27 +970,24 @@ export const EnhancedBlockEditor: React.FC<EnhancedBlockEditorProps> = (props) =
                   </SelectContent>
                 </Select>
               </div>
-              <div className="space-y-2">
-                <Label className="text-sm font-medium">オプション</Label>
-                <div className="flex items-center space-x-4 pt-2">
-                  <div className="flex items-center space-x-2">
-                    <Switch id={`border-video-${block.id}`} checked={block.content.borderEnabled !== false} onCheckedChange={(checked) => updateBlock(block.id, { ...block.content, borderEnabled: checked })} />
-                    <Label htmlFor={`border-video-${block.id}`} className="text-sm font-normal">枠線</Label>
-                  </div>
-                  <div className="flex items-center space-x-2">
-                    <Switch id={`rounded-video-${block.id}`} checked={block.content.rounded !== false} onCheckedChange={(checked) => updateBlock(block.id, { ...block.content, rounded: checked })} />
-                    <Label htmlFor={`rounded-video-${block.id}`} className="text-sm font-normal">角丸</Label>
-                  </div>
+
+              <div className="flex items-center gap-4">
+                <div className="flex items-center space-x-2">
+                  <Switch id={`border-video-${block.id}`} checked={block.content.borderEnabled !== false} onCheckedChange={(checked) => updateBlock(block.id, { ...block.content, borderEnabled: checked })} />
+                  <Label htmlFor={`border-video-${block.id}`} className="text-sm font-normal">枠線</Label>
                 </div>
-              </div>
-              {block.content.borderEnabled !== false && (
-                <div className="space-y-2">
-                  <Label className="text-sm font-medium">枠線色</Label>
-                  <div className="flex items-center">
+                {block.content.borderEnabled !== false && (
+                  <div className="flex items-center gap-2">
+                    <Label className="text-sm font-medium">枠線色</Label>
                     <input type="color" value={block.content.borderColor || '#000000'} onChange={(e) => updateBlock(block.id, { ...block.content, borderColor: e.target.value })} className="w-10 h-10 rounded border p-1" />
                   </div>
-                </div>
-              )}
+                )}
+              </div>
+
+              <div className="flex items-center space-x-2">
+                <Switch id={`rounded-video-${block.id}`} checked={block.content.rounded !== false} onCheckedChange={(checked) => updateBlock(block.id, { ...block.content, rounded: checked })} />
+                <Label htmlFor={`rounded-video-${block.id}`} className="text-sm font-normal">角丸</Label>
+              </div>
             </div>
             {block.content.url && (
               <div className={`mx-auto ${sizeClasses[block.content.size] || 'w-1/2'}`}>
@@ -1004,6 +1001,25 @@ export const EnhancedBlockEditor: React.FC<EnhancedBlockEditorProps> = (props) =
                 </div>
               </div>
             )}
+            <div className="flex items-center gap-1 mt-4">
+              <Label>キャプション</Label>
+              <TooltipProvider delayDuration={100}>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <div className="bg-green-500 rounded-full w-3 h-3 flex items-center justify-center cursor-help">
+                      <span className="text-white text-[9px] font-bold">?</span>
+                    </div>
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    <p className="text-xs text-gray-600">
+                      ・動画の下に表示される小さな文字です。<br />
+                      ・動画のタイトルや補足テキストを入力してください。<br />
+                      ・未入力でも大丈夫です
+                    </p>
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
+            </div>
             <Input placeholder="キャプション" value={block.content.caption || ''} onChange={(e) => updateBlock(block.id, { ...block.content, caption: e.target.value })} />
           </div>
         );
