@@ -10,6 +10,7 @@ export interface StepScenario {
   is_active: boolean
   scenario_order: number
   prevent_auto_exit: boolean
+  prevent_re_registration: boolean
   created_at: string
   updated_at: string
 }

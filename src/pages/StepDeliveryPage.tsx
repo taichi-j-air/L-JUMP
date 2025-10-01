@@ -16,6 +16,7 @@ import { DraggableStepsList } from "@/components/DraggableStepsList"
 import { ScenarioTransitionCard } from "@/components/ScenarioTransitionCard"
 import { ScenarioInviteCard } from "@/components/ScenarioInviteCard"
 import { ScenarioAnalytics } from "@/components/ScenarioAnalytics"
+import { ScenarioReRegistrationToggle } from "@/components/ScenarioReRegistrationToggle"
 import { StepDeliveryStatus } from "@/components/StepDeliveryStatus"
 import { MessagePreview } from "@/components/MessagePreview"
 import { SortableScenarioItem } from "@/components/SortableScenarioItem"
@@ -600,6 +601,19 @@ export default function StepDeliveryPage() {
                   inviteCodes={inviteCodes}
                   onGenerateCode={generateInviteCode}
                   onDeactivateCode={deactivateInviteCode}
+                />
+
+                {/* 再登録制御設定 */}
+                <ScenarioReRegistrationToggle
+                  scenarioId={selectedScenario.id}
+                  preventReRegistration={selectedScenario.prevent_re_registration ?? true}
+                  scenarioName={selectedScenario.name}
+                  onUpdate={(newValue) => {
+                    setSelectedScenario({
+                      ...selectedScenario,
+                      prevent_re_registration: newValue
+                    })
+                  }}
                 />
 
                 {/* 流入分析 */}

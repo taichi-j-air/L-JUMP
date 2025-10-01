@@ -2340,6 +2340,7 @@ export type Database = {
           is_active: boolean
           name: string
           prevent_auto_exit: boolean
+          prevent_re_registration: boolean
           scenario_order: number | null
           updated_at: string
           user_id: string
@@ -2351,6 +2352,7 @@ export type Database = {
           is_active?: boolean
           name: string
           prevent_auto_exit?: boolean
+          prevent_re_registration?: boolean
           scenario_order?: number | null
           updated_at?: string
           user_id: string
@@ -2362,6 +2364,7 @@ export type Database = {
           is_active?: boolean
           name?: string
           prevent_auto_exit?: boolean
+          prevent_re_registration?: boolean
           scenario_order?: number | null
           updated_at?: string
           user_id?: string
