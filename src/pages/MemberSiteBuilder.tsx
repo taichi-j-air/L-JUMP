@@ -248,6 +248,7 @@ const MemberSiteBuilder = () => {
   const [sidebarActiveFgColor, setSidebarActiveFgColor] = useState("#ffffff");
   const [showContentCount, setShowContentCount] = useState(true);
   const [sequentialProgression, setSequentialProgression] = useState(false);
+  const [mainBgColor, setMainBgColor] = useState("#e0e6ed");
 
   // Access control state
   const [requirePasscode, setRequirePasscode] = useState(false);
@@ -410,6 +411,8 @@ const MemberSiteBuilder = () => {
       setShowContentCount(theme.showContentCount !== false);
       setSequentialProgression(theme.sequentialProgression || false);
 
+      setMainBgColor(theme.mainBgColor || "#e0e6ed");
+
       // Load access control settings
       setRequirePasscode(data.require_passcode || false);
       setPasscode(data.passcode || "");
@@ -504,6 +507,7 @@ const MemberSiteBuilder = () => {
         sidebarActiveFgColor,
         showContentCount,
         sequentialProgression,
+        mainBgColor,
       };
       if (siteId && siteId !== "new") {
         const { error } = await supabase
@@ -1657,6 +1661,32 @@ const MemberSiteBuilder = () => {
                           <div className="flex items-center gap-2">
                             <Input id="header-fg-color" type="color" value={headerFgColor} onChange={(e) => setHeaderFgColor(e.target.value)} className="p-1 h-10 w-14" />
                             <Input type="text" value={headerFgColor} onChange={(e) => setHeaderFgColor(e.target.value)} placeholder="#000000" />
+                          </div>
+                        </div>
+                      </div>
+                      <div className="grid grid-cols-2 gap-4">
+                        <div className="space-y-2">
+                          <div className="flex items-center gap-1">
+                            <Label htmlFor="main-bg-color">メイン背景色</Label>
+                            <TooltipProvider delayDuration={100}>
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <div className="bg-green-500 rounded-full w-3 h-3 flex items-center justify-center cursor-help">
+                                    <span className="text-white text-[9px] font-bold">?</span>
+                                  </div>
+                                </TooltipTrigger>
+                                <TooltipContent>
+                                  <p className="text-xs text-gray-600">
+                                    画面の横幅が500PXを下回った場合は背景色の変更が適応されません<br />
+                                    PCやタブレットでは反応しますがスマホ縦画面の場合はカテゴリとコンテンツ内の背景色は白色固定になります
+                                  </p>
+                                </TooltipContent>
+                              </Tooltip>
+                            </TooltipProvider>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <Input id="main-bg-color" type="color" value={mainBgColor} onChange={(e) => setMainBgColor(e.target.value)} className="p-1 h-10 w-14" />
+                            <Input type="text" value={mainBgColor} onChange={(e) => setMainBgColor(e.target.value)} placeholder="#e0e6ed" />
                           </div>
                         </div>
                       </div>

@@ -76,6 +76,7 @@ const MemberSiteView: React.FC = () => {
   const [sideMenuOpen, setSideMenuOpen] = useState<boolean>(false);
   const [updatingProgress, setUpdatingProgress] = useState<boolean>(false);
   const [progressUpdateError, setProgressUpdateError] = useState<string | null>(null);
+  const [isMobile, setIsMobile] = useState(typeof window !== 'undefined' && window.innerWidth < 500);
 
   const preview = searchParams.get('preview') === 'true';
 
@@ -269,6 +270,16 @@ const MemberSiteView: React.FC = () => {
   useEffect(() => {
     void fetchData();
   }, [fetchData]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const handleResize = () => {
+      setIsMobile(window.innerWidth < 500);
+    };
+    window.addEventListener('resize', handleResize);
+    handleResize();
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
 
   useEffect(() => {
     if (passcodeParam) {
@@ -707,7 +718,10 @@ const MemberSiteView: React.FC = () => {
         {sideMenuOpen && <div className="fixed inset-0 bg-black/50 z-20 md:hidden" onClick={() => setSideMenuOpen(false)} />}
 
         {/* メイン */}
-        <main className={`flex-1 min-h-screen ${currentView !== 'categories' ? 'max-[500px]:bg-white' : ''}`}>
+        <main
+          className={`flex-1 min-h-screen`}
+          style={{ backgroundColor: isMobile ? '#fff' : (themeConfig.mainBgColor || 'transparent') }}
+        >
           {/* カテゴリ一覧 */}
           {currentView === 'categories' && (
             <div className="px-3 py-6">
