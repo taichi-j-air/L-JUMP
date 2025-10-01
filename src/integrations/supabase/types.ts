@@ -910,6 +910,7 @@ export type Database = {
           created_at: string
           description: string | null
           id: string
+          ignore_sequential: boolean
           name: string
           site_id: string
           sort_order: number | null
@@ -924,6 +925,7 @@ export type Database = {
           created_at?: string
           description?: string | null
           id?: string
+          ignore_sequential?: boolean
           name: string
           site_id: string
           sort_order?: number | null
@@ -938,6 +940,7 @@ export type Database = {
           created_at?: string
           description?: string | null
           id?: string
+          ignore_sequential?: boolean
           name?: string
           site_id?: string
           sort_order?: number | null
