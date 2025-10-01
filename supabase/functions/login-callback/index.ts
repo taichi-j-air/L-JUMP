@@ -37,8 +37,22 @@ serve(async (req) => {
     const code  = url.searchParams.get("code");
     const state = url.searchParams.get("state");   // ← 招待コードまたは"login"
     const err   = url.searchParams.get("error");
+    const retry = url.searchParams.get("retry");
+    
+    // Enhanced logging
+    const userAgent = req.headers.get('user-agent') || '';
+    const referer = req.headers.get('referer') || '';
+    const isMobile = /iPhone|iPad|iPod|Android/i.test(userAgent);
 
-    console.log("Callback parameters:", { code: !!code, state, err });
+    console.log("Callback parameters:", { 
+      code: !!code, 
+      state, 
+      err,
+      retry,
+      userAgent: userAgent.substring(0, 100),
+      referer,
+      isMobile
+    });
 
     if (err) {
       const sanitizedError = sanitizeTextInput(err);
@@ -204,8 +218,54 @@ serve(async (req) => {
         error: text,
         redirectUri,
         channelIdPrefix: profile.line_login_channel_id?.substring(0, 8) + '...',
-        requestTime: new Date().toISOString()
+        requestTime: new Date().toISOString(),
+        retry,
+        userAgent: userAgent.substring(0, 100)
       });
+      
+      // Handle invalid_grant errors with automatic retry/fallback
+      let errorObj: any = {};
+      try {
+        errorObj = JSON.parse(text);
+      } catch {
+        errorObj = { error: text };
+      }
+      
+      if (errorObj.error === "invalid_grant") {
+        console.log("🔄 Detected invalid_grant error (authorization code reuse)");
+        
+        // If not retried yet, redirect to scenario-login to get a new code
+        if (!retry && scenarioCode) {
+          console.log("⏪ Redirecting to scenario-login for retry...");
+          const retryParams = new URLSearchParams({
+            scenario: scenarioCode,
+            retry: "1"
+          });
+          if (campaign) retryParams.set("campaign", campaign);
+          if (source) retryParams.set("source", source);
+          
+          const retryUrl = `https://rtjxurmuaawyzjcdkqxt.supabase.co/functions/v1/scenario-login?${retryParams.toString()}`;
+          return Response.redirect(retryUrl, 302);
+        }
+        
+        // If already retried, fallback to LINE deep link/add friend
+        console.log("⏭️ Retry failed, redirecting to LINE as fallback...");
+        let fallbackUrl: string;
+        
+        if (isMobile && profile.line_bot_id) {
+          fallbackUrl = `line://ti/p/${encodeURIComponent(profile.line_bot_id)}`;
+        } else if (profile.add_friend_url && profile.add_friend_url.startsWith('https://')) {
+          fallbackUrl = profile.add_friend_url;
+        } else if (profile.line_bot_id) {
+          fallbackUrl = `https://line.me/R/ti/p/${encodeURIComponent(profile.line_bot_id)}`;
+        } else {
+          fallbackUrl = `https://74048ab5-8d5a-425a-ab29-bd5cc50dc2fe.lovableproject.com/login-success?error=invalid_grant`;
+        }
+        
+        console.log("Fallback redirect URL:", fallbackUrl);
+        return Response.redirect(fallbackUrl, 302);
+      }
+      
       throw new Error("Token exchange failed: " + text.slice(0, 120));
     }
     
@@ -401,9 +461,6 @@ serve(async (req) => {
     if (existingFriend) {
       // 既存の友だち = 既にフォロー済み
       // LINEトーク画面を開く（ディープリンク優先）
-      const userAgent = req.headers.get('user-agent') || '';
-      const isMobile = /iPhone|iPad|iPod|Android/i.test(userAgent);
-      
       if (isMobile && profile.line_bot_id) {
         // モバイルはディープリンクでLINEアプリを直接開く
         redirectUrl = `line://ti/p/${encodeURIComponent(profile.line_bot_id)}`;
