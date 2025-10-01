@@ -69,9 +69,17 @@ export default function InvitePage() {
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 mx-auto mb-4" />
-          <p>読み込み中...</p>
+        <div className="text-center space-y-4">
+          <img 
+            src="/lovable-uploads/ab6aefa7-fa54-4f4a-b5ef-03333852664c.png" 
+            alt="L!JUMP" 
+            className="h-16 mx-auto mb-6"
+            onError={(e) => {
+              e.currentTarget.style.display = 'none';
+            }}
+          />
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-4" />
+          <p className="text-muted-foreground">読み込み中...</p>
         </div>
       </div>
     );
@@ -108,9 +116,6 @@ export default function InvitePage() {
                 <QRCodeCanvas value={authorizeUrl} size={240} includeMargin />
               </div>
               <p className="text-sm opacity-80 text-center">スマホのカメラでQRコードを読み取り、LINEで認証してください。</p>
-              <Button onClick={() => (window.location.href = authorizeUrl)} className="mt-2">
-                LINEでログインを開く
-              </Button>
             </>
           ) : (
             <p>認証URLを取得できませんでした。</p>
