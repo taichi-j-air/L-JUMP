@@ -175,6 +175,15 @@ serve(async (req) => {
     const redirectUri =
       "https://rtjxurmuaawyzjcdkqxt.supabase.co/functions/v1/login-callback";
 
+    console.log("📝 Token exchange request details:", {
+      codeLength: code?.length || 0,
+      codePrefix: code?.substring(0, 8) + '...',
+      redirectUri,
+      channelIdPrefix: profile.line_login_channel_id?.substring(0, 8) + '...',
+      hasChannelSecret: !!profile.line_login_channel_secret,
+      timestamp: new Date().toISOString()
+    });
+
     const tokenRes = await fetch("https://api.line.me/oauth2/v2.1/token", {
       method: "POST",
       headers: { "Content-Type": "application/x-www-form-urlencoded" },
@@ -189,8 +198,18 @@ serve(async (req) => {
 
     if (!tokenRes.ok) {
       const text = await tokenRes.text();
+      console.error("❌ Token exchange failed:", {
+        status: tokenRes.status,
+        statusText: tokenRes.statusText,
+        error: text,
+        redirectUri,
+        channelIdPrefix: profile.line_login_channel_id?.substring(0, 8) + '...',
+        requestTime: new Date().toISOString()
+      });
       throw new Error("Token exchange failed: " + text.slice(0, 120));
     }
+    
+    console.log("✅ Token exchange successful");
     const token = await tokenRes.json() as {
       access_token: string;
       id_token: string;
