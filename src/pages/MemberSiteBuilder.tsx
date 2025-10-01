@@ -8,8 +8,9 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { ArrowLeft, Save, Eye, Plus, Trash2, Settings, Image as ImageIcon, ExternalLink, GripVertical, Copy as CopyIcon } from "lucide-react";
+import { ArrowLeft, Save, Eye, Plus, Trash2, Settings, Image as ImageIcon, ExternalLink, GripVertical, Copy as CopyIcon, HelpCircle } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { supabase } from "@/integrations/supabase/client";
 import { Table, TableBody, TableCell, TableRow } from "@/components/ui/table";
 import { MediaLibrarySelector } from "@/components/MediaLibrarySelector";
@@ -1216,7 +1217,21 @@ const MemberSiteBuilder = () => {
                                 </label>
                               </div>
                               <div className="space-y-2">
-                                <Label htmlFor="contentSortOrder">表示順位</Label>
+                                <div className="flex items-center gap-1">
+                                  <Label htmlFor="contentSortOrder">表示順位</Label>
+                                  <TooltipProvider delayDuration={100}>
+                                    <Tooltip>
+                                      <TooltipTrigger asChild>
+                                        <div className="bg-green-500 rounded-full w-3 h-3 flex items-center justify-center cursor-help">
+                                          <span className="text-white text-[9px] font-bold">?</span>
+                                        </div>
+                                      </TooltipTrigger>
+                                      <TooltipContent>
+                                        <p className="text-xs text-gray-600">半角で数字を入力してください。数字が小さいほどコンテンツ表示の順番が上に来ます</p>
+                                      </TooltipContent>
+                                    </Tooltip>
+                                  </TooltipProvider>
+                                </div>
                                 <Input
                                   id="contentSortOrder"
                                   type="number"
@@ -1239,7 +1254,21 @@ const MemberSiteBuilder = () => {
                             </div>
 
                             <div className="space-y-2">
-                              <Label htmlFor="category">カテゴリ</Label>
+                              <div className="flex items-center gap-1">
+                                <Label htmlFor="category">カテゴリ</Label>
+                                <TooltipProvider delayDuration={100}>
+                                  <Tooltip>
+                                    <TooltipTrigger asChild>
+                                      <div className="bg-green-500 rounded-full w-3 h-3 flex items-center justify-center cursor-help">
+                                        <span className="text-white text-[9px] font-bold">?</span>
+                                      </div>
+                                    </TooltipTrigger>
+                                    <TooltipContent>
+                                      <p className="text-xs text-gray-600">カテゴリ選択無しを選択すると会員サイトページに表示されなくなるので必ずカテゴリを選択してください</p>
+                                    </TooltipContent>
+                                  </Tooltip>
+                                </TooltipProvider>
+                              </div>
                               <Select value={contentCategoryId} onValueChange={setContentCategoryId}>
                                 <SelectTrigger>
                                   <SelectValue placeholder="カテゴリを選択" />
@@ -1346,9 +1375,9 @@ const MemberSiteBuilder = () => {
                                 onCheckedChange={setIgnoreSequential}
                               />
                               <div className="space-y-0.5">
-                                <Label htmlFor="ignore-sequential">シーケンシャル設定を無視</Label>
+                                <Label htmlFor="ignore-sequential">ステップ式の表示設定を無効</Label>
                                 <p className="text-xs text-muted-foreground">
-                                  このカテゴリでは、サイト全体のシーケンシャル設定を無視して常に全てのコンテンツを表示します。
+                                  <strong>このカテゴリに限り</strong>、サイト全体の「ステップ式コンテンツ表示」設定を無効にし、全てのコンテンツを常に表示します。
                                 </p>
                               </div>
                             </div>
@@ -1365,7 +1394,24 @@ const MemberSiteBuilder = () => {
                             </div>
 
                             <div className="space-y-2">
-                              <Label>サムネイル画像</Label>
+                              <div className="flex items-center gap-1">
+                                <Label>サムネイル画像</Label>
+                                <TooltipProvider delayDuration={100}>
+                                  <Tooltip>
+                                    <TooltipTrigger asChild>
+                                      <div className="bg-green-500 rounded-full w-3 h-3 flex items-center justify-center cursor-help">
+                                        <span className="text-white text-[9px] font-bold">?</span>
+                                      </div>
+                                    </TooltipTrigger>
+                                    <TooltipContent>
+                                      <p className="text-xs text-gray-600">
+                                        サムネイル画像の比率は16:9を推奨しています<br />
+                                        画像容量を1MB以下(KB)に抑えると表示が早くなります。
+                                      </p>
+                                    </TooltipContent>
+                                  </Tooltip>
+                                </TooltipProvider>
+                              </div>
                               <div className="flex items-center gap-2">
                                 {categoryThumbnailUrl && (
                                   <img src={categoryThumbnailUrl} alt="Category Thumbnail" className="w-24 h-24 object-cover rounded-md border" />
@@ -1462,7 +1508,7 @@ const MemberSiteBuilder = () => {
                           onCheckedChange={setSequentialProgression}
                         />
                         <div className="space-y-0.5">
-                          <Label htmlFor="sequential-progression">シーケンシャル・プログレッション</Label>
+                          <Label htmlFor="sequential-progression">ステップ式コンテンツ表示</Label>
                           <p className="text-xs text-muted-foreground">
                             前のコンテンツを完了しないと、次のコンテンツが表示されないようにします。
                           </p>
@@ -1488,20 +1534,33 @@ const MemberSiteBuilder = () => {
                     <CardContent className="space-y-4">
                       <div className="grid grid-cols-2 gap-4">
                         <div className="space-y-2">
-                          <Label htmlFor="site-name">サイト名</Label>
+                          <div className="flex items-center gap-1">
+                            <Label htmlFor="site-name">サイト名</Label>
+                            <TooltipProvider delayDuration={100}>
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <div className="bg-green-500 rounded-full w-3 h-3 flex items-center justify-center cursor-help">
+                                    <span className="text-white text-[9px] font-bold">?</span>
+                                  </div>
+                                </TooltipTrigger>
+                                <TooltipContent>
+                                  <p className="text-xs text-gray-600">会員サイトのヘッダーに表示されます</p>
+                                </TooltipContent>
+                              </Tooltip>
+                            </TooltipProvider>
+                          </div>
                           <Input id="site-name" value={siteName} onChange={(e) => setSiteName(e.target.value)} placeholder="サイト名を入力" />
                         </div>
                         <div className="space-y-2">
-                          <Label htmlFor="site-slug">URL スラッグ</Label>
+                          <div className="flex items-center gap-1" style={{ height: '1.25rem' }}>
+                            <Label htmlFor="site-slug">URL スラッグ</Label>
+                          </div>
                           <Input id="site-slug" value={siteSlug} onChange={(e) => setSiteSlug(e.target.value)} placeholder="url-slug" />
                           <p className="text-xs text-muted-foreground">URLスラッグは変更しないでください</p>
                         </div>
                       </div>
 
-                      <div className="space-y-2">
-                        <Label htmlFor="site-description">サイト説明</Label>
-                        <Textarea id="site-description" value={siteDescription} onChange={(e) => setSiteDescription(e.target.value)} placeholder="サイトの説明を入力" rows={4} />
-                      </div>
+                      
 
                       <div className="flex items-center gap-4">
                         <label className="flex items-center space-x-2">
