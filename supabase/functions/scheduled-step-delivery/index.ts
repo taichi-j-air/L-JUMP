@@ -38,6 +38,7 @@ Deno.serve(async (req) => {
 
     // Get current time
     const now = new Date().toISOString()
+    const startTime = Date.now()
     console.log(`⏰ Current time: ${now}`, { scenarioIdFilter, friendIdFilter, recentOnly, lineUserIdFilter })
 
     const cutoff = new Date(Date.now() - 2 * 60 * 1000).toISOString()
@@ -56,6 +57,23 @@ Deno.serve(async (req) => {
       }
     }
 
+    // Count waiting steps for dynamic batch sizing
+    let countQuery = supabase
+      .from('step_delivery_tracking')
+      .select('*', { count: 'exact', head: true })
+      .eq('status', 'waiting')
+      .not('friend_id', 'is', null)
+      .lte('scheduled_delivery_at', now)
+    if (scenarioIdFilter) countQuery = countQuery.eq('scenario_id', scenarioIdFilter)
+    if (friendIdFilter) countQuery = countQuery.eq('friend_id', friendIdFilter)
+    if (friendIdsFilter) countQuery = countQuery.in('friend_id', friendIdsFilter)
+    
+    const { count: waitingCount } = await countQuery
+    
+    // Dynamic batch size: 100-1000 based on waiting count
+    const batchSize = Math.min(1000, Math.max(100, Math.floor((waitingCount || 0) / 10)))
+    console.log(`📊 Waiting steps: ${waitingCount || 0}, Batch size: ${batchSize}`)
+
     // 1) Flip waiting -> ready where scheduled time has arrived
     let waitingToReady = supabase
       .from('step_delivery_tracking')
@@ -69,7 +87,7 @@ Deno.serve(async (req) => {
     if (friendIdsFilter) waitingToReady = waitingToReady.in('friend_id', friendIdsFilter)
     await waitingToReady.select('id')
 
-    // 2) Claim ready rows for delivery
+    // 2) Claim ready rows for delivery with dynamic batch size
     let query = supabase
       .from('step_delivery_tracking')
       .update({ status: 'delivering', updated_at: now })
@@ -92,7 +110,7 @@ Deno.serve(async (req) => {
 
     const { data: stepsToDeliver, error: fetchError } = await query
       .order('scheduled_delivery_at', { ascending: true })
-      .limit(100)
+      .limit(batchSize)
       .select('*')
 
     if (fetchError) {
@@ -125,41 +143,60 @@ Deno.serve(async (req) => {
       await Promise.allSettled(deliveryPromises)
     }
 
-    // Schedule next check if we processed the maximum, or if a waiting step is due soon
-    if (stepsToDeliver && stepsToDeliver.length === 100) {
-      console.log('🔄 Scheduling next check due to max steps processed')
-      // EdgeRuntime.waitUntil(scheduleNextCheck(supabase, 2))
+    // Smart scheduling: only check for upcoming deliveries
+    let shouldScheduleNext = false
+    let nextCheckDelay = 60 // Default to 1 minute
+    
+    if (stepsToDeliver && stepsToDeliver.length >= batchSize) {
+      // Hit batch limit, check again immediately
+      shouldScheduleNext = true
+      nextCheckDelay = 2
+      console.log('🔄 Hit batch limit, scheduling immediate next check')
     } else {
-      // Check for any waiting steps due within the next 60 seconds
+      // Check for any waiting steps due within the next 2 minutes
       let upcomingQuery = supabase
         .from('step_delivery_tracking')
         .select('scheduled_delivery_at')
         .eq('status', 'waiting')
         .not('friend_id', 'is', null)
+        .lte('scheduled_delivery_at', new Date(Date.now() + 120000).toISOString())
         .order('scheduled_delivery_at', { ascending: true })
         .limit(1)
       if (scenarioIdFilter) upcomingQuery = upcomingQuery.eq('scenario_id', scenarioIdFilter)
       if (friendIdFilter) upcomingQuery = upcomingQuery.eq('friend_id', friendIdFilter)
       if (friendIdsFilter) upcomingQuery = upcomingQuery.in('friend_id', friendIdsFilter)
+      
       const { data: upcoming } = await upcomingQuery
       if (upcoming && upcoming.length > 0) {
         const dueAt = new Date(upcoming[0].scheduled_delivery_at)
         const nowDate = new Date()
         if (dueAt.getTime() > nowDate.getTime()) {
-          const delay = Math.max(1, Math.min(55, Math.ceil((dueAt.getTime() - Date.now()) / 1000) + 1))
-          console.log(`⏭️ Scheduling next check in ${delay}s for upcoming delivery at ${dueAt.toISOString()}`)
-          // EdgeRuntime.waitUntil(scheduleNextCheck(supabase, delay))
-        } else {
-          console.log(`⏹️ Upcoming delivery time is in the past (${dueAt.toISOString()}), not self-triggering`)
+          shouldScheduleNext = true
+          nextCheckDelay = Math.max(5, Math.min(60, Math.ceil((dueAt.getTime() - Date.now()) / 1000) - 5))
+          console.log(`⏭️ Next delivery due at ${dueAt.toISOString()}, scheduling check in ${nextCheckDelay}s`)
         }
+      } else {
+        console.log('⏹️ No upcoming deliveries within 2 minutes, skipping next check')
       }
     }
+
+    // Calculate performance metrics
+    const processingTime = Date.now() - startTime
+    const successRate = deliveredCount > 0 ? (deliveredCount / (deliveredCount + errorCount) * 100).toFixed(1) : 100
+    const throughput = processingTime > 0 ? ((deliveredCount / processingTime) * 1000).toFixed(2) : 0
 
     const result = {
       success: true,
       delivered: deliveredCount,
       errors: errorCount,
       totalChecked: stepsToDeliver?.length || 0,
+      batchSize,
+      waitingCount: waitingCount || 0,
+      processingTimeMs: processingTime,
+      successRate: `${successRate}%`,
+      throughputPerSec: throughput,
+      nextCheckScheduled: shouldScheduleNext,
+      nextCheckDelaySeconds: shouldScheduleNext ? nextCheckDelay : null,
       timestamp: now
     }
 
