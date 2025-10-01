@@ -58,8 +58,9 @@ serve(async (req) => {
         const pad = b64.length % 4 ? '='.repeat(4 - (b64.length % 4)) : '';
         const json = atob(b64 + pad);
         const obj = JSON.parse(json);
-        if (obj?.scenario) {
-          scenarioCode = String(obj.scenario);
+        console.log('🔍 Decoded state object:', JSON.stringify(obj));
+        if (obj?.inviteCode || obj?.scenario) {
+          scenarioCode = String(obj.inviteCode || obj.scenario);
           if (obj.campaign != null) campaign = String(obj.campaign);
           if (obj.source != null) source = String(obj.source);
         }
@@ -68,8 +69,10 @@ serve(async (req) => {
       }
       if (!scenarioCode) scenarioCode = state;
       if (!validateInviteCode(scenarioCode)) {
+        console.error('❌ Invalid invite code format:', scenarioCode);
         throw new Error("Invalid invite code format");
       }
+      console.log('✅ Valid invite code:', scenarioCode);
     }
 
     /* ── 2. Supabase 初期化 ── */

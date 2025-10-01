@@ -11,7 +11,8 @@ export function validateLineUserId(userId: string | null | undefined): boolean {
 
 export function validateInviteCode(code: string | null | undefined): boolean {
   if (!code) return false;
-  return /^[a-zA-Z0-9]{8,32}$/.test(code);
+  // Relaxed validation: 6-32 alphanumeric characters
+  return /^[a-zA-Z0-9]{6,32}$/.test(code);
 }
 
 export function validateEmail(email: string | null | undefined): boolean {
