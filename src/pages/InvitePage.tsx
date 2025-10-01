@@ -8,20 +8,27 @@ import { QRCodeCanvas } from "qrcode.react";
 
 export default function InvitePage() {
   const { inviteCode } = useParams();
-  const code = inviteCode || window.location.pathname.split("/").pop() || "";
-  const isMobile = useIsMobile();
-  // In-app LINE ブラウザやUAベースでもモバイル判定（幅だけだと誤判定が起きるため）
+  // クエリパラメータまたはパスパラメータから招待コードを取得
+  const qsCode = new URLSearchParams(window.location.search).get('code');
+  const code = (qsCode || inviteCode || '').trim();
+  
+  // UAベースのモバイル/LINE判定のみ（横幅ベースは誤判定の原因になるため使用しない）
   const ua = navigator.userAgent || "";
   const isMobileUA = /iPhone|iPad|iPod|Android/i.test(ua);
   const isLineInApp = /Line\//i.test(ua);
-  const shouldRedirectMobile = isMobile || isMobileUA || isLineInApp;
+  const shouldRedirectMobile = isMobileUA || isLineInApp;
 
   const [authorizeUrl, setAuthorizeUrl] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!code) return;
+    // 招待コードが無い場合はエラー表示
+    if (!code) {
+      setError("招待コードが指定されていません。");
+      setLoading(false);
+      return;
+    }
 
     // Edge Function (scenario-invite) のベースURL
     const base = "https://rtjxurmuaawyzjcdkqxt.supabase.co/functions/v1/scenario-invite";
@@ -34,10 +41,20 @@ export default function InvitePage() {
     const fetchAuthorizeUrl = async () => {
       try {
         // PCはQR表示用に最終URL(JSON)を取得（デフォルトはOA/トーク起動）
-        const res = await fetch(`${base}?code=${encodeURIComponent(code)}&format=json`);
-        if (!res.ok) throw new Error("認証URLの取得に失敗しました");
+        const res = await fetch(`${base}?code=${encodeURIComponent(code)}&format=json`, {
+          headers: {
+            'Accept': 'application/json'
+          }
+        });
+        if (!res.ok) {
+          if (res.status === 404) {
+            throw new Error("招待リンクが無効か、使用上限に達しています。");
+          }
+          throw new Error("認証URLの取得に失敗しました");
+        }
         const json = await res.json();
-        setAuthorizeUrl(json.authorizeUrl);
+        // Edge Functionは authUrl を返す（authorizeUrl との両対応）
+        setAuthorizeUrl(json.authUrl || json.authorizeUrl);
       } catch (e: any) {
         console.error(e);
         setError(e.message || "エラーが発生しました");
@@ -47,7 +64,7 @@ export default function InvitePage() {
     };
 
     fetchAuthorizeUrl();
-  }, [code, isMobile]);
+  }, [code, shouldRedirectMobile]);
 
   if (loading) {
     return (
