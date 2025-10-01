@@ -23,18 +23,18 @@ export default function InvitePage() {
   useEffect(() => {
     if (!code) return;
 
-    // Edge Function (scenario-login) のベースURL
-    const base = "https://rtjxurmuaawyzjcdkqxt.supabase.co/functions/v1/scenario-login";
+    // Edge Function (scenario-invite) のベースURL
+    const base = "https://rtjxurmuaawyzjcdkqxt.supabase.co/functions/v1/scenario-invite";
     // モバイル/LINE内ブラウザは即リダイレクト（UIを見せない）
     if (shouldRedirectMobile) {
-      window.location.replace(`${base}?scenario=${encodeURIComponent(code)}`);
+      window.location.replace(`${base}?code=${encodeURIComponent(code)}`);
       return;
     }
 
     const fetchAuthorizeUrl = async () => {
       try {
         // PCはQR表示用に最終URL(JSON)を取得（デフォルトはOA/トーク起動）
-        const res = await fetch(`${base}?scenario=${encodeURIComponent(code)}&format=json`);
+        const res = await fetch(`${base}?code=${encodeURIComponent(code)}&format=json`);
         if (!res.ok) throw new Error("認証URLの取得に失敗しました");
         const json = await res.json();
         setAuthorizeUrl(json.authorizeUrl);

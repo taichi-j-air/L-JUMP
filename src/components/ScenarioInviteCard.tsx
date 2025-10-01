@@ -37,8 +37,8 @@ export function ScenarioInviteCard({
   }
 
   const generateInviteUrl = (inviteCode: string) => {
-    // 新しいシンプルな招待システム - デバイス判定とリダイレクト
-    return `https://rtjxurmuaawyzjcdkqxt.supabase.co/functions/v1/scenario-invite?code=${inviteCode}`
+    // フロントエンドのInvitePageを経由して適切なデバイス判定を行う
+    return `${window.location.origin}/invite?code=${inviteCode}`
   }
 
   return (
