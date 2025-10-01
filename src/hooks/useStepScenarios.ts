@@ -59,6 +59,9 @@ export interface ScenarioInviteCode {
   usage_count: number
   max_usage?: number
   is_active: boolean
+  allow_re_registration?: boolean
+  re_registration_message?: string
+  re_registration_action?: string
   created_at: string
   updated_at: string
 }

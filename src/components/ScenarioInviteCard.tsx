@@ -3,9 +3,17 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { Copy, QrCode, Plus, Trash2 } from "lucide-react"
+import { Copy, QrCode, Plus, Trash2, Settings } from "lucide-react"
 import { StepScenario, ScenarioInviteCode } from "@/hooks/useStepScenarios"
 import { toast } from "sonner"
+import { Switch } from "@/components/ui/switch"
+import { Textarea } from "@/components/ui/textarea"
+import { supabase } from "@/integrations/supabase/client"
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from "@/components/ui/collapsible"
 
 interface ScenarioInviteCardProps {
   scenario: StepScenario
@@ -21,6 +29,7 @@ export function ScenarioInviteCard({
   onDeactivateCode 
 }: ScenarioInviteCardProps) {
   const [showCode, setShowCode] = useState(false)
+  const [expandedSettings, setExpandedSettings] = useState<string | null>(null)
 
   const scenarioInviteCodes = inviteCodes.filter(code => 
     code.scenario_id === scenario.id && code.is_active
@@ -39,6 +48,27 @@ export function ScenarioInviteCard({
   const generateInviteUrl = (inviteCode: string) => {
     // フロントエンドのInvitePageを経由して適切なデバイス判定を行う
     return `${window.location.origin}/invite?code=${inviteCode}`
+  }
+
+  const updateInviteCodeSettings = async (
+    codeId: string, 
+    updates: {
+      allow_re_registration?: boolean
+      re_registration_message?: string
+      re_registration_action?: string
+    }
+  ) => {
+    const { error } = await supabase
+      .from('scenario_invite_codes')
+      .update(updates)
+      .eq('id', codeId)
+    
+    if (error) {
+      toast.error("設定の更新に失敗しました")
+      console.error(error)
+    } else {
+      toast.success("設定を更新しました")
+    }
   }
 
   return (
@@ -127,6 +157,49 @@ export function ScenarioInviteCard({
                         </Button>
                       </div>
                     </div>
+
+                    {/* 再登録設定 */}
+                    <Collapsible
+                      open={expandedSettings === code.id}
+                      onOpenChange={(open) => setExpandedSettings(open ? code.id : null)}
+                    >
+                      <CollapsibleTrigger asChild>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="w-full h-7 text-xs gap-1 justify-start"
+                        >
+                          <Settings className="h-3 w-3" />
+                          再登録設定
+                        </Button>
+                      </CollapsibleTrigger>
+                      <CollapsibleContent className="space-y-3 mt-2 p-2 bg-muted/50 rounded">
+                        <div className="flex items-center justify-between">
+                          <Label className="text-xs">再登録を許可</Label>
+                          <Switch
+                            checked={code.allow_re_registration ?? false}
+                            onCheckedChange={(checked) => 
+                              updateInviteCodeSettings(code.id, { allow_re_registration: checked })
+                            }
+                          />
+                        </div>
+                        
+                        <div className="space-y-1">
+                          <Label className="text-xs">登録済みメッセージ</Label>
+                          <Textarea
+                            placeholder="このシナリオには既に登録済みです"
+                            value={code.re_registration_message ?? ''}
+                            onChange={(e) => 
+                              updateInviteCodeSettings(code.id, { re_registration_message: e.target.value })
+                            }
+                            className="text-xs h-16 resize-none"
+                          />
+                          <p className="text-[10px] text-muted-foreground">
+                            既に登録済みのユーザーに表示されるメッセージ
+                          </p>
+                        </div>
+                      </CollapsibleContent>
+                    </Collapsible>
                   </div>
                 </div>
               )
