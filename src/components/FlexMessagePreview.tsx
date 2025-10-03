@@ -1,5 +1,7 @@
 import { useState, useEffect } from "react"
 import { supabase } from "@/integrations/supabase/client"
+import { ChevronLeft, ChevronRight } from "lucide-react"
+import { Button } from "./ui/button"
 
 interface FlexMessagePreviewProps {
   flexMessageId: string
@@ -14,6 +16,7 @@ interface FlexMessage {
 export function FlexMessagePreview({ flexMessageId }: FlexMessagePreviewProps) {
   const [flexMessage, setFlexMessage] = useState<FlexMessage | null>(null)
   const [loading, setLoading] = useState(true)
+  const [carouselIndex, setCarouselIndex] = useState(0)
 
   useEffect(() => {
     const fetchFlexMessage = async () => {
@@ -87,6 +90,32 @@ export function FlexMessagePreview({ flexMessageId }: FlexMessagePreviewProps) {
     )
   }
 
+  // Helper functions for converting tokens to pixels
+  const getMarginPx = (token?: string): string => {
+    const map: Record<string, string> = {
+      none: "0px",
+      xs: "2px",
+      sm: "4px",
+      md: "8px",
+      lg: "12px",
+      xl: "16px",
+      xxl: "20px"
+    };
+    return map[token || "none"] || "0px";
+  };
+
+  const padToPx = (token?: string): string => {
+    const map: Record<string, string> = {
+      none: "0px",
+      xs: "4px",
+      sm: "8px",
+      md: "12px",
+      lg: "16px",
+      xl: "20px"
+    };
+    return map[token || "none"] || "0px";
+  };
+
   const renderSingleBubble = (bubble: any) => {
     const hero = bubble?.hero;
     const flexContents = bubble?.body?.contents;
@@ -137,12 +166,26 @@ export function FlexMessagePreview({ flexMessageId }: FlexMessagePreviewProps) {
         )}
         
         {/* Body contents */}
-        <div className={hero ? 'p-3' : ''}>
+        <div 
+          className={hero ? 'p-3' : ''}
+          style={{
+            display: 'flex',
+            flexDirection: 'column',
+            gap: bubble?.body?.spacing ? getMarginPx(bubble.body.spacing) : '0px'
+          }}
+        >
           {elements.map((element: any, index: number) => {
+            const marginTop = element.properties?.margin ? getMarginPx(element.properties.margin) : undefined;
+            const padding = element.properties?.padding ? padToPx(element.properties.padding) : undefined;
+            
             return (
               <div 
                 key={element.id || index}
                 className="flex"
+                style={{
+                  marginTop,
+                  padding
+                }}
               >
                 {element.type === 'text' && (
                   <div 
@@ -217,13 +260,43 @@ export function FlexMessagePreview({ flexMessageId }: FlexMessagePreviewProps) {
     const isCarousel = content?.type === "carousel";
 
     if (isCarousel && content?.contents && Array.isArray(content.contents)) {
+      const totalBubbles = content.contents.length;
+      
+      const handlePrev = () => {
+        setCarouselIndex((prev) => (prev > 0 ? prev - 1 : totalBubbles - 1));
+      };
+
+      const handleNext = () => {
+        setCarouselIndex((prev) => (prev < totalBubbles - 1 ? prev + 1 : 0));
+      };
+
       return (
-        <div className="flex gap-2 overflow-x-auto pb-2">
-          {content.contents.map((bubble: any, index: number) => (
-            <div key={index} className="flex-shrink-0">
-              {renderSingleBubble(bubble)}
-            </div>
-          ))}
+        <div className="relative flex items-center gap-2">
+          <Button
+            variant="outline"
+            size="icon"
+            onClick={handlePrev}
+            className="flex-shrink-0"
+          >
+            <ChevronLeft className="h-4 w-4" />
+          </Button>
+          
+          <div className="flex-1 flex justify-center">
+            {renderSingleBubble(content.contents[carouselIndex])}
+          </div>
+          
+          <Button
+            variant="outline"
+            size="icon"
+            onClick={handleNext}
+            className="flex-shrink-0"
+          >
+            <ChevronRight className="h-4 w-4" />
+          </Button>
+          
+          <div className="absolute bottom-2 left-1/2 -translate-x-1/2 bg-background/80 px-2 py-1 rounded text-xs">
+            {carouselIndex + 1} / {totalBubbles}
+          </div>
         </div>
       );
     }
