@@ -80,51 +80,67 @@ BEGIN
     RAISE LOG 'New friend created: friend_id=%', v_friend_id;
   END IF;
 
-  -- invite_linkからの登録の場合、既存登録をチェック
-  IF p_registration_source = 'invite_link' THEN
-    SELECT * INTO v_existing_log
+  -- 既存登録をシナリオ単位で確認（招待コード一致を優先）
+  v_existing_log := NULL;
+
+  IF p_invite_code IS NOT NULL THEN
+    SELECT *
+    INTO v_existing_log
     FROM scenario_friend_logs
     WHERE scenario_id = v_scenario_id
       AND friend_id = v_friend_id
       AND invite_code = p_invite_code
-      AND registration_source = 'invite_link';
+      AND (p_registration_source IS NULL OR registration_source = p_registration_source)
+    ORDER BY added_at DESC
+    LIMIT 1;
+  END IF;
 
-    IF FOUND THEN
-      RAISE LOG 'Existing registration found for invite_link: log_id=%, allow_re_registration=%', 
-        v_existing_log.id, v_allow_re_registration;
+  IF v_existing_log IS NULL THEN
+    SELECT *
+    INTO v_existing_log
+    FROM scenario_friend_logs
+    WHERE scenario_id = v_scenario_id
+      AND friend_id = v_friend_id
+    ORDER BY added_at DESC
+    LIMIT 1;
+  END IF;
 
-      IF NOT v_allow_re_registration THEN
-        RAISE LOG 'Re-registration not allowed, returning error';
-        RETURN json_build_object(
-          'success', false, 
-          'error', COALESCE(v_invite_data.re_registration_message, 'このシナリオには既に登録済みです。'),
-          'already_registered', true
+  IF v_existing_log IS NOT NULL THEN
+    RAISE LOG 'Existing registration detected: log_id=%, source=%, allow_re_registration=%',
+      v_existing_log.id, COALESCE(v_existing_log.registration_source, 'unknown'), v_allow_re_registration;
+
+    IF NOT v_allow_re_registration THEN
+      RAISE LOG 'Re-registration not allowed, returning error';
+      RETURN json_build_object(
+        'success', false, 
+        'error', COALESCE(v_invite_data.re_registration_message, 'こ�Eシナリオには既に登録済みです、E),
+        'already_registered', true
+      );
+    ELSE
+      RAISE LOG 'Re-registration allowed, deleting existing tracking records';
+      DELETE FROM step_delivery_tracking
+      WHERE scenario_id = v_scenario_id AND friend_id = v_friend_id;
+
+      DELETE FROM step_delivery_tracking
+      WHERE friend_id = v_friend_id
+        AND scenario_id IN (
+          SELECT st.to_scenario_id
+          FROM scenario_transitions st
+          WHERE st.from_scenario_id = v_scenario_id
         );
-      ELSE
-        RAISE LOG 'Re-registration allowed, deleting existing tracking records';
-        DELETE FROM step_delivery_tracking
-        WHERE scenario_id = v_scenario_id AND friend_id = v_friend_id;
 
-        DELETE FROM step_delivery_tracking
-        WHERE friend_id = v_friend_id
-          AND scenario_id IN (
-            SELECT st.to_scenario_id
-            FROM scenario_transitions st
-            WHERE st.from_scenario_id = v_scenario_id
-          );
+      DELETE FROM scenario_friend_logs
+      WHERE scenario_id = v_scenario_id
+        AND friend_id = v_friend_id;
 
-        DELETE FROM scenario_friend_logs
-        WHERE id = v_existing_log.id;
-
-        DELETE FROM scenario_friend_logs
-        WHERE friend_id = v_friend_id
-          AND scenario_id IN (
-            SELECT st.to_scenario_id
-            FROM scenario_transitions st
-            WHERE st.from_scenario_id = v_scenario_id
-          )
-          AND invite_code = 'system_transition';
-      END IF;
+      DELETE FROM scenario_friend_logs
+      WHERE friend_id = v_friend_id
+        AND scenario_id IN (
+          SELECT st.to_scenario_id
+          FROM scenario_transitions st
+          WHERE st.from_scenario_id = v_scenario_id
+        )
+        AND invite_code = 'system_transition';
     END IF;
   END IF;
 
