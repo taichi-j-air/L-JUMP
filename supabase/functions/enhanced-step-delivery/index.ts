@@ -489,27 +489,10 @@ async function sendLineMessage(userId: string, message: any, accessToken: string
       break;
     
     case 'flex': {
-      const toFlexPayload = (raw: any) => {
-        if (!raw) return null;
-        try {
-          const payload = typeof raw === 'string' ? JSON.parse(raw) : raw;
-          if (!payload) return null;
-
-          const altText = payload.altText || message.alt_text || 'Flex Message';
-          const contents = payload.type === 'flex' && payload.contents ? payload.contents : payload;
-
-          return { altText, contents };
-        } catch (error) {
-          console.error('Flex payload parse error:', error);
-          return null;
-        }
-      };
-
       if (message.flex_message_id) {
-        // Get flex message content
         const supabase = createClient(
-          Deno.env.get("SUPABASE_URL")!,
-          Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
+          Deno.env.get('SUPABASE_URL')!,
+          Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
         );
         const { data: flexData } = await supabase
           .from('flex_messages')
@@ -517,25 +500,17 @@ async function sendLineMessage(userId: string, message: any, accessToken: string
           .eq('id', message.flex_message_id)
           .single();
         if (flexData?.content) {
-          const flexPayload = toFlexPayload(flexData.content);
-          if (flexPayload) {
-            lineMessage = {
-              type: 'flex',
-              altText: flexPayload.altText,
-              contents: flexPayload.contents
-            };
+          const normalized = normalize(flexData.content);
+          if (normalized) {
+            lineMessage = normalized;
           }
         }
       }
 
       if (!lineMessage && message.content) {
-        const inlinePayload = toFlexPayload(message.content);
-        if (inlinePayload) {
-          lineMessage = {
-            type: 'flex',
-            altText: inlinePayload.altText,
-            contents: inlinePayload.contents
-          };
+        const normalized = normalize(message.content);
+        if (normalized) {
+          lineMessage = normalized;
         }
       }
       break;

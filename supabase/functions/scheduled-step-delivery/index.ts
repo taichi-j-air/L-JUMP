@@ -5,6 +5,70 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 }
 
+// Utility functions from send-flex-message
+function clone(value: any): any {
+  return JSON.parse(JSON.stringify(value));
+}
+
+function sanitize(comp: any): any {
+  if (!comp || typeof comp !== 'object') return comp;
+  const c = clone(comp);
+  const t = c.type;
+  const disallowed: Record<string, string[]> = {
+    box: ['action','url','height','style','borderColor','cornerRadius','backgroundColor'],
+    button: ['height','borderColor','cornerRadius'],
+    filler: ['action','url','height','style','borderColor','cornerRadius','backgroundColor'],
+    icon: ['action','url','height','style','borderColor','cornerRadius','backgroundColor'],
+    image: ['height','cornerRadius','backgroundColor'],
+    separator: ['action','url','height','style','borderColor','cornerRadius','backgroundColor'],
+    spacer: ['action','url','height','style','borderColor','cornerRadius','backgroundColor'],
+    text: ['url','height','borderColor','cornerRadius','backgroundColor'],
+  };
+  if (t && disallowed[t]) {
+    disallowed[t].forEach(k => delete c[k]);
+  }
+  for (const key in c) {
+    if (c[key] && typeof c[key] === 'object') {
+      if (Array.isArray(c[key])) {
+        c[key] = c[key].map((item: any) => sanitize(item));
+      } else {
+        c[key] = sanitize(c[key]);
+      }
+    }
+  }
+  return c;
+}
+
+function normalize(raw: any): any {
+  if (!raw) return null;
+  try {
+    const data = typeof raw === 'string' ? JSON.parse(raw) : clone(raw);
+    if (!data) return null;
+
+    let altText = data.altText || 'Flex Message';
+    let contents = data.contents;
+
+    if (data.type === 'flex' && contents) {
+      // already normalized
+    } else if (data.type === 'bubble' || data.type === 'carousel') {
+      contents = data;
+    } else if (contents && (contents.type === 'bubble' || contents.type === 'carousel')) {
+      // data is wrapper
+    } else {
+      return null;
+    }
+
+    return {
+      type: 'flex',
+      altText,
+      contents: sanitize(contents)
+    };
+  } catch (e) {
+    console.error('Failed to normalize flex message:', e);
+    return null;
+  }
+}
+
 Deno.serve(async (req) => {
   console.log('🕐 Scheduled step delivery function started at:', new Date().toISOString())
 
@@ -424,11 +488,19 @@ async function deliverStepMessages(supabase: any, stepTracking: any) {
               .eq('id', message.flex_message_id)
               .maybeSingle()
             if (!flexErr && flex?.content) {
-              preparedMessage = { ...preparedMessage, _flexContent: flex.content }
+              try {
+                preparedMessage = { ...preparedMessage, _flexContent: typeof flex.content === 'string' ? JSON.parse(flex.content) : flex.content }
+              } catch (e) {
+                console.error('Failed to parse flex_messages.content:', e)
+              }
             }
           }
-          if (!preparedMessage._flexContent && message.content && typeof message.content === 'string') {
-            preparedMessage = { ...preparedMessage, _flexContent: JSON.parse(message.content) }
+          if (!preparedMessage._flexContent && message.content) {
+            try {
+              preparedMessage = { ...preparedMessage, _flexContent: typeof message.content === 'string' ? JSON.parse(message.content) : message.content }
+            } catch (e) {
+              console.error('Failed to parse message.content:', e)
+            }
           }
         } catch {
           console.warn('Invalid flex content JSON for message', message.id)
@@ -551,17 +623,16 @@ async function sendLineMessage(accessToken: string, userId: string, message: any
         break
         
       case 'flex': {
-        let altText = message.alt_text || 'フレックスメッセージ'
-        let flexPayload: any = message._flexContent || (message.content ? JSON.parse(message.content) : {})
-        // If saved as full LINE message { type: 'flex', altText, contents }, unwrap
-        if (flexPayload && typeof flexPayload === 'object' && flexPayload.type === 'flex') {
-          if (flexPayload.altText) altText = flexPayload.altText
-          if (flexPayload.contents) flexPayload = flexPayload.contents
-        }
-        lineMessage = {
-          type: 'flex',
-          altText,
-          contents: flexPayload || {}
+        const rawContent = message._flexContent || message.content
+        if (rawContent) {
+          const normalized = normalize(rawContent)
+          if (normalized) {
+            lineMessage = normalized
+          } else {
+            throw new Error('Invalid flex message format')
+          }
+        } else {
+          throw new Error('No flex content available')
         }
         break
       }
