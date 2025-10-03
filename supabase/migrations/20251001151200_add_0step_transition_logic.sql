@@ -217,6 +217,8 @@ BEGIN
         INSERT INTO scenario_friend_logs (scenario_id, friend_id, invite_code, line_user_id, registration_source)
         VALUES (v_to_scenario_id, v_friend_id, 'system_transition', p_line_user_id, 'system_transition')
         ON CONFLICT DO NOTHING;
+
+        v_scenario_id := v_to_scenario_id;
       ELSE
         RAISE LOG '0-step scenario % has no transition configured. No action taken.', v_scenario_id;
       END IF;

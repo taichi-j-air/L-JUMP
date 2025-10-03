@@ -16,7 +16,6 @@ import { DraggableStepsList } from "@/components/DraggableStepsList"
 import { ScenarioTransitionCard } from "@/components/ScenarioTransitionCard"
 import { ScenarioInviteCard } from "@/components/ScenarioInviteCard"
 import { ScenarioAnalytics } from "@/components/ScenarioAnalytics"
-import { ScenarioReRegistrationToggle } from "@/components/ScenarioReRegistrationToggle"
 import { StepDeliveryStatus } from "@/components/StepDeliveryStatus"
 import { MessagePreview } from "@/components/MessagePreview"
 import { SortableScenarioItem } from "@/components/SortableScenarioItem"
@@ -483,7 +482,7 @@ export default function StepDeliveryPage() {
           <h1 className="text-2xl font-bold">ステップ配信</h1>
         </div>
 
-        <div className="flex gap-0 h-[calc(100vh-200px)]">
+        <div className="flex gap-0 items-start min-h-[calc(100vh-200px)]">
           {/* Scenarios List */}
           <div className="w-80 bg-card p-4 flex-shrink-0">
             <div className="flex items-center justify-between mb-4">
@@ -603,18 +602,6 @@ export default function StepDeliveryPage() {
                   onDeactivateCode={deactivateInviteCode}
                 />
 
-                {/* 再登録制御設定 */}
-                <ScenarioReRegistrationToggle
-                  scenarioId={selectedScenario.id}
-                  preventReRegistration={selectedScenario.prevent_re_registration ?? true}
-                  scenarioName={selectedScenario.name}
-                  onUpdate={(newValue) => {
-                    setSelectedScenario({
-                      ...selectedScenario,
-                      prevent_re_registration: newValue
-                    })
-                  }}
-                />
 
                 {/* 流入分析 */}
                 <ScenarioAnalytics scenario={selectedScenario} />
