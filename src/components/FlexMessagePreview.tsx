@@ -43,6 +43,32 @@ export function FlexMessagePreview({ flexMessageId }: FlexMessagePreviewProps) {
     }
 
     fetchFlexMessage()
+
+    // リアルタイム更新の設定
+    const channel = supabase
+      .channel(`flex_message_${flexMessageId}`)
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'flex_messages',
+          filter: `id=eq.${flexMessageId}`
+        },
+        (payload) => {
+          console.log('Flexメッセージが更新されました:', payload)
+          const newData = payload.new as any
+          const content = typeof newData.content === 'string'
+            ? JSON.parse(newData.content)
+            : newData.content
+          setFlexMessage({...newData, content})
+        }
+      )
+      .subscribe()
+
+    return () => {
+      supabase.removeChannel(channel)
+    }
   }, [flexMessageId])
 
   if (loading) {
