@@ -6,7 +6,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
-import { X, Plus, Image, Save } from "lucide-react";
+import { X, Plus, Image } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { MediaLibrarySelector } from "@/components/MediaLibrarySelector";
@@ -90,8 +90,6 @@ export default function StepMessageEditor({
   const [savingStates, setSavingStates] = useState<{ [key: number]: boolean }>({});
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState<{ [key: number]: boolean }>({});
 
-  // デバウンス用タイマー
-  const saveTimerRefs = useRef<{ [key: number]: ReturnType<typeof setTimeout> }>({});
 
   // 親→子同期：未保存がない時だけ同期（上書き防止）
   const prevMessagesRef = useRef<StepMessage[] | null>(null);
@@ -107,9 +105,6 @@ export default function StepMessageEditor({
   useEffect(() => {
     fetchScenarios();
     fetchFlexMessages();
-    return () => {
-      Object.values(saveTimerRefs.current).forEach(t => clearTimeout(t));
-    };
   }, []);
 
   // プレビューは保存済み messages から
@@ -291,28 +286,7 @@ export default function StepMessageEditor({
     }
   };
 
-  // デバウンス保存（最新版で保存）
-  const updateLocalMessageWithDebounce = (index: number, updates: Partial<StepMessage>) => {
-    const next: StepMessage = { ...editingMessages[index], ...updates };
-    updateLocalMessage(index, updates);
 
-    if (saveTimerRefs.current[index]) clearTimeout(saveTimerRefs.current[index]);
-    saveTimerRefs.current[index] = setTimeout(() => {
-      saveMessage(index, next);
-      delete saveTimerRefs.current[index];
-    }, 1000);
-  };
-
-  const saveAllMessages = async () => {
-    const unsavedIndexes = Object.keys(hasUnsavedChanges).map(Number).sort((a,b)=>a-b);
-    if (unsavedIndexes.length === 0) {
-      toast.info('保存する変更がありません');
-      return;
-    }
-    for (const idx of unsavedIndexes) {
-      await saveMessage(idx);
-    }
-  };
 
   const removeMessage = async (index: number) => {
     const message = editingMessages[index];
@@ -398,12 +372,6 @@ export default function StepMessageEditor({
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <h3 className="text-lg font-semibold">メッセージ設定</h3>
-        {Object.keys(hasUnsavedChanges).length > 0 && (
-          <Button onClick={saveAllMessages} size="sm" className="bg-blue-600 hover:bg-blue-700">
-            <Save className="h-4 w-4 mr-1" />
-            すべて保存 ({Object.keys(hasUnsavedChanges).length})
-          </Button>
-        )}
       </div>
 
       {editingMessages.length === 0 ? (
@@ -624,7 +592,8 @@ export default function StepMessageEditor({
                       <Label>メッセージ内容</Label>
                       <Textarea
                         value={message.content}
-                        onChange={(e) => updateLocalMessageWithDebounce(index, { content: e.target.value })}
+                        onChange={(e) => updateLocalMessage(index, { content: e.target.value })}
+                        onBlur={() => saveMessage(index)}
                         placeholder="テキストメッセージを入力..."
                         rows={4}
                       />
@@ -649,8 +618,22 @@ export default function StepMessageEditor({
                         }}
                       />
                       {message.media_url && (
-                        <div className="text-sm text-muted-foreground">
-                          選択中: {message.media_url}
+                        <div className="flex items-center gap-3">
+                          <div className="w-20 h-20 rounded-md border overflow-hidden bg-muted">
+                            <img
+                              src={message.media_url}
+                              alt="選択中のメディア"
+                              className="w-full h-full object-cover"
+                            />
+                          </div>
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => window.open(message.media_url || '', '_blank')}
+                          >
+                            別タブでプレビュー
+                          </Button>
                         </div>
                       )}
                     </div>
