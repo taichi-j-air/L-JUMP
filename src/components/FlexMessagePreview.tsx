@@ -87,9 +87,7 @@ export function FlexMessagePreview({ flexMessageId }: FlexMessagePreviewProps) {
     )
   }
 
-  const renderFlexPreview = () => {
-    // データ構造を確認
-    const bubble = flexMessage.content?.contents || flexMessage.content;
+  const renderSingleBubble = (bubble: any) => {
     const hero = bubble?.hero;
     const flexContents = bubble?.body?.contents;
     
@@ -141,17 +139,10 @@ export function FlexMessagePreview({ flexMessageId }: FlexMessagePreviewProps) {
         {/* Body contents */}
         <div className={hero ? 'p-3' : ''}>
           {elements.map((element: any, index: number) => {
-            const isFirst = index === 0;
-            const isLast = index === elements.length - 1;
-            
             return (
               <div 
                 key={element.id || index}
                 className="flex"
-                style={{
-                  marginTop: !isFirst ? '15px' : undefined,
-                  marginBottom: !isLast ? '15px' : undefined
-                }}
               >
                 {element.type === 'text' && (
                   <div 
@@ -219,6 +210,25 @@ export function FlexMessagePreview({ flexMessageId }: FlexMessagePreviewProps) {
         </div>
       </div>
     )
+  }
+
+  const renderFlexPreview = () => {
+    const content = flexMessage.content?.contents || flexMessage.content;
+    const isCarousel = content?.type === "carousel";
+
+    if (isCarousel && content?.contents && Array.isArray(content.contents)) {
+      return (
+        <div className="flex gap-2 overflow-x-auto pb-2">
+          {content.contents.map((bubble: any, index: number) => (
+            <div key={index} className="flex-shrink-0">
+              {renderSingleBubble(bubble)}
+            </div>
+          ))}
+        </div>
+      );
+    }
+
+    return renderSingleBubble(content);
   }
 
   return (
