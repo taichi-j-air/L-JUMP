@@ -2342,6 +2342,7 @@ export type Database = {
           prevent_auto_exit: boolean
           prevent_re_registration: boolean
           scenario_order: number | null
+          transition_to_scenario_id: string | null
           updated_at: string
           user_id: string
         }
@@ -2354,6 +2355,7 @@ export type Database = {
           prevent_auto_exit?: boolean
           prevent_re_registration?: boolean
           scenario_order?: number | null
+          transition_to_scenario_id?: string | null
           updated_at?: string
           user_id: string
         }
@@ -2366,6 +2368,7 @@ export type Database = {
           prevent_auto_exit?: boolean
           prevent_re_registration?: boolean
           scenario_order?: number | null
+          transition_to_scenario_id?: string | null
           updated_at?: string
           user_id?: string
         }
@@ -2376,6 +2379,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "profiles"
             referencedColumns: ["user_id"]
+          },
+          {
+            foreignKeyName: "step_scenarios_transition_to_scenario_id_fkey"
+            columns: ["transition_to_scenario_id"]
+            isOneToOne: false
+            referencedRelation: "step_scenarios"
+            referencedColumns: ["id"]
           },
         ]
       }
