@@ -488,7 +488,23 @@ async function sendLineMessage(userId: string, message: any, accessToken: string
       }
       break;
     
-    case 'flex':
+    case 'flex': {
+      const toFlexPayload = (raw: any) => {
+        if (!raw) return null;
+        try {
+          const payload = typeof raw === 'string' ? JSON.parse(raw) : raw;
+          if (!payload) return null;
+
+          const altText = payload.altText || message.alt_text || 'Flex Message';
+          const contents = payload.type === 'flex' && payload.contents ? payload.contents : payload;
+
+          return { altText, contents };
+        } catch (error) {
+          console.error('Flex payload parse error:', error);
+          return null;
+        }
+      };
+
       if (message.flex_message_id) {
         // Get flex message content
         const supabase = createClient(
@@ -501,27 +517,29 @@ async function sendLineMessage(userId: string, message: any, accessToken: string
           .eq('id', message.flex_message_id)
           .single();
         if (flexData?.content) {
+          const flexPayload = toFlexPayload(flexData.content);
+          if (flexPayload) {
+            lineMessage = {
+              type: 'flex',
+              altText: flexPayload.altText,
+              contents: flexPayload.contents
+            };
+          }
+        }
+      }
+
+      if (!lineMessage && message.content) {
+        const inlinePayload = toFlexPayload(message.content);
+        if (inlinePayload) {
           lineMessage = {
             type: 'flex',
-            altText: message.alt_text || 'Flex Message',
-            contents: flexData.content
+            altText: inlinePayload.altText,
+            contents: inlinePayload.contents
           };
         }
       }
-      // fallback when content is inline JSON string
-      if (!lineMessage && message.content) {
-        try {
-          const parsed = typeof message.content === 'string' ? JSON.parse(message.content) : message.content
-          lineMessage = {
-            type: 'flex',
-            altText: message.alt_text || 'Flex Message',
-            contents: parsed
-          }
-        } catch (_) {
-          // ignore parse error
-        }
-      }
       break;
+    }
 
     case 'restore_access':
       // アクセス解除＆シナリオ再登録メッセージ
