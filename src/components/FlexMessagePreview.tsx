@@ -264,8 +264,10 @@ export function FlexMessagePreview({ flexMessageId }: FlexMessagePreviewProps) {
       };
 
       return (
-        <div className="flex flex-col items-center gap-4">
-          <div className="flex items-center gap-4">
+        <div className="flex flex-col items-center gap-3">
+          {renderSingleBubble(content.contents[carouselIndex])}
+          
+          <div className="flex items-center gap-3">
             <Button
               variant="outline"
               size="icon"
@@ -275,7 +277,9 @@ export function FlexMessagePreview({ flexMessageId }: FlexMessagePreviewProps) {
               <ChevronLeft className="h-4 w-4" />
             </Button>
             
-            {renderSingleBubble(content.contents[carouselIndex])}
+            <div className="bg-background/80 px-3 py-1 rounded text-xs font-medium">
+              {carouselIndex + 1} / {totalBubbles}
+            </div>
             
             <Button
               variant="outline"
@@ -285,10 +289,6 @@ export function FlexMessagePreview({ flexMessageId }: FlexMessagePreviewProps) {
             >
               <ChevronRight className="h-4 w-4" />
             </Button>
-          </div>
-          
-          <div className="bg-background/80 px-2 py-1 rounded text-xs">
-            {carouselIndex + 1} / {totalBubbles}
           </div>
         </div>
       );
