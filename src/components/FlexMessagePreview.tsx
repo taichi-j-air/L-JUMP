@@ -88,8 +88,10 @@ export function FlexMessagePreview({ flexMessageId }: FlexMessagePreviewProps) {
   }
 
   const renderFlexPreview = () => {
-    // データ構造を確認: content.contents.body.contents
-    const flexContents = flexMessage.content?.contents?.body?.contents;
+    // データ構造を確認
+    const bubble = flexMessage.content?.contents || flexMessage.content;
+    const hero = bubble?.hero;
+    const flexContents = bubble?.body?.contents;
     
     if (!flexContents || !Array.isArray(flexContents)) {
       return (
@@ -105,8 +107,39 @@ export function FlexMessagePreview({ flexMessageId }: FlexMessagePreviewProps) {
     const elements = flexContents
 
     return (
-      <div className="bg-white rounded-lg shadow-sm border max-w-[280px] mx-auto">
-        <div>
+      <div className="bg-white rounded-lg shadow-sm border max-w-[280px] mx-auto overflow-hidden">
+        {/* Hero block */}
+        {hero && (
+          <div className="w-full">
+            {hero.type === 'image' && (
+              <img
+                src={hero.url}
+                alt="Hero画像"
+                className="w-full"
+                style={{
+                  aspectRatio: hero.aspectRatio?.replace(':', '/') || '20/13',
+                  objectFit: hero.aspectMode === 'cover' ? 'cover' : 'contain',
+                }}
+              />
+            )}
+            {hero.type === 'video' && (
+              <div className="relative w-full bg-black">
+                <video
+                  src={hero.url}
+                  className="w-full"
+                  style={{
+                    aspectRatio: hero.aspectRatio?.replace(':', '/') || '20/13',
+                    objectFit: hero.aspectMode === 'cover' ? 'cover' : 'contain',
+                  }}
+                  controls
+                />
+              </div>
+            )}
+          </div>
+        )}
+        
+        {/* Body contents */}
+        <div className={hero ? 'p-3' : ''}>
           {elements.map((element: any, index: number) => {
             const isFirst = index === 0;
             const isLast = index === elements.length - 1;
