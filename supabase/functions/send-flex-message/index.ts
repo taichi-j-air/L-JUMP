@@ -47,19 +47,30 @@ function sanitize(node: any): any {
 function normalize(input: any) {
   if (!input) return null;
 
+  let normalized: any = null;
+
   // ① すでに flex ラップ済み
-  if (input.type === "flex" && input.contents)
-    return { type: "flex", altText: input.altText?.trim() || "お知らせ", contents: sanitize(input.contents) };
-
+  if (input.type === "flex" && input.contents) {
+    normalized = { type: "flex", altText: input.altText?.trim() || "お知らせ", contents: sanitize(input.contents) };
+  }
   // ② bubble / carousel がルート
-  if (["bubble", "carousel"].includes(input.type))
-    return { type: "flex", altText: "お知らせ", contents: sanitize(input) };
-
+  else if (["bubble", "carousel"].includes(input.type)) {
+    normalized = { type: "flex", altText: "お知らせ", contents: sanitize(input) };
+  }
   // ③ { contents: {...}, altText } 形式
-  if (input.contents && ["bubble", "carousel"].includes(input.contents.type))
-    return { type: "flex", altText: input.altText?.trim() || "お知らせ", contents: sanitize(input.contents) };
+  else if (input.contents && ["bubble", "carousel"].includes(input.contents.type)) {
+    normalized = { type: "flex", altText: input.altText?.trim() || "お知らせ", contents: sanitize(input.contents) };
+  }
 
-  return null;
+  if (!normalized) return null;
+
+  // ★★★ styles.body.backgroundColor を contents.body.backgroundColor に適用する処理を追加 ★★★
+  if (input.styles?.body?.backgroundColor && normalized.contents?.type === 'bubble' && normalized.contents.body) {
+    // 元のbodyにbackgroundColorがすでにある場合でも、styles側を優先して上書きする
+    normalized.contents.body.backgroundColor = input.styles.body.backgroundColor;
+  }
+
+  return normalized;
 }
 
 // ────────────────────── メイン
