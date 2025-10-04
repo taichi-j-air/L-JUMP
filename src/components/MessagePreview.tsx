@@ -51,7 +51,7 @@ export function MessagePreview({ messages, editingMessages }: MessagePreviewProp
                   </AvatarFallback>
                 </Avatar>
                 <div className="flex-1">
-                  <div className="bg-muted rounded-lg p-3 max-w-[200px]">
+                  <div className={`bg-muted rounded-lg p-3 ${message.message_type === 'flex' ? 'max-w-[380px]' : 'max-w-[200px]'}`}>
                     {message.message_type === 'text' ? (
                       <p className="text-sm whitespace-pre-wrap break-words">
                         {message.content || 'テキストメッセージ'}
