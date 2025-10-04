@@ -118,7 +118,7 @@ export function FlexMessagePreview({ flexMessageId }: FlexMessagePreviewProps) {
   const getMarginPx = (margin?: string): number => {
     if (!margin) return 0
     const map: Record<string, number> = { 
-      none: 0, xs: 2, sm: 4, md: 8, lg: 12, xl: 16, xxl: 20 
+      none: 0, xs: 1, sm: 3, md: 6, lg: 8, xl: 11, xxl: 14 
     }
     return map[margin] || 0
   }
@@ -126,20 +126,20 @@ export function FlexMessagePreview({ flexMessageId }: FlexMessagePreviewProps) {
   const getPaddingPx = (pad?: string): number => {
     if (!pad) return 0
     const map: Record<string, number> = { 
-      none: 0, xs: 4, sm: 8, md: 12, lg: 16, xl: 20, xxl: 24 
+      none: 0, xs: 3, sm: 6, md: 8, lg: 11, xl: 14, xxl: 17 
     }
     return map[pad] || 0
   }
 
   const getBubbleWidth = (size?: string): string => {
     const sizeMap: Record<string, string> = {
-      nano: '200px',
-      micro: '260px',
-      kilo: '300px',
-      mega: '340px',
-      giga: '360px'
+      nano: '140px',
+      micro: '180px',
+      kilo: '210px',
+      mega: '240px',
+      giga: '260px'
     }
-    return sizeMap[size || 'mega'] || '300px'
+    return sizeMap[size || 'mega'] || '210px'
   }
 
   // 要素を再帰的にレンダリング
@@ -183,8 +183,8 @@ export function FlexMessagePreview({ flexMessageId }: FlexMessagePreviewProps) {
       const wrap = element.wrap !== false
 
       const sizeMap: Record<string, string> = {
-        xxs: '10px', xs: '12px', sm: '14px', md: '16px',
-        lg: '18px', xl: '20px', xxl: '22px', '3xl': '26px', '4xl': '30px', '5xl': '34px'
+        xxs: '8px', xs: '10px', sm: '11px', md: '13px',
+        lg: '14px', xl: '16px', xxl: '18px', '3xl': '21px', '4xl': '24px', '5xl': '27px'
       }
 
       return (
@@ -238,22 +238,22 @@ export function FlexMessagePreview({ flexMessageId }: FlexMessagePreviewProps) {
       const color = element.color
 
       const heightMap: Record<string, string> = {
-        sm: '32px',
-        md: '40px',
-        lg: '48px'
+        sm: '26px',
+        md: '32px',
+        lg: '38px'
       }
 
       let buttonStyle: React.CSSProperties = {
         marginTop,
-        height: heightMap[height] || '40px',
+        height: heightMap[height] || '32px',
         borderRadius: '4px',
-        fontSize: '14px',
+        fontSize: '11px',
         fontWeight: 500,
         cursor: 'pointer',
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
-        padding: '0 16px'
+        padding: '0 12px'
       }
 
       if (style === 'link') {
