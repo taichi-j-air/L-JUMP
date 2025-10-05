@@ -57,6 +57,7 @@ export function FriendsList({ user }: FriendsListProps) {
   const [friendTagMap, setFriendTagMap] = useState<Record<string, string[]>>({})
   const [friendScenarioMap, setFriendScenarioMap] = useState<Record<string, string[]>>({})
   const [friendProtectedScenarioMap, setFriendProtectedScenarioMap] = useState<Record<string, string[]>>({})
+  const [blockTagId, setBlockTagId] = useState<string | null>(null)
 
   // Bulk actions
   const [bulkScenarioId, setBulkScenarioId] = useState<string>("")
@@ -164,6 +165,62 @@ export function FriendsList({ user }: FriendsListProps) {
     ])
     setTags((tagRows||[]) as any)
     setScenarios((scenarioRows||[]) as any)
+
+    const blockTag = (tagRows || []).find((t) => t.name === "ブロック")
+    if (blockTag) {
+      setBlockTagId(blockTag.id)
+    }
+  }
+
+  const toggleBlockTag = async (friend: Friend) => {
+    if (!blockTagId) {
+      toast({ title: "エラー", description: "「ブロック」タグが見つかりません。", variant: "destructive" })
+      return
+    }
+
+    const isBlocked = (friendTagMap[friend.id] || []).includes(blockTagId)
+
+    try {
+      if (isBlocked) {
+        // Unblock: delete from friend_tags
+        const { error } = await supabase.from("friend_tags").delete().eq("friend_id", friend.id).eq("tag_id", blockTagId)
+
+        if (error) throw error
+
+        // Update state
+        setFriendTagMap((prev) => {
+          const newMap = { ...prev }
+          newMap[friend.id] = (newMap[friend.id] || []).filter((tId) => tId !== blockTagId)
+          return newMap
+        })
+        toast({ title: "ブロック解除しました" })
+      } else {
+        // Block: insert into friend_tags
+        const { error } = await supabase.from("friend_tags").insert({
+          user_id: user.id,
+          friend_id: friend.id,
+          tag_id: blockTagId,
+        })
+
+        if (error) throw error
+
+        // Update state
+        setFriendTagMap((prev) => {
+          const newMap = { ...prev }
+          if (!newMap[friend.id]) {
+            newMap[friend.id] = []
+          }
+          newMap[friend.id].push(blockTagId)
+          return newMap
+        })
+        toast({ title: "ブロックしました" })
+      }
+      // refresh tag counts in TagsManager
+      window.dispatchEvent(new CustomEvent("refreshFriendTags"))
+    } catch (error: any) {
+      console.error("Error toggling block tag:", error)
+      toast({ title: "操作に失敗しました", description: error.message, variant: "destructive" })
+    }
   }
 
   if (loading) {
@@ -435,6 +492,16 @@ export function FriendsList({ user }: FriendsListProps) {
                     </div>
 
                     <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
+                      {blockTagId && (
+                        <Button
+                          size="sm"
+                          variant={(friendTagMap[friend.id] || []).includes(blockTagId) ? "destructive" : "outline"}
+                          onClick={() => toggleBlockTag(friend)}
+                          className="gap-1 h-8 px-2"
+                        >
+                          {(friendTagMap[friend.id] || []).includes(blockTagId) ? "ブロック解除" : "ブロック"}
+                        </Button>
+                      )}
                       <Button size="sm" variant="outline" onClick={() => setTagDialogFriend(friend)} className="gap-1 h-8 px-2">
                         <TagIcon className="h-4 w-4" />
                         タグ
