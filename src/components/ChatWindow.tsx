@@ -4,6 +4,7 @@ import { Send, Loader2 } from "lucide-react"
 import { Card, CardContent, CardHeader, CardTitle } from "./ui/card"
 import { Button } from "./ui/button"
 import { Input } from "./ui/input"
+import { Textarea } from "./ui/textarea"
 import { Avatar, AvatarFallback, AvatarImage } from "./ui/avatar"
 import { supabase } from "@/integrations/supabase/client"
 import { useToast } from "./ui/use-toast"
@@ -243,7 +244,7 @@ export function ChatWindow({ user, friend, onClose }: ChatWindowProps) {
   }
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === 'Enter' && !e.shiftKey) {
+    if ((e.key === 'Enter' && e.shiftKey) || (e.key === 'Enter' && (e.ctrlKey || e.metaKey))) {
       e.preventDefault()
       sendMessage()
     }
@@ -251,7 +252,7 @@ export function ChatWindow({ user, friend, onClose }: ChatWindowProps) {
 
   return (
     <div className="flex gap-4 h-full">
-      <Card className="min-h-[600px] max-h-[80vh] flex flex-col flex-1">
+      <Card className="min-h-[600px] max-h-[80vh] flex flex-col flex-1 max-w-xl w-full mx-auto">
         <CardHeader className="flex-row items-center space-y-0 pb-2 flex-shrink-0">
           <Avatar className="h-8 w-8 mr-3">
             <AvatarImage src={friend.picture_url || ""} alt={friend.display_name || ""} />
@@ -416,26 +417,32 @@ export function ChatWindow({ user, friend, onClose }: ChatWindowProps) {
             <div ref={messagesEndRef} />
           </div>
           
-          <div className="flex gap-2 flex-shrink-0">
-            <Input
-              value={newMessage}
-              onChange={(e) => setNewMessage(e.target.value)}
-              onKeyDown={handleKeyDown}
-              placeholder="メッセージを入力..."
-              disabled={sending}
-              className="flex-1"
-            />
-            <Button 
-              onClick={sendMessage} 
-              disabled={!newMessage.trim() || sending}
-              size="icon"
-            >
-              {sending ? (
-                <Loader2 className="h-4 w-4 animate-spin" />
-              ) : (
-                <Send className="h-4 w-4" />
-              )}
-            </Button>
+          <div className="flex flex-col gap-2 flex-shrink-0">
+            <div className="flex gap-2">
+              <Textarea
+                value={newMessage}
+                onChange={(e) => setNewMessage(e.target.value)}
+                onKeyDown={handleKeyDown}
+                placeholder="メッセージを入力..."
+                disabled={sending}
+                className="flex-1 resize-none"
+                rows={1}
+              />
+              <Button 
+                onClick={sendMessage} 
+                disabled={!newMessage.trim() || sending}
+                size="sm"
+              >
+                {sending ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  "送信"
+                )}
+              </Button>
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Enter: 改行 | Ctrl+Enter (Mac: Cmd+Enter): 送信
+            </p>
           </div>
         </CardContent>
       </Card>
