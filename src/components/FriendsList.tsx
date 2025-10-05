@@ -482,10 +482,10 @@ export function FriendsList({ user }: FriendsListProps) {
                         )}
                       </div>
                       <div className="text-xs text-muted-foreground">
-                        <p className="font-mono font-bold text-primary">
-                          User ID: 
+                        <p className="font-mono font-bold">
+                          <span className="text-gray-500">UID: </span>
                           <button 
-                            className="ml-1 px-1 hover:bg-primary/20 rounded"
+                            className="ml-1 px-1 hover:bg-primary/20 rounded text-primary"
                             onClick={(e) => {
                               e.stopPropagation()
                               navigator.clipboard.writeText(friend.short_uid || '')
