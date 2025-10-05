@@ -373,7 +373,7 @@ export function FriendsList({ user }: FriendsListProps) {
                 <div className="p-3 border rounded-md space-y-2">
               <div className="grid grid-cols-1 gap-2">
                 <Select value={bulkScenarioId} onValueChange={setBulkScenarioId}>
-                  <SelectTrigger className="h-9"><SelectValue placeholder="登録するシナリオを選択" /></SelectTrigger>
+                  <SelectTrigger className="h-9"><SelectValue placeholder="登録/解除するシナリオを選択" /></SelectTrigger>
                   <SelectContent>
                     {scenarios.map(s => <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>)}
                   </SelectContent>
@@ -399,19 +399,26 @@ export function FriendsList({ user }: FriendsListProps) {
                 </div>
               </AccordionTrigger>
               <AccordionContent>
-                <div className="p-3 border rounded-md space-y-2">
-                  <Select value={bulkTagAddId} onValueChange={setBulkTagAddId}>
-                    <SelectTrigger className="h-9"><SelectValue placeholder="付与するタグ" /></SelectTrigger>
-                    <SelectContent>
-                      {tags.map(t => <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>)}
-                    </SelectContent>
-                  </Select>
-                  <Select value={bulkTagRemoveId} onValueChange={setBulkTagRemoveId}>
-                    <SelectTrigger className="h-9"><SelectValue placeholder="解除するタグ" /></SelectTrigger>
-                    <SelectContent>
-                      {tags.map(t => <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>)}
-                    </SelectContent>
-                  </Select>
+                <div className="p-3 border rounded-md space-y-4">
+                  <div className="space-y-1">
+                    <Label>付与するタグ</Label>
+                    <Select value={bulkTagAddId} onValueChange={setBulkTagAddId}>
+                      <SelectTrigger className="h-9"><SelectValue placeholder="付与するタグ" /></SelectTrigger>
+                      <SelectContent>
+                        {tags.map(t => <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>)}
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <div className="space-y-1">
+                    <Label>解除するタグ</Label>
+                    <Select value={bulkTagRemoveId} onValueChange={setBulkTagRemoveId}>
+                      <SelectTrigger className="h-9"><SelectValue placeholder="解除するタグ" /></SelectTrigger>
+                      <SelectContent>
+                        {tags.map(t => <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>)}
+                      </SelectContent>
+                    </Select>
+                  </div>
                   <Button className="w-full h-9" onClick={async ()=>{
                     setConfirmTagOpen(true)
                   }}>保存</Button>
