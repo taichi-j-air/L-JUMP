@@ -91,13 +91,37 @@ export default function TagsManager() {
         return
       }
 
-      const [{ data: tagRows, error: tagErr }, { data: ftRows, error: ftErr }] = await Promise.all([
+      const [{ data: tagRowsData, error: tagErr }, { data: ftRows, error: ftErr }] = await Promise.all([
         (supabase as any).from("tags").select("*").eq("user_id", user.id).order("created_at", { ascending: false }),
         (supabase as any).from("friend_tags").select("tag_id").eq("user_id", user.id),
       ])
 
       if (tagErr) throw tagErr
       if (ftErr) throw ftErr
+
+      const tagRows = tagRowsData || []
+
+      // Check for "ブロック" tag and create if not exists
+      const blockTagExists = (tagRows || []).some((tag) => tag.name === "ブロック")
+      if (!blockTagExists) {
+        const { data: newTag, error: insertError } = await supabase
+          .from("tags")
+          .insert({
+            name: "ブロック",
+            user_id: user.id,
+            description: "LINE公式アカウントをブロックしたユーザーに自動で付与されるタグです。",
+          })
+          .select()
+          .single()
+
+        if (insertError) {
+          console.error("Failed to create 'ブロック' tag:", insertError)
+          // Continue without the block tag if creation fails
+        } else if (newTag) {
+          // Add the new tag to the list
+          tagRows.unshift(newTag)
+        }
+      }
 
       const cnt: Record<string, number> = {}
       ;(ftRows || []).forEach((r: any) => {
@@ -377,7 +401,13 @@ export default function TagsManager() {
                           </TableCell>
                           <TableCell className="py-2">{formatYYDDMMHHMM(tag.created_at)}</TableCell>
                           <TableCell className="text-right py-2">
-                            <Button variant="destructive" size="sm" className="h-7 px-2" onClick={() => handleDelete(tag.id)}>
+                            <Button
+                              variant="destructive"
+                              size="sm"
+                              className="h-7 px-2"
+                              onClick={() => handleDelete(tag.id)}
+                              disabled={tag.name === "ブロック"}
+                            >
                               <Trash2 className="mr-2 h-4 w-4" /> 削除
                             </Button>
                           </TableCell>
