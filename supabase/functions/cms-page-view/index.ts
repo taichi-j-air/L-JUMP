@@ -219,7 +219,11 @@ serve(async (req) => {
       tokenValues["[UID]"] = friend?.short_uid_ci ?? normalizedUid
     }
 
-    tokenValues["[LINE_NAME]"] = friend?.display_name ?? ""
+    const rawDisplayName = friend?.display_name?.trim()
+    const fallbackName = rawDisplayName && rawDisplayName.length > 0 ? rawDisplayName : "あなた"
+
+    tokenValues["[LINE_NAME]"] = fallbackName
+    tokenValues["[LINE_NAME_SAN]"] = fallbackName === "あなた" ? "あなた" : `${fallbackName}さん`
     tokenValues["[LINE_ID]"] = friend?.line_user_id ?? ""
 
     if (friend && (page.blocked_tag_ids?.length > 0 || page.allowed_tag_ids?.length > 0)) {

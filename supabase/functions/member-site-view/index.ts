@@ -152,9 +152,13 @@ Deno.serve(async (req) => {
       return errorResponse('Invalid UID', 401, 'UID_AUTH_FAILED')
     }
 
+    const rawDisplayName = friendData.display_name?.trim()
+    const fallbackName = rawDisplayName && rawDisplayName.length > 0 ? rawDisplayName : "あなた"
+
     const tokenValues: TokenMap = {
       '[UID]': friendData.short_uid_ci ?? normalizedUid,
-      '[LINE_NAME]': friendData.display_name ?? '',
+      '[LINE_NAME]': fallbackName,
+      '[LINE_NAME_SAN]': fallbackName === 'あなた' ? 'あなた' : `${fallbackName}さん`,
       '[LINE_ID]': friendData.line_user_id ?? '',
     }
 
