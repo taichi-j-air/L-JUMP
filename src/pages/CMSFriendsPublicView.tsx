@@ -54,7 +54,7 @@ type KnownErrors =
   | "tag_required";
 
 // Block renderer function
-const renderBlock = (block: Block) => {
+const renderBlock = (block: Block, uid?: string) => {
   const { type, content } = block;
 
   const textStyle = (block.type === 'paragraph' || block.type === 'heading' || block.type === 'note') ? {
@@ -198,7 +198,7 @@ const renderBlock = (block: Block) => {
     case 'form_embed':
       return (
         <div className="my-4">
-          <FormEmbedComponent formId={content.formId} />
+          <FormEmbedComponent formId={content.formId} uid={uid} />
         </div>
       );
 
@@ -792,7 +792,7 @@ export default function CMSFriendsPublicView() {
         <article className="prose max-w-none dark:prose-invert flex-1 p-4 ql-content">
           {filteredBlocks.length > 0 ? (
             filteredBlocks.map((block) => (
-              <div key={block.id} className="not-prose">{renderBlock(block)}</div>
+              <div key={block.id} className="not-prose">{renderBlock(block, uid)}</div>
             ))
           ) : (
             <div dangerouslySetInnerHTML={{ __html: sanitizeHtml(data.content || "") }} />

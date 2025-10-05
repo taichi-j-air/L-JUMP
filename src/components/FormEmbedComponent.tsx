@@ -131,8 +131,8 @@ export default function FormEmbedComponent({ formId, uid, className }: FormEmbed
 
       if (submitError) {
         console.error('Submission error:', submitError);
-        if (submitError.message?.includes('既にこのフォームに回答済みです')) {
-          setError('このフォームには既に回答いただいています。');
+        if (submitError.code === '23505') {
+          setError('既に回答済の為、送信できません。');
         } else if (submitError.message?.includes('友だち限定')) {
           setError('このフォームはLINE友だち限定です。正しいリンクから開いてください。');
         } else {

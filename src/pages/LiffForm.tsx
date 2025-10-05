@@ -217,10 +217,10 @@ export default function LiffForm() {
         payload: payload
       });
       
-      if (error.code === '23505' && error.message?.includes('この友だちは既にこのフォームに回答済みです')) {
-        toast.error('この友だちは既にこのフォームに回答済みです。');
+      if (error.code === '23505') {
+        toast.error('既に回答済の為、送信できません。');
       } else {
-        toast.error('送信に失敗しました');
+        toast.error('送信に失敗しました。もう一度お試しください。');
       }
       setSubmitting(false);
       return;
