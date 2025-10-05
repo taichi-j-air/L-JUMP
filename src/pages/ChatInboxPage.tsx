@@ -7,6 +7,7 @@ import { AppHeader } from "@/components/AppHeader"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { ChatWindow } from "@/components/ChatWindow"
 import { Badge } from "@/components/ui/badge"
+import { Button } from "@/components/ui/button"
 
 interface Friend {
   id: string
@@ -30,6 +31,9 @@ export default function ChatInboxPage() {
   const [friends, setFriends] = useState<Friend[]>([])
   const [selectedFriend, setSelectedFriend] = useState<Friend | null>(null)
   const [loading, setLoading] = useState(true)
+  const [currentPage, setCurrentPage] = useState(1)
+  const [totalFriendsCount, setTotalFriendsCount] = useState(0)
+  const itemsPerPage = 20
   const navigate = useNavigate()
   const [searchParams, setSearchParams] = useSearchParams()
 
@@ -65,7 +69,7 @@ export default function ChatInboxPage() {
     if (user) {
       loadFriendsWithLastMessage()
     }
-  }, [user])
+  }, [user, currentPage]) // Add currentPage to dependency array
 
   useEffect(() => {
     const friendId = searchParams.get('friend')
@@ -81,12 +85,29 @@ export default function ChatInboxPage() {
     if (!user) return
 
     try {
+      // 1. Fetch total count of friends
+      const { count, error: countError } = await supabase
+        .from('line_friends')
+        .select('id', { count: 'exact', head: true })
+        .eq('user_id', user.id)
+
+      if (countError) {
+        console.error('Error counting friends:', countError)
+        return
+      }
+      setTotalFriendsCount(count || 0)
+
+      // Calculate range for current page
+      const startIndex = (currentPage - 1) * itemsPerPage
+      const endIndex = startIndex + itemsPerPage - 1
+
       // 友達一覧を取得
       const { data: friendsData, error: friendsError } = await supabase
         .from('line_friends')
         .select('*')
         .eq('user_id', user.id)
         .order('added_at', { ascending: false })
+        .range(startIndex, endIndex) // Apply pagination
 
       if (friendsError) {
         console.error('Error loading friends:', friendsError)
@@ -164,7 +185,7 @@ export default function ChatInboxPage() {
     <div className="min-h-screen bg-background">
       <AppHeader user={user} />
       
-      <main className="container mx-auto px-4 py-8">
+      <main className="mx-auto px-4 py-8 max-w-5xl">
         <div className="flex items-center justify-between mb-6">
           <h1 className="text-2xl font-bold">チャット受信箱</h1>
         </div>
@@ -189,21 +210,21 @@ export default function ChatInboxPage() {
                     <div
                       key={friend.id}
                       onClick={() => handleFriendSelect(friend)}
-                      className={`flex items-center gap-3 p-4 border-b cursor-pointer hover:bg-muted/50 transition-colors ${
+                      className={`flex items-center gap-2 py-1.5 px-2 border-b cursor-pointer hover:bg-muted/50 transition-colors ${
                         selectedFriend?.id === friend.id ? 'bg-primary/10 border-primary/20' : ''
                       }`}
                     >
-                      <Avatar className="h-10 w-10">
+                      <Avatar className="h-7 w-7">
                         <AvatarImage src={friend.picture_url || ""} />
                         <AvatarFallback>
                           {friend.display_name?.charAt(0) || "?"}
                         </AvatarFallback>
                       </Avatar>
                       <div className="flex-1 min-w-0">
-                        <div className="font-medium truncate">
+                        <div className="font-medium truncate text-xs">
                           {friend.display_name || "名前未設定"}
                         </div>
-                        <div className="text-xs text-muted-foreground">
+                        <div className="text-[10px] text-muted-foreground">
                           {friend.last_message_at && 
                             new Date(friend.last_message_at).toLocaleDateString('ja-JP', {
                               month: 'short',
@@ -217,7 +238,7 @@ export default function ChatInboxPage() {
                       {friend.unread_count && friend.unread_count > 0 && (
                         <Badge 
                           variant="destructive" 
-                          className="h-5 w-5 flex items-center justify-center p-0 text-xs bg-red-500 text-white rounded-full"
+                          className="h-3.5 w-3.5 flex items-center justify-center p-0 text-[9px] bg-red-500 text-white rounded-full"
                         >
                           {friend.unread_count}
                         </Badge>
@@ -227,6 +248,27 @@ export default function ChatInboxPage() {
                 )}
               </div>
             </CardContent>
+            <div className="flex justify-center gap-2 p-4 border-t">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setCurrentPage((prev) => Math.max(1, prev - 1))}
+                disabled={currentPage === 1}
+              >
+                前へ
+              </Button>
+              <span className="text-sm flex items-center">
+                {currentPage} / {Math.ceil(totalFriendsCount / itemsPerPage)}
+              </span>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setCurrentPage((prev) => Math.min(Math.ceil(totalFriendsCount / itemsPerPage), prev + 1))}
+                disabled={currentPage === Math.ceil(totalFriendsCount / itemsPerPage)}
+              >
+                次へ
+              </Button>
+            </div>
           </Card>
 
           {/* 右側: チャット画面 */}
