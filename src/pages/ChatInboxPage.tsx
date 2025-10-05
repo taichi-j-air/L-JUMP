@@ -185,14 +185,14 @@ export default function ChatInboxPage() {
     <div className="min-h-screen bg-background">
       <AppHeader user={user} />
       
-      <main className="mx-auto px-4 py-8 max-w-5xl">
+      <main className="px-4 py-8 max-w-5xl">
         <div className="flex items-center justify-between mb-6">
           <h1 className="text-2xl font-bold">チャット受信箱</h1>
         </div>
         
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 h-[calc(100vh-160px)]">
+        <div className="flex flex-col lg:flex-row gap-6 h-[calc(100vh-160px)]">
           {/* 左側: チャット送信者一覧 */}
-          <Card className="lg:col-span-1">
+          <Card className="lg:w-64 flex-shrink-0">
             <CardHeader>
               <CardTitle>チャット一覧</CardTitle>
             </CardHeader>
@@ -272,7 +272,7 @@ export default function ChatInboxPage() {
           </Card>
 
           {/* 右側: チャット画面 */}
-          <div className="lg:col-span-2">
+          <div className="flex-1 flex justify-center">
             {selectedFriend ? (
               <ChatWindow 
                 user={user} 

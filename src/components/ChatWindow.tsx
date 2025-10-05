@@ -252,7 +252,7 @@ export function ChatWindow({ user, friend, onClose }: ChatWindowProps) {
 
   return (
     <div className="flex gap-4 h-full">
-      <Card className="min-h-[600px] max-h-[80vh] flex flex-col flex-1 max-w-xl w-full mx-auto">
+      <Card className="min-h-[600px] max-h-[80vh] flex flex-col w-[700px] overflow-x-hidden">
         <CardHeader className="flex-row items-center space-y-0 pb-2 flex-shrink-0">
           <Avatar className="h-8 w-8 mr-3">
             <AvatarImage src={friend.picture_url || ""} alt={friend.display_name || ""} />
@@ -268,8 +268,8 @@ export function ChatWindow({ user, friend, onClose }: ChatWindowProps) {
           </Button>
         </CardHeader>
       
-        <CardContent className="flex-1 flex flex-col p-4 min-h-0">
-          <div className="flex-1 overflow-y-auto space-y-4 mb-4 min-h-0" style={{ backgroundColor: 'rgb(140, 171, 216)' }}>
+        <CardContent className="flex-1 flex flex-col p-4 min-h-0 min-w-0">
+          <div className="flex-1 overflow-y-auto space-y-4 mb-4 min-h-0 min-w-0" style={{ backgroundColor: 'rgb(140, 171, 216)' }}>
             {loading ? (
               <div className="text-center text-muted-foreground py-8">
                 <Loader2 className="h-6 w-6 animate-spin mx-auto mb-2" />
