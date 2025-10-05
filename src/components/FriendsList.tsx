@@ -576,10 +576,10 @@ export function FriendsList({ user }: FriendsListProps) {
                            <AccordionContent>
                              <div className="space-y-2">
                                {Object.entries(f.data).map(([key, value]) => {
-                                 const field = formFields.find((field: any) => field.name === key);
+                                 const field = formFields.find((field: any) => field.name === key || field.id === key);
                                  const label = field?.label || key;
                                  return (
-                                   <div key={key} className="border-b pb-1">
+                                   <div key={key}>
                                      <div className="font-medium text-xs">{label}</div>
                                      <div className="text-xs text-muted-foreground">
                                        {Array.isArray(value) ? value.join(', ') : String(value)}

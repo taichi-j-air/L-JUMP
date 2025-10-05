@@ -362,7 +362,7 @@ export default function FormResponses() {
                         <AccordionContent className="px-3 py-2">
                           <div className="grid gap-3 grid-cols-1">
                             {fieldOrder.map((f) => {
-                              const val = s.data?.[f.name]
+                              const val = s.data?.[f.name] ?? s.data?.[f.id]
                               const text = renderValue(f.type, val)
                               return (
                                 <div key={f.id} className="space-y-1">

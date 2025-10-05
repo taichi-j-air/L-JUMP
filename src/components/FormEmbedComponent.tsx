@@ -18,6 +18,7 @@ interface FormEmbedComponentProps {
 
 interface FormField {
   id: string;
+  name: string;
   type: string;
   label: string;
   placeholder?: string;
@@ -84,17 +85,17 @@ export default function FormEmbedComponent({ formId, uid, className }: FormEmbed
     fetchFormData();
   }, [formId]);
 
-  const handleInputChange = (fieldId: string, value: any) => {
+  const handleInputChange = (fieldName: string, value: any) => {
     setFormValues(prev => ({
       ...prev,
-      [fieldId]: value
+      [fieldName]: value
     }));
   };
 
   const validateRequired = (fields: FormField[]) => {
     const missing = fields.filter(field => {
       if (!field.required) return false;
-      const v = formValues[field.id];
+      const v = formValues[field.name];
       if (field.type === 'checkbox') return !Array.isArray(v) || v.length === 0;
       return v == null || String(v).trim() === '';
     });
@@ -154,10 +155,11 @@ export default function FormEmbedComponent({ formId, uid, className }: FormEmbed
   const renderField = (field: FormField) => {
     const commonProps = {
       id: field.id,
+      name: field.name,
       required: field.required,
       placeholder: field.placeholder,
-      value: formValues[field.id] ?? '',
-      onChange: (e: any) => handleInputChange(field.id, e.target.value)
+      value: formValues[field.name] ?? '',
+      onChange: (e: any) => handleInputChange(field.name, e.target.value)
     };
 
     switch (field.type) {
@@ -170,10 +172,10 @@ export default function FormEmbedComponent({ formId, uid, className }: FormEmbed
       case 'number':
         return <Input {...commonProps} type="number" />;
       case 'textarea':
-        return <Textarea {...commonProps} onChange={(e) => handleInputChange(field.id, e.target.value)} />;
+        return <Textarea {...commonProps} onChange={(e) => handleInputChange(field.name, e.target.value)} />;
       case 'select':
         return (
-          <Select value={formValues[field.id] ?? ''} onValueChange={(value) => handleInputChange(field.id, value)}>
+          <Select value={formValues[field.name] ?? ''} onValueChange={(value) => handleInputChange(field.name, value)}>
             <SelectTrigger>
               <SelectValue placeholder={field.placeholder || '選択してください'} />
             </SelectTrigger>
@@ -186,7 +188,7 @@ export default function FormEmbedComponent({ formId, uid, className }: FormEmbed
         );
       case 'radio':
         return (
-          <RadioGroup value={formValues[field.id] ?? ''} onValueChange={(value) => handleInputChange(field.id, value)}>
+          <RadioGroup value={formValues[field.name] ?? ''} onValueChange={(value) => handleInputChange(field.name, value)}>
             {field.options?.map((option, index) => (
               <div key={index} className="flex items-center space-x-2">
                 <RadioGroupItem
@@ -203,7 +205,7 @@ export default function FormEmbedComponent({ formId, uid, className }: FormEmbed
         return (
           <div className="space-y-2">
             {field.options?.map((option, index) => {
-              const checked = Array.isArray(formValues[field.id]) && formValues[field.id].includes(option);
+              const checked = Array.isArray(formValues[field.name]) && formValues[field.name].includes(option);
               return (
                 <div key={index} className="flex items-center space-x-2">
                   <Checkbox
@@ -211,11 +213,11 @@ export default function FormEmbedComponent({ formId, uid, className }: FormEmbed
                     checked={checked}
                     className="border-[var(--form-accent)] data-[state=checked]:bg-[var(--form-accent)] data-[state=checked]:text-white"
                     onCheckedChange={(isChecked) => {
-                      const prev = Array.isArray(formValues[field.id]) ? [...formValues[field.id]] : [];
+                      const prev = Array.isArray(formValues[field.name]) ? [...formValues[field.name]] : [];
                       if (isChecked === true) {
-                        handleInputChange(field.id, Array.from(new Set([...prev, option])));
+                        handleInputChange(field.name, Array.from(new Set([...prev, option])));
                       } else {
-                        handleInputChange(field.id, prev.filter((v: string) => v !== option));
+                        handleInputChange(field.name, prev.filter((v: string) => v !== option));
                       }
                     }}
                   />
