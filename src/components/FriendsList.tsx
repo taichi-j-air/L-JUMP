@@ -466,12 +466,22 @@ export function FriendsList({ user }: FriendsListProps) {
 
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2">
-                        <span className="font-medium truncate">
+                        <button
+                          className="font-medium truncate mr-2 hover:bg-primary/20 rounded"
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            navigator.clipboard.writeText(friend.display_name || '')
+                            toast({ title: `名前 ${friend.display_name || ''} をコピーしました` })
+                          }}
+                        >
                           {friend.display_name || "名前未設定"}
+                        </button>
+                        <span className="flex items-center gap-0">
+                          <span className="text-xs text-gray-500">友達追加日時：</span>
+                          <Badge variant="secondary" className="text-xs">
+                            {format(new Date(friend.added_at), "yyyy/MM/dd HH:mm")}
+                          </Badge>
                         </span>
-                        <Badge variant="secondary" className="text-xs">
-                          {format(new Date(friend.added_at), "yyyy/MM/dd HH:mm")}
-                        </Badge>
                         {blockedSet.has(friend.line_user_id) && (
                           <Badge variant="destructive" className="text-xs">ブロック中</Badge>
                         )}
