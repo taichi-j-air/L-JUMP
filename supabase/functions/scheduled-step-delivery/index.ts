@@ -508,10 +508,17 @@ async function deliverStepMessages(supabase: any, stepTracking: any) {
       }
 
       // Process message to add UID parameters to form links
-      if (message.message_type === 'text' && friendData?.short_uid) {
-        preparedMessage.content = addUidToFormLinks(message.content, friendData.short_uid);
-        console.log(`UID変換実行: ${message.content} -> ${preparedMessage.content}`);
-      }
+      const processedMessage = { ...message };
+        if (message.message_type === 'text') { // Check for text message type once
+          if (tracking.line_friends.display_name) {
+            // [LINE_NAME]変数をfriend.display_nameで置換
+            processedMessage.content = processedMessage.content.replace(/\[LINE_NAME\]/g, tracking.line_friends.display_name || "");
+          }
+          if (friendData?.short_uid) {
+            processedMessage.content = addUidToFormLinks(processedMessage.content, friendData.short_uid);
+            console.log(`UID変換実行: ${message.content} -> ${processedMessage.content}`);
+          }
+        }
 
       // Cancellation check mid-flight
       const { data: curStatus } = await supabase

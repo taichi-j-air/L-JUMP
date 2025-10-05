@@ -126,9 +126,15 @@ async function processReadySteps(supabase: any) {
       for (const message of messages || []) {
         // Process message to add UID parameters to form links
         const processedMessage = { ...message };
-        if (message.message_type === 'text' && friendData?.short_uid) {
-          processedMessage.content = addUidToFormLinks(message.content, friendData.short_uid);
-          console.log(`UID変換実行: ${message.content} -> ${processedMessage.content}`);
+        if (message.message_type === 'text') { // Check for text message type once
+          if (tracking.line_friends.display_name) {
+            // [LINE_NAME]変数をfriend.display_nameで置換
+            processedMessage.content = processedMessage.content.replace(/\[LINE_NAME\]/g, tracking.line_friends.display_name || "");
+          }
+          if (friendData?.short_uid) {
+            processedMessage.content = addUidToFormLinks(processedMessage.content, friendData.short_uid);
+            console.log(`UID変換実行: ${message.content} -> ${processedMessage.content}`);
+          }
         }
         
         await sendLineMessage(

@@ -106,6 +106,8 @@ export function ChatWindow({ user, friend, onClose }: ChatWindowProps) {
     
     // [UID]変数をshort_uidで置換
     message = message.replace(/\[UID\]/g, friendShortUid);
+    // [LINE_NAME]変数をfriend.display_nameで置換
+    message = message.replace(/\[LINE_NAME\]/g, friend.display_name || "");
     
     // レガシー対応：既存のformリンクのパターンも検出してuidパラメーターを付与
     const formLinkPattern = /(https?:\/\/[^\/]+\/form\/[a-f0-9\-]+(?:\?[^?\s]*)?)/gi

@@ -11,11 +11,21 @@ const cors = {
 // ────────────────────── 汎用ユーティリティ
 const clone = <T>(v: T): T => (v == null ? v : JSON.parse(JSON.stringify(v)));
 
-const replaceUid = (n: any, uid: string): any => {
+const replaceTokens = (n: any, uid: string | null, lineName: string | null): any => {
   if (n == null) return n;
-  if (Array.isArray(n)) return n.map((x) => replaceUid(x, uid));
-  if (typeof n === "object") return Object.fromEntries(Object.entries(n).map(([k, v]) => [k, replaceUid(v, uid)]));
-  return typeof n === "string" ? n.replace(/\[UID]/g, uid) : n;
+  if (Array.isArray(n)) return n.map((x) => replaceTokens(x, uid, lineName));
+  if (typeof n === "object") return Object.fromEntries(Object.entries(n).map(([k, v]) => [k, replaceTokens(v, uid, lineName)]));
+  if (typeof n === "string") {
+    let result = n;
+    if (uid) {
+      result = result.replace(/\[UID\]/g, uid);
+    }
+    if (lineName) {
+      result = result.replace(/\[LINE_NAME\]/g, lineName);
+    }
+    return result;
+  }
+  return n;
 };
 
 // ────────────────────── LINE Flex 用サニタイズ
@@ -160,7 +170,7 @@ serve(async (req) => {
     console.log("Fetching friends list for user:", userId);
     const { data: friends, error: fErr } = await supabase
       .from("line_friends")
-      .select("line_user_id, short_uid")
+      .select("line_user_id, short_uid, display_name")
       .eq("user_id", userId);
       
     if (fErr) {
@@ -189,8 +199,8 @@ serve(async (req) => {
       console.log(`Processing friend: ${line_user_id}, short_uid: ${short_uid}`);
       
       // UIDを置換してFlexメッセージを準備
-      const withUid = short_uid ? replaceUid(clone(flex), short_uid) : flex;
-      const normalized = normalize(withUid);
+      const withTokens = (short_uid || display_name) ? replaceTokens(clone(flex), short_uid, display_name) : flex;
+      const normalized = normalize(withTokens);
 
       if (!normalized) {
         console.error(`Flex message normalization failed for ${line_user_id}`);
