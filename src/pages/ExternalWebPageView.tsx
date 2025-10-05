@@ -49,9 +49,11 @@ type KnownErrors =
 
 export default function ExternalWebPageView() {
   const params = useParams();
+  const [searchParams] = useSearchParams();
 
   const shareCode = params.shareCode;
   const pageId = params.pageId;
+  const uid = searchParams.get("uid") || undefined;
 
   const [data, setData] = useState<PagePayload | null>(null);
   const [loading, setLoading] = useState(true);
@@ -152,11 +154,11 @@ export default function ExternalWebPageView() {
         return;
       }
 
-      console.log(`🔍 Calling cms-page-view with shareCode: ${shareCode}`);
+      console.log(`🔍 Calling cms-page-view with shareCode: ${shareCode}, uid: ${uid}`);
       
       const { data: res, error: fnErr } = await supabase.functions.invoke(
         "cms-page-view",
-        { body: { shareCode, passcode: withPasscode, pageType: 'public' } }
+        { body: { shareCode, uid, passcode: withPasscode, pageType: 'public' } }
       );
 
       if (fnErr) {
@@ -189,7 +191,7 @@ export default function ExternalWebPageView() {
   useEffect(() => {
     fetchData();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [shareCode, pageId]);
+  }, [shareCode, pageId, uid]);
 
   if (loading) return <div className="container mx-auto p-6">読み込み中…</div>;
 
@@ -305,6 +307,7 @@ export default function ExternalWebPageView() {
             bgColor={data.timer_bg_color || "#0cb386"}
             textColor={data.timer_text_color || "#ffffff"}
             shareCode={shareCode}
+            uid={uid}
             dayLabel={data.timer_day_label || "日"}
             hourLabel={data.timer_hour_label || "時間"}
             minuteLabel={data.timer_minute_label || "分"}
