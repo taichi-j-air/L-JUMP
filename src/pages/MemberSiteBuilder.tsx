@@ -1459,10 +1459,14 @@ const MemberSiteBuilder = () => {
 
                             <div className="space-y-2">
                               <Label>詳細コンテンツ（ブロックエディタ）</Label>
-                              <EnhancedBlockEditor
-                                blocks={Array.isArray(categoryBlocks) ? categoryBlocks : []}
-                                onChange={(next: any[]) => setCategoryBlocks(Array.isArray(next) ? next : [])}
-                              />
+                              <div className="p-2 border rounded-md min-h-[300px]">
+                                <EnhancedBlockEditor
+                                  blocks={Array.isArray(categoryBlocks) ? categoryBlocks : []}
+                                  onChange={(next: any[]) => setCategoryBlocks(Array.isArray(next) ? next : [])}
+                                  hideBackgroundBlockButton={true}
+                                  hideTemplateButton={true}
+                                />
+                              </div>
                               <div className="flex gap-2">
                                 <Button type="button" variant="secondary" onClick={() => setCategoryBlocks([])} title="ブロックをクリア">
                                   クリア
