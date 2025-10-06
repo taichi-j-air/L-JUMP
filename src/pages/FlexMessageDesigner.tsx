@@ -887,6 +887,68 @@ const { data: newData, error } = await supabase.from("flex_messages").insert({ u
 
       const toItems = (b: any, idxBase = 0): FlexElement[] => {
         const items: FlexElement[] = [];
+
+        const processNodes = (nodes: any[]) => {
+          (nodes || []).forEach((node: any, i: number) => {
+            const paddingMap = (px?: string): PaddingToken =>
+              px === "4px" ? "xs" : px === "8px" ? "sm" : px === "12px" ? "md" : px === "16px" ? "lg" : px === "20px" ? "xl" : "none";
+
+            const isWrapperBox = node.type === "box" && Array.isArray(node.contents) && node.contents.length === 1;
+            const innerNode = isWrapperBox ? node.contents[0] : node;
+
+            if (!["text", "image", "button"].includes(innerNode.type)) return;
+
+            let properties: ElementProps = { ...innerNode };
+
+            // Handle properties from the wrapper box
+            if (isWrapperBox) {
+              properties.padding = paddingMap(node.paddingAll);
+              properties.margin = node.margin || innerNode.margin; 
+              if (innerNode.type === 'text' && node.backgroundColor) {
+                properties.backgroundColor = node.backgroundColor;
+              }
+            }
+            
+            const finalProps: ElementProps = {
+              margin: properties.margin || "none",
+              padding: properties.padding || "none",
+              backgroundColor: properties.backgroundColor,
+            };
+
+            if (innerNode.type === 'text') {
+              Object.assign(finalProps, {
+                text: innerNode.text,
+                size: innerNode.size || "md",
+                weight: innerNode.weight || "normal",
+                color: innerNode.color || "#000000",
+                align: innerNode.align || "start",
+                wrap: true,
+              });
+            } else if (innerNode.type === 'image') {
+              Object.assign(finalProps, {
+                url: innerNode.url,
+                imgSize: innerNode.size || "full",
+                aspectRatio: innerNode.aspectRatio || "20:13",
+                aspectMode: innerNode.aspectMode || "cover",
+                action: innerNode.action,
+              });
+            } else if (innerNode.type === 'button') {
+              Object.assign(finalProps, {
+                style: innerNode.style || "primary",
+                buttonColor: innerNode.color,
+                height: innerNode.height || "md",
+                action: innerNode.action,
+              });
+            }
+
+            items.push({
+              id: `el-${idxBase}-${i}`,
+              type: innerNode.type,
+              properties: finalProps,
+            });
+          });
+        }
+
         if (b.hero?.url) {
           items.push({
             id: `el-h-${idxBase}`,
@@ -903,64 +965,10 @@ const { data: newData, error } = await supabase.from("flex_messages").insert({ u
             },
           });
         }
-        (b.body?.contents || []).forEach((node: any, i: number) => {
-          const paddingMap = (px?: string): PaddingToken =>
-            px === "4px" ? "xs" : px === "8px" ? "sm" : px === "12px" ? "md" : px === "16px" ? "lg" : px === "20px" ? "xl" : "none";
-
-          const pushFromNode = (inner: any, pad: PaddingToken) => {
-            if (inner.type === "text") {
-              items.push({
-                id: `el-${idxBase}-${i}`,
-                type: "text",
-                properties: {
-                  text: inner.text,
-                  size: inner.size || "md",
-                  weight: inner.weight || "normal",
-                  color: inner.color || "#000000",
-                  align: inner.align || "start",
-                  margin: inner.margin || "none",
-                  padding: pad,
-                  backgroundColor: inner.backgroundColor,
-                  wrap: true,
-                },
-              });
-            } else if (inner.type === "image") {
-              items.push({
-                id: `el-${idxBase}-${i}`,
-                type: "image",
-                properties: {
-                  url: inner.url,
-                  imgSize: inner.size || "full",
-                  aspectRatio: inner.aspectRatio || "20:13",
-                  aspectMode: inner.aspectMode || "cover",
-                  action: inner.action,
-                  margin: inner.margin || "none",
-                  padding: pad,
-                },
-              });
-            } else if (inner.type === "button") {
-              items.push({
-                id: `el-${idxBase}-${i}`,
-                type: "button",
-                properties: {
-                  style: inner.style || "primary",
-                  buttonColor: inner.color,
-                  height: inner.height || "md",
-                  action: inner.action,
-                  margin: inner.margin || "none",
-                  padding: pad,
-                },
-              });
-            }
-          };
-
-          if (node.type === "box" && Array.isArray(node.contents) && node.contents.length === 1) {
-            const inner = node.contents[0];
-            pushFromNode(inner, paddingMap(node.paddingAll));
-          } else {
-            pushFromNode(node, "none");
-          }
-        });
+        
+        processNodes(b.body?.contents);
+        processNodes(b.footer?.contents);
+        
         return items;
       };
 
