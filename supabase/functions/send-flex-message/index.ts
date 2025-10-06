@@ -147,71 +147,104 @@ serve(async (req) => {
 
     console.log("Supabase client created with service role");
 
-    // LINE 資格情報の取得 - 直接テーブルクエリで試行
+    // LINE 資格情報の取得 - フォールバック付き
     console.log("Fetching LINE credentials for user:", userId);
-    const { data: cred, error: credErr } = await supabase
-      .from("secure_line_credentials")
-      .select("credential_type, encrypted_value")
-      .eq("user_id", userId)
-      .in("credential_type", ["channel_access_token"]);
     
-    if (credErr) {
-      console.error("LINE credentials query error:", credErr);
-      return new Response(JSON.stringify({ error: "LINE資格情報取得エラー", details: credErr.message }), {
-        headers: { ...cors, "Content-Type": "application/json" },
-        status: 400,
-      });
-    }
+    let channelAccessToken: string | null = null;
+    let credentialSource = '';
 
-    console.log("Raw credentials data:", cred);
-
-    const accessTokenRecord = cred?.find(c => c.credential_type === "channel_access_token");
-    const encryptedToken = accessTokenRecord?.encrypted_value;
-
-    if (!encryptedToken) {
-      console.error("No channel access token found in credentials:", cred);
-      return new Response(JSON.stringify({ error: "LINE Channel Access Tokenが設定されていません" }), {
-        headers: { ...cors, "Content-Type": "application/json" },
-        status: 400,
-      });
-    }
-
-    let channelAccessToken: string;
+    // 方法1: RPC経由で取得を試行
     try {
-      // --- 復号化処理 ---
-      if (!encryptedToken.startsWith("enc:")) {
-        throw new Error("Invalid encrypted value format");
+      const { data: rpcCred, error: rpcErr } = await supabase
+        .rpc('get_line_credentials_for_user', { p_user_id: userId })
+        .single();
+      
+      if (!rpcErr && rpcCred?.channel_access_token) {
+        channelAccessToken = rpcCred.channel_access_token;
+        credentialSource = 'RPC function';
+        console.log("✓ Credentials obtained via RPC");
       }
-      const encryptedData = atob(encryptedToken.substring(4));
-      const combinedArray = new Uint8Array(encryptedData.length);
-      for (let i = 0; i < encryptedData.length; i++) {
-        combinedArray[i] = encryptedData.charCodeAt(i);
+    } catch (rpcError) {
+      console.warn("RPC credential fetch failed:", rpcError);
+    }
+
+    // 方法2: secure_line_credentialsから直接取得（暗号化・平文両対応）
+    if (!channelAccessToken) {
+      const { data: cred, error: credErr } = await supabase
+        .from("secure_line_credentials")
+        .select("encrypted_value")
+        .eq("user_id", userId)
+        .eq("credential_type", "channel_access_token")
+        .single();
+      
+      if (!credErr && cred?.encrypted_value) {
+        const encryptedToken = cred.encrypted_value;
+        
+        if (encryptedToken.startsWith("enc:")) {
+          // 暗号化されている場合は復号
+          try {
+            const encryptedData = atob(encryptedToken.substring(4));
+            const combinedArray = new Uint8Array(encryptedData.length);
+            for (let i = 0; i < encryptedData.length; i++) {
+              combinedArray[i] = encryptedData.charCodeAt(i);
+            }
+            const iv = combinedArray.slice(0, 12);
+            const encrypted = combinedArray.slice(12);
+            const userKey = await crypto.subtle.importKey(
+              "raw",
+              new TextEncoder().encode(userId.substring(0, 32).padEnd(32, "0")),
+              { name: "AES-GCM" },
+              false,
+              ["decrypt"]
+            );
+            const decrypted = await crypto.subtle.decrypt(
+              { name: "AES-GCM", iv },
+              userKey,
+              encrypted
+            );
+            channelAccessToken = new TextDecoder().decode(decrypted);
+            credentialSource = 'secure_line_credentials (encrypted)';
+            console.log("✓ Credentials decrypted from secure_line_credentials");
+          } catch (decryptError) {
+            console.error("Decryption failed:", decryptError);
+          }
+        } else {
+          // 平文の場合はそのまま使用
+          channelAccessToken = encryptedToken;
+          credentialSource = 'secure_line_credentials (plaintext)';
+          console.log("✓ Credentials obtained from secure_line_credentials (plaintext)");
+        }
       }
-      const iv = combinedArray.slice(0, 12);
-      const encrypted = combinedArray.slice(12);
-      const userKey = await crypto.subtle.importKey(
-        "raw",
-        new TextEncoder().encode(userId.substring(0, 32).padEnd(32, "0")),
-        { name: "AES-GCM" },
-        false,
-        ["decrypt"]
-      );
-      const decrypted = await crypto.subtle.decrypt(
-        { name: "AES-GCM", iv },
-        userKey,
-        encrypted
-      );
-      channelAccessToken = new TextDecoder().decode(decrypted);
-      // --- 復号化処理ここまで ---
-    } catch (e) {
-      console.error("Failed to decrypt access token:", e);
-      return new Response(JSON.stringify({ error: "アクセストークンの復号に失敗しました", details: e.message }), {
+    }
+
+    // 方法3: profilesテーブルから取得（レガシー対応）
+    if (!channelAccessToken) {
+      const { data: profile, error: profileErr } = await supabase
+        .from("profiles")
+        .select("line_channel_access_token")
+        .eq("user_id", userId)
+        .single();
+      
+      if (!profileErr && profile?.line_channel_access_token) {
+        channelAccessToken = profile.line_channel_access_token;
+        credentialSource = 'profiles table (legacy)';
+        console.log("✓ Credentials obtained from profiles (legacy)");
+      }
+    }
+
+    // トークンが取得できなかった場合はエラー
+    if (!channelAccessToken) {
+      console.error("Failed to obtain LINE access token from any source");
+      return new Response(JSON.stringify({ 
+        error: "LINE Channel Access Tokenが設定されていません",
+        details: "RPC、secure_line_credentials、profilesのいずれからもトークンを取得できませんでした"
+      }), {
         headers: { ...cors, "Content-Type": "application/json" },
-        status: 500,
+        status: 400,
       });
     }
     
-    console.log("LINE credentials fetched and decrypted successfully");
+    console.log(`LINE credentials ready from: ${credentialSource}`);
 
     // 友だち一覧の取得（Service Roleで直接クエリ）
     console.log("Fetching friends list for user:", userId);

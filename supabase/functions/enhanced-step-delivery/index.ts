@@ -6,6 +6,83 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
+// Utility functions
+const clone = <T>(v: T): T => (v == null ? v : JSON.parse(JSON.stringify(v)));
+
+const replaceTokens = (
+  n: any,
+  uid: string | null,
+  lineName: string | null,
+  lineNameSan: string | null,
+): any => {
+  if (n == null) return n;
+  if (Array.isArray(n)) return n.map((x) => replaceTokens(x, uid, lineName, lineNameSan));
+  if (typeof n === "object") {
+    return Object.fromEntries(
+      Object.entries(n).map(([k, v]) => [k, replaceTokens(v, uid, lineName, lineNameSan)]),
+    );
+  }
+  if (typeof n === "string") {
+    let result = n;
+    if (uid) {
+      result = result.replace(/\[UID\]/g, uid);
+    }
+    if (lineNameSan) {
+      result = result.replace(/\[LINE_NAME_SAN\]/g, lineNameSan);
+    }
+    if (lineName) {
+      result = result.replace(/\[LINE_NAME\]/g, lineName);
+    }
+    return result;
+  }
+  return n;
+};
+
+function sanitize(node: any): any {
+  if (node == null) return node;
+  if (Array.isArray(node)) return node.map(sanitize);
+
+  if (typeof node === "object") {
+    const invalid: Record<string, Set<string>> = {
+      text: new Set(["backgroundColor", "padding", "borderRadius", "borderWidth", "borderColor", "className"]),
+      image: new Set(["className"]),
+      box: new Set(["className"]),
+      button: new Set(["className"]),
+    };
+
+    const t = node.type as string | undefined;
+    const out: any = {};
+    for (const [k, v] of Object.entries(node)) {
+      if (t && invalid[t]?.has(k)) continue;
+      out[k] = sanitize(v);
+    }
+    return out;
+  }
+  return node;
+}
+
+function normalize(input: any) {
+  if (!input) return null;
+
+  let normalized: any = null;
+
+  if (input.type === "flex" && input.contents) {
+    normalized = { type: "flex", altText: input.altText?.trim() || "お知らせ", contents: sanitize(input.contents) };
+  } else if (["bubble", "carousel"].includes(input.type)) {
+    normalized = { type: "flex", altText: "お知らせ", contents: sanitize(input) };
+  } else if (input.contents && ["bubble", "carousel"].includes(input.contents.type)) {
+    normalized = { type: "flex", altText: input.altText?.trim() || "お知らせ", contents: sanitize(input.contents) };
+  }
+
+  if (!normalized) return null;
+
+  if (input.styles?.body?.backgroundColor && normalized.contents?.type === 'bubble' && normalized.contents.body) {
+    normalized.contents.body.backgroundColor = input.styles.body.backgroundColor;
+  }
+
+  return normalized;
+}
+
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
@@ -105,16 +182,79 @@ async function processReadySteps(supabase: any) {
         .eq('step_id', tracking.step_id)
         .order('message_order');
 
-      // Get secure LINE credentials
-      const { data: credentials, error: credError } = await supabase
-        .rpc('get_line_credentials_for_user', { p_user_id: tracking.step_scenarios.user_id });
+      // Get secure LINE credentials with fallback
+      let accessToken: string | null = null;
+      const scenarioUserId = tracking.step_scenarios.user_id;
       
-      if (credError || !credentials?.channel_access_token) {
-        console.warn(`No access token for scenario ${tracking.step_scenarios.name}:`, credError);
+      // 方法1: RPC経由
+      try {
+        const { data: credentials, error: credError } = await supabase
+          .rpc('get_line_credentials_for_user', { p_user_id: scenarioUserId });
+        
+        if (!credError && credentials?.channel_access_token) {
+          accessToken = credentials.channel_access_token;
+          console.log(`✓ Token via RPC for scenario ${tracking.step_scenarios.name}`);
+        }
+      } catch (rpcError) {
+        console.warn(`RPC failed for scenario ${tracking.step_scenarios.name}:`, rpcError);
+      }
+
+      // 方法2: secure_line_credentials（暗号化・平文両対応）
+      if (!accessToken) {
+        const { data: cred, error: credErr } = await supabase
+          .from("secure_line_credentials")
+          .select("encrypted_value")
+          .eq("user_id", scenarioUserId)
+          .eq("credential_type", "channel_access_token")
+          .single();
+        
+        if (!credErr && cred?.encrypted_value) {
+          const token = cred.encrypted_value;
+          if (token.startsWith("enc:")) {
+            try {
+              const encData = atob(token.substring(4));
+              const arr = new Uint8Array(encData.length);
+              for (let i = 0; i < encData.length; i++) arr[i] = encData.charCodeAt(i);
+              const iv = arr.slice(0, 12);
+              const enc = arr.slice(12);
+              const key = await crypto.subtle.importKey(
+                "raw",
+                new TextEncoder().encode(scenarioUserId.substring(0, 32).padEnd(32, "0")),
+                { name: "AES-GCM" },
+                false,
+                ["decrypt"]
+              );
+              const dec = await crypto.subtle.decrypt({ name: "AES-GCM", iv }, key, enc);
+              accessToken = new TextDecoder().decode(dec);
+              console.log(`✓ Token decrypted from secure_line_credentials`);
+            } catch (e) {
+              console.error(`Decryption failed:`, e);
+            }
+          } else {
+            accessToken = token;
+            console.log(`✓ Token from secure_line_credentials (plaintext)`);
+          }
+        }
+      }
+
+      // 方法3: profiles（レガシー）
+      if (!accessToken) {
+        const { data: prof } = await supabase
+          .from("profiles")
+          .select("line_channel_access_token")
+          .eq("user_id", scenarioUserId)
+          .single();
+        
+        if (prof?.line_channel_access_token) {
+          accessToken = prof.line_channel_access_token;
+          console.log(`✓ Token from profiles (legacy)`);
+        }
+      }
+
+      if (!accessToken) {
+        console.warn(`No access token for scenario ${tracking.step_scenarios.name}`);
         continue;
       }
-      
-      const accessToken = credentials.channel_access_token;
 
       // Get friend's short_uid for UID parameter
       const { data: friendData } = await supabase
@@ -512,9 +652,23 @@ async function sendLineMessage(userId: string, message: any, accessToken: string
           .eq('id', message.flex_message_id)
           .single();
         if (flexData?.content) {
-          const normalized = normalize(flexData.content);
+          // Apply token replacement for Flex messages
+          const { data: friendInfo } = await supabase
+            .from('line_friends')
+            .select('short_uid, display_name')
+            .eq('line_user_id', userId)
+            .single();
+          
+          const shortUid = friendInfo?.short_uid || null;
+          const rawDisplayName = friendInfo?.display_name?.trim() || '';
+          const fallbackName = rawDisplayName.length > 0 ? rawDisplayName : 'あなた';
+          const fallbackNameSan = fallbackName === 'あなた' ? 'あなた' : `${fallbackName}さん`;
+          
+          const withTokens = replaceTokens(clone(flexData.content), shortUid, fallbackName, fallbackNameSan);
+          const normalized = normalize(withTokens);
           if (normalized) {
             lineMessage = normalized;
+            console.log(`✓ Flex message normalized with tokens for ${userId}`);
           }
         }
       }
