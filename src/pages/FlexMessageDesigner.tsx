@@ -61,7 +61,7 @@ type PaddingToken = "none" | "xs" | "sm" | "md" | "lg" | "xl";
 type MarginToken = "none" | "xs" | "sm" | "md" | "lg" | "xl" | "xxl";
 type SpacingToken = "none" | "xs" | "sm" | "md" | "lg";
 type ContainerType = "bubble" | "carousel";
-type BubbleSize = "micro" | "kilo" | "giga";
+type BubbleSize = "micro" | "deca" | "kilo" | "mega" | "giga";
 
 interface FlexMessageRow {
   id: string;
@@ -185,9 +185,11 @@ const getButtonHeightPx = (h: ButtonHeight): string => {
 
 const getBubbleWidthPx = (size: BubbleSize): string => {
   switch (size) {
-    case "micro": return "240px"; // 縮小
-    case "kilo":  return "300px"; // 通常
-    case "giga":  return "360px"; // 最大
+    case "micro": return "240px";
+    case "deca": return "270px";
+    case "kilo":  return "300px";
+    case "mega":  return "330px";
+    case "giga":  return "360px";
     default: return "300px";
   }
 };
@@ -1131,7 +1133,7 @@ const { data: newData, error } = await supabase.from("flex_messages").insert({ u
                     <Label className="text-xs">バブル幅</Label>
                     <Select value={current.bubbleSize} onValueChange={(v: BubbleSize) => setState((prev) => ({ ...prev, bubbles: prev.bubbles.map((b, i) => (i === prev.currentIndex ? { ...b, bubbleSize: v } : b)) }))}>
                       <SelectTrigger className="h-8 text-xs" />
-                      <SelectContent><SelectItem value="micro">縮小</SelectItem><SelectItem value="kilo">通常</SelectItem><SelectItem value="giga">最大</SelectItem></SelectContent>
+                      <SelectContent><SelectItem value="micro">縮小</SelectItem><SelectItem value="deca">中間</SelectItem><SelectItem value="kilo">通常</SelectItem><SelectItem value="mega">拡大</SelectItem><SelectItem value="giga">最大</SelectItem></SelectContent>
                     </Select>
                     <p className="text-[11px] text-muted-foreground mt-1">プレビュー幅に反映</p>
                   </div>
