@@ -102,30 +102,43 @@ export function ChatWindow({ user, friend, onClose }: ChatWindowProps) {
 
   // UIDパラメーター付与関数
   const addUidToFormLinks = (message: string, friendShortUid: string | null): string => {
-    if (!friendShortUid) return message
-    
-    // [UID]変数をshort_uidで置換
-    message = message.replace(/\[UID\]/g, friendShortUid);
-    // [LINE_NAME]変数をfriend.display_nameで置換
-    message = message.replace(/\[LINE_NAME\]/g, friend.display_name || "");
-    
-    // レガシー対応：既存のformリンクのパターンも検出してuidパラメーターを付与
-    const formLinkPattern = /(https?:\/\/[^\/]+\/form\/[a-f0-9\-]+(?:\?[^?\s]*)?)/gi
-    
-    return message.replace(formLinkPattern, (match) => {
+    let updated = message;
+
+    const effectiveUid = friendShortUid?.trim() || null;
+    if (effectiveUid) {
+      updated = updated.replace(/\[UID\]/g, effectiveUid);
+    } else {
+      updated = updated.replace(/\[UID\]/g, "");
+    }
+
+    const rawDisplayName = typeof friend.display_name === "string" ? friend.display_name.trim() : "";
+    const fallbackName = rawDisplayName.length > 0 ? rawDisplayName : "あなた";
+    const fallbackNameSan = fallbackName === "あなた" ? "あなた" : `${fallbackName}さん`;
+
+    updated = updated
+      .replace(/\[LINE_NAME_SAN\]/g, fallbackNameSan)
+      .replace(/\[LINE_NAME\]/g, fallbackName);
+
+    const formLinkPattern = /(https?:\/\/[^\/]+\/form\/[a-f0-9\-]+(?:\?[^?\s]*)?)/gi;
+
+    if (!effectiveUid) {
+      return updated;
+    }
+
+    return updated.replace(formLinkPattern, (match) => {
       try {
-        const url = new URL(match)
+        const url = new URL(match);
         // Check if uid parameter already exists to prevent duplication
-        if (!url.searchParams.has('uid')) {
-          url.searchParams.set('uid', friendShortUid)
+        if (!url.searchParams.has("uid")) {
+          url.searchParams.set("uid", effectiveUid);
         }
-        return url.toString()
+        return url.toString();
       } catch (error) {
-        console.error('Error processing form URL:', error)
-        return match // Return original URL if parsing fails
+        console.error("Error processing form URL:", error);
+        return match; // Return original URL if parsing fails
       }
-    })
-  }
+    });
+  };
 
   const sendMessage = async () => {
     if (!newMessage.trim() || sending) return

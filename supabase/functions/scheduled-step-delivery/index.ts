@@ -510,13 +510,19 @@ async function deliverStepMessages(supabase: any, stepTracking: any) {
       // Process message to add UID parameters to form links
       const processedMessage = { ...message };
         if (message.message_type === 'text') { // Check for text message type once
-          if (tracking.line_friends.display_name) {
-            // [LINE_NAME]変数をfriend.display_nameで置換
-            processedMessage.content = processedMessage.content.replace(/\[LINE_NAME\]/g, tracking.line_friends.display_name || "");
-          }
-          if (friendData?.short_uid) {
-            processedMessage.content = addUidToFormLinks(processedMessage.content, friendData.short_uid);
-            console.log(`UID変換実行: ${message.content} -> ${processedMessage.content}`);
+          if (typeof processedMessage.content === 'string') {
+            const rawDisplayName = tracking.line_friends.display_name?.trim();
+            const fallbackName = rawDisplayName && rawDisplayName.length > 0 ? rawDisplayName : "あなた";
+
+            // [LINE_NAME] / [LINE_NAME_SAN] を friend.display_name で置換（未設定時は "あなた"）
+            processedMessage.content = processedMessage.content
+              .replace(/\[LINE_NAME_SAN\]/g, fallbackName === "あなた" ? "あなた" : `${fallbackName}さん`)
+              .replace(/\[LINE_NAME\]/g, fallbackName);
+
+            if (friendData?.short_uid) {
+              processedMessage.content = addUidToFormLinks(processedMessage.content, friendData.short_uid);
+              console.log(`UID変換実行: ${message.content} -> ${processedMessage.content}`);
+            }
           }
         }
 

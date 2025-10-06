@@ -11,14 +11,26 @@ const cors = {
 // ────────────────────── 汎用ユーティリティ
 const clone = <T>(v: T): T => (v == null ? v : JSON.parse(JSON.stringify(v)));
 
-const replaceTokens = (n: any, uid: string | null, lineName: string | null): any => {
+const replaceTokens = (
+  n: any,
+  uid: string | null,
+  lineName: string | null,
+  lineNameSan: string | null,
+): any => {
   if (n == null) return n;
-  if (Array.isArray(n)) return n.map((x) => replaceTokens(x, uid, lineName));
-  if (typeof n === "object") return Object.fromEntries(Object.entries(n).map(([k, v]) => [k, replaceTokens(v, uid, lineName)]));
+  if (Array.isArray(n)) return n.map((x) => replaceTokens(x, uid, lineName, lineNameSan));
+  if (typeof n === "object") {
+    return Object.fromEntries(
+      Object.entries(n).map(([k, v]) => [k, replaceTokens(v, uid, lineName, lineNameSan)]),
+    );
+  }
   if (typeof n === "string") {
     let result = n;
     if (uid) {
       result = result.replace(/\[UID\]/g, uid);
+    }
+    if (lineNameSan) {
+      result = result.replace(/\[LINE_NAME_SAN\]/g, lineNameSan);
     }
     if (lineName) {
       result = result.replace(/\[LINE_NAME\]/g, lineName);
@@ -195,11 +207,15 @@ serve(async (req) => {
     console.log("Starting flex message delivery to", friends.length, "friends");
     const results: { lineUserId: string; success: boolean; error?: any }[] = [];
     
-    for (const { line_user_id, short_uid } of friends) {
+    for (const { line_user_id, short_uid, display_name } of friends) {
       console.log(`Processing friend: ${line_user_id}, short_uid: ${short_uid}`);
       
+      const rawDisplayName = typeof display_name === "string" ? display_name.trim() : "";
+      const fallbackName = rawDisplayName.length > 0 ? rawDisplayName : "あなた";
+      const fallbackNameSan = fallbackName === "あなた" ? "あなた" : `${fallbackName}さん`;
+      
       // UIDを置換してFlexメッセージを準備
-      const withTokens = (short_uid || display_name) ? replaceTokens(clone(flex), short_uid, display_name) : flex;
+      const withTokens = replaceTokens(clone(flex), short_uid ?? null, fallbackName, fallbackNameSan);
       const normalized = normalize(withTokens);
 
       if (!normalized) {
