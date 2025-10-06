@@ -242,30 +242,37 @@ serve(async (req) => {
     console.log("Starting flex message delivery to", friends.length, "friends");
     const results: { lineUserId: string; success: boolean; error?: any }[] = [];
     
-    for (const { line_user_id, short_uid, display_name } of friends) {
-      console.log(`Processing friend: ${line_user_id}, short_uid: ${short_uid}`);
-      
+    for (const friend of friends) {
+      const lineUserId = friend.line_user_id;
+      const shortUid = friend.short_uid ?? null;
+      console.log(`Processing friend: ${lineUserId}, short_uid: ${shortUid}`);
+
+      const rawDisplayName = typeof friend.display_name === "string" ? friend.display_name.trim() : "";
+      const fallbackName = rawDisplayName.length > 0 ? rawDisplayName : "あなた";
+      const fallbackNameSan = fallbackName === "あなた" ? "あなた" : `${fallbackName}さん`;
+
       let normalized: any;
       try {
-        const rawDisplayName = typeof display_name === "string" ? display_name.trim() : "";
-        const fallbackName = rawDisplayName.length > 0 ? rawDisplayName : "あなた";
-        const fallbackNameSan = fallbackName === "あなた" ? "あなた" : `${fallbackName}さん`;
-        
-        const withTokens = replaceTokens(clone(flex), short_uid ?? null, fallbackName, fallbackNameSan);
+        const withTokens = replaceTokens(clone(flex), {
+          uid: shortUid,
+          lineName: fallbackName,
+          lineNameSan: fallbackNameSan,
+        });
         normalized = normalize(withTokens);
-        
+
         if (!normalized) {
-          console.error(`Flex message normalization failed for ${line_user_id}`);
-          results.push({ lineUserId: line_user_id, success: false, error: "Flex形式不正" });
+          console.error(`Flex message normalization failed for ${lineUserId}`);
+          results.push({ lineUserId, success: false, error: "Flex形式不正" });
           continue;
         }
       } catch (tokenError) {
-        console.error(`Token replacement failed for ${line_user_id}:`, tokenError);
-        results.push({ lineUserId: line_user_id, success: false, error: `Token replacement failed: ${(tokenError as Error)?.message || tokenError}` });
+        const tokenErrorMessage = tokenError instanceof Error ? tokenError.message : String(tokenError);
+        console.error(`Token replacement failed for ${lineUserId}:`, tokenError);
+        results.push({ lineUserId, success: false, error: `Token replacement failed: ${tokenErrorMessage}` });
         continue;
       }
-      
-      console.log(`Sending message to ${line_user_id}`);
+
+      console.log(`Sending message to ${lineUserId}`);
       try {
         const res = await fetch("https://api.line.me/v2/bot/message/push", {
           method: "POST",
@@ -273,14 +280,14 @@ serve(async (req) => {
             "Content-Type": "application/json",
             Authorization: `Bearer ${channelAccessToken}`,
           },
-          body: JSON.stringify({ to: line_user_id, messages: [normalized] }),
+          body: JSON.stringify({ to: lineUserId, messages: [normalized] }),
         });
 
         if (res.ok) {
-          console.log(`Successfully sent message to ${line_user_id}`);
-          results.push({ lineUserId: line_user_id, success: true });
+          console.log(`Successfully sent message to ${lineUserId}`);
+          results.push({ lineUserId, success: true });
         } else {
-          console.error(`Failed to send message to ${line_user_id}, status: ${res.status}`);
+          console.error(`Failed to send message to ${lineUserId}, status: ${res.status}`);
           const errorText = await res.text();
           let errorData;
           try {
@@ -289,14 +296,14 @@ serve(async (req) => {
             errorData = errorText;
           }
           console.error(`LINE API error response:`, errorData);
-          results.push({ lineUserId: line_user_id, success: false, error: errorData });
+          results.push({ lineUserId, success: false, error: errorData });
         }
       } catch (fetchError) {
-        console.error(`Network error when sending to ${line_user_id}:`, fetchError);
-        results.push({ lineUserId: line_user_id, success: false, error: `Network error: ${(fetchError as Error)?.message || 'Unknown error'}` });
+        const fetchErrorMessage = fetchError instanceof Error ? fetchError.message : String(fetchError);
+        console.error(`Network error when sending to ${lineUserId}:`, fetchError);
+        results.push({ lineUserId, success: false, error: `Network error: ${fetchErrorMessage}` });
       }
     }
-
     const ok = results.filter((r) => r.success).length;
     const failed = results.length - ok;
     
