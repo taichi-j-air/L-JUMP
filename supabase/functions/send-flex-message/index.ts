@@ -245,22 +245,27 @@ serve(async (req) => {
     for (const { line_user_id, short_uid, display_name } of friends) {
       console.log(`Processing friend: ${line_user_id}, short_uid: ${short_uid}`);
       
-      const rawDisplayName = typeof display_name === "string" ? display_name.trim() : "";
-      const fallbackName = rawDisplayName.length > 0 ? rawDisplayName : "あなた";
-      const fallbackNameSan = fallbackName === "あなた" ? "あなた" : `${fallbackName}さん`;
-      
-      // UIDを置換してFlexメッセージを準備
-      const withTokens = replaceTokens(clone(flex), short_uid ?? null, fallbackName, fallbackNameSan);
-      const normalized = normalize(withTokens);
-
-      if (!normalized) {
-        console.error(`Flex message normalization failed for ${line_user_id}`);
-        results.push({ lineUserId: line_user_id, success: false, error: "Flex形式不正" });
+      let normalized: any;
+      try {
+        const rawDisplayName = typeof display_name === "string" ? display_name.trim() : "";
+        const fallbackName = rawDisplayName.length > 0 ? rawDisplayName : "あなた";
+        const fallbackNameSan = fallbackName === "あなた" ? "あなた" : `${fallbackName}さん`;
+        
+        const withTokens = replaceTokens(clone(flex), short_uid ?? null, fallbackName, fallbackNameSan);
+        normalized = normalize(withTokens);
+        
+        if (!normalized) {
+          console.error(`Flex message normalization failed for ${line_user_id}`);
+          results.push({ lineUserId: line_user_id, success: false, error: "Flex形式不正" });
+          continue;
+        }
+      } catch (tokenError) {
+        console.error(`Token replacement failed for ${line_user_id}:`, tokenError);
+        results.push({ lineUserId: line_user_id, success: false, error: `Token replacement failed: ${(tokenError as Error)?.message || tokenError}` });
         continue;
       }
-
-      console.log(`Sending message to ${line_user_id}`);
       
+      console.log(`Sending message to ${line_user_id}`);
       try {
         const res = await fetch("https://api.line.me/v2/bot/message/push", {
           method: "POST",
