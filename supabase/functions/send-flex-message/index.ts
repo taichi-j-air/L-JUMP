@@ -253,11 +253,7 @@ serve(async (req) => {
 
       let normalized: any;
       try {
-        const withTokens = replaceTokens(clone(flex), {
-          uid: shortUid,
-          lineName: fallbackName,
-          lineNameSan: fallbackNameSan,
-        });
+        const withTokens = replaceTokens(clone(flex), shortUid, fallbackName, fallbackNameSan);
         normalized = normalize(withTokens);
 
         if (!normalized) {
