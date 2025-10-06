@@ -278,6 +278,7 @@ function buildBubbleFromDesign(design: BubbleDesign) {
 
       let node: any = null;
 
+      // 1. Create the base node (without backgroundColor for text)
       if (el.type === "text") {
         const text = (p.text || "").trim();
         if (!text) return;
@@ -289,7 +290,7 @@ function buildBubbleFromDesign(design: BubbleDesign) {
           ...(p.color && { color: p.color }),
           ...(p.align && p.align !== "start" && { align: p.align }),
           wrap: true,
-          ...(p.backgroundColor ? { backgroundColor: p.backgroundColor } : {}),
+          // backgroundColor is handled below
           ...(margin ? { margin } : {}),
         };
       } else if (el.type === "image") {
@@ -306,7 +307,6 @@ function buildBubbleFromDesign(design: BubbleDesign) {
         };
       } else if (el.type === "button") {
         const defaultColor = p.style === "link" ? "#0f83ff" : "#06c755";
-        
         node = {
           type: "button",
           style: p.style || "primary",
@@ -315,24 +315,33 @@ function buildBubbleFromDesign(design: BubbleDesign) {
           ...(p.action ? { action: p.action } : {}),
           ...(margin ? { margin } : {}),
         };
-        
-        // デバッグ用
         console.log("Button style:", p.style, "Final node:", node);
       }
 
       if (!node) return;
 
+      // 2. Wrap the node in a box if padding or (for text) a background color is needed
       const pad = padToPx(p.padding);
-      if (pad && pad !== "0px") {
+      const needsWrapper = (pad && pad !== "0px") || (el.type === 'text' && p.backgroundColor);
+
+      if (needsWrapper) {
+        // Move margin from the inner node to the outer wrapper box
+        const innerNode = { ...node };
+        if (innerNode.margin) {
+          delete innerNode.margin;
+        }
+        
         node = {
           type: "box",
           layout: "vertical",
-          paddingAll: pad,
-          contents: [node],
+          contents: [innerNode],
+          ...(margin && { margin }), // Apply margin to the wrapper
+          ...(pad && pad !== "0px" && { paddingAll: pad }),
+          ...(el.type === 'text' && p.backgroundColor && { backgroundColor: p.backgroundColor }),
         };
       }
 
-      // ボタンかどうかで振り分け
+      // 3. Distribute the final node
       if (el.type === "button") {
         footerElements.push(node);
       } else {
