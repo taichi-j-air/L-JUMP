@@ -491,7 +491,7 @@ const SortableItem = ({
                   <Label className="text-xs">サイズ</Label>
                   <Select value={p.size || "md"} onValueChange={(v: TextSize) => onUpdate(element.id, { ...p, size: v })}>
                     <SelectTrigger className="h-7 text-xs" />
-                    <SelectContent>{(["xxs", "xs", "sm", "md", "lg", "xl", "xxl", "3xl", "4xl", "5xl"] as TextSize[]).map((t)=>(<SelectItem key={t} value={t}>{t}</SelectItem>))}</SelectContent>
+                    <SelectContent>{(["xxs", "xs", "sm", "md", "lg", "xl", "xxl", "3xl", "4xl", "5xl"] as TextSize[]).map((t) => (<SelectItem key={t} value={t}>{`${getTextSizePx(t)} (${t})`}</SelectItem>))}</SelectContent>
                   </Select>
                 </div>
                 <div>
