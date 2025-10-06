@@ -51,7 +51,7 @@ import {
 
 type ButtonStyle = "primary" | "secondary" | "link";
 type ButtonHeight = "sm" | "md" | "lg";
-type TextSize = "xs" | "sm" | "md" | "lg" | "xl";
+type TextSize = "xxs" | "xs" | "sm" | "md" | "lg" | "xl" | "xxl" | "3xl" | "4xl" | "5xl";
 type FontWeight = "normal" | "bold";
 type Align = "start" | "center" | "end";
 type ImageSize = "xxs" | "xs" | "sm" | "md" | "lg" | "xl" | "xxl" | "full";
@@ -160,11 +160,16 @@ const getMarginPx = (m?: MarginToken): string => {
 
 const getTextSizePx = (s: TextSize): string => {
   switch (s) {
+    case "xxs": return "10px";
     case "xs": return "11px";
     case "sm": return "12px";
     case "md": return "13px";
     case "lg": return "16px";
     case "xl": return "18px";
+    case "xxl": return "22px";
+    case "3xl": return "26px";
+    case "4xl": return "30px";
+    case "5xl": return "34px";
     default: return "13px";
   }
 };
@@ -486,7 +491,7 @@ const SortableItem = ({
                   <Label className="text-xs">サイズ</Label>
                   <Select value={p.size || "md"} onValueChange={(v: TextSize) => onUpdate(element.id, { ...p, size: v })}>
                     <SelectTrigger className="h-7 text-xs" />
-                    <SelectContent>{(["xs","sm","md","lg","xl"] as TextSize[]).map((t)=>(<SelectItem key={t} value={t}>{t}</SelectItem>))}</SelectContent>
+                    <SelectContent>{(["xxs", "xs", "sm", "md", "lg", "xl", "xxl", "3xl", "4xl", "5xl"] as TextSize[]).map((t)=>(<SelectItem key={t} value={t}>{t}</SelectItem>))}</SelectContent>
                   </Select>
                 </div>
                 <div>
