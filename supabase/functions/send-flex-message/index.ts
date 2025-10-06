@@ -164,11 +164,11 @@ serve(async (req) => {
     }
 
     console.log("Raw credentials data:", cred);
-    
-    const accessTokenRecord = cred?.find(c => c.credential_type === "channel_access_token");
-    const channelAccessToken = accessTokenRecord?.encrypted_value;
 
-    if (!channelAccessToken) {
+    const accessTokenRecord = cred?.find(c => c.credential_type === "channel_access_token");
+    const encryptedToken = accessTokenRecord?.encrypted_value;
+
+    if (!encryptedToken) {
       console.error("No channel access token found in credentials:", cred);
       return new Response(JSON.stringify({ error: "LINE Channel Access Tokenが設定されていません" }), {
         headers: { ...cors, "Content-Type": "application/json" },
@@ -176,7 +176,42 @@ serve(async (req) => {
       });
     }
 
-    console.log("LINE credentials fetched successfully");
+    let channelAccessToken: string;
+    try {
+      // --- 復号化処理 ---
+      if (!encryptedToken.startsWith("enc:")) {
+        throw new Error("Invalid encrypted value format");
+      }
+      const encryptedData = atob(encryptedToken.substring(4));
+      const combinedArray = new Uint8Array(encryptedData.length);
+      for (let i = 0; i < encryptedData.length; i++) {
+        combinedArray[i] = encryptedData.charCodeAt(i);
+      }
+      const iv = combinedArray.slice(0, 12);
+      const encrypted = combinedArray.slice(12);
+      const userKey = await crypto.subtle.importKey(
+        "raw",
+        new TextEncoder().encode(userId.substring(0, 32).padEnd(32, "0")),
+        { name: "AES-GCM" },
+        false,
+        ["decrypt"]
+      );
+      const decrypted = await crypto.subtle.decrypt(
+        { name: "AES-GCM", iv },
+        userKey,
+        encrypted
+      );
+      channelAccessToken = new TextDecoder().decode(decrypted);
+      // --- 復号化処理ここまで ---
+    } catch (e) {
+      console.error("Failed to decrypt access token:", e);
+      return new Response(JSON.stringify({ error: "アクセストークンの復号に失敗しました", details: e.message }), {
+        headers: { ...cors, "Content-Type": "application/json" },
+        status: 500,
+      });
+    }
+    
+    console.log("LINE credentials fetched and decrypted successfully");
 
     // 友だち一覧の取得（Service Roleで直接クエリ）
     console.log("Fetching friends list for user:", userId);
