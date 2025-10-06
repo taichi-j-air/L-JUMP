@@ -183,15 +183,19 @@ const getButtonHeightPx = (h: ButtonHeight): string => {
   }
 };
 
-const getBubbleWidthPx = (size: BubbleSize): string => {
-  switch (size) {
-    case "micro": return "240px";
-    case "deca": return "270px";
-    case "kilo":  return "300px";
-    case "mega":  return "330px";
-    case "giga":  return "360px";
-    default: return "300px";
-  }
+const getBubbleWidthPx = (size: BubbleSize, containerWidth: number): string => {
+    // 右側プレビューエリアのp-4 (1rem = 16px) のパディングを考慮
+    const maxWidth = containerWidth - 32;
+    if (maxWidth <= 0) return "250px"; // コンテナ幅が取得できない場合のフォールバック
+
+    switch (size) {
+        case "giga":  return `${maxWidth}px`;
+        case "mega":  return `${Math.floor(maxWidth * 0.9)}px`;
+        case "kilo":  return `${Math.floor(maxWidth * 0.8)}px`;
+        case "deca":  return `${Math.floor(maxWidth * 0.7)}px`;
+        case "micro": return `${Math.floor(maxWidth * 0.6)}px`;
+        default:      return `${Math.floor(maxWidth * 0.8)}px`;
+    }
 };
 
 const defaultBubble = (label = "バブル 1"): BubbleDesign => ({
@@ -726,6 +730,26 @@ export default function FlexMessageDesigner() {
     currentIndex: 0,
   });
 
+  const previewContainerRef = useRef<HTMLDivElement>(null);
+  const [previewWidth, setPreviewWidth] = useState(300);
+
+  useEffect(() => {
+    const container = previewContainerRef.current;
+    if (!container) return;
+
+    const resizeObserver = new ResizeObserver(entries => {
+      if (entries[0]) {
+        setPreviewWidth(entries[0].contentRect.width);
+      }
+    });
+
+    resizeObserver.observe(container);
+    // 初期幅を設定
+    setPreviewWidth(container.getBoundingClientRect().width);
+
+    return () => resizeObserver.disconnect();
+  }, []);
+
   const current = state.bubbles[state.currentIndex];
 
   // DnD sensors
@@ -1204,12 +1228,15 @@ const { data: newData, error } = await supabase.from("flex_messages").insert({ u
           <Card className="h-[calc(100vh-140px)] lg:sticky top-3 overflow-hidden">
             <CardHeader className="py-3">
               <CardTitle className="text-sm flex items-center gap-2"><Eye className="w-4 h-4" />プレビュー</CardTitle>
-              <CardDescription className="text-xs">おおよその見た目（実機と微差あり）</CardDescription>
+              <CardDescription className="text-xs">
+                おおよその見た目（実機と微差あり）。<br />
+                実際に配信のテストを行いデザインを確認してください。
+              </CardDescription>
             </CardHeader>
-            <CardContent className="pt-0 overflow-auto h-full p-4" style={{ backgroundColor: "#8cabd8" }}>
+            <CardContent ref={previewContainerRef} className="pt-0 overflow-auto h-full p-4" style={{ backgroundColor: "#8cabd8" }}>
               <div
                 className="mx-auto rounded-lg bg-white overflow-hidden"
-                style={{ width: getBubbleWidthPx(current.bubbleSize) }}
+                style={{ width: getBubbleWidthPx(current.bubbleSize, previewWidth) }}
               >
                 {/* hero */}
                 {current.contents.find((c) => c.type === "image" && c.properties.isHero && c.properties.url) && (() => {
