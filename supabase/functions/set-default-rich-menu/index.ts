@@ -30,6 +30,9 @@ serve(async (req) => {
     }
 
     const { richMenuId } = await req.json();
+    if (!richMenuId) {
+      throw new Error('richMenuId is required');
+    }
 
     // Get LINE credentials
     const { data: credentials } = await supabase
@@ -45,26 +48,24 @@ serve(async (req) => {
 
     const accessToken = credentials.encrypted_value;
 
-    // Set default rich menu on LINE API
-    const response = await fetch(`https://api.line.me/v2/bot/user/all/richmenu/${richMenuId}`, {
+    // Set default rich menu via LINE API
+    const setDefaultUrl = `https://api.line.me/v2/bot/user/all/richmenu/${richMenuId}`;
+    const setDefaultResponse = await fetch(setDefaultUrl, {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${accessToken}`,
-      }
+      },
     });
 
-    if (!response.ok) {
-      const errorText = await response.text();
-      console.error('LINE API error:', errorText);
-      throw new Error(`LINE API error: ${response.status} - ${errorText}`);
+    if (!setDefaultResponse.ok) {
+      const errorText = await setDefaultResponse.text();
+      console.error('Failed to set default rich menu on LINE API:', errorText);
+      throw new Error(`LINE API error: ${setDefaultResponse.status} ${errorText}`);
     }
 
-    console.log(`Rich menu ${richMenuId} set as default on LINE`);
+    console.log(`Successfully set rich menu ${richMenuId} as default.`);
 
-    return new Response(JSON.stringify({ 
-      success: true,
-      message: 'Default rich menu updated on LINE'
-    }), {
+    return new Response(JSON.stringify({ success: true }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
 

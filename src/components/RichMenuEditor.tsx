@@ -265,6 +265,7 @@ export const RichMenuEditor = ({ menu, onSave, onCancel }: RichMenuEditorProps) 
                 chat_bar_text: chatBarText,
                 size,
                 background_image_url: backgroundImageUrl,
+                setAsDefault: isDefault,
                 areas: tapAreas.map(area => ({
                   bounds: {
                     x: Math.round((area.x_percent / 100) * (size === 'full' ? 2500 : 1200)),

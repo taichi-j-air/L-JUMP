@@ -29,7 +29,7 @@ serve(async (req) => {
       throw new Error('Authentication failed');
     }
 
-    const { richMenuData, imageFile } = await req.json();
+    const { richMenuData } = await req.json();
 
     // Get LINE credentials
     const { data: credentials } = await supabase
@@ -74,7 +74,7 @@ serve(async (req) => {
     console.log('Rich menu created on LINE:', lineRichMenu.richMenuId);
 
     // Upload image if provided
-    if (imageFile && richMenuData.background_image_url) {
+    if (richMenuData.background_image_url) {
       try {
         // Download image from Supabase storage
         const imageResponse = await fetch(richMenuData.background_image_url);
@@ -99,6 +99,26 @@ serve(async (req) => {
         }
       } catch (imageError) {
         console.error('Image upload error:', imageError);
+      }
+    }
+
+    // If setAsDefault is true, set this rich menu as the default for all users
+    if (richMenuData.setAsDefault) {
+      const setDefaultUrl = `https://api.line.me/v2/bot/user/all/richmenu/${lineRichMenu.richMenuId}`;
+      const setDefaultResponse = await fetch(setDefaultUrl, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${accessToken}`,
+        },
+      });
+
+      if (!setDefaultResponse.ok) {
+        const errorText = await setDefaultResponse.text();
+        console.error('Failed to set default rich menu:', errorText);
+        // We don't throw an error here, just log it, 
+        // as the menu creation itself was successful.
+      } else {
+        console.log(`Successfully set rich menu ${lineRichMenu.richMenuId} as default.`);
       }
     }
 
