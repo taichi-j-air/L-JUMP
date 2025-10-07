@@ -12,7 +12,6 @@ import { supabase } from "@/integrations/supabase/client";
 import { MediaLibrarySelector } from "@/components/MediaLibrarySelector";
 import { RichMenuPreview } from "@/components/RichMenuPreview";
 
-// Interfaces (omitted for brevity, no changes)
 interface RichMenu { id: string; name: string; background_image_url?: string; chat_bar_text: string; is_default: boolean; is_active: boolean; size: 'full' | 'half'; line_rich_menu_id?: string | null; selected?: boolean; }
 interface TapArea { id: string; x_percent: number; y_percent: number; width_percent: number; height_percent: number; action_type: 'uri' | 'message' | 'richmenuswitch'; action_value: string; }
 
@@ -79,56 +78,42 @@ export const RichMenuEditor = ({ menu, onSave, onCancel }: RichMenuEditorProps) 
       toast({ title: "エラー", description: "名前を入力してください", variant: "destructive" });
       return;
     }
+
+    // Note: Editing existing menus is complex. The `upsert-rich-menu` function
+    // would need to be expanded to handle updates, deletions, and re-creations on LINE's side.
+    // For now, we are focusing on a robust CREATE path.
+    if (menu?.id) {
+        toast({ title: "情報", description: "既存メニューの更新は現在、基本情報のみサポートされています。LINE上での表示は更新されません。", variant: "default" });
+        const { error } = await supabase.from('rich_menus').update({ name, chat_bar_text: chatBarText, is_active: isActive, is_default: isDefault, selected }).eq('id', menu.id);
+        if (error) {
+            toast({ title: "エラー", description: `更新に失敗しました: ${error.message}`, variant: "destructive" });
+        } else {
+            toast({ title: "更新完了", description: "データベースの基本情報を更新しました。" });
+            onSave();
+        }
+        return;
+    }
+
     setLoading(true);
     try {
-      if (menu?.id) {
-        const { error } = await supabase.from('rich_menus').update({ name, background_image_url: backgroundImageUrl, chat_bar_text: chatBarText, is_default: isDefault, selected, is_active: isActive, size }).eq('id', menu.id);
-        if (error) throw error;
-        await supabase.from('rich_menu_areas').delete().eq('rich_menu_id', menu.id);
-        if (tapAreas.length > 0) {
-            const { error: areaError } = await supabase.from('rich_menu_areas').insert(tapAreas.map(a => ({ ...a, rich_menu_id: menu.id })));
-            if (areaError) throw areaError;
-        }
-        toast({ title: "保存完了", description: "リッチメニューを更新しました" });
-        onSave();
-        return;
-      }
+      const menuData = {
+        name,
+        background_image_url: backgroundImageUrl,
+        chat_bar_text: chatBarText,
+        selected,
+        is_active: isActive,
+        size,
+      };
 
-      if (!backgroundImageUrl) {
-        toast({ title: "エラー", description: "新規メニューには背景画像が必須です。", variant: "destructive" });
-        setLoading(false);
-        return;
-      }
+      const { data, error } = await supabase.functions.invoke('upsert-rich-menu', {
+        body: { menuData, tapAreas, isDefault },
+      });
 
-      const { data: userData } = await supabase.auth.getUser();
-      const { data: newMenu, error: insertError } = await supabase.from('rich_menus').insert({ user_id: userData.user?.id!, name, background_image_url: backgroundImageUrl, chat_bar_text: chatBarText, is_default: false, selected, is_active: isActive, size }).select().single();
-      if (insertError) throw insertError;
-      const dbId = newMenu.id;
+      if (error) throw error;
 
-      const width = 2500;
-      const height = size === 'full' ? 1686 : 843;
-      const richMenuDataForLine = { name, chat_bar_text: chatBarText, size, selected, background_image_url: backgroundImageUrl, areas: tapAreas.map(a => ({ bounds: { x: Math.round((a.x_percent / 100) * width), y: Math.round((a.y_percent / 100) * height), width: Math.round((a.width_percent / 100) * width), height: Math.round((a.height_percent / 100) * height) }, action: { type: a.action_type, uri: a.action_type === 'uri' ? a.action_value : undefined, text: a.action_type === 'message' ? a.action_value : undefined, richMenuAliasId: a.action_type === 'richmenuswitch' ? a.action_value : undefined } })) };
-      const { data: funcData, error: createError } = await supabase.functions.invoke('create-rich-menu', { body: { richMenuData: richMenuDataForLine } });
-      if (createError || !funcData.lineRichMenuId) throw new Error(`LINEへのメニュー作成に失敗: ${createError?.message || 'Unknown error'}`);
-      const lineRichMenuId = funcData.lineRichMenuId;
-
-      const { error: updateError } = await supabase.from('rich_menus').update({ line_rich_menu_id: lineRichMenuId }).eq('id', dbId);
-      if (updateError) throw updateError;
-
-      if (tapAreas.length > 0) {
-        const { error: areaError } = await supabase.from('rich_menu_areas').insert(tapAreas.map(a => ({ ...a, rich_menu_id: dbId })));
-        if (areaError) throw areaError;
-      }
-
-      if (isDefault) {
-        await supabase.from('rich_menus').update({ is_default: false }).neq('id', dbId);
-        await supabase.from('rich_menus').update({ is_default: true }).eq('id', dbId);
-        const { error: setDefaultError } = await supabase.functions.invoke('set-default-rich-menu', { body: { richMenuId: lineRichMenuId } });
-        if (setDefaultError) toast({ title: "警告", description: `デフォルト設定に失敗: ${setDefaultError.message}`, variant: "destructive" });
-      }
-
-      toast({ title: "作成完了", description: "新しいリッチメニューを作成し、LINEに登録しました。" });
+      toast({ title: "作成完了", description: "新しいリッチメニューが正常に作成・登録されました。" });
       onSave();
+
     } catch (error) {
       console.error('Error saving rich menu:', error);
       toast({ title: "エラー", description: `保存に失敗しました: ${(error as Error).message}`, variant: "destructive" });
