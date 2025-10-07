@@ -14,7 +14,7 @@ serve(async (req) => {
   try {
     const supabase = createClient(
       Deno.env.get('SUPABASE_URL') ?? '',
-      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
+      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '' // Service role key is needed to read secure credentials
     );
 
     const authHeader = req.headers.get('Authorization');
@@ -29,9 +29,12 @@ serve(async (req) => {
       throw new Error('Authentication failed');
     }
 
-    const { richMenuId, richMenuData } = await req.json();
-    if (!richMenuId) {
-      throw new Error('richMenuId (database ID) is required');
+    const { richMenuData } = await req.json();
+    if (!richMenuData) {
+        throw new Error('richMenuData is required.');
+    }
+    if (!richMenuData.background_image_url) {
+        throw new Error('A background image is required to create a rich menu on LINE.');
     }
 
     // Get LINE credentials
@@ -43,12 +46,11 @@ serve(async (req) => {
       .single();
 
     if (!credentials?.encrypted_value) {
-      throw new Error('LINE access token not found');
+      throw new Error('LINE access token not found in the database.');
     }
-
     const accessToken = credentials.encrypted_value;
 
-    // Create rich menu on LINE API
+    // 1. Create rich menu on LINE API
     const richMenuResponse = await fetch('https://api.line.me/v2/bot/richmenu', {
       method: 'POST',
       headers: {
@@ -69,73 +71,38 @@ serve(async (req) => {
 
     if (!richMenuResponse.ok) {
       const errorText = await richMenuResponse.text();
-      console.error('LINE API error during creation:', errorText);
-      throw new Error(`LINE API error: ${richMenuResponse.status}`);
+      throw new Error(`LINE API error during menu creation: ${errorText}`);
     }
 
     const lineRichMenu = await richMenuResponse.json();
     const lineRichMenuId = lineRichMenu.richMenuId;
-    console.log('Rich menu created on LINE:', lineRichMenuId);
 
-    // Save the returned line_rich_menu_id to our database
-    const { error: updateError } = await supabase
-      .from('rich_menus')
-      .update({ line_rich_menu_id: lineRichMenuId })
-      .eq('id', richMenuId);
-
-    if (updateError) {
-      console.error('Failed to save line_rich_menu_id to database:', updateError);
-      throw new Error(`Failed to save line_rich_menu_id: ${updateError.message}`);
-    }
-
-    // Upload image if provided
-    if (richMenuData.background_image_url) {
-      try {
-        const imageResponse = await fetch(richMenuData.background_image_url);
-        if (imageResponse.ok) {
-          const imageBuffer = await imageResponse.arrayBuffer();
-          const uploadResponse = await fetch(`https://api.line.me/v2/bot/richmenu/${lineRichMenuId}/content`, {
-            method: 'POST',
-            headers: {
-              'Authorization': `Bearer ${accessToken}`,
-              'Content-Type': 'image/png',
-            },
-            body: imageBuffer
-          });
-
-          if (!uploadResponse.ok) {
-            const uploadErrorText = await uploadResponse.text();
-            console.error('Image upload failed:', uploadErrorText);
-            throw new Error(`Image upload to LINE failed: ${uploadErrorText}`);
-          }
-        } else {
-          throw new Error(`Failed to fetch image from URL: ${richMenuData.background_image_url}`);
-        }
-      } catch (imageError) {
-        console.error('Image upload process error:', imageError);
-        throw new Error(`Image upload process failed: ${imageError.message}`);
+    // 2. Upload image to LINE API
+    try {
+      const imageResponse = await fetch(richMenuData.background_image_url);
+      if (!imageResponse.ok) {
+        throw new Error(`Failed to fetch image from URL: ${richMenuData.background_image_url}`);
       }
-    } else {
-        throw new Error('A background image is required to create a rich menu on LINE.');
-    }
-
-    // If setAsDefault is true, set this rich menu as the default for all users
-    if (richMenuData.setAsDefault) {
-      const setDefaultUrl = `https://api.line.me/v2/bot/user/all/richmenu/${lineRichMenuId}`;
-      const setDefaultResponse = await fetch(setDefaultUrl, {
+      
+      const imageBuffer = await imageResponse.arrayBuffer();
+      const uploadResponse = await fetch(`https://api-data.line.me/v2/bot/richmenu/${lineRichMenuId}/content`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${accessToken}`,
+          'Content-Type': 'image/png',
         },
+        body: imageBuffer
       });
 
-      if (!setDefaultResponse.ok) {
-        const errorText = await setDefaultResponse.text();
-        console.error('Failed to set default rich menu:', errorText);
-        // Do not throw here, as the menu is already created. The client can retry.
+      if (!uploadResponse.ok) {
+        const uploadErrorText = await uploadResponse.text();
+        throw new Error(`Image upload to LINE failed: ${uploadErrorText}`);
       }
+    } catch (imageError) {
+      throw new Error(`Image upload process failed: ${imageError.message}`);
     }
 
+    // 3. Return the new LINE Rich Menu ID
     return new Response(JSON.stringify({ 
       success: true, 
       lineRichMenuId: lineRichMenuId 
@@ -144,7 +111,6 @@ serve(async (req) => {
     });
 
   } catch (error) {
-    console.error('Error in create-rich-menu:', error.message);
     return new Response(JSON.stringify({ 
       success: false, 
       error: (error as Error)?.message || 'Unknown error'
