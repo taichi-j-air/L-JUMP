@@ -1,13 +1,15 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
+import { format } from "date-fns";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { ArrowLeft, Menu, Plus, Settings, Trash2 } from "lucide-react";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { ArrowLeft, Menu, Plus, MoreHorizontal, Settings, Trash2, Star } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { RichMenuEditor } from "@/components/RichMenuEditor";
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 
 interface RichMenu {
   id: string;
@@ -24,7 +26,7 @@ interface RichMenu {
 const RichMenuSettings = () => {
   const navigate = useNavigate();
   const { toast } = useToast();
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [richMenus, setRichMenus] = useState<RichMenu[]>([]);
   const [editingMenu, setEditingMenu] = useState<RichMenu | null>(null);
   const [showEditor, setShowEditor] = useState(false);
@@ -36,26 +38,12 @@ const RichMenuSettings = () => {
   const loadRichMenus = async () => {
     setLoading(true);
     try {
-      const { data, error } = await supabase
-        .from('rich_menus')
-        .select('*')
-        .order('created_at', { ascending: false });
-
+      const { data, error } = await supabase.from('rich_menus').select('*').order('created_at', { ascending: false });
       if (error) throw error;
-      
-      const formattedData = (data || []).map(menu => ({
-        ...menu,
-        size: menu.size as 'full' | 'half',
-      }));
-      
-      setRichMenus(formattedData);
+      setRichMenus((data || []).map(menu => ({ ...menu, size: menu.size as 'full' | 'half' })));
     } catch (error) {
       console.error('Error loading rich menus:', error);
-      toast({
-        title: "エラー",
-        description: "リッチメニューの読み込みに失敗しました",
-        variant: "destructive",
-      });
+      toast({ title: "エラー", description: "リッチメニューの読み込みに失敗しました", variant: "destructive" });
     } finally {
       setLoading(false);
     }
@@ -72,42 +60,19 @@ const RichMenuSettings = () => {
   };
 
   const deleteMenu = async (dbId: string, lineId: string | null | undefined) => {
-    if (!confirm('このリッチメニューを削除しますか？')) return;
-    
+    if (!confirm('このリッチメニューを削除しますか？\nLINE上からも削除されますが、元に戻すことはできません。')) return;
     try {
       setLoading(true);
-      let lineError: any = null;
-
       if (lineId) {
-        const { error } = await supabase.functions.invoke('delete-rich-menu', {
-          body: { richMenuId: lineId }
-        });
-        lineError = error;
+        await supabase.functions.invoke('delete-rich-menu', { body: { richMenuId: lineId } });
       }
-
-      if (lineError) {
-        console.error('LINE API error during deletion:', lineError);
-      }
-
-      const { error: dbError } = await supabase
-        .from('rich_menus')
-        .delete()
-        .eq('id', dbId);
-
+      const { error: dbError } = await supabase.from('rich_menus').delete().eq('id', dbId);
       if (dbError) throw dbError;
-      
-      toast({
-        title: "削除完了",
-        description: lineError ? "データベースから削除されました（LINE APIでの削除に失敗）" : "データベースとLINE公式アカウントから削除されました",
-      });
+      toast({ title: "削除完了", description: "リッチメニューを削除しました。" });
       loadRichMenus();
     } catch (error) {
       console.error('Error deleting rich menu:', error);
-      toast({
-        title: "エラー",
-        description: "削除に失敗しました",
-        variant: "destructive",
-      });
+      toast({ title: "エラー", description: `削除に失敗しました: ${(error as Error).message}`, variant: "destructive" });
     } finally {
       setLoading(false);
     }
@@ -115,56 +80,20 @@ const RichMenuSettings = () => {
 
   const setDefaultMenu = async (dbId: string, lineId: string | null | undefined) => {
     if (!lineId) {
-      toast({
-        title: "エラー",
-        description: "このリッチメニューはLINEに登録されていないため、デフォルトに設定できません。",
-        variant: "destructive",
-      });
+      toast({ title: "エラー", description: "このリッチメニューはLINEに登録されていないため、デフォルトに設定できません。", variant: "destructive" });
       return;
     }
-
     try {
       setLoading(true);
-      
-      await supabase
-        .from('rich_menus')
-        .update({ is_default: false })
-        .neq('id', '00000000-0000-0000-0000-000000000000');
-
-      const { error: dbError } = await supabase
-        .from('rich_menus')
-        .update({ is_default: true })
-        .eq('id', dbId);
-
-      if (dbError) throw dbError;
-
-      const { error: lineError } = await supabase.functions.invoke('set-default-rich-menu', {
-        body: { richMenuId: lineId }
-      });
-
-      if (lineError) {
-        console.error('LINE API error:', lineError);
-        const description = (lineError as Error)?.message || "データベースは更新されましたが、LINE公式アカウントへの反映でエラーが発生しました。";
-        toast({
-          title: "警告",
-          description: description,
-          variant: "destructive"
-        });
-      } else {
-        toast({
-          title: "設定完了",
-          description: "デフォルトリッチメニューがLINE公式アカウントに反映されました",
-        });
-      }
-      
+      await supabase.from('rich_menus').update({ is_default: false }).neq('id', '00000000-0000-0000-0000-000000000000');
+      await supabase.from('rich_menus').update({ is_default: true }).eq('id', dbId);
+      const { error: lineError } = await supabase.functions.invoke('set-default-rich-menu', { body: { richMenuId: lineId } });
+      if (lineError) throw lineError;
+      toast({ title: "設定完了", description: "デフォルトリッチメニューがLINE公式アカウントに反映されました" });
       loadRichMenus();
     } catch (error) {
       console.error('Error setting default menu:', error);
-      toast({
-        title: "エラー",
-        description: "設定に失敗しました",
-        variant: "destructive",
-      });
+      toast({ title: "エラー", description: `設定に失敗しました: ${(error as Error).message}`, variant: "destructive" });
     } finally {
       setLoading(false);
     }
@@ -177,152 +106,71 @@ const RichMenuSettings = () => {
   };
 
   if (showEditor) {
-    return (
-      <RichMenuEditor
-        menu={editingMenu}
-        onSave={onEditorSave}
-        onCancel={() => {
-          setShowEditor(false);
-          setEditingMenu(null);
-        }}
-      />
-    );
+    return <RichMenuEditor menu={editingMenu} onSave={onEditorSave} onCancel={() => { setShowEditor(false); setEditingMenu(null); }} />;
   }
 
   return (
     <div className="min-h-screen bg-background">
-      <header className="border-b">
-        <div className="container mx-auto px-4 py-4">
-          <div className="flex items-center gap-4">
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => navigate("/")}
-              className="flex items-center gap-2"
-            >
-              <ArrowLeft className="w-4 h-4" />
-              戻る
-            </Button>
-            <Menu className="w-6 h-6" />
-            <h1 className="text-2xl font-bold">リッチメニュー設定</h1>
-          </div>
-        </div>
-      </header>
-
+      <header className="border-b"><div className="container mx-auto px-4 py-4"><div className="flex items-center justify-between"><div className="flex items-center gap-4"><Button variant="ghost" size="sm" onClick={() => navigate("/")} className="flex items-center gap-2"><ArrowLeft className="w-4 h-4" />戻る</Button><h1 className="text-2xl font-bold">リッチメニュー設定</h1></div><Button onClick={createNewMenu} className="flex items-center gap-2"><Plus className="w-4 h-4" />新規作成</Button></div></div></header>
       <main className="container mx-auto px-4 py-8 max-w-6xl">
-        <div className="space-y-6">
-          <div className="flex justify-between items-center">
-            <div>
-              <h2 className="text-xl font-semibold">リッチメニュー管理</h2>
-              <p className="text-muted-foreground">LINE公式アカウントのリッチメニューを作成・管理します</p>
-            </div>
-            <Button onClick={createNewMenu} className="flex items-center gap-2">
-              <Plus className="w-4 h-4" />
-              新規作成
-            </Button>
-          </div>
-
-          {loading ? (
-            <Card>
-              <CardContent className="p-6">
-                <div className="text-center">読み込み中...</div>
-              </CardContent>
-            </Card>
-          ) : richMenus.length === 0 ? (
-            <Card>
-              <CardContent className="p-8 text-center">
-                <Menu className="w-12 h-12 mx-auto mb-4 text-muted-foreground" />
-                <h3 className="text-lg font-medium mb-2">リッチメニューがありません</h3>
-                <p className="text-muted-foreground mb-4">
-                  最初のリッチメニューを作成して、LINE公式アカウントをより魅力的にしましょう
-                </p>
-                <Button onClick={createNewMenu} className="flex items-center gap-2 mx-auto">
-                  <Plus className="w-4 h-4" />
-                  新規作成
-                </Button>
-              </CardContent>
-            </Card>
-          ) : (
-            <div className="grid gap-4">
-              {richMenus.map((menu) => (
-                <Card key={menu.id}>
-                  <CardHeader className="pb-3">
-                    <div className="flex justify-between items-start">
-                      <div className="space-y-1">
-                        <div className="flex items-center gap-2">
-                          <CardTitle className="text-lg">{menu.name}</CardTitle>
-                          {menu.is_default && (
-                            <Badge variant="secondary">デフォルト</Badge>
-                          )}
-                          {!menu.is_active && (
-                            <Badge variant="outline">無効</Badge>
-                          )}
+        <Card>
+          <CardHeader>
+            <CardTitle>リッチメニュー管理</CardTitle>
+            <CardDescription>LINE公式アカウントのリッチメニューを作成・管理します</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead className="hidden w-[100px] sm:table-cell">プレビュー</TableHead>
+                  <TableHead>名前</TableHead>
+                  <TableHead>ステータス</TableHead>
+                  <TableHead className="hidden md:table-cell">チャットバー</TableHead>
+                  <TableHead className="hidden md:table-cell">作成日</TableHead>
+                  <TableHead><span className="sr-only">Actions</span></TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {loading ? (
+                  <TableRow><TableCell colSpan={6} className="h-24 text-center">読み込み中...</TableCell></TableRow>
+                ) : richMenus.length > 0 ? (
+                  richMenus.map((menu) => (
+                    <TableRow key={menu.id}>
+                      <TableCell className="hidden sm:table-cell">
+                        {menu.background_image_url ? <img alt={menu.name} className="aspect-video rounded-md object-cover" height="64" src={menu.background_image_url} width="100" /> : <div className="h-16 w-[100px] bg-muted rounded-md flex items-center justify-center text-xs text-muted-foreground">No Image</div>}
+                      </TableCell>
+                      <TableCell className="font-medium">{menu.name}</TableCell>
+                      <TableCell>
+                        <div className="flex flex-col gap-1">
+                          {menu.is_default && <Badge variant="secondary">デフォルト</Badge>}
+                          {menu.is_active ? <Badge variant="outline">有効</Badge> : <Badge variant="destructive">無効</Badge>}
                         </div>
-                        <CardDescription>
-                          チャットバーテキスト: {menu.chat_bar_text} | サイズ: {menu.size === 'full' ? 'フル' : 'ハーフ'}
-                        </CardDescription>
-                      </div>
-                      <div className="flex gap-2">
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => editMenu(menu)}
-                        >
-                          <Settings className="w-4 h-4" />
-                        </Button>
-                        {!menu.is_default && (
-                          <TooltipProvider>
-                            <Tooltip>
-                              <TooltipTrigger asChild>
-                                <span tabIndex={0}>
-                                  <Button
-                                    variant="outline"
-                                    size="sm"
-                                    onClick={() => setDefaultMenu(menu.id, menu.line_rich_menu_id)}
-                                    disabled={!menu.line_rich_menu_id}
-                                  >
-                                    デフォルトに設定
-                                  </Button>
-                                </span>
-                              </TooltipTrigger>
-                              {!menu.line_rich_menu_id && (
-                                <TooltipContent>
-                                  <p>背景画像を設定し、LINEに登録されたメニューのみ設定可能です。</p>
-                                </TooltipContent>
-                              )}
-                            </Tooltip>
-                          </TooltipProvider>
-                        )}
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => deleteMenu(menu.id, menu.line_rich_menu_id)}
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </Button>
-                      </div>
-                    </div>
-                  </CardHeader>
-                  {menu.background_image_url && (
-                    <CardContent className="pt-0">
-                      <div className="w-full max-w-sm mx-auto">
-                        <img
-                          src={menu.background_image_url}
-                          alt={menu.name}
-                          className="w-full h-auto rounded border"
-                        />
-                      </div>
-                    </CardContent>
-                  )}
-                </Card>
-              ))}
-            </div>
-          )}
-        </div>
+                      </TableCell>
+                      <TableCell className="hidden md:table-cell">{menu.chat_bar_text}</TableCell>
+                      <TableCell className="hidden md:table-cell">{format(new Date(menu.created_at), "yyyy/MM/dd")}</TableCell>
+                      <TableCell>
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild><Button aria-haspopup="true" size="icon" variant="ghost"><MoreHorizontal className="h-4 w-4" /><span className="sr-only">Toggle menu</span></Button></DropdownMenuTrigger>
+                          <DropdownMenuContent align="end">
+                            <DropdownMenuLabel>アクション</DropdownMenuLabel>
+                            <DropdownMenuItem onClick={() => editMenu(menu)}><Settings className="h-4 w-4 mr-2"/>編集</DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => setDefaultMenu(menu.id, menu.line_rich_menu_id)} disabled={menu.is_default || !menu.line_rich_menu_id}><Star className="h-4 w-4 mr-2"/>デフォルトに設定</DropdownMenuItem>
+                            <DropdownMenuItem className="text-red-600" onClick={() => deleteMenu(menu.id, menu.line_rich_menu_id)}><Trash2 className="h-4 w-4 mr-2"/>削除</DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      </TableCell>
+                    </TableRow>
+                  ))
+                ) : (
+                  <TableRow><TableCell colSpan={6} className="h-24 text-center">リッチメニューがありません。「新規作成」から最初のメニューを作成しましょう。</TableCell></TableRow>
+                )}
+              </TableBody>
+            </Table>
+          </CardContent>
+        </Card>
       </main>
     </div>
   );
-
 };
 
 export default RichMenuSettings;
