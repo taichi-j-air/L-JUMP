@@ -34,6 +34,9 @@ serve(async (req) => {
       throw new Error('richMenuId is required');
     }
 
+    // Log the received ID for debugging
+    console.log(`Attempting to set default rich menu for LINE ID: ${richMenuId}`);
+
     // Get LINE credentials
     const { data: credentials } = await supabase
       .from('secure_line_credentials')
@@ -60,7 +63,7 @@ serve(async (req) => {
     if (!setDefaultResponse.ok) {
       const errorText = await setDefaultResponse.text();
       console.error('Failed to set default rich menu on LINE API:', errorText);
-      throw new Error(`LINE API error: ${setDefaultResponse.status} ${errorText}`);
+      throw new Error(`LINE API error: ${setDefaultResponse.status} - ${errorText}`);
     }
 
     console.log(`Successfully set rich menu ${richMenuId} as default.`);
