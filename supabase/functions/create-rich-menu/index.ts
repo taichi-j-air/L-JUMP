@@ -29,7 +29,10 @@ serve(async (req) => {
       throw new Error('Authentication failed');
     }
 
-    const { richMenuData } = await req.json();
+    const { richMenuId, richMenuData } = await req.json();
+    if (!richMenuId) {
+      throw new Error('richMenuId (database ID) is required');
+    }
 
     // Get LINE credentials
     const { data: credentials } = await supabase
@@ -66,23 +69,32 @@ serve(async (req) => {
 
     if (!richMenuResponse.ok) {
       const errorText = await richMenuResponse.text();
-      console.error('LINE API error:', errorText);
+      console.error('LINE API error during creation:', errorText);
       throw new Error(`LINE API error: ${richMenuResponse.status}`);
     }
 
     const lineRichMenu = await richMenuResponse.json();
-    console.log('Rich menu created on LINE:', lineRichMenu.richMenuId);
+    const lineRichMenuId = lineRichMenu.richMenuId;
+    console.log('Rich menu created on LINE:', lineRichMenuId);
+
+    // Save the returned line_rich_menu_id to our database
+    const { error: updateError } = await supabase
+      .from('rich_menus')
+      .update({ line_rich_menu_id: lineRichMenuId })
+      .eq('id', richMenuId);
+
+    if (updateError) {
+      console.error('Failed to save line_rich_menu_id to database:', updateError);
+      throw new Error(`Failed to save line_rich_menu_id: ${updateError.message}`);
+    }
 
     // Upload image if provided
     if (richMenuData.background_image_url) {
       try {
-        // Download image from Supabase storage
         const imageResponse = await fetch(richMenuData.background_image_url);
         if (imageResponse.ok) {
           const imageBuffer = await imageResponse.arrayBuffer();
-          
-          // Upload to LINE
-          const uploadResponse = await fetch(`https://api.line.me/v2/bot/richmenu/${lineRichMenu.richMenuId}/content`, {
+          const uploadResponse = await fetch(`https://api.line.me/v2/bot/richmenu/${lineRichMenuId}/content`, {
             method: 'POST',
             headers: {
               'Authorization': `Bearer ${accessToken}`,
@@ -104,7 +116,7 @@ serve(async (req) => {
 
     // If setAsDefault is true, set this rich menu as the default for all users
     if (richMenuData.setAsDefault) {
-      const setDefaultUrl = `https://api.line.me/v2/bot/user/all/richmenu/${lineRichMenu.richMenuId}`;
+      const setDefaultUrl = `https://api.line.me/v2/bot/user/all/richmenu/${lineRichMenuId}`;
       const setDefaultResponse = await fetch(setDefaultUrl, {
         method: 'POST',
         headers: {
@@ -115,16 +127,14 @@ serve(async (req) => {
       if (!setDefaultResponse.ok) {
         const errorText = await setDefaultResponse.text();
         console.error('Failed to set default rich menu:', errorText);
-        // We don't throw an error here, just log it, 
-        // as the menu creation itself was successful.
       } else {
-        console.log(`Successfully set rich menu ${lineRichMenu.richMenuId} as default.`);
+        console.log(`Successfully set rich menu ${lineRichMenuId} as default.`);
       }
     }
 
     return new Response(JSON.stringify({ 
       success: true, 
-      lineRichMenuId: lineRichMenu.richMenuId 
+      lineRichMenuId: lineRichMenuId 
     }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });

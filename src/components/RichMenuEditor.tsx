@@ -260,6 +260,7 @@ export const RichMenuEditor = ({ menu, onSave, onCancel }: RichMenuEditorProps) 
         try {
           const { error: lineError } = await supabase.functions.invoke('create-rich-menu', {
             body: {
+              richMenuId: richMenuId,
               richMenuData: {
                 name,
                 chat_bar_text: chatBarText,

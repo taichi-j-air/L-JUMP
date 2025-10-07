@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { ArrowLeft, Menu, Plus, Settings, Eye, Trash2 } from "lucide-react";
+import { ArrowLeft, Menu, Plus, Settings, Trash2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { RichMenuEditor } from "@/components/RichMenuEditor";
@@ -17,6 +17,7 @@ interface RichMenu {
   is_active: boolean;
   size: 'full' | 'half';
   created_at: string;
+  line_rich_menu_id?: string | null;
 }
 
 const RichMenuSettings = () => {
@@ -69,33 +70,34 @@ const RichMenuSettings = () => {
     setShowEditor(true);
   };
 
-  const deleteMenu = async (id: string) => {
+  const deleteMenu = async (dbId: string, lineId: string | null | undefined) => {
     if (!confirm('このリッチメニューを削除しますか？')) return;
     
     try {
       setLoading(true);
+      let lineError: any = null;
 
-      // Delete from LINE API first
-      const { error: lineError } = await supabase.functions.invoke('delete-rich-menu', {
-        body: { richMenuId: id }
-      });
-
-      if (lineError) {
-        console.error('LINE API error:', lineError);
-        // Continue with database deletion even if LINE API fails
+      if (lineId) {
+        const { error } = await supabase.functions.invoke('delete-rich-menu', {
+          body: { richMenuId: lineId }
+        });
+        lineError = error;
       }
 
-      // Delete from database
-      const { error } = await supabase
+      if (lineError) {
+        console.error('LINE API error during deletion:', lineError);
+      }
+
+      const { error: dbError } = await supabase
         .from('rich_menus')
         .delete()
-        .eq('id', id);
+        .eq('id', dbId);
 
-      if (error) throw error;
+      if (dbError) throw dbError;
       
       toast({
         title: "削除完了",
-        description: lineError ? "データベースから削除されました（LINE API でエラーが発生）" : "データベースとLINE公式アカウントから削除されました",
+        description: lineError ? "データベースから削除されました（LINE APIでの削除に失敗）" : "データベースとLINE公式アカウントから削除されました",
       });
       loadRichMenus();
     } catch (error) {
@@ -110,31 +112,41 @@ const RichMenuSettings = () => {
     }
   };
 
-  const setDefaultMenu = async (id: string) => {
+  const setDefaultMenu = async (dbId: string, lineId: string | null | undefined) => {
+    if (!lineId) {
+      toast({
+        title: "エラー",
+        description: "このリッチメニューはLINEに登録されていないため、デフォルトに設定できません。",
+        variant: "destructive",
+      });
+      return;
+    }
+
     try {
       setLoading(true);
       
-      // まず全てのデフォルトを解除
       await supabase
         .from('rich_menus')
         .update({ is_default: false })
         .neq('id', '00000000-0000-0000-0000-000000000000');
 
-      // 指定したメニューをデフォルトに設定
-      const { error } = await supabase
+      const { error: dbError } = await supabase
         .from('rich_menus')
         .update({ is_default: true })
-        .eq('id', id);
+        .eq('id', dbId);
 
-      if (error) throw error;
+      if (dbError) throw dbError;
 
-      // Set default on LINE API
       const { error: lineError } = await supabase.functions.invoke('set-default-rich-menu', {
-        body: { richMenuId: id }
+        body: { richMenuId: lineId }
       });
 
       if (lineError) {
         console.error('LINE API error:', lineError);
+        if (lineError.context) {
+          const errorBody = await lineError.context.text();
+          console.error('Edge function response body:', errorBody);
+        }
         toast({
           title: "警告",
           description: "データベースは更新されましたが、LINE公式アカウントへの反映でエラーが発生しました。",
@@ -264,7 +276,7 @@ const RichMenuSettings = () => {
                           <Button
                             variant="outline"
                             size="sm"
-                            onClick={() => setDefaultMenu(menu.id)}
+                            onClick={() => setDefaultMenu(menu.id, menu.line_rich_menu_id)}
                           >
                             デフォルトに設定
                           </Button>
@@ -272,7 +284,7 @@ const RichMenuSettings = () => {
                         <Button
                           variant="outline"
                           size="sm"
-                          onClick={() => deleteMenu(menu.id)}
+                          onClick={() => deleteMenu(menu.id, menu.line_rich_menu_id)}
                         >
                           <Trash2 className="w-4 h-4" />
                         </Button>
