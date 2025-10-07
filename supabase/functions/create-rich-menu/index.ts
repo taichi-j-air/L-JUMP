@@ -104,14 +104,19 @@ serve(async (req) => {
           });
 
           if (!uploadResponse.ok) {
-            console.error('Image upload failed:', await uploadResponse.text());
-          } else {
-            console.log('Image uploaded successfully');
+            const uploadErrorText = await uploadResponse.text();
+            console.error('Image upload failed:', uploadErrorText);
+            throw new Error(`Image upload to LINE failed: ${uploadErrorText}`);
           }
+        } else {
+          throw new Error(`Failed to fetch image from URL: ${richMenuData.background_image_url}`);
         }
       } catch (imageError) {
-        console.error('Image upload error:', imageError);
+        console.error('Image upload process error:', imageError);
+        throw new Error(`Image upload process failed: ${imageError.message}`);
       }
+    } else {
+        throw new Error('A background image is required to create a rich menu on LINE.');
     }
 
     // If setAsDefault is true, set this rich menu as the default for all users
@@ -127,8 +132,7 @@ serve(async (req) => {
       if (!setDefaultResponse.ok) {
         const errorText = await setDefaultResponse.text();
         console.error('Failed to set default rich menu:', errorText);
-      } else {
-        console.log(`Successfully set rich menu ${lineRichMenuId} as default.`);
+        // Do not throw here, as the menu is already created. The client can retry.
       }
     }
 
@@ -140,7 +144,7 @@ serve(async (req) => {
     });
 
   } catch (error) {
-    console.error('Error in create-rich-menu:', error);
+    console.error('Error in create-rich-menu:', error.message);
     return new Response(JSON.stringify({ 
       success: false, 
       error: (error as Error)?.message || 'Unknown error'

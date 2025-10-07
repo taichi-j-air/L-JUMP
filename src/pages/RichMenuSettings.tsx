@@ -7,6 +7,7 @@ import { ArrowLeft, Menu, Plus, Settings, Trash2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { RichMenuEditor } from "@/components/RichMenuEditor";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 
 interface RichMenu {
   id: string;
@@ -143,13 +144,10 @@ const RichMenuSettings = () => {
 
       if (lineError) {
         console.error('LINE API error:', lineError);
-        if (lineError.context) {
-          const errorBody = await lineError.context.text();
-          console.error('Edge function response body:', errorBody);
-        }
+        const description = (lineError as Error)?.message || "データベースは更新されましたが、LINE公式アカウントへの反映でエラーが発生しました。";
         toast({
           title: "警告",
-          description: "データベースは更新されましたが、LINE公式アカウントへの反映でエラーが発生しました。",
+          description: description,
           variant: "destructive"
         });
       } else {
@@ -273,13 +271,27 @@ const RichMenuSettings = () => {
                           <Settings className="w-4 h-4" />
                         </Button>
                         {!menu.is_default && (
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => setDefaultMenu(menu.id, menu.line_rich_menu_id)}
-                          >
-                            デフォルトに設定
-                          </Button>
+                          <TooltipProvider>
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <span tabIndex={0}>
+                                  <Button
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={() => setDefaultMenu(menu.id, menu.line_rich_menu_id)}
+                                    disabled={!menu.line_rich_menu_id}
+                                  >
+                                    デフォルトに設定
+                                  </Button>
+                                </span>
+                              </TooltipTrigger>
+                              {!menu.line_rich_menu_id && (
+                                <TooltipContent>
+                                  <p>背景画像を設定し、LINEに登録されたメニューのみ設定可能です。</p>
+                                </TooltipContent>
+                              )}
+                            </Tooltip>
+                          </TooltipProvider>
                         )}
                         <Button
                           variant="outline"
