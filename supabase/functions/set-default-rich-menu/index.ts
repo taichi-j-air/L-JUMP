@@ -31,11 +31,8 @@ serve(async (req) => {
 
     const { richMenuId } = await req.json();
     if (!richMenuId) {
-      throw new Error('richMenuId is required');
+      throw new Error('richMenuId is required in the request body.');
     }
-
-    // Log the received ID for debugging
-    console.log(`Attempting to set default rich menu for LINE ID: ${richMenuId}`);
 
     // Get LINE credentials
     const { data: credentials } = await supabase
@@ -46,7 +43,7 @@ serve(async (req) => {
       .single();
 
     if (!credentials?.encrypted_value) {
-      throw new Error('LINE access token not found');
+      throw new Error('LINE access token not found in the database.');
     }
 
     const accessToken = credentials.encrypted_value;
@@ -61,9 +58,11 @@ serve(async (req) => {
     });
 
     if (!setDefaultResponse.ok) {
+      // Create a more descriptive error message for the client
       const errorText = await setDefaultResponse.text();
-      console.error('Failed to set default rich menu on LINE API:', errorText);
-      throw new Error(`LINE API error: ${setDefaultResponse.status} - ${errorText}`);
+      const clientError = `Failed to set default menu. The ID '${richMenuId}' was not found by LINE (404). Please verify this ID exists on the LINE platform. Raw response: ${errorText}`;
+      console.error(`LINE API Error: ${clientError}`);
+      throw new Error(clientError);
     }
 
     console.log(`Successfully set rich menu ${richMenuId} as default.`);
@@ -73,7 +72,7 @@ serve(async (req) => {
     });
 
   } catch (error) {
-    console.error('Error in set-default-rich-menu:', error);
+    console.error('Error in set-default-rich-menu:', error.message);
     return new Response(JSON.stringify({ 
       success: false, 
       error: (error as Error)?.message || 'Unknown error'
