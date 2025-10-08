@@ -268,14 +268,31 @@ serve(async (req) => {
     const imageResponse = await fetch(menuData.background_image_url);
     if (!imageResponse.ok) throw new Error('Failed to fetch image from URL.');
     const imageBuffer = await imageResponse.arrayBuffer();
-    const uploadResponse = await fetch(`https://api-data.line.me/v2/bot/richmenu/${newLineRichMenuId}/content`, { method: 'POST', headers: { 'Authorization': `Bearer ${accessToken}`, 'Content-Type': 'image/png' }, body: imageBuffer });
+    // Determine Content-Type dynamically from response headers or URL extension
+    const headerType = imageResponse.headers.get('content-type')?.toLowerCase() ?? '';
+    let contentType = headerType.includes('jpeg') || headerType.includes('jpg')
+      ? 'image/jpeg'
+      : headerType.includes('png')
+        ? 'image/png'
+        : '';
+    if (!contentType) {
+      const lowerUrl = (menuData.background_image_url || '').toLowerCase();
+      if (lowerUrl.endsWith('.jpg') || lowerUrl.endsWith('.jpeg')) contentType = 'image/jpeg';
+      else if (lowerUrl.endsWith('.png')) contentType = 'image/png';
+      else contentType = 'image/png';
+    }
+    const uploadResponse = await fetch(`https://api-data.line.me/v2/bot/richmenu/${newLineRichMenuId}/content`, {
+      method: 'POST',
+      headers: { 'Authorization': `Bearer ${accessToken}`, 'Content-Type': contentType },
+      body: imageBuffer
+    });
     if (!uploadResponse.ok) throw new Error(`LINE API error (image upload): ${await uploadResponse.text()}`);
 
     // --- Generate/Use Alias ID and Register with LINE ---
     if (!currentLineAliasId) {
       currentLineAliasId = makeAliasId();
     }
-    console.log('Creating alias', { aliasId: currentLineAliasId, for: 'main', richMenuId: lineRichMenuId });
+    console.log('Creating alias', { aliasId: currentLineAliasId, for: 'main', richMenuId: newLineRichMenuId });
     const aliasResponse = await fetch('https://api.line.me/v2/bot/richmenu/alias', {
       method: 'POST',
       headers: { 'Authorization': `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
