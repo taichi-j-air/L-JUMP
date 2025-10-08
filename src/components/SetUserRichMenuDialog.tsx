@@ -60,12 +60,12 @@ export const SetUserRichMenuDialog = ({ user, friend, open, onOpenChange }: SetU
       });
 
       if (currentMenuError) {
-        // A 404 error is expected if no menu is linked, so we don't throw an error.
-        if (!currentMenuError.message.includes('404')) {
+        if (currentMenuError.context && currentMenuError.context.status === 404) {
+            setCurrentUserMenuId(null);
+            setSelectedMenuId('default');
+        } else {
             throw currentMenuError;
         }
-        setCurrentUserMenuId(null);
-        setSelectedMenuId('default');
       } else {
         const linkedLineId = currentMenuData.richMenuId;
         const matchingMenu = menus.find(m => m.line_rich_menu_id === linkedLineId);
