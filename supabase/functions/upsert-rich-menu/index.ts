@@ -141,16 +141,79 @@ serve(async (req) => {
     const authHeader = req.headers.get('Authorization');
     if (!authHeader) throw new Error('No authorization header');
     const token = authHeader.replace('Bearer ', '');
-    const { data: { user }, error: authError } = await supabase.auth.getUser();
+    const { data: { user }, error: authError } = await supabase.auth.getUser(token);
     if (authError || !user) throw new Error('Authentication failed');
 
     const { dbId, lineId, lineAliasId, menuData, tapAreas, isDefault } = await req.json();
     if (!menuData) throw new Error('menuData is required.');
 
-    // Step 1: Get LINE Access Token
-    const { data: credentials, error: credsError } = await supabase.from('secure_line_credentials').select('encrypted_value').eq('user_id', user.id).eq('credential_type', 'channel_access_token').single();
-    if (credsError || !credentials) throw new Error('LINE access token not found.');
-    const accessToken = credentials.encrypted_value;
+    // Step 1: Get LINE Access Token with fallback
+    let accessToken: string | null = null;
+
+    // Try RPC function first
+    try {
+      const { data: rpcData, error: rpcError } = await supabase.rpc('get_line_credentials_for_user', { 
+        p_user_id: user.id 
+      });
+      if (!rpcError && rpcData?.channel_access_token) {
+        accessToken = rpcData.channel_access_token;
+        console.log('✓ Access token retrieved via RPC');
+      }
+    } catch (rpcErr) {
+      console.log('RPC token retrieval failed, trying direct query:', rpcErr);
+    }
+
+    // Fallback: Try secure_line_credentials with conditional decryption
+    if (!accessToken) {
+      const { data: credentials, error: credsError } = await supabase
+        .from('secure_line_credentials')
+        .select('encrypted_value')
+        .eq('user_id', user.id)
+        .eq('credential_type', 'channel_access_token')
+        .maybeSingle();
+
+      if (!credsError && credentials?.encrypted_value) {
+        const value = credentials.encrypted_value;
+        
+        if (value.startsWith('enc:')) {
+          // Encrypted token - needs decryption
+          try {
+            const { data: decryptData, error: decryptError } = await supabase.functions.invoke(
+              'decrypt-credential',
+              { body: { encryptedValue: value } }
+            );
+            if (!decryptError && decryptData?.decryptedValue) {
+              accessToken = decryptData.decryptedValue;
+              console.log('✓ Access token decrypted from secure_line_credentials');
+            }
+          } catch (decryptErr) {
+            console.error('Decryption failed:', decryptErr);
+          }
+        } else {
+          // Plain text token
+          accessToken = value;
+          console.log('✓ Access token retrieved as plaintext from secure_line_credentials');
+        }
+      }
+    }
+
+    // Final fallback: Try profiles table (legacy)
+    if (!accessToken) {
+      const { data: profileData } = await supabase
+        .from('profiles')
+        .select('line_channel_access_token')
+        .eq('user_id', user.id)
+        .maybeSingle();
+      
+      if (profileData?.line_channel_access_token) {
+        accessToken = profileData.line_channel_access_token;
+        console.log('✓ Access token retrieved from profiles (legacy)');
+      }
+    }
+
+    if (!accessToken) {
+      throw new Error('LINE access token not found. Please configure your LINE credentials.');
+    }
 
     // --- Handle Update (Delete old menu and alias from LINE) ---
     let currentLineAliasId = lineAliasId; // Use existing alias if available
