@@ -24,7 +24,7 @@ export function useSecureCredentials() {
       if (!user) return;
 
       const { data, error } = await supabase
-        .rpc('get_user_line_credentials', { p_user_id: user.id });
+        .rpc('get_line_credentials_for_user', { p_user_id: user.id });
 
       if (error) {
         console.error('Failed to load credentials:', error);
