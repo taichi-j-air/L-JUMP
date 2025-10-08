@@ -76,7 +76,7 @@ async function normalizeTapAreasForSwitch(
 
     if (!aliasId) {
       if (!targetMenu.line_rich_menu_id) {
-        throw new Error('Rich menu switch target is missing LINE rich menu ID.');
+        throw new Error('切り替え先のリッチメニューがLINEに同期されていません。対象のリッチメニューを保存してから再度お試しください。');
       }
 
       if (aliasCache.has(targetMenu.id)) {
@@ -255,6 +255,7 @@ serve(async (req) => {
     });
 
   } catch (error) {
+    console.error('upsert-rich-menu error', error);
     return new Response(JSON.stringify({ success: false, error: (error as Error)?.message || 'Unknown error' }), {
       status: 500,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },

@@ -36,6 +36,19 @@ export const RichMenuEditor = ({ menu, onSave, onCancel }: RichMenuEditorProps) 
   const editorRef = useRef<HTMLDivElement>(null);
   const [availableRichMenus, setAvailableRichMenus] = useState<RichMenu[]>([]);
 
+  const getFunctionErrorMessage = (err: unknown): string => {
+    if (typeof err === 'object' && err !== null) {
+      const contextError = (err as { context?: { response?: { error?: unknown } } }).context?.response?.error;
+      if (typeof contextError === 'string' && contextError.trim().length > 0) {
+        return contextError;
+      }
+    }
+    if (err instanceof Error) {
+      return err.message;
+    }
+    return '不明なエラーが発生しました';
+  };
+
   useEffect(() => {
     if (menu?.id) loadTapAreas(menu.id);
     loadAvailableRichMenus();
@@ -93,18 +106,49 @@ export const RichMenuEditor = ({ menu, onSave, onCancel }: RichMenuEditorProps) 
       return;
     }
     if (!backgroundImageUrl) {
-        toast({ title: "エラー", description: "背景画像は必須です。", variant: "destructive" });
-        return;
+      toast({ title: "エラー", description: "背景画像は必須です。", variant: "destructive" });
+      return;
     }
 
-    const hasInvalidSwitchTarget = tapAreas.some(
-      area => area.action_type === 'richmenuswitch' && !area.action_value
-    );
+    const switchAreas = tapAreas.filter(area => area.action_type === 'richmenuswitch');
 
-    if (hasInvalidSwitchTarget) {
+    if (switchAreas.some(area => !area.action_value)) {
       toast({
-        title: "?G???[",
-        description: "???b?`???j???[???`??????????????j???[??I??????????????",
+        title: "エラー",
+        description: "リッチメニュー切り替えの対象メニューを選択してください",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    const resolveTargetMenu = (value: string) =>
+      availableRichMenus.find(
+        rm =>
+          rm.id === value ||
+          rm.line_rich_menu_alias_id === value ||
+          rm.line_rich_menu_id === value
+      );
+
+    const switchTargets = switchAreas.map(area => ({
+      area,
+      menu: resolveTargetMenu(area.action_value),
+    }));
+
+    const unresolvedSwitch = switchTargets.find(target => !target.menu);
+    if (unresolvedSwitch) {
+      toast({
+        title: "エラー",
+        description: "切り替え先のリッチメニューが見つかりません。対象のメニューを再選択してください。",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    const unsyncedTarget = switchTargets.find(target => target.menu && !target.menu.line_rich_menu_id);
+    if (unsyncedTarget) {
+      toast({
+        title: "エラー",
+        description: "切り替え先のリッチメニューがLINEと同期されていません。対象メニューを保存してから再度お試しください。",
         variant: "destructive",
       });
       return;
@@ -125,18 +169,16 @@ export const RichMenuEditor = ({ menu, onSave, onCancel }: RichMenuEditorProps) 
           size,
         },
         tapAreas: tapAreas.map(a => {
-            if (a.action_type !== 'richmenuswitch') {
-                return a;
-            }
+          if (a.action_type !== 'richmenuswitch') {
+            return a;
+          }
 
-            const targetMenu = availableRichMenus.find(
-                rm => rm.id === a.action_value || rm.line_rich_menu_alias_id === a.action_value
-            );
+          const targetMenu = resolveTargetMenu(a.action_value);
 
-            return {
-                ...a,
-                action_value: targetMenu?.line_rich_menu_alias_id || a.action_value,
-            };
+          return {
+            ...a,
+            action_value: targetMenu?.line_rich_menu_alias_id || a.action_value,
+          };
         }),
         isDefault,
       };
@@ -150,12 +192,12 @@ export const RichMenuEditor = ({ menu, onSave, onCancel }: RichMenuEditorProps) 
 
     } catch (error) {
       console.error('Error saving rich menu:', error);
-      toast({ title: "エラー", description: `保存に失敗しました: ${(error as Error).message}`, variant: "destructive" });
+      const fallbackMessage = getFunctionErrorMessage(error);
+      toast({ title: "エラー", description: `保存に失敗しました: ${fallbackMessage}`, variant: "destructive" });
     } finally {
       setLoading(false);
     }
   };
-
   return (
     <div className="min-h-screen bg-background">
       <header className="border-b sticky top-0 bg-background z-10"><div className="container mx-auto px-4 py-4"><div className="flex items-center justify-between"><div className="flex items-center gap-4"><Button variant="ghost" size="sm" onClick={onCancel} className="flex items-center gap-2"><ArrowLeft className="w-4 h-4" />戻る</Button><h1 className="text-2xl font-bold">{menu ? 'リッチメニュー編集' : '新規リッチメニュー作成'}</h1></div><Button onClick={handleSave} disabled={loading}>{loading ? '保存中...' : '保存'}</Button></div></div></header>
@@ -181,7 +223,7 @@ export const RichMenuEditor = ({ menu, onSave, onCancel }: RichMenuEditorProps) 
                 </Card>
                 <Card>
                   <CardHeader><div className="flex justify-between items-center"><CardTitle>タップエリア</CardTitle><Button onClick={addTapArea} size="sm"><Plus className="w-4 h-4 mr-2" />追加</Button></div></CardHeader>
-                  <CardContent className="space-y-4">{tapAreas.map((area, index) => (<div key={area.id} className={`p-4 border rounded-lg ${selectedArea === area.id ? 'border-primary' : ''}`} onClick={() => setSelectedArea(area.id)}><div className="flex justify-between items-center mb-3"><span className="font-medium">エリア {index + 1}</span><Button variant="ghost" size="icon" className="h-8 w-8" onClick={(e) => { e.stopPropagation(); deleteTapArea(area.id); }}><Trash2 className="w-4 h-4" /></Button></div>{selectedArea === area.id && (<div className="space-y-4"><div><Label>アクションタイプ</Label><Select value={area.action_type} onValueChange={(value: 'uri' | 'message' | 'richmenuswitch') => updateTapArea(area.id, { action_type: value })}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="uri">URLを開く</SelectItem><SelectItem value="message">テキストを送信</SelectItem><SelectItem value="richmenuswitch">リッチメニューを切り替え</SelectItem></SelectContent></Select></div><div><Label>{area.action_type === 'uri' ? 'URL' : area.action_type === 'message' ? '送信テキスト' : '切り替え先メニュー'}</Label>{area.action_type === 'richmenuswitch' ? (<Select value={area.action_value} onValueChange={(value) => updateTapArea(area.id, { action_value: value })}><SelectTrigger><SelectValue placeholder="リッチメニューを選択" /></SelectTrigger><SelectContent>{availableRichMenus.map((richMenu) => (<SelectItem key={richMenu.id} value={richMenu.line_rich_menu_alias_id ?? richMenu.id}>{richMenu.name}</SelectItem>))}</SelectContent></Select>) : (<Input value={area.action_value} onChange={(e) => updateTapArea(area.id, { action_value: e.target.value })} placeholder={area.action_type === 'uri' ? 'https://example.com' : 'こんにちは'} />)}</div></div>)}</div>))}
+                  <CardContent className="space-y-4">{tapAreas.map((area, index) => (<div key={area.id} className={`p-4 border rounded-lg ${selectedArea === area.id ? 'border-primary' : ''}`} onClick={() => setSelectedArea(area.id)}><div className="flex justify-between items-center mb-3"><span className="font-medium">エリア {index + 1}</span><Button variant="ghost" size="icon" className="h-8 w-8" onClick={(e) => { e.stopPropagation(); deleteTapArea(area.id); }}><Trash2 className="w-4 h-4" /></Button></div>{selectedArea === area.id && (<div className="space-y-4"><div><Label>アクションタイプ</Label><Select value={area.action_type} onValueChange={(value: 'uri' | 'message' | 'richmenuswitch') => updateTapArea(area.id, { action_type: value })}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="uri">URLを開く</SelectItem><SelectItem value="message">テキストを送信</SelectItem><SelectItem value="richmenuswitch">リッチメニューを切り替え</SelectItem></SelectContent></Select></div><div><Label>{area.action_type === 'uri' ? 'URL' : area.action_type === 'message' ? '送信テキスト' : '切り替え先メニュー'}</Label>{area.action_type === 'richmenuswitch' ? (<Select value={area.action_value} onValueChange={(value) => updateTapArea(area.id, { action_value: value })}><SelectTrigger><SelectValue placeholder="リッチメニューを選択" /></SelectTrigger><SelectContent>{availableRichMenus.map((richMenu) => (<SelectItem key={richMenu.id} value={richMenu.line_rich_menu_alias_id ?? richMenu.line_rich_menu_id ?? richMenu.id}>{richMenu.name}</SelectItem>))}</SelectContent></Select>) : (<Input value={area.action_value} onChange={(e) => updateTapArea(area.id, { action_value: e.target.value })} placeholder={area.action_type === 'uri' ? 'https://example.com' : 'こんにちは'} />)}</div></div>)}</div>))}
                     {tapAreas.length === 0 && (<div className="text-center py-10 text-muted-foreground"><p>タップエリアがありません</p><p className="text-sm">「追加」ボタンでエリアを作成してください</p></div>)}</CardContent>
                 </Card>
               </div>
