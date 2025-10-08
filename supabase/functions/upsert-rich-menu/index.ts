@@ -24,6 +24,12 @@ serve(async (req) => {
     if (authError || !user) throw new Error('Authentication failed');
 
     const { menuData, tapAreas, isDefault } = await req.json();
+    
+    // Log received data for debugging
+    console.log("--- Upsert Rich Menu Invoked ---");
+    console.log("Received menuData.size:", menuData?.size);
+    console.log("Received isDefault flag:", isDefault);
+
     if (!menuData) throw new Error('menuData is required.');
 
     if (!menuData.background_image_url) {
