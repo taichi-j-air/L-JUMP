@@ -16,7 +16,6 @@ interface Friend {
 interface RichMenu {
   id: string;
   name: string;
-  line_rich_menu_id?: string | null;
 }
 
 interface SetUserRichMenuDialogProps {
@@ -46,9 +45,8 @@ export const SetUserRichMenuDialog = ({ user, friend, open, onOpenChange }: SetU
       // Fetch all available rich menus
       const { data: menus, error: menusError } = await supabase
         .from('rich_menus')
-        .select('id, name, line_rich_menu_id')
+        .select('id, name')
         .eq('user_id', user.id)
-        .not('line_rich_menu_id', 'is', null)
         .order('name', { ascending: true });
 
       if (menusError) throw menusError;
@@ -67,10 +65,9 @@ export const SetUserRichMenuDialog = ({ user, friend, open, onOpenChange }: SetU
             throw currentMenuError;
         }
       } else {
-        const linkedLineId = currentMenuData.richMenuId;
-        const matchingMenu = menus.find(m => m.line_rich_menu_id === linkedLineId);
-        setCurrentUserMenuId(matchingMenu?.id || null);
-        setSelectedMenuId(matchingMenu?.id || 'default');
+        // Use menuId from response if available
+        setCurrentUserMenuId(currentMenuData.menuId || null);
+        setSelectedMenuId(currentMenuData.menuId || 'default');
       }
 
     } catch (error) {
@@ -94,13 +91,13 @@ export const SetUserRichMenuDialog = ({ user, friend, open, onOpenChange }: SetU
         if (error) throw error;
         toast({ title: "成功", description: "リッチメニューをデフォルトに戻しました。" });
       } else {
-        // Link the selected menu
+        // Link the selected menu using its ID
         const menuToLink = richMenus.find(m => m.id === selectedMenuId);
-        if (!menuToLink?.line_rich_menu_id) {
-          throw new Error("選択されたメニューにLINE IDがありません。");
+        if (!menuToLink) {
+          throw new Error("選択されたメニューが見つかりません。");
         }
         const { error } = await supabase.functions.invoke('link-rich-menu-to-user', {
-          body: { userId: friend.line_user_id, richMenuId: menuToLink.line_rich_menu_id },
+          body: { userId: friend.line_user_id, richMenuId: menuToLink.id },
         });
         if (error) throw error;
         toast({ title: "成功", description: `「${menuToLink.name}」をユーザーに設定しました。` });
