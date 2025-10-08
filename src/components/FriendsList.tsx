@@ -4,16 +4,15 @@ import { User } from "@supabase/supabase-js"
 import { Avatar, AvatarFallback, AvatarImage } from "./ui/avatar"
 import { Badge } from "./ui/badge"
 import { Button } from "./ui/button"
-import { MessageCircle, Tag as TagIcon, ListChecks, Calendar as CalendarIcon } from "lucide-react"
+import { MessageCircle, Tag as TagIcon, ListChecks, Calendar as CalendarIcon, MenuSquare } from "lucide-react"
 import { format, startOfDay, endOfDay } from "date-fns"
 import { ChatWindow } from "./ChatWindow"
 import { Input } from "./ui/input"
+import { Label } from "./ui/label"
 import { useToast } from "@/hooks/use-toast"
 import { FriendScenarioDialog } from "./FriendScenarioDialog"
 import FriendTagDialog from "./FriendTagDialog"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "./ui/select"
-import { Checkbox } from "./ui/checkbox"
-import { Label } from "./ui/label"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "./ui/dialog"
 import { Calendar } from "./ui/calendar"
 import { Popover, PopoverContent, PopoverTrigger } from "./ui/popover"
@@ -21,6 +20,8 @@ import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "./
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "./ui/alert-dialog"
 import { cn } from "@/lib/utils"
 import type { DateRange } from "react-day-picker"
+import { SetUserRichMenuDialog } from "./SetUserRichMenuDialog"
+
 interface Friend {
   id: string
   line_user_id: string
@@ -41,15 +42,13 @@ export function FriendsList({ user }: FriendsListProps) {
   const [searchTerm, setSearchTerm] = useState("")
   const [scenarioDialogFriend, setScenarioDialogFriend] = useState<Friend | null>(null)
   const [tagDialogFriend, setTagDialogFriend] = useState<Friend | null>(null)
-  const { toast } = useToast() // moved to hooks per shadcn update
+  const [richMenuDialogFriend, setRichMenuDialogFriend] = useState<Friend | null>(null)
+  const { toast } = useToast()
 
-  // Filters & pagination
   const [dateRange, setDateRange] = useState<DateRange | undefined>(undefined)
   const [sort, setSort] = useState<'date_desc'|'date_asc'|'name_asc'>("date_desc")
   const [page, setPage] = useState(1)
   const pageSize = 50
-
-  // Tags & scenarios
   const [tags, setTags] = useState<Array<{id:string; name:string}>>([])
   const [scenarios, setScenarios] = useState<Array<{id:string; name:string}>>([])
   const [selectedTag, setSelectedTag] = useState<string>("all")
@@ -58,23 +57,16 @@ export function FriendsList({ user }: FriendsListProps) {
   const [friendScenarioMap, setFriendScenarioMap] = useState<Record<string, string[]>>({})
   const [friendProtectedScenarioMap, setFriendProtectedScenarioMap] = useState<Record<string, string[]>>({})
   const [blockTagId, setBlockTagId] = useState<string | null>(null)
-
-  // Bulk actions
   const [bulkScenarioId, setBulkScenarioId] = useState<string>("")
   const [bulkTagAddId, setBulkTagAddId] = useState<string>("")
   const [bulkTagRemoveId, setBulkTagRemoveId] = useState<string>("")
-  const [confirmMoveOpen, setConfirmMoveOpen] = useState(false)
   const [confirmRegisterOpen, setConfirmRegisterOpen] = useState(false)
   const [confirmUnenrollOpen, setConfirmUnenrollOpen] = useState(false)
   const [confirmTagOpen, setConfirmTagOpen] = useState(false)
-
-  // Detail dialog
   const [detailOpen, setDetailOpen] = useState(false)
   const [detailFriend, setDetailFriend] = useState<Friend | null>(null)
   const [detailForms, setDetailForms] = useState<any[]>([])
   const [detailLogs, setDetailLogs] = useState<any[]>([])
-
-  // Followers/blocked
   const [blockedSet, setBlockedSet] = useState<Set<string>>(new Set())
 
   useEffect(() => {
@@ -82,353 +74,37 @@ export function FriendsList({ user }: FriendsListProps) {
     loadAux()
   }, [user.id])
 
-  const loadFriends = async () => {
-    try {
-      const { data: dbData, error: dbError } = await supabase
-        .from('line_friends')
-        .select('*')
-        .eq('user_id', user.id)
-        .order('added_at', { ascending: false });
+  const loadFriends = async () => { try { const { data: dbData, error: dbError } = await supabase .from('line_friends') .select('*') .eq('user_id', user.id) .order('added_at', { ascending: false }); if (dbError) { console.error('Error loading friends from DB:', dbError); } else { setFriends(dbData || []); const ids = (dbData || []).map((f:any)=>f.id); if (ids.length) { const { data: tracks } = await supabase .from('step_delivery_tracking') .select(` friend_id, scenario_id, status, step_scenarios!inner(prevent_auto_exit) `) .in('friend_id', ids) .neq('status','exited'); const map: Record<string,string[]> = {}; const protectedMap: Record<string,string[]> = {}; for (const t of (tracks||[]) as any[]) { const arr = map[t.friend_id] || []; if (!arr.includes(t.scenario_id)) arr.push(t.scenario_id); map[t.friend_id] = arr; if (t.step_scenarios?.prevent_auto_exit) { const protectedArr = protectedMap[t.friend_id] || []; if (!protectedArr.includes(t.scenario_id)) protectedArr.push(t.scenario_id); protectedMap[t.friend_id] = protectedArr; } } setFriendScenarioMap(map); setFriendProtectedScenarioMap(protectedMap); } if (ids.length) { const { data: fts } = await supabase .from('friend_tags') .select('friend_id, tag_id') .in('friend_id', ids); const tmap: Record<string,string[]> = {}; for (const r of (fts||[]) as any[]) { const arr = tmap[r.friend_id] || []; arr.push(r.tag_id); tmap[r.friend_id] = arr; } setFriendTagMap(tmap); } try { const { data: followersData, error: followersError } = await supabase.functions.invoke('get-line-friends', { body: {} }); if (!followersError && followersData?.friends) { const currentIds = new Set((followersData.friends as any[]).map((x:any)=>x.line_user_id)); const dbLineIds = (dbData || []).map((f:any)=>f.line_user_id); const blocked = dbLineIds.filter((id:string)=>!currentIds.has(id)); setBlockedSet(new Set(blocked)); } } catch (e) { console.error('Error fetching LINE followers:', e); } } } catch (error) { console.error('Error loading friends:', error); } finally { setLoading(false); } };
+  const loadAux = async () => { const [{ data: tagRows }, { data: scenarioRows }] = await Promise.all([ supabase.from('tags').select('id, name').eq('user_id', user.id).order('name', { ascending: true }), supabase.from('step_scenarios').select('id, name').eq('user_id', user.id).order('name', { ascending: true }), ]); setTags((tagRows||[]) as any); setScenarios((scenarioRows||[]) as any); const blockTag = (tagRows || []).find((t) => t.name === "ブロック"); if (blockTag) { setBlockTagId(blockTag.id); } };
+  const toggleBlockTag = async (friend: Friend) => { if (!blockTagId) { toast({ title: "エラー", description: "「ブロック」タグが見つかりません。", variant: "destructive" }); return; } const isBlocked = (friendTagMap[friend.id] || []).includes(blockTagId); try { if (isBlocked) { const { error } = await supabase.from("friend_tags").delete().eq("friend_id", friend.id).eq("tag_id", blockTagId); if (error) throw error; setFriendTagMap((prev) => { const newMap = { ...prev }; newMap[friend.id] = (newMap[friend.id] || []).filter((tId) => tId !== blockTagId); return newMap; }); toast({ title: "ブロック解除しました" }); } else { const { error } = await supabase.from("friend_tags").insert({ user_id: user.id, friend_id: friend.id, tag_id: blockTagId, }); if (error) throw error; setFriendTagMap((prev) => { const newMap = { ...prev }; if (!newMap[friend.id]) { newMap[friend.id] = []; } newMap[friend.id].push(blockTagId); return newMap; }); toast({ title: "ブロックしました" }); } window.dispatchEvent(new CustomEvent("refreshFriendTags")); } catch (error: any) { console.error("Error toggling block tag:", error); toast({ title: "操作に失敗しました", description: error.message, variant: "destructive" }); } };
 
-      if (dbError) {
-        console.error('Error loading friends from DB:', dbError);
-      } else {
-        setFriends(dbData || []);
-        // build scenario map
-        const ids = (dbData || []).map((f:any)=>f.id)
-        if (ids.length) {
-          const { data: tracks } = await supabase
-            .from('step_delivery_tracking')
-            .select(`
-              friend_id, 
-              scenario_id, 
-              status,
-              step_scenarios!inner(prevent_auto_exit)
-            `)
-            .in('friend_id', ids)
-            .neq('status','exited')
-          const map: Record<string,string[]> = {}
-          const protectedMap: Record<string,string[]> = {}
-          for (const t of (tracks||[]) as any[]) {
-            const arr = map[t.friend_id] || []
-            if (!arr.includes(t.scenario_id)) arr.push(t.scenario_id)
-            map[t.friend_id] = arr
-            
-            // 解除防止シナリオの追跡
-            if (t.step_scenarios?.prevent_auto_exit) {
-              const protectedArr = protectedMap[t.friend_id] || []
-              if (!protectedArr.includes(t.scenario_id)) protectedArr.push(t.scenario_id)
-              protectedMap[t.friend_id] = protectedArr
-            }
-          }
-          setFriendScenarioMap(map)
-          setFriendProtectedScenarioMap(protectedMap)
-        }
-        // build tag map
-        if (ids.length) {
-          const { data: fts } = await supabase
-            .from('friend_tags')
-            .select('friend_id, tag_id')
-            .in('friend_id', ids)
-          const tmap: Record<string,string[]> = {}
-          for (const r of (fts||[]) as any[]) {
-            const arr = tmap[r.friend_id] || []
-            arr.push(r.tag_id)
-            tmap[r.friend_id] = arr
-          }
-          setFriendTagMap(tmap)
-        }
-        // fetch current LINE followers to detect blocked/unfollowed
-        try {
-          const { data: followersData, error: followersError } = await supabase.functions.invoke('get-line-friends', { body: {} })
-          if (!followersError && followersData?.friends) {
-            const currentIds = new Set((followersData.friends as any[]).map((x:any)=>x.line_user_id))
-            const dbLineIds = (dbData || []).map((f:any)=>f.line_user_id)
-            const blocked = dbLineIds.filter((id:string)=>!currentIds.has(id))
-            setBlockedSet(new Set(blocked))
-          }
-        } catch (e) {
-          console.error('Error fetching LINE followers:', e)
-        }
-      }
-    } catch (error) {
-      console.error('Error loading friends:', error);
-    } finally {
-      setLoading(false);
-    }
-  }
+  if (loading) return <div className="p-4">読み込み中...</div>;
+  if (friends.length === 0) return <div className="p-4 text-center text-muted-foreground">まだ友達が追加されていません</div>;
+  if (selectedFriend) return <ChatWindow user={user} friend={selectedFriend} onClose={() => setSelectedFriend(null)} />;
 
-  const loadAux = async () => {
-    const [{ data: tagRows }, { data: scenarioRows }] = await Promise.all([
-      supabase.from('tags').select('id, name').eq('user_id', user.id).order('name', { ascending: true }),
-      supabase.from('step_scenarios').select('id, name').eq('user_id', user.id).order('name', { ascending: true }),
-    ])
-    setTags((tagRows||[]) as any)
-    setScenarios((scenarioRows||[]) as any)
-
-    const blockTag = (tagRows || []).find((t) => t.name === "ブロック")
-    if (blockTag) {
-      setBlockTagId(blockTag.id)
-    }
-  }
-
-  const toggleBlockTag = async (friend: Friend) => {
-    if (!blockTagId) {
-      toast({ title: "エラー", description: "「ブロック」タグが見つかりません。", variant: "destructive" })
-      return
-    }
-
-    const isBlocked = (friendTagMap[friend.id] || []).includes(blockTagId)
-
-    try {
-      if (isBlocked) {
-        // Unblock: delete from friend_tags
-        const { error } = await supabase.from("friend_tags").delete().eq("friend_id", friend.id).eq("tag_id", blockTagId)
-
-        if (error) throw error
-
-        // Update state
-        setFriendTagMap((prev) => {
-          const newMap = { ...prev }
-          newMap[friend.id] = (newMap[friend.id] || []).filter((tId) => tId !== blockTagId)
-          return newMap
-        })
-        toast({ title: "ブロック解除しました" })
-      } else {
-        // Block: insert into friend_tags
-        const { error } = await supabase.from("friend_tags").insert({
-          user_id: user.id,
-          friend_id: friend.id,
-          tag_id: blockTagId,
-        })
-
-        if (error) throw error
-
-        // Update state
-        setFriendTagMap((prev) => {
-          const newMap = { ...prev }
-          if (!newMap[friend.id]) {
-            newMap[friend.id] = []
-          }
-          newMap[friend.id].push(blockTagId)
-          return newMap
-        })
-        toast({ title: "ブロックしました" })
-      }
-      // refresh tag counts in TagsManager
-      window.dispatchEvent(new CustomEvent("refreshFriendTags"))
-    } catch (error: any) {
-      console.error("Error toggling block tag:", error)
-      toast({ title: "操作に失敗しました", description: error.message, variant: "destructive" })
-    }
-  }
-
-  if (loading) {
-    return <div className="p-4">読み込み中...</div>
-  }
-
-  if (friends.length === 0) {
-    return (
-      <div className="p-4 text-center text-muted-foreground">
-        まだ友達が追加されていません
-      </div>
-    )
-  }
-
-  if (selectedFriend) {
-    return (
-      <ChatWindow 
-        user={user} 
-        friend={selectedFriend} 
-        onClose={() => setSelectedFriend(null)} 
-      />
-    )
-  }
-
-  const filteredFriends = friends.filter((f) => {
-    const q = searchTerm.trim().toLowerCase()
-    const withinSearch = !q || (f.display_name || '').toLowerCase().includes(q) || f.line_user_id.toLowerCase().includes(q)
-    const d = new Date(f.added_at)
-    const fromOk = !dateRange?.from || d >= startOfDay(dateRange.from)
-    const toOk = !dateRange?.to || d <= endOfDay(dateRange.to)
-    const tagOk = selectedTag === 'all' || (friendTagMap[f.id] || []).includes(selectedTag)
-    const scenarioOk = selectedScenario === 'all' || (friendScenarioMap[f.id] || []).includes(selectedScenario)
-    return withinSearch && fromOk && toOk && tagOk && scenarioOk
-  }).sort((a,b) => {
-    if (sort === 'date_desc') return new Date(b.added_at).getTime() - new Date(a.added_at).getTime()
-    if (sort === 'date_asc') return new Date(a.added_at).getTime() - new Date(b.added_at).getTime()
-    return (a.display_name||'').localeCompare(b.display_name||'')
-  })
-
-  const totalPages = Math.max(1, Math.ceil(filteredFriends.length / pageSize))
-  const pagedFriends = filteredFriends.slice((page-1)*pageSize, page*pageSize)
+  const filteredFriends = friends.filter((f) => { const q = searchTerm.trim().toLowerCase(); const withinSearch = !q || (f.display_name || '').toLowerCase().includes(q) || f.line_user_id.toLowerCase().includes(q); const d = new Date(f.added_at); const fromOk = !dateRange?.from || d >= startOfDay(dateRange.from); const toOk = !dateRange?.to || d <= endOfDay(dateRange.to); const tagOk = selectedTag === 'all' || (friendTagMap[f.id] || []).includes(selectedTag); const scenarioOk = selectedScenario === 'all' || (friendScenarioMap[f.id] || []).includes(selectedScenario); return withinSearch && fromOk && toOk && tagOk && scenarioOk; }).sort((a,b) => { if (sort === 'date_desc') return new Date(b.added_at).getTime() - new Date(a.added_at).getTime(); if (sort === 'date_asc') return new Date(a.added_at).getTime() - new Date(b.added_at).getTime(); return (a.display_name||'').localeCompare(b.display_name||''); });
+  const totalPages = Math.max(1, Math.ceil(filteredFriends.length / pageSize));
+  const pagedFriends = filteredFriends.slice((page-1)*pageSize, page*pageSize);
 
   return (
     <div className="space-y-2">
       <div className="grid grid-cols-12 gap-3">
-        {/* Left: controls (3/12) */}
         <aside className="col-span-12 md:col-span-3 space-y-2">
           <Accordion type="multiple" className="space-y-2">
-            <AccordionItem value="filters">
-              <AccordionTrigger>絞り込み</AccordionTrigger>
-              <AccordionContent>
-                <div className="p-3 border rounded-md space-y-3">
-                  <div className="space-y-2">
-                    <Label>キーワード</Label>
-                    <Input
-                      value={searchTerm}
-                      onChange={(e) => { setSearchTerm(e.target.value); setPage(1) }}
-                      placeholder="ユーザー名やIDで検索"
-                      className="h-9"
-                      aria-label="友だち検索"
-                    />
-                  </div>
-                  <div className="space-y-1">
-                    <Label>友だち追加期間</Label>
-                    <Popover>
-                      <PopoverTrigger asChild>
-                        <Button
-                          variant="outline"
-                          className={cn("w-full h-9 justify-start text-left font-normal", !dateRange && "text-muted-foreground")}
-                        >
-                          <CalendarIcon className="mr-2 h-4 w-4" />
-                          {dateRange?.from ? (
-                            dateRange.to ? (
-                              `${format(dateRange.from, 'yyyy/MM/dd')} - ${format(dateRange.to, 'yyyy/MM/dd')}`
-                            ) : (
-                              `${format(dateRange.from, 'yyyy/MM/dd')} - `
-                            )
-                          ) : (
-                            <span>期間を選択</span>
-                          )}
-                        </Button>
-                      </PopoverTrigger>
-                      <PopoverContent className="w-auto p-0" align="start">
-                        <Calendar
-                          mode="range"
-                          selected={dateRange}
-                          onSelect={(range)=>{ setDateRange(range); setPage(1) }}
-                          numberOfMonths={2}
-                          initialFocus
-                          className={cn("p-3 pointer-events-auto")}
-                          formatters={{
-                            formatCaption: (date) => `${date.getFullYear()}年${date.getMonth() + 1}月`
-                          }}
-                        />
-                      </PopoverContent>
-                    </Popover>
-                  </div>
-                  <div className="space-y-1">
-                    <Label>タグで絞り込み</Label>
-                    <Select value={selectedTag} onValueChange={(v)=>{setSelectedTag(v); setPage(1)}}>
-                      <SelectTrigger className="h-9">
-                        <SelectValue placeholder="すべて" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="all">すべて</SelectItem>
-                        {tags.map(t => <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>)}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div className="space-y-1">
-                    <Label>シナリオで絞り込み</Label>
-                    <Select value={selectedScenario} onValueChange={(v)=>{setSelectedScenario(v); setPage(1)}}>
-                      <SelectTrigger className="h-9">
-                        <SelectValue placeholder="すべて" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="all">すべて</SelectItem>
-                        {scenarios.map(s => <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>)}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div className="grid grid-cols-2 gap-2">
-                    <div className="space-y-1">
-                      <Label>並び順</Label>
-                      <Select value={sort} onValueChange={(v:any)=>{setSort(v); setPage(1)}}>
-                        <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="date_desc">友だち追加の新しい順</SelectItem>
-                          <SelectItem value="date_asc">友だち追加の古い順</SelectItem>
-                          <SelectItem value="name_asc">名前順</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    <div className="flex items-end">
-                      <Button variant="secondary" className="w-full h-9" onClick={()=>{ setSearchTerm(''); setDateRange(undefined); setSelectedTag('all'); setSelectedScenario('all'); setSort('date_desc'); setPage(1) }}>クリア</Button>
-                    </div>
-                  </div>
-                </div>
-              </AccordionContent>
-            </AccordionItem>
-
-            <AccordionItem value="bulk-scenario">
-              <AccordionTrigger>
-                <div className="text-sm">
-                  一括シナリオ操作
-                  <span className="block text-xs text-muted-foreground">（表示中のユーザーに適用）</span>
-                </div>
-              </AccordionTrigger>
-              <AccordionContent>
-                <div className="p-3 border rounded-md space-y-2">
-              <div className="grid grid-cols-1 gap-2">
-                <Select value={bulkScenarioId} onValueChange={setBulkScenarioId}>
-                  <SelectTrigger className="h-9"><SelectValue placeholder="登録/解除するシナリオを選択" /></SelectTrigger>
-                  <SelectContent>
-                    {scenarios.map(s => <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>)}
-                  </SelectContent>
-                </Select>
-                 <Button className="w-full h-9" onClick={async ()=>{
+            <AccordionItem value="filters"><AccordionTrigger>絞り込み</AccordionTrigger><AccordionContent><div className="p-3 border rounded-md space-y-3"><div className="space-y-2"><Label>キーワード</Label><Input value={searchTerm} onChange={(e) => { setSearchTerm(e.target.value); setPage(1) }} placeholder="ユーザー名やIDで検索" className="h-9" aria-label="友だち検索" /></div><div className="space-y-1"><Label>友だち追加期間</Label><Popover><PopoverTrigger asChild><Button variant="outline" className={cn("w-full h-9 justify-start text-left font-normal", !dateRange && "text-muted-foreground")}><CalendarIcon className="mr-2 h-4 w-4" />{dateRange?.from ? (dateRange.to ? (`${format(dateRange.from, 'yyyy/MM/dd')} - ${format(dateRange.to, 'yyyy/MM/dd')}`) : (`${format(dateRange.from, 'yyyy/MM/dd')} - `)) : (<span>期間を選択</span>)}</Button></PopoverTrigger><PopoverContent className="w-auto p-0" align="start"><Calendar mode="range" selected={dateRange} onSelect={(range)=>{ setDateRange(range); setPage(1) }} numberOfMonths={2} initialFocus className={cn("p-3 pointer-events-auto")} formatters={{ formatCaption: (date) => `${date.getFullYear()}年${date.getMonth() + 1}月` }} /></PopoverContent></Popover></div><div className="space-y-1"><Label>タグで絞り込み</Label><Select value={selectedTag} onValueChange={(v)=>{setSelectedTag(v); setPage(1)}}><SelectTrigger className="h-9"><SelectValue placeholder="すべて" /></SelectTrigger><SelectContent><SelectItem value="all">すべて</SelectItem>{tags.map(t => <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>)}</SelectContent></Select></div><div className="space-y-1"><Label>シナリオで絞り込み</Label><Select value={selectedScenario} onValueChange={(v)=>{setSelectedScenario(v); setPage(1)}}><SelectTrigger className="h-9"><SelectValue placeholder="すべて" /></SelectTrigger><SelectContent><SelectItem value="all">すべて</SelectItem>{scenarios.map(s => <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>)}</SelectContent></Select></div><div className="grid grid-cols-2 gap-2"><div className="space-y-1"><Label>並び順</Label><Select value={sort} onValueChange={(v:any)=>{setSort(v); setPage(1)}}><SelectTrigger className="h-9"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="date_desc">友だち追加の新しい順</SelectItem><SelectItem value="date_asc">友だち追加の古い順</SelectItem><SelectItem value="name_asc">名前順</SelectItem></SelectContent></Select></div><div className="flex items-end"><Button variant="secondary" className="w-full h-9" onClick={()=>{ setSearchTerm(''); setDateRange(undefined); setSelectedTag('all'); setSelectedScenario('all'); setSort('date_desc'); setPage(1) }}>クリア</Button></div></div></div></AccordionContent></AccordionItem>
+            <AccordionItem value="bulk-scenario"><AccordionTrigger><div className="text-sm">一括シナリオ操作<span className="block text-xs text-muted-foreground">（表示中のユーザーに適用）</span></div></AccordionTrigger><AccordionContent><div className="p-3 border rounded-md space-y-2"><div className="grid grid-cols-1 gap-2"><Select value={bulkScenarioId} onValueChange={setBulkScenarioId}><SelectTrigger className="h-9"><SelectValue placeholder="登録/解除するシナリオを選択" /></SelectTrigger><SelectContent>{scenarios.map(s => <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>)}</SelectContent></Select><Button className="w-full h-9" onClick={async ()=>{
                    if (!bulkScenarioId) { toast({ title:'シナリオ未選択', description:'登録するシナリオを選択してください' }); return }
                    setConfirmRegisterOpen(true)
-                 }}>一斉登録</Button>
-                    <Button variant="destructive" className="w-full h-9" onClick={async ()=>{
+                 }}>一斉登録</Button><Button variant="destructive" className="w-full h-9" onClick={async ()=>{
                       if (!bulkScenarioId) { toast({ title:'解除対象未選択', description:'解除するシナリオを選択してください' }); return }
                       setConfirmUnenrollOpen(true)
-                    }}>一斉解除</Button>
-                  </div>
-                </div>
-              </AccordionContent>
-            </AccordionItem>
-
-            <AccordionItem value="bulk-tag">
-              <AccordionTrigger>
-                <div className="text-sm">
-                  一括タグ操作
-                  <span className="block text-xs text-muted-foreground">（表示中のユーザーに適用）</span>
-                </div>
-              </AccordionTrigger>
-              <AccordionContent>
-                <div className="p-3 border rounded-md space-y-4">
-                  <div className="space-y-1">
-                    <Label>付与するタグ</Label>
-                    <Select value={bulkTagAddId} onValueChange={setBulkTagAddId}>
-                      <SelectTrigger className="h-9"><SelectValue placeholder="付与するタグ" /></SelectTrigger>
-                      <SelectContent>
-                        {tags.map(t => <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>)}
-                      </SelectContent>
-                    </Select>
-                  </div>
-
-                  <div className="space-y-1">
-                    <Label>解除するタグ</Label>
-                    <Select value={bulkTagRemoveId} onValueChange={setBulkTagRemoveId}>
-                      <SelectTrigger className="h-9"><SelectValue placeholder="解除するタグ" /></SelectTrigger>
-                      <SelectContent>
-                        {tags.map(t => <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>)}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <Button className="w-full h-9" onClick={async ()=>{
+                    }}>一斉解除</Button></div></div></AccordionContent></AccordionItem>
+            <AccordionItem value="bulk-tag"><AccordionTrigger><div className="text-sm">一括タグ操作<span className="block text-xs text-muted-foreground">（表示中のユーザーに適用）</span></div></AccordionTrigger><AccordionContent><div className="p-3 border rounded-md space-y-4"><div className="space-y-1"><Label>付与するタグ</Label><Select value={bulkTagAddId} onValueChange={setBulkTagAddId}><SelectTrigger className="h-9"><SelectValue placeholder="付与するタグ" /></SelectTrigger><SelectContent>{tags.map(t => <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>)}</SelectContent></Select></div><div className="space-y-1"><Label>解除するタグ</Label><Select value={bulkTagRemoveId} onValueChange={setBulkTagRemoveId}><SelectTrigger className="h-9"><SelectValue placeholder="解除するタグ" /></SelectTrigger><SelectContent>{tags.map(t => <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>)}</SelectContent></Select></div><Button className="w-full h-9" onClick={async ()=>{
                     setConfirmTagOpen(true)
-                  }}>保存</Button>
-                </div>
-              </AccordionContent>
-            </AccordionItem>
+                  }}>保存</Button></div></AccordionContent></AccordionItem>
           </Accordion>
         </aside>
 
-        {/* Right: list (9/12) */}
         <section className="col-span-12 md:col-span-9 space-y-2">
           <div className="space-y-0 divide-y rounded-md border">
             {pagedFriends.map((friend) => (
@@ -509,6 +185,10 @@ export function FriendsList({ user }: FriendsListProps) {
                     </div>
 
                     <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
+                      <Button size="sm" variant="outline" onClick={() => setRichMenuDialogFriend(friend)} className="gap-1 h-8 px-2">
+                        <MenuSquare className="h-4 w-4" />
+                        メニュー
+                      </Button>
                       {blockTagId && (
                         <Button
                           size="sm"
@@ -550,7 +230,15 @@ export function FriendsList({ user }: FriendsListProps) {
         </section>
       </div>
 
-      {/* Existing dialogs */}
+      {richMenuDialogFriend && (
+        <SetUserRichMenuDialog
+          user={user}
+          friend={richMenuDialogFriend}
+          open={!!richMenuDialogFriend}
+          onOpenChange={(open) => { if (!open) setRichMenuDialogFriend(null) }}
+        />
+      )}
+
       {scenarioDialogFriend && (
         <FriendScenarioDialog
           open={!!scenarioDialogFriend}
@@ -569,7 +257,6 @@ export function FriendsList({ user }: FriendsListProps) {
         />
       )}
 
-      {/* Friend details dialog */}
       <Dialog open={detailOpen} onOpenChange={setDetailOpen}>
         <DialogContent className="max-w-2xl">
           <DialogHeader>
@@ -644,7 +331,6 @@ export function FriendsList({ user }: FriendsListProps) {
         </DialogContent>
       </Dialog>
 
-      {/* Confirm dialogs */}
       <AlertDialog open={confirmRegisterOpen} onOpenChange={setConfirmRegisterOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
@@ -666,12 +352,10 @@ export function FriendsList({ user }: FriendsListProps) {
                 let successCount = 0;
                 let errorCount = 0;
                 
-                // 個別登録と同じ方式で直接step_delivery_trackingを操作
                 for (const friend of filteredFriends) {
                   try {
                     console.log('Registering friend:', friend.line_user_id, 'to scenario:', target.name)
                     
-                    // シナリオの全ステップを取得
                     const { data: allSteps } = await supabase
                       .from('steps')
                       .select('id, step_order, delivery_type, delivery_seconds, delivery_minutes, delivery_hours, delivery_days, delivery_time_of_day, specific_time, delivery_relative_to_previous')
@@ -684,18 +368,15 @@ export function FriendsList({ user }: FriendsListProps) {
                       continue
                     }
 
-                    // 個別登録と同じ開始ステップ設定（step_order 0から開始）
-                    const startOrder = 0 // 常に最初のステップから開始
+                    const startOrder = 0
                     const startStepId = allSteps[0]?.id
 
-                    // 個別登録と同じ詳細な配信時刻計算ロジック
                     const startStepDetail = allSteps[0]
                     
                     const computeFirstScheduledAt = (): string => {
                       const now = new Date()
                       if (!startStepDetail) return now.toISOString()
 
-                      // delivery_typeの正規化（Edge関数に合わせる）
                       let effectiveType = startStepDetail.delivery_type as string
                       if (effectiveType === 'immediate') effectiveType = 'immediately'
                       if (effectiveType === 'specific') effectiveType = 'specific_time'
@@ -717,22 +398,18 @@ export function FriendsList({ user }: FriendsListProps) {
                         return { h: Number(hh), m: Number(mm), s: Number(ss) }
                       }
 
-                      // ベース時刻（シナリオ登録時刻 = 今）
                       const registrationAt = now
 
                       if (effectiveType === 'specific_time' && startStepDetail.specific_time) {
-                        // 特定日時
                         return new Date(startStepDetail.specific_time).toISOString()
                       }
 
-                      // relative / relative_to_previous の初回は「シナリオ登録時刻」を基準に
                       let scheduled = addOffset(registrationAt)
 
                       const tod = parseTimeOfDay(startStepDetail.delivery_time_of_day)
                       if (tod) {
                         const withTod = new Date(scheduled)
                         withTod.setHours(tod.h, tod.m, tod.s, 0)
-                        // もしすでに過去なら翌日に
                         if (withTod.getTime() <= scheduled.getTime()) {
                           withTod.setDate(withTod.getDate() + 1)
                         }
@@ -744,7 +421,6 @@ export function FriendsList({ user }: FriendsListProps) {
                     const firstScheduledAt = computeFirstScheduledAt()
                     const firstNextCheck = new Date(new Date(firstScheduledAt).getTime() - 5000).toISOString()
 
-                    // 既存のトラッキングを確認
                     const { data: existing } = await supabase
                       .from('step_delivery_tracking')
                       .select('id, step_id')
@@ -753,7 +429,6 @@ export function FriendsList({ user }: FriendsListProps) {
 
                     const existingMap = new Map<string, string>((existing || []).map((r: any) => [r.step_id, r.id]))
 
-                    // 不足分を一括INSERT（個別登録と同じstatus設定）
                     const missingRows = allSteps
                       .filter((s: any) => !existingMap.has(s.id))
                       .map((s: any) => ({
@@ -771,7 +446,6 @@ export function FriendsList({ user }: FriendsListProps) {
                       if (insErr) throw insErr
                     }
 
-                    // 既存分をUPDATE（個別登録と同じstatus設定）
                     for (const s of allSteps) {
                       const id = existingMap.get(s.id)
                       if (!id) continue
@@ -787,7 +461,6 @@ export function FriendsList({ user }: FriendsListProps) {
                       if (updErr) throw updErr
                     }
 
-                    // スケジューラ関数をキック（この友だちのみ）
                     try {
                       await supabase.functions.invoke('scheduled-step-delivery', {
                         body: { line_user_id: friend.line_user_id, scenario_id: target.id }
@@ -796,7 +469,6 @@ export function FriendsList({ user }: FriendsListProps) {
                       console.warn('scheduled-step-delivery invoke failed', e)
                     }
 
-                    // ログを追加
                     try {
                       await supabase
                         .from('scenario_friend_logs')
@@ -821,9 +493,8 @@ export function FriendsList({ user }: FriendsListProps) {
                 
                 if (successCount > 0) {
                   toast({ title:'登録完了', description:`${successCount}名を登録しました${errorCount > 0 ? ` (${errorCount}名でエラー)` : ''}` })
-                  // 統計更新通知
                   window.dispatchEvent(new CustomEvent('scenario-stats-updated'))
-                  loadFriends() // Reload to update scenario mappings
+                  loadFriends()
                 } else {
                   toast({ title:'登録失敗', description:'登録できませんでした', variant:'destructive' })
                 }
