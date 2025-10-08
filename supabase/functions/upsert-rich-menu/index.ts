@@ -14,6 +14,15 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
+const isValidAliasId = (aliasId: string | null | undefined): aliasId is string =>
+  typeof aliasId === 'string' &&
+  aliasId.length > 0 &&
+  aliasId.length <= 32 &&
+  /^[a-z0-9-]+$/.test(aliasId);
+
+const normalizeAliasId = (aliasId: string | null | undefined) =>
+  isValidAliasId(aliasId) ? aliasId : null;
+
 type TapAreaPayload = {
   action_type: 'uri' | 'message' | 'richmenuswitch';
   action_value: string;
@@ -80,11 +89,14 @@ async function normalizeTapAreasForSwitch(
       continue;
     }
 
-    let aliasId: string | null = targetMenu.line_rich_menu_alias_id;
+    let aliasId: string | null = normalizeAliasId(targetMenu.line_rich_menu_alias_id);
+    if (!aliasId && targetMenu.line_rich_menu_alias_id) {
+      console.warn('Invalid LINE alias id found for switch target; regenerating.', { menuId: targetMenu.id, storedAlias: targetMenu.line_rich_menu_alias_id });
+    }
 
     if (!aliasId) {
       if (!targetMenu.line_rich_menu_id) {
-        throw new Error('切り替え先のリッチメニューがLINEに同期されていません。対象のリッチメニューを保存してから再度お試しください。');
+        throw new Error('\u5207\u308a\u66ff\u3048\u5148\u306e\u30ea\u30c3\u30c1\u30e1\u30cb\u30e5\u30fc\u304cLINE\u306b\u540c\u671f\u3055\u308c\u3066\u3044\u307e\u305b\u3093\u3002\u5bfe\u8c61\u306e\u30ea\u30c3\u30c1\u30e1\u30cb\u30e5\u30fc\u3092\u4fdd\u5b58\u3057\u3066\u304b\u3089\u518d\u5ea6\u304a\u8a66\u3057\u304f\u3060\u3055\u3044\u3002');
       }
 
       if (aliasCache.has(targetMenu.id)) {
@@ -166,7 +178,7 @@ serve(async (req) => {
       });
       if (!rpcError && rpcData?.channel_access_token) {
         accessToken = rpcData.channel_access_token;
-        console.log('✓ Access token retrieved via RPC');
+        console.log('Access token retrieved via RPC');
       }
     } catch (rpcErr) {
       console.log('RPC token retrieval failed, trying direct query:', rpcErr);
@@ -193,7 +205,7 @@ serve(async (req) => {
             );
             if (!decryptError && decryptData?.decryptedValue) {
               accessToken = decryptData.decryptedValue;
-              console.log('✓ Access token decrypted from secure_line_credentials');
+              console.log('Access token decrypted from secure_line_credentials');
             }
           } catch (decryptErr) {
             console.error('Decryption failed:', decryptErr);
@@ -201,7 +213,7 @@ serve(async (req) => {
         } else {
           // Plain text token
           accessToken = value;
-          console.log('✓ Access token retrieved as plaintext from secure_line_credentials');
+          console.log('Access token retrieved as plaintext from secure_line_credentials');
         }
       }
     }
@@ -216,7 +228,7 @@ serve(async (req) => {
       
       if (profileData?.line_channel_access_token) {
         accessToken = profileData.line_channel_access_token;
-        console.log('✓ Access token retrieved from profiles (legacy)');
+        console.log('Access token retrieved from profiles (legacy)');
       }
     }
 
@@ -225,7 +237,10 @@ serve(async (req) => {
     }
 
     // --- Handle Update (Delete old menu and alias from LINE) ---
-    let currentLineAliasId = lineAliasId; // Use existing alias if available
+    let currentLineAliasId = normalizeAliasId(lineAliasId); // Use existing alias if available
+    if (!currentLineAliasId && lineAliasId) {
+      console.warn('Invalid LINE alias id found for main menu; regenerating.', { menuId: dbId, storedAlias: lineAliasId });
+    }
     if (dbId && lineId) { // If updating an existing menu
       // Delete old rich menu from LINE
       const deleteMenuUrl = `https://api.line.me/v2/bot/richmenu/${lineId}`;
