@@ -1,6 +1,9 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient, type SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2";
 
+// Generate LINE-compliant alias ID (lowercase alphanumeric + hyphen only)
+const makeAliasId = () => 'richmenualias-' + crypto.randomUUID().replace(/[^a-z0-9]/g, '');
+
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
@@ -82,7 +85,8 @@ async function normalizeTapAreasForSwitch(
       if (aliasCache.has(targetMenu.id)) {
         aliasId = aliasCache.get(targetMenu.id) ?? null;
       } else {
-        aliasId = `alias_${crypto.randomUUID().replace(/-/g, '')}`;
+        aliasId = makeAliasId();
+        console.log('Creating alias', { aliasId, for: 'switch-target', richMenuId: targetMenu.id });
 
         const aliasResponse = await fetch('https://api.line.me/v2/bot/richmenu/alias', {
           method: 'POST',
@@ -269,8 +273,9 @@ serve(async (req) => {
 
     // --- Generate/Use Alias ID and Register with LINE ---
     if (!currentLineAliasId) {
-      currentLineAliasId = `alias_${crypto.randomUUID().replace(/-/g, '')}`;
+      currentLineAliasId = makeAliasId();
     }
+    console.log('Creating alias', { aliasId: currentLineAliasId, for: 'main', richMenuId: lineRichMenuId });
     const aliasResponse = await fetch('https://api.line.me/v2/bot/richmenu/alias', {
       method: 'POST',
       headers: { 'Authorization': `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
