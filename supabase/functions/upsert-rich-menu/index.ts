@@ -82,7 +82,7 @@ async function normalizeTapAreasForSwitch(
       if (aliasCache.has(targetMenu.id)) {
         aliasId = aliasCache.get(targetMenu.id) ?? null;
       } else {
-        aliasId = `richmenu-alias-${crypto.randomUUID().replace(/-/g, '')}`;
+        aliasId = `alias_${crypto.randomUUID().replace(/-/g, '')}`;
 
         const aliasResponse = await fetch('https://api.line.me/v2/bot/richmenu/alias', {
           method: 'POST',
@@ -269,7 +269,7 @@ serve(async (req) => {
 
     // --- Generate/Use Alias ID and Register with LINE ---
     if (!currentLineAliasId) {
-      currentLineAliasId = `richmenu-alias-${crypto.randomUUID().replace(/-/g, '')}`;
+      currentLineAliasId = `alias_${crypto.randomUUID().replace(/-/g, '')}`;
     }
     const aliasResponse = await fetch('https://api.line.me/v2/bot/richmenu/alias', {
       method: 'POST',
