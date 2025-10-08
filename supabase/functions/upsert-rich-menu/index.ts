@@ -2,7 +2,12 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient, type SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 // Generate LINE-compliant alias ID (lowercase alphanumeric + hyphen only)
-const makeAliasId = () => 'richmenualias-' + crypto.randomUUID().replace(/[^a-z0-9]/g, '');
+const makeAliasId = () => {
+  const prefix = 'richmenualias-';
+  const randomLength = Math.max(0, 32 - prefix.length);
+  const randomPart = crypto.randomUUID().replace(/[^a-z0-9]/g, '').slice(0, randomLength);
+  return prefix + randomPart;
+};
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
