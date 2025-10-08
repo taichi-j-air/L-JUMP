@@ -20,28 +20,38 @@ serve(async (req) => {
     const authHeader = req.headers.get('Authorization');
     if (!authHeader) throw new Error('No authorization header');
     const token = authHeader.replace('Bearer ', '');
-    const { data: { user }, error: authError } = await supabase.auth.getUser(token);
+    const { data: { user }, error: authError } = await supabase.auth.getUser();
     if (authError || !user) throw new Error('Authentication failed');
 
-    const { dbId, lineId, menuData, tapAreas, isDefault } = await req.json();
+    const { dbId, lineId, lineAliasId, menuData, tapAreas, isDefault } = await req.json();
     if (!menuData) throw new Error('menuData is required.');
 
+    // Step 1: Get LINE Access Token
     const { data: credentials, error: credsError } = await supabase.from('secure_line_credentials').select('encrypted_value').eq('user_id', user.id).eq('credential_type', 'channel_access_token').single();
     if (credsError || !credentials) throw new Error('LINE access token not found.');
     const accessToken = credentials.encrypted_value;
 
-    // --- UPDATE PATH --- 
-    if (dbId && lineId) {
-      // Step 1: Delete the old menu from LINE
-      const deleteUrl = `https://api.line.me/v2/bot/richmenu/${lineId}`;
-      const deleteResponse = await fetch(deleteUrl, { method: 'DELETE', headers: { 'Authorization': `Bearer ${accessToken}` } });
-      if (!deleteResponse.ok && deleteResponse.status !== 404) {
-        console.error(`Failed to delete old rich menu ${lineId} from LINE: ${await deleteResponse.text()}`);
-        // Don't throw, just log. We can still try to create the new one.
+    // --- Handle Update (Delete old menu and alias from LINE) ---
+    let currentLineAliasId = lineAliasId; // Use existing alias if available
+    if (dbId && lineId) { // If updating an existing menu
+      // Delete old rich menu from LINE
+      const deleteMenuUrl = `https://api.line.me/v2/bot/richmenu/${lineId}`;
+      const deleteMenuResponse = await fetch(deleteMenuUrl, { method: 'DELETE', headers: { 'Authorization': `Bearer ${accessToken}` } });
+      if (!deleteMenuResponse.ok && deleteMenuResponse.status !== 404) {
+        console.warn(`Failed to delete old rich menu ${lineId} from LINE: ${await deleteMenuResponse.text()}`);
+      }
+
+      // Delete old rich menu alias from LINE (if it exists)
+      if (currentLineAliasId) {
+        const deleteAliasUrl = `https://api.line.me/v2/bot/richmenu/alias/${currentLineAliasId}`;
+        const deleteAliasResponse = await fetch(deleteAliasUrl, { method: 'DELETE', headers: { 'Authorization': `Bearer ${accessToken}` } });
+        if (!deleteAliasResponse.ok && deleteAliasResponse.status !== 404) {
+          console.warn(`Failed to delete old rich menu alias ${currentLineAliasId} from LINE: ${await deleteAliasResponse.text()}`);
+        }
       }
     }
 
-    // --- CREATE PATH (for both new and updated menus) ---
+    // --- Create New Menu on LINE (for both new and updated menus) ---
     if (!menuData.background_image_url) throw new Error('A background image is required.');
 
     const lineMenuObject = {
@@ -55,17 +65,29 @@ serve(async (req) => {
       }))
     };
     const richMenuResponse = await fetch('https://api.line.me/v2/bot/richmenu', { method: 'POST', headers: { 'Authorization': `Bearer ${accessToken}`, 'Content-Type': 'application/json' }, body: JSON.stringify(lineMenuObject) });
-    if (!richMenuResponse.ok) throw new Error(`LINE API error (creation): ${await richMenuResponse.text()}`);
+    if (!richMenuResponse.ok) throw new Error(`LINE API error (menu creation): ${await richMenuResponse.text()}`);
     const lineRichMenu = await richMenuResponse.json();
     const newLineRichMenuId = lineRichMenu.richMenuId;
 
+    // --- Upload Image to LINE ---
     const imageResponse = await fetch(menuData.background_image_url);
     if (!imageResponse.ok) throw new Error('Failed to fetch image from URL.');
     const imageBuffer = await imageResponse.arrayBuffer();
     const uploadResponse = await fetch(`https://api-data.line.me/v2/bot/richmenu/${newLineRichMenuId}/content`, { method: 'POST', headers: { 'Authorization': `Bearer ${accessToken}`, 'Content-Type': 'image/png' }, body: imageBuffer });
     if (!uploadResponse.ok) throw new Error(`LINE API error (image upload): ${await uploadResponse.text()}`);
 
-    // --- DATABASE UPDATE --- 
+    // --- Generate/Use Alias ID and Register with LINE ---
+    if (!currentLineAliasId) {
+      currentLineAliasId = `richmenu-alias-${crypto.randomUUID().replace(/-/g, '')}`;
+    }
+    const aliasResponse = await fetch('https://api.line.me/v2/bot/richmenu/alias', {
+      method: 'POST',
+      headers: { 'Authorization': `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ richMenuAliasId: currentLineAliasId, richMenuId: newLineRichMenuId })
+    });
+    if (!aliasResponse.ok) throw new Error(`LINE API error (alias creation): ${await aliasResponse.text()}`);
+
+    // --- DATABASE UPSERT --- 
     const recordToUpsert = {
       user_id: user.id,
       name: menuData.name,
@@ -75,19 +97,22 @@ serve(async (req) => {
       selected: menuData.selected || false,
       is_active: menuData.is_active ?? true,
       size: menuData.size,
-      line_rich_menu_id: newLineRichMenuId
+      line_rich_menu_id: newLineRichMenuId,
+      line_rich_menu_alias_id: currentLineAliasId // Save the alias ID
     };
 
     const { data: upsertedMenu, error: upsertError } = await supabase.from('rich_menus').upsert(dbId ? { ...recordToUpsert, id: dbId } : recordToUpsert).select().single();
     if (upsertError) throw new Error(`DB upsert error: ${upsertError.message}`);
     const newDbId = upsertedMenu.id;
 
+    // --- Save Tap Areas --- 
     await supabase.from('rich_menu_areas').delete().eq('rich_menu_id', newDbId);
     if (tapAreas && tapAreas.length > 0) {
       const { error: areaError } = await supabase.from('rich_menu_areas').insert(tapAreas.map((a: any) => ({ ...a, rich_menu_id: newDbId })));
       if (areaError) throw new Error(`DB tap area insert error: ${areaError.message}`);
     }
 
+    // --- Set as default if requested --- 
     if (isDefault) {
       await supabase.from('rich_menus').update({ is_default: false }).neq('id', newDbId);
       const setDefaultUrl = `https://api.line.me/v2/bot/user/all/richmenu/${newLineRichMenuId}`;
@@ -95,7 +120,7 @@ serve(async (req) => {
       if (!setDefaultResponse.ok) console.error(`Failed to set menu ${newLineRichMenuId} as default on LINE: ${await setDefaultResponse.text()}`);
     }
 
-    return new Response(JSON.stringify({ success: true, id: newDbId, lineRichMenuId: newLineRichMenuId }), {
+    return new Response(JSON.stringify({ success: true, id: newDbId, lineRichMenuId: newLineRichMenuId, lineRichMenuAliasId: currentLineAliasId }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
 
