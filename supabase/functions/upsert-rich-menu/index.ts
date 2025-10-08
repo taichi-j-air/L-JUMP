@@ -23,22 +23,26 @@ serve(async (req) => {
     const { data: { user }, error: authError } = await supabase.auth.getUser(token);
     if (authError || !user) throw new Error('Authentication failed');
 
-    const { menuData, tapAreas, isDefault } = await req.json();
-    
-    // Log received data for debugging
-    console.log("--- Upsert Rich Menu Invoked ---");
-    console.log("Received menuData.size:", menuData?.size);
-    console.log("Received isDefault flag:", isDefault);
-
+    const { dbId, lineId, menuData, tapAreas, isDefault } = await req.json();
     if (!menuData) throw new Error('menuData is required.');
-
-    if (!menuData.background_image_url) {
-      throw new Error('A background image is required for a new menu.');
-    }
 
     const { data: credentials, error: credsError } = await supabase.from('secure_line_credentials').select('encrypted_value').eq('user_id', user.id).eq('credential_type', 'channel_access_token').single();
     if (credsError || !credentials) throw new Error('LINE access token not found.');
     const accessToken = credentials.encrypted_value;
+
+    // --- UPDATE PATH --- 
+    if (dbId && lineId) {
+      // Step 1: Delete the old menu from LINE
+      const deleteUrl = `https://api.line.me/v2/bot/richmenu/${lineId}`;
+      const deleteResponse = await fetch(deleteUrl, { method: 'DELETE', headers: { 'Authorization': `Bearer ${accessToken}` } });
+      if (!deleteResponse.ok && deleteResponse.status !== 404) {
+        console.error(`Failed to delete old rich menu ${lineId} from LINE: ${await deleteResponse.text()}`);
+        // Don't throw, just log. We can still try to create the new one.
+      }
+    }
+
+    // --- CREATE PATH (for both new and updated menus) ---
+    if (!menuData.background_image_url) throw new Error('A background image is required.');
 
     const lineMenuObject = {
       size: { width: 2500, height: menuData.size === 'full' ? 1686 : 843 },
@@ -50,26 +54,19 @@ serve(async (req) => {
         action: { type: a.action_type, uri: a.action_type === 'uri' ? a.action_value : undefined, text: a.action_type === 'message' ? a.action_value : undefined, richMenuAliasId: a.action_type === 'richmenuswitch' ? a.action_value : undefined }
       }))
     };
-    const richMenuResponse = await fetch('https://api.line.me/v2/bot/richmenu', {
-      method: 'POST',
-      headers: { 'Authorization': `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify(lineMenuObject)
-    });
+    const richMenuResponse = await fetch('https://api.line.me/v2/bot/richmenu', { method: 'POST', headers: { 'Authorization': `Bearer ${accessToken}`, 'Content-Type': 'application/json' }, body: JSON.stringify(lineMenuObject) });
     if (!richMenuResponse.ok) throw new Error(`LINE API error (creation): ${await richMenuResponse.text()}`);
     const lineRichMenu = await richMenuResponse.json();
-    const lineRichMenuId = lineRichMenu.richMenuId;
+    const newLineRichMenuId = lineRichMenu.richMenuId;
 
     const imageResponse = await fetch(menuData.background_image_url);
     if (!imageResponse.ok) throw new Error('Failed to fetch image from URL.');
     const imageBuffer = await imageResponse.arrayBuffer();
-    const uploadResponse = await fetch(`https://api-data.line.me/v2/bot/richmenu/${lineRichMenuId}/content`, {
-      method: 'POST',
-      headers: { 'Authorization': `Bearer ${accessToken}`, 'Content-Type': 'image/png' },
-      body: imageBuffer
-    });
+    const uploadResponse = await fetch(`https://api-data.line.me/v2/bot/richmenu/${newLineRichMenuId}/content`, { method: 'POST', headers: { 'Authorization': `Bearer ${accessToken}`, 'Content-Type': 'image/png' }, body: imageBuffer });
     if (!uploadResponse.ok) throw new Error(`LINE API error (image upload): ${await uploadResponse.text()}`);
 
-    const { data: newMenu, error: insertError } = await supabase.from('rich_menus').insert({
+    // --- DATABASE UPDATE --- 
+    const recordToUpsert = {
       user_id: user.id,
       name: menuData.name,
       background_image_url: menuData.background_image_url,
@@ -78,26 +75,27 @@ serve(async (req) => {
       selected: menuData.selected || false,
       is_active: menuData.is_active ?? true,
       size: menuData.size,
-      line_rich_menu_id: lineRichMenuId
-    }).select().single();
-    if (insertError) throw new Error(`DB insert error: ${insertError.message}`);
-    const dbId = newMenu.id;
+      line_rich_menu_id: newLineRichMenuId
+    };
 
+    const { data: upsertedMenu, error: upsertError } = await supabase.from('rich_menus').upsert(dbId ? { ...recordToUpsert, id: dbId } : recordToUpsert).select().single();
+    if (upsertError) throw new Error(`DB upsert error: ${upsertError.message}`);
+    const newDbId = upsertedMenu.id;
+
+    await supabase.from('rich_menu_areas').delete().eq('rich_menu_id', newDbId);
     if (tapAreas && tapAreas.length > 0) {
-      const { error: areaError } = await supabase.from('rich_menu_areas').insert(tapAreas.map((a: any) => ({ ...a, rich_menu_id: dbId })));
+      const { error: areaError } = await supabase.from('rich_menu_areas').insert(tapAreas.map((a: any) => ({ ...a, rich_menu_id: newDbId })));
       if (areaError) throw new Error(`DB tap area insert error: ${areaError.message}`);
     }
 
     if (isDefault) {
-      await supabase.from('rich_menus').update({ is_default: false }).neq('id', dbId);
-      const setDefaultUrl = `https://api.line.me/v2/bot/user/all/richmenu/${lineRichMenuId}`;
+      await supabase.from('rich_menus').update({ is_default: false }).neq('id', newDbId);
+      const setDefaultUrl = `https://api.line.me/v2/bot/user/all/richmenu/${newLineRichMenuId}`;
       const setDefaultResponse = await fetch(setDefaultUrl, { method: 'POST', headers: { 'Authorization': `Bearer ${accessToken}` } });
-      if (!setDefaultResponse.ok) {
-        console.error(`Failed to set menu ${lineRichMenuId} as default on LINE: ${await setDefaultResponse.text()}`);
-      }
+      if (!setDefaultResponse.ok) console.error(`Failed to set menu ${newLineRichMenuId} as default on LINE: ${await setDefaultResponse.text()}`);
     }
 
-    return new Response(JSON.stringify({ success: true, id: dbId, lineRichMenuId: lineRichMenuId }), {
+    return new Response(JSON.stringify({ success: true, id: newDbId, lineRichMenuId: newLineRichMenuId }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
 

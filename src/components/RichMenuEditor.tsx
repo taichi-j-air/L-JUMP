@@ -78,40 +78,33 @@ export const RichMenuEditor = ({ menu, onSave, onCancel }: RichMenuEditorProps) 
       toast({ title: "エラー", description: "名前を入力してください", variant: "destructive" });
       return;
     }
-
-    // Note: Editing existing menus is complex. The `upsert-rich-menu` function
-    // would need to be expanded to handle updates, deletions, and re-creations on LINE's side.
-    // For now, we are focusing on a robust CREATE path.
-    if (menu?.id) {
-        toast({ title: "情報", description: "既存メニューの更新は現在、基本情報のみサポートされています。LINE上での表示は更新されません。", variant: "default" });
-        const { error } = await supabase.from('rich_menus').update({ name, chat_bar_text: chatBarText, is_active: isActive, is_default: isDefault, selected }).eq('id', menu.id);
-        if (error) {
-            toast({ title: "エラー", description: `更新に失敗しました: ${error.message}`, variant: "destructive" });
-        } else {
-            toast({ title: "更新完了", description: "データベースの基本情報を更新しました。" });
-            onSave();
-        }
+    if (!backgroundImageUrl) {
+        toast({ title: "エラー", description: "背景画像は必須です。", variant: "destructive" });
         return;
     }
 
     setLoading(true);
     try {
-      const menuData = {
-        name,
-        background_image_url: backgroundImageUrl,
-        chat_bar_text: chatBarText,
-        selected,
-        is_active: isActive,
-        size,
+      const payload = {
+        dbId: menu?.id,
+        lineId: menu?.line_rich_menu_id,
+        menuData: {
+          name,
+          background_image_url: backgroundImageUrl,
+          chat_bar_text: chatBarText,
+          selected,
+          is_active: isActive,
+          size,
+        },
+        tapAreas,
+        isDefault,
       };
 
-      const { data, error } = await supabase.functions.invoke('upsert-rich-menu', {
-        body: { menuData, tapAreas, isDefault },
-      });
+      const { error } = await supabase.functions.invoke('upsert-rich-menu', { body: payload });
 
       if (error) throw error;
 
-      toast({ title: "作成完了", description: "新しいリッチメニューが正常に作成・登録されました。" });
+      toast({ title: "保存完了", description: "リッチメニューが正常に保存・登録されました。" });
       onSave();
 
     } catch (error) {
