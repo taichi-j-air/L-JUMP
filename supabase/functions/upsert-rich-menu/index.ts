@@ -1,10 +1,131 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { createClient, type SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
+
+type TapAreaPayload = {
+  action_type: 'uri' | 'message' | 'richmenuswitch';
+  action_value: string;
+  x_percent: number;
+  y_percent: number;
+  width_percent: number;
+  height_percent: number;
+  id?: string;
+  [key: string]: unknown;
+};
+
+type UserRichMenuRecord = {
+  id: string;
+  line_rich_menu_id: string | null;
+  line_rich_menu_alias_id: string | null;
+};
+
+async function normalizeTapAreasForSwitch(
+  tapAreas: TapAreaPayload[] | undefined,
+  supabase: SupabaseClient,
+  userId: string,
+  accessToken: string,
+): Promise<TapAreaPayload[]> {
+  if (!Array.isArray(tapAreas) || tapAreas.length === 0) {
+    return tapAreas ?? [];
+  }
+
+  const switchAreas = tapAreas.filter((area) => area?.action_type === 'richmenuswitch');
+  if (switchAreas.length === 0) {
+    return tapAreas;
+  }
+
+  const { data: userMenusData, error: userMenusError } = await supabase
+    .from('rich_menus')
+    .select('id, line_rich_menu_id, line_rich_menu_alias_id')
+    .eq('user_id', userId);
+
+  if (userMenusError) {
+    throw new Error(`Failed to load rich menus for switch actions: ${userMenusError.message}`);
+  }
+
+  const aliasCache = new Map<string, string>();
+  const normalizedAreas: TapAreaPayload[] = [];
+  const userMenus: UserRichMenuRecord[] = (userMenusData ?? []) as UserRichMenuRecord[];
+
+  for (const area of tapAreas) {
+    if (!area || area.action_type !== 'richmenuswitch') {
+      normalizedAreas.push(area);
+      continue;
+    }
+
+    if (!area.action_value) {
+      throw new Error('Rich menu switch actions require a target rich menu.');
+    }
+
+    const targetMenu = userMenus.find(
+      (menu) =>
+        menu.id === area.action_value ||
+        menu.line_rich_menu_alias_id === area.action_value,
+    );
+
+    if (!targetMenu) {
+      normalizedAreas.push(area);
+      continue;
+    }
+
+    let aliasId: string | null = targetMenu.line_rich_menu_alias_id;
+
+    if (!aliasId) {
+      if (!targetMenu.line_rich_menu_id) {
+        throw new Error('Rich menu switch target is missing LINE rich menu ID.');
+      }
+
+      if (aliasCache.has(targetMenu.id)) {
+        aliasId = aliasCache.get(targetMenu.id) ?? null;
+      } else {
+        aliasId = `richmenu-alias-${crypto.randomUUID().replace(/-/g, '')}`;
+
+        const aliasResponse = await fetch('https://api.line.me/v2/bot/richmenu/alias', {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${accessToken}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            richMenuAliasId: aliasId,
+            richMenuId: targetMenu.line_rich_menu_id,
+          }),
+        });
+
+        if (!aliasResponse.ok) {
+          throw new Error(`LINE API error (alias creation for switch target): ${await aliasResponse.text()}`);
+        }
+
+        const { error: updateAliasError } = await supabase
+          .from('rich_menus')
+          .update({ line_rich_menu_alias_id: aliasId })
+          .eq('id', targetMenu.id);
+
+        if (updateAliasError) {
+          throw new Error(`DB error updating alias for target rich menu: ${updateAliasError.message}`);
+        }
+
+        aliasCache.set(targetMenu.id, aliasId);
+
+        const menuIndex = userMenus.findIndex((menu) => menu.id === targetMenu.id);
+        if (menuIndex !== -1) {
+          userMenus[menuIndex].line_rich_menu_alias_id = aliasId;
+        }
+      }
+    }
+
+    normalizedAreas.push({
+      ...area,
+      action_value: aliasId ?? area.action_value,
+    });
+  }
+
+  return normalizedAreas;
+}
 
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
@@ -51,6 +172,13 @@ serve(async (req) => {
       }
     }
 
+    const normalizedTapAreas = await normalizeTapAreasForSwitch(
+      Array.isArray(tapAreas) ? tapAreas : [],
+      supabase,
+      user.id,
+      accessToken,
+    );
+
     // --- Create New Menu on LINE (for both new and updated menus) ---
     if (!menuData.background_image_url) throw new Error('A background image is required.');
 
@@ -59,7 +187,7 @@ serve(async (req) => {
       selected: menuData.selected || false,
       name: menuData.name,
       chatBarText: menuData.chat_bar_text,
-      areas: tapAreas.map((a: any) => ({
+      areas: normalizedTapAreas.map((a) => ({
         bounds: { x: Math.round((a.x_percent / 100) * 2500), y: Math.round((a.y_percent / 100) * (menuData.size === 'full' ? 1686 : 843)), width: Math.round((a.width_percent / 100) * 2500), height: Math.round((a.height_percent / 100) * (menuData.size === 'full' ? 1686 : 843)) },
         action: { type: a.action_type, uri: a.action_type === 'uri' ? a.action_value : undefined, text: a.action_type === 'message' ? a.action_value : undefined, richMenuAliasId: a.action_type === 'richmenuswitch' ? a.action_value : undefined }
       }))
@@ -107,8 +235,10 @@ serve(async (req) => {
 
     // --- Save Tap Areas --- 
     await supabase.from('rich_menu_areas').delete().eq('rich_menu_id', newDbId);
-    if (tapAreas && tapAreas.length > 0) {
-      const { error: areaError } = await supabase.from('rich_menu_areas').insert(tapAreas.map((a: any) => ({ ...a, rich_menu_id: newDbId })));
+    if (normalizedTapAreas.length > 0) {
+      const { error: areaError } = await supabase
+        .from('rich_menu_areas')
+        .insert(normalizedTapAreas.map((a) => ({ ...a, rich_menu_id: newDbId })));
       if (areaError) throw new Error(`DB tap area insert error: ${areaError.message}`);
     }
 
