@@ -69,7 +69,9 @@ export default function LineLoginSettings() {
         const lineBotId = profile.line_bot_id || ''
         
         // LIFF認証専用ページのエンドポイントURL生成（LINE Bot IDを使用してセキュリティ向上）
-        const liffEndpointUrl = `${window.location.origin}/liff?userId=${userId}&lineBotId=${lineBotId || '[LINE_BOT_ID]'}`
+        const liffEndpointUrl = liffId
+        ? `${window.location.origin}/liff?userId=${userId}&liffId=${liffId}`
+        : `${window.location.origin}/liff?userId=${userId}&liffId=[LIFF_ID]`
         
         setSettings({
           channelId,
@@ -355,6 +357,18 @@ export default function LineLoginSettings() {
                   )}
                 </p>
               </div>
+
+              {liffSettings.liffUrl && user && (
+                <div className="rounded-lg border p-4 space-y-2">
+                  <p className="font-medium">Rich menu LIFF link example</p>
+                  <p className="text-sm text-muted-foreground break-all">
+                    {`${liffSettings.liffUrl}?userId=${user.id}&target=${encodeURIComponent('https://example.com/?uid=[UID]')}`}
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    Update the encoded URL to the page you want to open (include [UID] when you need personalised links).
+                  </p>
+                </div>
+              )}
 
               <Button onClick={handleLiffSave} disabled={savingLiff}>
                 {savingLiff ? "保存中..." : "LIFF設定を保存"}
