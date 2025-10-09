@@ -40,6 +40,39 @@ type UserRichMenuRecord = {
   line_rich_menu_alias_id: string | null;
 };
 
+const buildLineAction = (area: TapAreaPayload) => {
+  if (!area || !area.action_type) {
+    throw new Error('Tap area action type is required.');
+  }
+
+  if (area.action_type === 'uri') {
+    if (!area.action_value) {
+      throw new Error('URL actions require a destination URL.');
+    }
+    return { type: 'uri', uri: area.action_value };
+  }
+
+  if (area.action_type === 'message') {
+    if (!area.action_value) {
+      throw new Error('Message actions require text content.');
+    }
+    return { type: 'message', text: area.action_value };
+  }
+
+  if (!area.action_value) {
+    throw new Error('Rich menu switch actions require a target rich menu.');
+  }
+
+  const alias = area.action_value;
+  const dataValue = `switch:${area.id ?? alias}`;
+
+  return {
+    type: 'richmenuswitch',
+    richMenuAliasId: alias,
+    data: dataValue,
+  };
+};
+
 async function normalizeTapAreasForSwitch(
   tapAreas: TapAreaPayload[] | undefined,
   supabase: SupabaseClient,
@@ -275,15 +308,20 @@ serve(async (req) => {
       name: menuData.name,
       chatBarText: menuData.chat_bar_text,
       areas: normalizedTapAreas.map((a) => ({
-        bounds: { x: Math.round((a.x_percent / 100) * 2500), y: Math.round((a.y_percent / 100) * (menuData.size === 'full' ? 1686 : 843)), width: Math.round((a.width_percent / 100) * 2500), height: Math.round((a.height_percent / 100) * (menuData.size === 'full' ? 1686 : 843)) },
-        action: { type: a.action_type, uri: a.action_type === 'uri' ? a.action_value : undefined, text: a.action_type === 'message' ? a.action_value : undefined, richMenuAliasId: a.action_type === 'richmenuswitch' ? a.action_value : undefined }
+        bounds: {
+          x: Math.round((a.x_percent / 100) * 2500),
+          y: Math.round((a.y_percent / 100) * (menuData.size === 'full' ? 1686 : 843)),
+          width: Math.round((a.width_percent / 100) * 2500),
+          height: Math.round((a.height_percent / 100) * (menuData.size === 'full' ? 1686 : 843)),
+        },
+        action: buildLineAction(a),
       }))
     };
+
     const richMenuResponse = await fetch('https://api.line.me/v2/bot/richmenu', { method: 'POST', headers: { 'Authorization': `Bearer ${accessToken}`, 'Content-Type': 'application/json' }, body: JSON.stringify(lineMenuObject) });
     if (!richMenuResponse.ok) throw new Error(`LINE API error (menu creation): ${await richMenuResponse.text()}`);
     const lineRichMenu = await richMenuResponse.json();
     const newLineRichMenuId = lineRichMenu.richMenuId;
-
     // --- Upload Image to LINE ---
     const imageResponse = await fetch(menuData.background_image_url);
     if (!imageResponse.ok) throw new Error('Failed to fetch image from URL.');
