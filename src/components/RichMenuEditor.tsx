@@ -12,7 +12,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { MediaLibrarySelector } from "@/components/MediaLibrarySelector";
 import { RichMenuPreview } from "@/components/RichMenuPreview";
 
-interface RichMenu { id: string; name: string; background_image_url?: string; chat_bar_text: string; is_default: boolean; is_active: boolean; size: 'full' | 'half'; selected?: boolean; }
+interface RichMenu { id: string; name: string; background_image_url?: string; chat_bar_text: string; is_default: boolean; is_active: boolean; size: 'full' | 'half'; selected?: boolean; line_rich_menu_id?: string | null; line_rich_menu_alias_id?: string | null; }
 interface TapArea { id: string; x_percent: number; y_percent: number; width_percent: number; height_percent: number; action_type: 'uri' | 'message' | 'richmenuswitch'; action_value: string; }
 
 interface RichMenuEditorProps {
@@ -145,6 +145,8 @@ export const RichMenuEditor = ({ menu, onSave, onCancel }: RichMenuEditorProps) 
     try {
       const payload = {
         dbId: menu?.id,
+        lineId: menu?.line_rich_menu_id || null,
+        lineAliasId: menu?.line_rich_menu_alias_id || null,
         menuData: {
           name,
           background_image_url: backgroundImageUrl,

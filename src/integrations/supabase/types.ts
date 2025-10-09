@@ -1774,7 +1774,10 @@ export type Database = {
           id: string
           is_active: boolean | null
           is_default: boolean | null
+          line_rich_menu_alias_id: string | null
+          line_rich_menu_id: string | null
           name: string
+          selected: boolean | null
           size: string | null
           updated_at: string
           user_id: string
@@ -1786,7 +1789,10 @@ export type Database = {
           id?: string
           is_active?: boolean | null
           is_default?: boolean | null
+          line_rich_menu_alias_id?: string | null
+          line_rich_menu_id?: string | null
           name: string
+          selected?: boolean | null
           size?: string | null
           updated_at?: string
           user_id: string
@@ -1798,7 +1804,10 @@ export type Database = {
           id?: string
           is_active?: boolean | null
           is_default?: boolean | null
+          line_rich_menu_alias_id?: string | null
+          line_rich_menu_id?: string | null
           name?: string
+          selected?: boolean | null
           size?: string | null
           updated_at?: string
           user_id?: string

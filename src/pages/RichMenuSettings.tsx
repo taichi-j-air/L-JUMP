@@ -21,6 +21,8 @@ interface RichMenu {
   size: 'full' | 'half';
   created_at: string;
   line_rich_menu_id?: string | null;
+  line_rich_menu_alias_id?: string | null;
+  selected?: boolean;
 }
 
 const RichMenuSettings = () => {
