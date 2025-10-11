@@ -9,7 +9,7 @@ import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { ArrowLeft, MessageCircle, Link } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
-import { QRCodeSVG } from 'qrcode.react';
+import { QRCodeCanvas } from 'qrcode.react';
 
 interface Scenario {
   id: string;
@@ -53,6 +53,21 @@ const GreetingMessageSettings = () => {
       }
     } catch (error) {
       console.error('Error loading profile:', error);
+    }
+  };
+
+  const handleDownloadPNG = () => {
+    const canvas = document.getElementById('qr-code-canvas') as HTMLCanvasElement;
+    if (canvas) {
+      const pngUrl = canvas
+        .toDataURL("image/png")
+        .replace("image/png", "image/octet-stream");
+      const downloadLink = document.createElement("a");
+      downloadLink.href = pngUrl;
+      downloadLink.download = "line-add-friend-qr.png";
+      document.body.appendChild(downloadLink);
+      downloadLink.click();
+      document.body.removeChild(downloadLink);
     }
   };
 
@@ -249,8 +264,13 @@ const GreetingMessageSettings = () => {
                       </Button>
                     </div>
                   </div>
-                  <div className="flex items-center justify-center p-4 border rounded-lg bg-white">
-                    <QRCodeSVG value={friendUrl} size={128} />
+                  <div className="space-y-4 text-center">
+                    <div className="flex items-center justify-center p-4 border rounded-lg bg-white w-40 mx-auto">
+                        <QRCodeCanvas id="qr-code-canvas" value={friendUrl} size={128} />
+                    </div>
+                    <Button variant="outline" onClick={handleDownloadPNG}>
+                        PNGとして保存
+                    </Button>
                   </div>
                 </>
               ) : (
