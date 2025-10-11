@@ -97,29 +97,40 @@ export function MessagePreview({ messages, editingMessages }: MessagePreviewProp
                          </div>
                        )
                      ) : message.message_type === 'restore_access' ? (
-                       <div className="space-y-2">
+                       <div className="space-y-0 bg-white rounded-lg border border-gray-200 overflow-hidden max-w-[300px]">
                          {message.restore_config?.type === 'button' ? (
-                           <div className="bg-background rounded border p-3 space-y-2">
-                             <p className="text-sm font-medium">
-                               {message.restore_config.title || 'アクセス復活'}
-                             </p>
-                             <div className="flex justify-center">
-                               <div className="bg-primary text-primary-foreground px-4 py-2 rounded text-sm">
-                                 {message.restore_config.button_text || 'OK'}
-                               </div>
+                           // OKボタンタイプ：テキスト + ボタン
+                           <>
+                             <div className="p-4 text-center">
+                               <p className="text-sm text-gray-800">
+                                 {message.restore_config.title || 'アクセスを回復しますか？'}
+                               </p>
                              </div>
-                           </div>
+                             <div className="border-t border-gray-200">
+                               <button className="w-full py-3 text-center text-white bg-[#00B900] hover:bg-[#00A000] transition-colors font-medium text-sm">
+                                 {message.restore_config.button_text || 'OK'}
+                               </button>
+                             </div>
+                           </>
                          ) : message.restore_config?.type === 'image' && message.restore_config.image_url ? (
-                           <div className="bg-background rounded border p-2">
-                             <img 
-                               src={message.restore_config.image_url} 
-                               alt="Restoration action" 
-                               className="max-w-full h-auto rounded"
-                               style={{ maxHeight: '120px' }}
-                             />
-                           </div>
+                           // 画像ボタンタイプ：画像 + ボタン
+                           <>
+                             <div className="aspect-video bg-gray-100">
+                               <img 
+                                 src={message.restore_config.image_url} 
+                                 alt="Restoration action" 
+                                 className="w-full h-full object-cover"
+                               />
+                             </div>
+                             <div className="border-t border-gray-200">
+                               <button className="w-full py-3 text-center text-white bg-[#00B900] hover:bg-[#00A000] transition-colors font-medium text-sm">
+                                 {message.restore_config.button_text || 'OK'}
+                               </button>
+                             </div>
+                           </>
                          ) : (
-                           <div className="bg-background rounded border p-2">
+                           // 未設定の場合
+                           <div className="p-4 text-center">
                              <p className="text-xs text-muted-foreground">復活アクションが設定されていません</p>
                            </div>
                          )}
