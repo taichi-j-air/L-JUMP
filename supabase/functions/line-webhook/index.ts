@@ -720,8 +720,6 @@ async function handleFollow(event: LineEvent, supabase: any, req: Request) {
         console.log('⚠ あいさつメッセージ設定が見つかりません')
       }
     }
-    }
-
   } catch (error) {
     console.error('Error handling follow:', error)
   }
