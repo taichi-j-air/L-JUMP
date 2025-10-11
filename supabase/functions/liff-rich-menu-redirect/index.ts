@@ -47,7 +47,7 @@ serve(async (req) => {
 
     const { data: friendData, error: friendError } = await supabase
       .from("line_friends")
-      .select("short_uid, display_name")
+      .select("short_uid, short_uid_ci, display_name")
       .eq("user_id", ownerUserId)
       .eq("line_user_id", lineUserId)
       .maybeSingle();
@@ -57,7 +57,7 @@ serve(async (req) => {
       return jsonError("Could not resolve friend information", 500);
     }
 
-    const shortUid = normalizeUid(friendData?.short_uid ?? null);
+    const shortUid = normalizeUid(friendData?.short_uid ?? friendData?.short_uid_ci ?? null);
     const displayName = sanitizeDisplayName(friendData?.display_name ?? "Friend");
 
     let finalUrl = applyTokenReplacements(target, {
