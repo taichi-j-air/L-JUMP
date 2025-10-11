@@ -436,7 +436,7 @@ async function deliverStepMessages(supabase: any, stepTracking: any) {
     // Fetch friend info
     const { data: friend, error: friendErr } = await supabase
       .from('line_friends')
-      .select('line_user_id, user_id, added_at')
+      .select('line_user_id, user_id, added_at, display_name')
       .eq('id', stepTracking.friend_id)
       .maybeSingle()
 
@@ -445,19 +445,70 @@ async function deliverStepMessages(supabase: any, stepTracking: any) {
       throw friendErr || new Error('Friend not found')
     }
 
-    // Fetch profile to get access token
-    const { data: profile, error: profErr } = await supabase
-      .from('profiles')
-      .select('line_channel_access_token')
+    // Fetch access token with fallback mechanism
+    let accessToken: string | null = null
+    
+    // First try secure_line_credentials
+    const { data: secureCredentials } = await supabase
+      .from('secure_line_credentials')
+      .select('encrypted_value')
       .eq('user_id', friend.user_id)
+      .eq('credential_type', 'channel_access_token')
       .maybeSingle()
-
-    if (profErr || !profile?.line_channel_access_token) {
-      console.error('LINE access token not found for user:', friend.user_id, profErr)
-      throw profErr || new Error('LINE access token not found')
+    
+    if (secureCredentials?.encrypted_value) {
+      let rawToken = secureCredentials.encrypted_value
+      
+      // Decrypt if encrypted (starts with "enc:")
+      if (rawToken.startsWith('enc:')) {
+        try {
+          const encryptedData = rawToken.substring(4)
+          const decryptUrl = `${Deno.env.get('SUPABASE_URL')}/functions/v1/decrypt-credential`
+          const decryptRes = await fetch(decryptUrl, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')}`
+            },
+            body: JSON.stringify({ encrypted_data: encryptedData })
+          })
+          
+          if (decryptRes.ok) {
+            const { decrypted_value } = await decryptRes.json()
+            accessToken = decrypted_value
+            console.log('✅ Token decrypted from secure_line_credentials')
+          } else {
+            console.warn('Failed to decrypt token, will try fallback')
+          }
+        } catch (err) {
+          console.warn('Token decryption error:', err)
+        }
+      } else {
+        // Plain text token
+        accessToken = rawToken
+        console.log('✅ Token retrieved from secure_line_credentials (plain)')
+      }
+    }
+    
+    // Fallback to legacy profiles.line_channel_access_token
+    if (!accessToken) {
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('line_channel_access_token')
+        .eq('user_id', friend.user_id)
+        .maybeSingle()
+      
+      if (profile?.line_channel_access_token) {
+        accessToken = profile.line_channel_access_token
+        console.log('✅ Token retrieved from profiles (legacy)')
+      }
+    }
+    
+    if (!accessToken) {
+      console.error('❌ LINE access token not found for user:', friend.user_id)
+      throw new Error('LINE access token not found')
     }
 
-    const accessToken = profile.line_channel_access_token
     const lineUserId = friend.line_user_id
 
     if (!messages || messages.length === 0) {
@@ -511,7 +562,7 @@ async function deliverStepMessages(supabase: any, stepTracking: any) {
       const processedMessage = { ...message };
         if (message.message_type === 'text') { // Check for text message type once
           if (typeof processedMessage.content === 'string') {
-            const rawDisplayName = tracking.line_friends.display_name?.trim();
+            const rawDisplayName = friend.display_name?.trim();
             const fallbackName = rawDisplayName && rawDisplayName.length > 0 ? rawDisplayName : "あなた";
 
             // [LINE_NAME] / [LINE_NAME_SAN] を friend.display_name で置換（未設定時は "あなた"）
@@ -538,13 +589,17 @@ async function deliverStepMessages(supabase: any, stepTracking: any) {
       }
 
       try {
-        await sendLineMessage(accessToken, lineUserId, preparedMessage)
-        console.log('Message sent successfully:', message.id)
-        if (i < messages.length - 1) {
-          await new Promise(resolve => setTimeout(resolve, 300))
+        const sendResult = await sendLineMessage(accessToken, lineUserId, preparedMessage)
+        if (sendResult.sent) {
+          console.log('✅ Message sent successfully:', message.id)
+          if (i < messages.length - 1) {
+            await new Promise(resolve => setTimeout(resolve, 300))
+          }
+        } else {
+          console.log('⏭️ Message skipped:', message.id, sendResult.reason)
         }
       } catch (error) {
-        console.error('Message send error:', message.id, error)
+        console.error('❌ Message send error:', message.id, error)
         throw error
       }
     }
@@ -692,12 +747,12 @@ async function sendLineMessage(accessToken: string, userId: string, message: any
             }
           }
         } else {
-          // Invalid restore_access config - log error but skip sending message
+          // Invalid restore_access config - skip sending message
           console.warn('⚠️ Invalid restore_access config, skipping message delivery:', {
             message_id: message.id,
             config: config
           })
-          continue // Skip this message without sending anything
+          return { sent: false, reason: 'Invalid restore_access config' }
         }
         break
       }
@@ -728,6 +783,7 @@ async function sendLineMessage(accessToken: string, userId: string, message: any
     }
     
     console.log('LINE message sent successfully')
+    return { sent: true }
     
   } catch (error) {
     console.error('LINE message send error:', error)
