@@ -576,9 +576,9 @@ async function deliverStepMessages(supabase: any, stepTracking: any) {
 }
 
 // ────────────────────── LINE Flex 用サニタイズ
-function sanitize(node: any): any {
+function flexSanitize(node: any): any {
   if (node == null) return node;
-  if (Array.isArray(node)) return node.map(sanitize);
+  if (Array.isArray(node)) return node.map(flexSanitize);
 
   if (typeof node === "object") {
     // 型ごとに LINE が許容しないキーを定義
@@ -593,7 +593,7 @@ function sanitize(node: any): any {
     const out: any = {};
     for (const [k, v] of Object.entries(node)) {
       if (t && invalid[t]?.has(k)) continue;
-      out[k] = sanitize(v);
+      out[k] = flexSanitize(v);
     }
     return out;
   }
@@ -601,22 +601,22 @@ function sanitize(node: any): any {
 }
 
 // ────────────────────── Flex 正規化
-function normalize(input: any) {
+function normalizeFlex(input: any) {
   if (!input) return null;
 
   let normalized: any = null;
 
   // ① すでに flex ラップ済み
   if (input.type === "flex" && input.contents) {
-    normalized = { type: "flex", altText: input.altText?.trim() || "お知らせ", contents: sanitize(input.contents) };
+    normalized = { type: "flex", altText: input.altText?.trim() || "お知らせ", contents: flexSanitize(input.contents) };
   }
   // ② bubble / carousel がルート
   else if (["bubble", "carousel"].includes(input.type)) {
-    normalized = { type: "flex", altText: "お知らせ", contents: sanitize(input) };
+    normalized = { type: "flex", altText: "お知らせ", contents: flexSanitize(input) };
   }
   // ③ { contents: {...}, altText } 形式
   else if (input.contents && ["bubble", "carousel"].includes(input.contents.type)) {
-    normalized = { type: "flex", altText: input.altText?.trim() || "お知らせ", contents: sanitize(input.contents) };
+    normalized = { type: "flex", altText: input.altText?.trim() || "お知らせ", contents: flexSanitize(input.contents) };
   }
 
   if (!normalized) return null;
@@ -713,7 +713,7 @@ async function sendLineMessage(accessToken: string, userId: string, message: any
       case 'flex': {
         const rawContent = message._flexContent || message.content
         if (rawContent) {
-          const normalized = normalize(rawContent)
+          const normalized = normalizeFlex(rawContent)
           if (normalized) {
             lineMessage = normalized
           } else {
