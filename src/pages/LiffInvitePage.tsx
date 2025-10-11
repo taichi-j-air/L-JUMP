@@ -1,12 +1,6 @@
 import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 
-declare global {
-  interface Window {
-    liff: any;
-  }
-}
-
 export default function LiffInvitePage() {
   const [status, setStatus] = useState<string>("初期化中...");
   const [error, setError] = useState<string>("");

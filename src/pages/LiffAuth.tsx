@@ -1,12 +1,6 @@
 import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 
-declare global {
-  interface Window {
-    liff?: any;
-  }
-}
-
 const LIFF_SDK_URL = "https://static.line-scdn.net/liff/edge/2/sdk.js";
 
 const loadLiffSdk = (): Promise<void> => {
@@ -135,7 +129,7 @@ export default function LiffAuth() {
       } catch (err) {
         console.error("LIFF redirect error", err);
         const params = new URLSearchParams(window.location.search);
-        const fallback = decodeParam(params.get("fallback")) ?? fallbackUrl;
+        const fallback = decodeParam(params.get("fallback"));
         if (fallback) {
           window.location.replace(fallback);
           return;
