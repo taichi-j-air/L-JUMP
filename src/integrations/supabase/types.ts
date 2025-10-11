@@ -802,6 +802,47 @@ export type Database = {
         }
         Relationships: []
       }
+      line_greeting_settings: {
+        Row: {
+          created_at: string
+          greeting_message: string | null
+          greeting_type: "message" | "scenario"
+          id: string
+          scenario_id: string | null
+          scenario_invite_code: string | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          greeting_message?: string | null
+          greeting_type?: "message" | "scenario"
+          id?: string
+          scenario_id?: string | null
+          scenario_invite_code?: string | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          greeting_message?: string | null
+          greeting_type?: "message" | "scenario"
+          id?: string
+          scenario_id?: string | null
+          scenario_invite_code?: string | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "line_greeting_settings_scenario_id_fkey"
+            columns: ["scenario_id"]
+            isOneToOne: false
+            referencedRelation: "step_scenarios"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       line_api_credentials: {
         Row: {
           created_at: string | null
@@ -3131,3 +3172,5 @@ export const Constants = {
     },
   },
 } as const
+
+
