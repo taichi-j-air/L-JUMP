@@ -1,5 +1,5 @@
 import { useState } from "react"
-import { useDroppable } from "@dnd-kit/core"
+import { useDroppable, useDndContext } from "@dnd-kit/core"
 import { useSortable, SortableContext, verticalListSortingStrategy, arrayMove } from "@dnd-kit/sortable"
 import { CSS } from "@dnd-kit/utilities"
 import { Button } from "@/components/ui/button"
@@ -36,31 +36,39 @@ export function ScenarioFolders({
 }: ScenarioFoldersProps) {
   const [editingId, setEditingId] = useState<string | null>(null)
   const [tempName, setTempName] = useState('')
+  const { active, over } = useDndContext()
 
   return (
     <div className="space-y-2">
-      {folders.map((folder, idx) => (
-        <FolderRow
-          key={folder.id}
-          folder={folder}
-          editing={editingId === folder.id}
-          tempName={tempName}
-          onStartEdit={() => { setEditingId(folder.id); setTempName(folder.name) }}
-          onCancelEdit={() => { setEditingId(null); setTempName('') }}
-          onCommitEdit={(name) => { onRename(folder.id, name); setEditingId(null) }}
-          onTempNameChange={(name) => setTempName(name)}
-          onBorderColor={(hex) => onBorderColor(folder.id, hex)}
-          onToggle={() => onToggle(folder.id)}
-          onMoveOut={onMoveOut}
-          onDelete={() => onDelete(folder.id)}
-          getScenarioName={getScenarioName}
-          renderScenario={renderScenario}
-          canMoveUp={idx > 0}
-          canMoveDown={idx < folders.length - 1}
-          onMoveUp={() => onReorder(arrayMove(folders.map(f => f.id), idx, idx - 1))}
-          onMoveDown={() => onReorder(arrayMove(folders.map(f => f.id), idx, idx + 1))}
-        />
-      ))}
+      {folders.map((folder, idx) => {
+        const isScenarioDrag = active?.id && !String(active.id).startsWith('folderItem:')
+        const isOverThisFolder = over?.id && (over.id === `folder:${folder.id}` || over.id === `folderItem:${folder.id}`)
+        const showHighlight = isScenarioDrag && isOverThisFolder
+
+        return (
+          <FolderRow
+            key={folder.id}
+            folder={folder}
+            editing={editingId === folder.id}
+            tempName={tempName}
+            showHighlight={showHighlight}
+            onStartEdit={() => { setEditingId(folder.id); setTempName(folder.name) }}
+            onCancelEdit={() => { setEditingId(null); setTempName('') }}
+            onCommitEdit={(name) => { onRename(folder.id, name); setEditingId(null) }}
+            onTempNameChange={(name) => setTempName(name)}
+            onBorderColor={(hex) => onBorderColor(folder.id, hex)}
+            onToggle={() => onToggle(folder.id)}
+            onMoveOut={onMoveOut}
+            onDelete={() => onDelete(folder.id)}
+            getScenarioName={getScenarioName}
+            renderScenario={renderScenario}
+            canMoveUp={idx > 0}
+            canMoveDown={idx < folders.length - 1}
+            onMoveUp={() => onReorder(arrayMove(folders.map(f => f.id), idx, idx - 1))}
+            onMoveDown={() => onReorder(arrayMove(folders.map(f => f.id), idx, idx + 1))}
+          />
+        )
+      })}
     </div>
   )
 }
@@ -69,6 +77,7 @@ function FolderRow({
   folder,
   editing,
   tempName,
+  showHighlight,
   onStartEdit,
   onCancelEdit,
   onCommitEdit,
@@ -87,6 +96,7 @@ function FolderRow({
   folder: ScenarioFolder
   editing: boolean
   tempName: string
+  showHighlight: boolean
   onStartEdit: () => void
   onCancelEdit: () => void
   onCommitEdit: (name: string) => void
@@ -102,7 +112,7 @@ function FolderRow({
   onMoveUp: () => void
   onMoveDown: () => void
 }) {
-  const { setNodeRef, isOver } = useDroppable({ id: `folder:${folder.id}` })
+  const { setNodeRef } = useDroppable({ id: `folder:${folder.id}` })
   const { attributes, listeners, setNodeRef: setSortableRef, transform, transition, isDragging } = useSortable({ id: `folderItem:${folder.id}` })
   const style = {
     transform: CSS.Transform.toString(transform),
@@ -112,9 +122,9 @@ function FolderRow({
   }
 
   return (
-    <Card ref={(node) => { setSortableRef(node as any) }} style={style} className="border-2 border-solid">
+    <Card ref={(node) => { setSortableRef(node as any) }} style={style} className={`border-2 border-solid transition-shadow ${showHighlight ? 'ring-2 ring-primary ring-offset-2' : ''}`}>
       <CardContent className="p-2">
-        <div ref={setNodeRef} className={`${isOver ? 'ring-2 ring-primary rounded-md' : ''}`}>
+        <div ref={setNodeRef}>
           <div className="flex items-center gap-2">
             <div className="cursor-grab p-1 hover:bg-muted rounded h-6 w-6 flex items-center justify-center">
               <GripVertical className="h-4 w-4 text-muted-foreground" />

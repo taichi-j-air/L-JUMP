@@ -387,9 +387,9 @@ export default function StepDeliveryPage() {
     }
 
     // フォルダへのドロップ（シナリオ→フォルダ）
-    if (overIdOriginal.startsWith('folder:')) {
+    if (overIdOriginal.startsWith('folder:') || overIdOriginal.startsWith('folderItem:')) {
       if (activeId.startsWith('folderItem:')) return // フォルダ自体は入れない
-      const folderId = overIdOriginal.replace('folder:', '')
+      const folderId = overIdOriginal.replace('folder:', '').replace('folderItem:', '')
       moveToFolder(activeId, folderId)
       return
     }
@@ -411,8 +411,8 @@ export default function StepDeliveryPage() {
       return
     }
 
-    // フォルダ間の移動
-    if (activeFolderId && overFolderId && activeFolderId !== overFolderId) {
+    // フォルダ間の移動、またはルートからフォルダへの移動
+    if (overFolderId && activeFolderId !== overFolderId) {
       moveToFolder(activeId, overFolderId)
       return
     }
