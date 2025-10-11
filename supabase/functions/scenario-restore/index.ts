@@ -35,6 +35,8 @@ serve(async (req) => {
       .from('line_friends')
       .select('id, user_id')
       .eq('line_user_id', line_user_id)
+      .order('created_at', { ascending: false })
+      .limit(1)
       .maybeSingle();
 
     if (friendErr || !friendData) {
