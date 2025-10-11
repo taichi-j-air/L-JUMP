@@ -324,6 +324,7 @@ serve(async (req) => {
         p_display_name: display,
         p_picture_url : lineProfile.pictureUrl ?? null,
         p_registration_source: 'invite_link',
+        p_scenario_id: null,
       },
     );
 
