@@ -802,47 +802,6 @@ export type Database = {
         }
         Relationships: []
       }
-      line_greeting_settings: {
-        Row: {
-          created_at: string
-          greeting_message: string | null
-          greeting_type: "message" | "scenario"
-          id: string
-          scenario_id: string | null
-          scenario_invite_code: string | null
-          updated_at: string
-          user_id: string
-        }
-        Insert: {
-          created_at?: string
-          greeting_message?: string | null
-          greeting_type?: "message" | "scenario"
-          id?: string
-          scenario_id?: string | null
-          scenario_invite_code?: string | null
-          updated_at?: string
-          user_id: string
-        }
-        Update: {
-          created_at?: string
-          greeting_message?: string | null
-          greeting_type?: "message" | "scenario"
-          id?: string
-          scenario_id?: string | null
-          scenario_invite_code?: string | null
-          updated_at?: string
-          user_id?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "line_greeting_settings_scenario_id_fkey"
-            columns: ["scenario_id"]
-            isOneToOne: false
-            referencedRelation: "step_scenarios"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
       line_api_credentials: {
         Row: {
           created_at: string | null
@@ -898,6 +857,7 @@ export type Database = {
           created_at: string
           display_name: string | null
           id: string
+          is_blocked: boolean | null
           line_user_id: string
           picture_url: string | null
           registration_source: string | null
@@ -914,6 +874,7 @@ export type Database = {
           created_at?: string
           display_name?: string | null
           id?: string
+          is_blocked?: boolean | null
           line_user_id: string
           picture_url?: string | null
           registration_source?: string | null
@@ -930,6 +891,7 @@ export type Database = {
           created_at?: string
           display_name?: string | null
           id?: string
+          is_blocked?: boolean | null
           line_user_id?: string
           picture_url?: string | null
           registration_source?: string | null
@@ -941,6 +903,44 @@ export type Database = {
           user_id?: string
         }
         Relationships: []
+      }
+      line_greeting_settings: {
+        Row: {
+          created_at: string
+          greeting_message: string | null
+          greeting_type: string
+          id: string
+          scenario_id: string | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          greeting_message?: string | null
+          greeting_type: string
+          id?: string
+          scenario_id?: string | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          greeting_message?: string | null
+          greeting_type?: string
+          id?: string
+          scenario_id?: string | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "line_greeting_settings_scenario_id_fkey"
+            columns: ["scenario_id"]
+            isOneToOne: false
+            referencedRelation: "step_scenarios"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       member_site_categories: {
         Row: {
@@ -3172,5 +3172,3 @@ export const Constants = {
     },
   },
 } as const
-
-

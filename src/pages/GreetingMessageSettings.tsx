@@ -72,8 +72,27 @@ const GreetingMessageSettings = () => {
   };
 
   const loadGreetingMessage = async () => {
-    // TODO: Implement greeting message loading logic
-    setGreetingMessage("");
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+
+      const { data, error } = await supabase
+        .from('line_greeting_settings')
+        .select('*')
+        .eq('user_id', user.id)
+        .maybeSingle();
+
+      if (!error && data) {
+        setGreetingType(data.greeting_type as "message" | "scenario");
+        if (data.greeting_type === 'message') {
+          setGreetingMessage(data.greeting_message || '');
+        } else if (data.greeting_type === 'scenario') {
+          setSelectedScenario(data.scenario_id || '');
+        }
+      }
+    } catch (error) {
+      console.error('Error loading greeting message:', error);
+    }
   };
 
   const loadScenarios = async () => {
@@ -121,11 +140,29 @@ const GreetingMessageSettings = () => {
         return;
       }
 
-      // TODO: Implement save logic based on greeting type
-      if (greetingType === "message") {
-        console.log('Saving greeting message:', greetingMessage);
-      } else {
-        console.log('Saving greeting scenario:', selectedScenario);
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) {
+        toast({
+          title: "エラー",
+          description: "ログインが必要です",
+          variant: "destructive",
+        });
+        return;
+      }
+
+      const payload = {
+        user_id: user.id,
+        greeting_type: greetingType,
+        greeting_message: greetingType === 'message' ? greetingMessage : null,
+        scenario_id: greetingType === 'scenario' ? selectedScenario : null,
+      };
+
+      const { error } = await supabase
+        .from('line_greeting_settings')
+        .upsert(payload, { onConflict: 'user_id' });
+
+      if (error) {
+        throw error;
       }
 
       toast({

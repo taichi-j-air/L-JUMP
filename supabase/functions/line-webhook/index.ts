@@ -428,6 +428,70 @@ async function sendReplyMessage(replyToken: string, text: string, supabase: any)
   }
 }
 
+async function sendPushMessage(userId: string, text: string, supabase: any) {
+  try {
+    const { data: secureCredentials, error: secureError } = await supabase
+      .from('secure_line_credentials')
+      .select('encrypted_value, user_id')
+      .eq('credential_type', 'channel_access_token')
+      .not('encrypted_value', 'is', null)
+      .limit(1)
+
+    let accessToken = null
+
+    if (!secureError && secureCredentials && secureCredentials.length > 0) {
+      accessToken = secureCredentials[0].encrypted_value
+    } else {
+      const { data: profiles, error } = await supabase
+        .from('profiles')
+        .select('line_channel_access_token')
+        .not('line_channel_access_token', 'is', null)
+        .limit(1)
+
+      if (error || !profiles || profiles.length === 0) {
+        console.error('No LINE access token found:', error)
+        return
+      }
+      accessToken = profiles[0].line_channel_access_token
+    }
+
+    if (!accessToken) {
+      console.error('No LINE access token found')
+      return
+    }
+
+    const pushData = {
+      to: userId,
+      messages: [
+        {
+          type: 'text',
+          text: text
+        }
+      ]
+    }
+
+    const response = await fetch('https://api.line.me/v2/bot/message/push', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${accessToken}`
+      },
+      body: JSON.stringify(pushData)
+    })
+
+    if (!response.ok) {
+      const errorText = await response.text()
+      console.error('LINE API push error:', response.status, errorText)
+      return
+    }
+
+    console.log('Push message sent successfully')
+
+  } catch (error) {
+    console.error('Error sending push message:', error)
+  }
+}
+
 async function handleFollow(event: LineEvent, supabase: any, req: Request) {
   try {
     const { source } = event
@@ -542,6 +606,48 @@ async function handleFollow(event: LineEvent, supabase: any, req: Request) {
         }
 
         console.log('通常の友達追加が完了しました:', userProfile.displayName)
+
+        // Check for greeting message settings
+        const { data: greetingSettings, error: greetingError } = await supabase
+          .from('line_greeting_settings')
+          .select('*')
+          .eq('user_id', profile.user_id)
+          .maybeSingle()
+
+        if (!greetingError && greetingSettings) {
+          console.log('あいさつメッセージ設定が見つかりました:', greetingSettings.greeting_type)
+
+          if (greetingSettings.greeting_type === 'message' && greetingSettings.greeting_message) {
+            // Send greeting message
+            await sendPushMessage(source.userId, greetingSettings.greeting_message, supabase)
+            console.log('あいさつメッセージを送信しました')
+          } else if (greetingSettings.greeting_type === 'scenario' && greetingSettings.scenario_id) {
+            // Register to scenario
+            console.log('あいさつシナリオに登録します:', greetingSettings.scenario_id)
+            
+            try {
+              const { data: registrationResult, error: registrationError } = await supabase
+                .rpc('register_friend_to_scenario', {
+                  p_line_user_id: source.userId,
+                  p_invite_code: '', // Empty for greeting scenario
+                  p_display_name: userProfile.displayName,
+                  p_picture_url: userProfile.pictureUrl,
+                  p_registration_source: 'greeting_message'
+                })
+
+              if (registrationError) {
+                console.error('シナリオ登録エラー:', registrationError)
+              } else if (registrationResult && registrationResult.success) {
+                console.log('あいさつシナリオに登録しました')
+                // Note: Step delivery will be handled by scheduled function
+              }
+            } catch (error) {
+              console.error('あいさつシナリオ登録エラー:', error)
+            }
+          }
+        } else {
+          console.log('あいさつメッセージ設定が見つかりません')
+        }
       }
     } else {
       console.error('LINE APIからユーザープロファイルを取得できませんでした')
