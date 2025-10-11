@@ -40,7 +40,12 @@ type UserRichMenuRecord = {
   line_rich_menu_alias_id: string | null;
 };
 
-const buildLineAction = (area: TapAreaPayload) => {
+const buildLineAction = (
+  area: TapAreaPayload,
+  userId: string,
+  liffBaseUrl: string | null,
+  liffId: string | null
+) => {
   if (!area || !area.action_type) {
     throw new Error('Tap area action type is required.');
   }
@@ -49,7 +54,36 @@ const buildLineAction = (area: TapAreaPayload) => {
     if (!area.action_value) {
       throw new Error('URL actions require a destination URL.');
     }
-    return { type: 'uri', uri: area.action_value };
+    
+    let uri = area.action_value;
+    
+    // [UID]などのパラメータトークンを含む場合、自動的にLIFF URLに変換
+    const hasTokens = /\[(UID|LINE_NAME|LINE_NAME_SAN)\]/i.test(uri);
+    
+    if (hasTokens && liffBaseUrl && liffId) {
+      const encodedTarget = encodeURIComponent(uri);
+      const params = [
+        `userId=${encodeURIComponent(userId)}`,
+        `target=${encodedTarget}`,
+        `liffId=${encodeURIComponent(liffId)}`
+      ];
+      
+      // 外部リンクの場合は external=1 を追加
+      const isExternal = !uri.includes(liffBaseUrl.split('?')[0]);
+      if (isExternal) {
+        params.push('external=1');
+      }
+      
+      const separator = liffBaseUrl.includes('?') ? '&' : '?';
+      uri = `${liffBaseUrl}${separator}${params.join('&')}`;
+      
+      console.log('Auto-converted URL with tokens to LIFF:', {
+        original: area.action_value,
+        converted: uri
+      });
+    }
+    
+    return { type: 'uri', uri };
   }
 
   if (area.action_type === 'message') {
@@ -269,6 +303,20 @@ serve(async (req) => {
       throw new Error('LINE access token not found. Please configure your LINE credentials.');
     }
 
+    // LIFF設定を取得
+    const { data: profileData } = await supabase
+      .from('profiles')
+      .select('liff_url, liff_id')
+      .eq('user_id', user.id)
+      .single();
+    
+    const liffBaseUrl = profileData?.liff_url || null;
+    const liffId = profileData?.liff_id || null;
+    
+    if (!liffBaseUrl || !liffId) {
+      console.warn('LIFF not configured. Token-based URLs will not be auto-converted.');
+    }
+
     // --- Handle Update (Delete old menu and alias from LINE) ---
     let currentLineAliasId = normalizeAliasId(lineAliasId); // Use existing alias if available
     if (!currentLineAliasId && lineAliasId) {
@@ -314,7 +362,7 @@ serve(async (req) => {
           width: Math.round((a.width_percent / 100) * 2500),
           height: Math.round((a.height_percent / 100) * (menuData.size === 'full' ? 1686 : 843)),
         },
-        action: buildLineAction(a),
+        action: buildLineAction(a, user.id, liffBaseUrl, liffId),
       }))
     };
 

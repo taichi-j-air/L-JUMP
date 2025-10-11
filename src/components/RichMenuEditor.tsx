@@ -128,60 +128,6 @@ export const RichMenuEditor = ({ menu, onSave, onCancel }: RichMenuEditorProps) 
     if (selectedArea === id) setSelectedArea(null);
   };
 
-  const resolveLiffBaseUrl = () => {
-    const trimmedUrl = (liffUrl ?? '').trim();
-    if (trimmedUrl) return trimmedUrl;
-    const trimmedId = (liffId ?? '').trim();
-    return trimmedId ? `https://liff.line.me/${trimmedId}` : null;
-  };
-
-  const shouldForceExternal = (targetUrl: string) => {
-    if (typeof window === 'undefined') return false;
-    try {
-      const parsed = new URL(targetUrl);
-      return parsed.origin !== window.location.origin;
-    } catch {
-      return false;
-    }
-  };
-
-  const convertUriAreaToLiffLink = (area: TapArea) => {
-    const baseUrl = resolveLiffBaseUrl();
-    if (!baseUrl) {
-      toast({
-        title: 'LIFF settings missing',
-        description: 'Open LINE Login & LIFF settings and register your LIFF ID and LIFF URL.',
-        variant: 'destructive',
-      });
-      return;
-    }
-    if (!currentUserId) {
-      toast({ title: 'User info unavailable', description: 'Reload this page and try again.', variant: 'destructive' });
-      return;
-    }
-
-    const original = area.action_value?.trim();
-    if (!original) {
-      toast({ title: 'URL is empty', description: 'Enter the target URL before converting.', variant: 'destructive' });
-      return;
-    }
-
-    if (original.startsWith(baseUrl) && original.includes('target=')) {
-      toast({ title: 'Already a LIFF link', description: 'This URL is already wrapped as a LIFF link.', variant: 'default' });
-      return;
-    }
-
-    const encodedTarget = encodeURIComponent(original);
-    const params = [`userId=${encodeURIComponent(currentUserId)}`, `target=${encodedTarget}`];
-    if (shouldForceExternal(original)) {
-      params.push('external=1');
-    }
-    const separator = baseUrl.includes('?') ? '&' : '?';
-    const liffLink = `${baseUrl}${separator}${params.join('&')}`;
-
-    updateTapArea(area.id, { action_value: liffLink });
-    toast({ title: 'Generated LIFF link', description: 'Users will open this link with their UID applied.' });
-  };
 
   const handleSave = async () => {
     if (!name.trim()) {
@@ -288,17 +234,18 @@ export const RichMenuEditor = ({ menu, onSave, onCancel }: RichMenuEditorProps) 
                   <CardContent><MediaLibrarySelector trigger={<Button variant="outline" className="w-full">{backgroundImageUrl ? '画像を変更' : '画像を選択'}</Button>} onSelect={setBackgroundImageUrl} selectedUrl={backgroundImageUrl} />{backgroundImageUrl && (<div className="mt-4 rounded border overflow-hidden"><img src={backgroundImageUrl} alt="Background" className="w-full h-auto" /></div>)}</CardContent>
                 </Card>
                 <Card>
-                  <CardHeader><div className="flex justify-between items-center"><CardTitle>タップエリア</CardTitle><Button onClick={addTapArea} size="sm"><Plus className="w-4 h-4 mr-2" />追加</Button></div></CardHeader>
+                  <CardHeader>
+                    <div className="flex justify-between items-center">
+                      <CardTitle>タップエリア</CardTitle>
+                      <Button onClick={addTapArea} size="sm"><Plus className="w-4 h-4 mr-2" />追加</Button>
+                    </div>
+                    <CardDescription className="mt-2">
+                      💡 <strong>[UID]や[LINE_NAME]を含むURLは自動変換されます：</strong><br/>
+                      保存時に自動的にLINE認証付きLIFFリンクに変換され、ユーザーのUID/名前が適用されます。手動での変換操作は不要です。
+                    </CardDescription>
+                  </CardHeader>
                   <CardContent className="space-y-4">{tapAreas.map((area, index) => (<div key={area.id} className={`p-4 border rounded-lg ${selectedArea === area.id ? 'border-primary' : ''}`} onClick={() => setSelectedArea(area.id)}><div className="flex justify-between items-center mb-3"><span className="font-medium">エリア {index + 1}</span><Button variant="ghost" size="icon" className="h-8 w-8" onClick={(e) => { e.stopPropagation(); deleteTapArea(area.id); }}><Trash2 className="w-4 h-4" /></Button></div>{selectedArea === area.id && (<div className="space-y-4"><div><Label>アクションタイプ</Label><Select value={area.action_type} onValueChange={(value: 'uri' | 'message' | 'richmenuswitch') => updateTapArea(area.id, { action_type: value })}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="uri">URLを開く</SelectItem><SelectItem value="message">テキストを送信</SelectItem><SelectItem value="richmenuswitch">リッチメニューを切り替え</SelectItem></SelectContent></Select></div><div><Label>{area.action_type === 'uri' ? 'URL' : area.action_type === 'message' ? '送信テキスト' : '切り替え先メニュー'}</Label>{area.action_type === 'richmenuswitch' ? (<Select value={area.action_value} onValueChange={(value) => updateTapArea(area.id, { action_value: value })}><SelectTrigger><SelectValue placeholder="リッチメニューを選択" /></SelectTrigger><SelectContent>{availableRichMenus.map((richMenu) => (<SelectItem key={richMenu.id} value={richMenu.line_rich_menu_alias_id || richMenu.id}>{richMenu.name}</SelectItem>))}</SelectContent></Select>) : (<div className="space-y-2">
-  <Input value={area.action_value} onChange={(e) => updateTapArea(area.id, { action_value: e.target.value })} placeholder={area.action_type === 'uri' ? 'https://example.com' : 'こんにちは'} />
-  {area.action_type === 'uri' && (
-    <div className="flex items-center justify-between gap-2 text-xs text-muted-foreground">
-      <Button type="button" size="sm" variant="outline" onClick={(event) => { event.stopPropagation(); convertUriAreaToLiffLink(area); }}>
-        Convert to LIFF link
-      </Button>
-      {!resolveLiffBaseUrl() && <span>LIFF settings not found</span>}
-    </div>
-  )}
+                          <Input value={area.action_value} onChange={(e) => updateTapArea(area.id, { action_value: e.target.value })} placeholder={area.action_type === 'uri' ? 'https://example.com または https://example.com?uid=[UID]' : 'こんにちは'} />
 </div>)}</div></div>)}</div>))}
                     {tapAreas.length === 0 && (<div className="text-center py-10 text-muted-foreground"><p>タップエリアがありません</p><p className="text-sm">「追加」ボタンでエリアを作成してください</p></div>)}</CardContent>
                 </Card>
