@@ -459,8 +459,16 @@ serve(async (req) => {
           const sched = new Date(scheduledAt as unknown as string);
           const now = new Date();
           
-          // 即時配信（スケジュール時刻が現在時刻以前）の場合は ready、それ以外は waiting
-          const initialStatus = sched <= now ? 'ready' : 'waiting';
+          // 即時配信の判定を改善：delivery_typeがimmediatelyまたは0秒相対配信の場合
+          const isImmediate = effectiveType === 'immediately' || 
+                             (effectiveType === 'relative' && 
+                              firstStep.delivery_seconds === 0 &&
+                              firstStep.delivery_minutes === 0 &&
+                              firstStep.delivery_hours === 0 &&
+                              firstStep.delivery_days === 0);
+          
+          // 即時配信、またはスケジュール時刻が2秒以内の場合はreadyに
+          const initialStatus = isImmediate || sched <= new Date(now.getTime() + 2000) ? 'ready' : 'waiting';
           
           console.log("⏰ Setting step schedule:", {
             scheduled_at: sched.toISOString(),
