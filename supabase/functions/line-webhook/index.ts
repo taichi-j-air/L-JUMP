@@ -575,37 +575,71 @@ async function handleFollow(event: LineEvent, supabase: any, req: Request) {
 
         const profile = profiles[0]
 
-        // Insert friend data
-        const { data: friendData, error: insertError } = await supabase
+        // Check if friend already exists (e.g., after unblock)
+        const { data: existingFriend } = await supabase
           .from('line_friends')
-          .insert({
-            user_id: profile.user_id,
-            line_user_id: source.userId,
-            display_name: userProfile.displayName,
-            picture_url: userProfile.pictureUrl,
-            added_at: new Date().toISOString()
-          })
-          .select()
-          .single()
-
-        if (insertError) {
-          console.error('Error inserting friend:', insertError)
-          return
-        }
-
-        // Update friends count
-        const { error: updateError } = await supabase
-          .from('profiles')
-          .update({ 
-            friends_count: (profile.friends_count || 0) + 1 
-          })
+          .select('id')
           .eq('user_id', profile.user_id)
+          .eq('line_user_id', source.userId)
+          .maybeSingle()
 
-        if (updateError) {
-          console.error('Error updating friends count:', updateError)
+        let friendData
+        if (!existingFriend) {
+          // New friend - insert
+          const { data: newFriend, error: insertError } = await supabase
+            .from('line_friends')
+            .insert({
+              user_id: profile.user_id,
+              line_user_id: source.userId,
+              display_name: userProfile.displayName,
+              picture_url: userProfile.pictureUrl,
+              added_at: new Date().toISOString()
+            })
+            .select()
+            .single()
+
+          if (insertError) {
+            console.error('Error inserting friend:', insertError)
+            return
+          }
+
+          friendData = newFriend
+
+          // Update friends count for new friend only
+          const { error: updateError } = await supabase
+            .from('profiles')
+            .update({ 
+              friends_count: (profile.friends_count || 0) + 1 
+            })
+            .eq('user_id', profile.user_id)
+
+          if (updateError) {
+            console.error('Error updating friends count:', updateError)
+          }
+
+          console.log('新規友達追加が完了しました:', userProfile.displayName)
+        } else {
+          // Existing friend (e.g., after unblock) - update
+          const { data: updatedFriend, error: updateError } = await supabase
+            .from('line_friends')
+            .update({
+              display_name: userProfile.displayName,
+              picture_url: userProfile.pictureUrl,
+              is_blocked: false,
+              added_at: new Date().toISOString()
+            })
+            .eq('id', existingFriend.id)
+            .select()
+            .single()
+
+          if (updateError) {
+            console.error('Error updating existing friend:', updateError)
+            return
+          }
+
+          friendData = updatedFriend
+          console.log('既存友達の情報を更新しました（ブロック解除）:', userProfile.displayName)
         }
-
-        console.log('通常の友達追加が完了しました:', userProfile.displayName)
 
         // Check for greeting message settings
         const { data: greetingSettings, error: greetingError } = await supabase
