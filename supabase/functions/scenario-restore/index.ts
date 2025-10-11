@@ -82,6 +82,8 @@ serve(async (req) => {
 
     console.log('✓ ステップ数:', steps?.length || 0);
 
+    let finalScenarioId = target_scenario_id;
+
     // 新しいトラッキングレコードを作成
     if (steps && steps.length > 0) {
       const trackingData = steps.map((step, index) => ({
@@ -108,6 +110,76 @@ serve(async (req) => {
       }
 
       console.log('✓ トラッキングレコードを作成しました');
+    } else {
+      // 0 STEPシナリオの場合：遷移先チェック（オプショナル）
+      console.log('⚠ 0 STEPシナリオ検出、遷移先を確認中...');
+      const { data: transition, error: transErr } = await supabase
+        .from('scenario_transitions')
+        .select('to_scenario_id')
+        .eq('from_scenario_id', target_scenario_id)
+        .order('created_at')
+        .limit(1)
+        .maybeSingle();
+
+      if (!transErr && transition?.to_scenario_id) {
+        console.log('✓ 遷移先シナリオを検出:', transition.to_scenario_id);
+
+        // 遷移先の既存トラッキングを削除
+        const { error: delErr } = await supabase
+          .from('step_delivery_tracking')
+          .delete()
+          .eq('scenario_id', transition.to_scenario_id)
+          .eq('friend_id', friendData.id);
+
+        if (delErr) {
+          console.warn('遷移先の既存トラッキング削除エラー:', delErr);
+        }
+
+        // 遷移先のステップを取得して登録
+        const { data: nextSteps, error: nextErr } = await supabase
+          .from('steps')
+          .select('id, step_order')
+          .eq('scenario_id', transition.to_scenario_id)
+          .order('step_order');
+
+        if (!nextErr && nextSteps && nextSteps.length > 0) {
+          const nextTrackingData = nextSteps.map((step, index) => ({
+            scenario_id: transition.to_scenario_id,
+            step_id: step.id,
+            friend_id: friendData.id,
+            status: index === 0 ? 'ready' : 'waiting',
+            scheduled_delivery_at: index === 0 ? new Date().toISOString() : null,
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
+          }));
+
+          const { error: nextInsertErr } = await supabase
+            .from('step_delivery_tracking')
+            .insert(nextTrackingData);
+
+          if (nextInsertErr) {
+            console.error('遷移先トラッキング作成エラー:', nextInsertErr);
+          } else {
+            console.log('✓ 遷移先シナリオのトラッキングを作成しました');
+            finalScenarioId = transition.to_scenario_id;
+
+            // 遷移先のログ記録
+            await supabase
+              .from('scenario_friend_logs')
+              .insert({
+                scenario_id: transition.to_scenario_id,
+                friend_id: friendData.id,
+                line_user_id: line_user_id,
+                invite_code: 'system_transition',
+                registration_source: 'restore_0step_transition'
+              });
+          }
+        } else {
+          console.log('⚠ 遷移先シナリオにステップがありません');
+        }
+      } else {
+        console.log('⚠ 遷移先が設定されていません。ログのみ記録します。');
+      }
     }
 
     // シナリオ友達ログに記録
@@ -158,7 +230,8 @@ serve(async (req) => {
     return new Response(JSON.stringify({
       success: true,
       friend_id: friendData.id,
-      scenario_id: target_scenario_id,
+      scenario_id: finalScenarioId,
+      original_scenario_id: target_scenario_id,
       steps_registered: steps?.length || 0,
     }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },

@@ -189,6 +189,17 @@ export function FriendScenarioDialog({ open, onOpenChange, user, friend }: Frien
       const firstScheduledAt = computeFirstScheduledAt()
       const firstNextCheck = new Date(new Date(firstScheduledAt).getTime() - 5000).toISOString()
 
+      // 既存のトラッキングを完全削除（完全リセット）
+      const { error: deleteErr } = await supabase
+        .from('step_delivery_tracking')
+        .delete()
+        .eq('scenario_id', scenario.id)
+        .eq('friend_id', friend.id)
+
+      if (deleteErr) {
+        console.warn('既存トラッキング削除に失敗:', deleteErr)
+      }
+
       // 既存のトラッキング
       const { data: existing } = await supabase
         .from('step_delivery_tracking')
@@ -231,10 +242,70 @@ export function FriendScenarioDialog({ open, onOpenChange, user, friend }: Frien
         if (updErr) throw updErr
       }
 
+      // 0 STEPシナリオの場合、遷移先へ自動登録（オプショナル）
+      let finalScenarioId = scenario.id
+      if ((allSteps || []).length === 0) {
+        console.log('⚠ 0 STEPシナリオ検出、遷移先を確認中...')
+        const { data: transition } = await supabase
+          .from('scenario_transitions')
+          .select('to_scenario_id')
+          .eq('from_scenario_id', scenario.id)
+          .order('created_at')
+          .limit(1)
+          .maybeSingle()
+        
+        if (transition?.to_scenario_id) {
+          console.log('✓ 遷移先シナリオを検出:', transition.to_scenario_id)
+
+          // 遷移先の既存トラッキングを削除
+          await supabase
+            .from('step_delivery_tracking')
+            .delete()
+            .eq('scenario_id', transition.to_scenario_id)
+            .eq('friend_id', friend.id)
+          
+          // 遷移先のステップを取得して登録
+          const { data: nextSteps } = await supabase
+            .from('steps')
+            .select('id, step_order')
+            .eq('scenario_id', transition.to_scenario_id)
+            .order('step_order')
+          
+          if (nextSteps && nextSteps.length > 0) {
+            const nextTrackingData = nextSteps.map((step, index) => ({
+              scenario_id: transition.to_scenario_id,
+              step_id: step.id,
+              friend_id: friend.id,
+              status: index === 0 ? 'waiting' : 'waiting',
+              scheduled_delivery_at: index === 0 ? firstScheduledAt : null,
+              next_check_at: index === 0 ? firstNextCheck : null,
+            }))
+            
+            await supabase.from('step_delivery_tracking').insert(nextTrackingData)
+            
+            // 遷移先のログ記録
+            await supabase
+              .from('scenario_friend_logs')
+              .insert({
+                scenario_id: transition.to_scenario_id,
+                friend_id: friend.id,
+                line_user_id: friend.line_user_id,
+                invite_code: 'system_transition',
+                registration_source: 'manual_0step_transition'
+              })
+            
+            finalScenarioId = transition.to_scenario_id
+            console.log('✓ 遷移先シナリオへ登録完了')
+          }
+        } else {
+          console.log('⚠ 遷移先が設定されていません。ログのみ記録します。')
+        }
+      }
+
       // スケジューラ関数をキック（この友だちのみ）。未来時刻なら送られません。
       try {
         await supabase.functions.invoke('scheduled-step-delivery', {
-          body: { line_user_id: friend.line_user_id, scenario_id: scenario.id }
+          body: { line_user_id: friend.line_user_id, scenario_id: finalScenarioId }
         })
       } catch (e) {
         console.warn('scheduled-step-delivery invoke failed', e)
