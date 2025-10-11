@@ -696,7 +696,7 @@ async function handleFollow(event: LineEvent, supabase: any, req: Request) {
             if (friendData) {
               const uid = friendData.short_uid || null
               const lineName = friendData.display_name || userProfile?.displayName || null
-              const lineNameSan = lineName ? lineName.replace(/[<>\"\']/g, '') : null
+              const lineNameSan = lineName ? lineName.replace(/[<>\"\']/g, '') + 'さん' : null
 
               if (uid) {
                 message = message.replace(/\[UID\]/g, uid)

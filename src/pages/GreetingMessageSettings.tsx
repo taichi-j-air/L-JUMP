@@ -245,7 +245,7 @@ const GreetingMessageSettings = () => {
                         <ul className="space-y-0.5 ml-4">
                           <li><code className="bg-background px-1 py-0.5 rounded">[UID]</code> - 友だちの固有ID</li>
                           <li><code className="bg-background px-1 py-0.5 rounded">[LINE_NAME]</code> - 友だちの表示名</li>
-                          <li><code className="bg-background px-1 py-0.5 rounded">[LINE_NAME_SAN]</code> - 友だちの表示名（サニタイズ済み）</li>
+                          <li><code className="bg-background px-1 py-0.5 rounded">[LINE_NAME_SAN]</code> - 友だちの表示名 + さん</li>
                         </ul>
                       </div>
                     </div>
