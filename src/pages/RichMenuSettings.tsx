@@ -157,7 +157,7 @@ const RichMenuSettings = () => {
                             <DropdownMenuLabel>アクション</DropdownMenuLabel>
                             <DropdownMenuItem onClick={() => editMenu(menu)}><Settings className="h-4 w-4 mr-2"/>編集</DropdownMenuItem>
                             <DropdownMenuItem onClick={() => setDefaultMenu(menu.id, menu.line_rich_menu_id)} disabled={menu.is_default || !menu.line_rich_menu_id}><Star className="h-4 w-4 mr-2"/>デフォルトに設定</DropdownMenuItem>
-                            <DropdownMenuItem className="text-red-600" onClick={() => deleteMenu(menu.id, menu.line_rich_menu_id)}><Trash2 className="h-4 w-4 mr-2"/>削除</DropdownMenuItem>
+                            <DropdownMenuItem className="text-red-600 focus:text-white focus:bg-red-600" onClick={() => deleteMenu(menu.id, menu.line_rich_menu_id)}><Trash2 className="h-4 w-4 mr-2"/>削除</DropdownMenuItem>
                           </DropdownMenuContent>
                         </DropdownMenu>
                       </TableCell>

@@ -256,7 +256,6 @@ export const RichMenuEditor = ({ menu, onSave, onCancel }: RichMenuEditorProps) 
                     <CardHeader><CardTitle>公開設定</CardTitle></CardHeader>
                     <CardContent className="space-y-6">
                         <div className="flex items-center justify-between rounded-lg border p-4"><div className="space-y-0.5"><Label htmlFor="isActive" className="text-base">有効化</Label><p className="text-sm text-muted-foreground">このリッチメニューをアクティブにします。</p></div><Switch id="isActive" checked={isActive} onCheckedChange={setIsActive} /></div>
-                        <div className="flex items-center justify-between rounded-lg border p-4"><div className="space-y-0.5"><Label htmlFor="isDefault" className="text-base">デフォルトのメニューにする</Label><p className="text-sm text-muted-foreground">他のメニューが指定されていない全てのユーザーにこのメニューを表示します。</p></div><Switch id="isDefault" checked={isDefault} onCheckedChange={setIsDefault} /></div>
                         <div className="flex items-center justify-between rounded-lg border p-4"><div className="space-y-0.5"><Label htmlFor="selected" className="text-base">初期状態で開く</Label><p className="text-sm text-muted-foreground">ユーザーがトーク画面を開いた時に、最初からメニューを開いた状態にします。</p></div><Switch id="selected" checked={selected} onCheckedChange={setSelected} /></div>
                     </CardContent>
                 </Card>
