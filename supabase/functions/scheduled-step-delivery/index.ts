@@ -650,6 +650,55 @@ async function sendLineMessage(accessToken: string, userId: string, message: any
         break
       }
 
+      
+      case 'restore_access': {
+        const config = message.restore_config
+        if (config && config.type === 'button') {
+          lineMessage = {
+            type: 'template',
+            altText: config.title || 'アクセス回復',
+            template: {
+              type: 'buttons',
+              text: config.title || 'アクセスを回復しますか？',
+              actions: [{
+                type: 'postback',
+                label: config.button_text || 'OK',
+                data: JSON.stringify({
+                  action: 'restore_access',
+                  scenario_id: stepTracking.scenario_id
+                })
+              }]
+            }
+          }
+        } else if (config && config.type === 'image' && config.image_url) {
+          lineMessage = {
+            type: 'template',
+            altText: config.title || 'アクセス回復',
+            template: {
+              type: 'buttons',
+              thumbnailImageUrl: config.image_url,
+              imageSize: 'cover',
+              imageAspectRatio: 'rectangle',
+              title: config.title || ' ',
+              text: ' ',
+              actions: [{
+                type: 'postback',
+                label: config.button_text || 'OK',
+                data: JSON.stringify({
+                  action: 'restore_access',
+                  scenario_id: stepTracking.scenario_id
+                })
+              }]
+            }
+          }
+        } else {
+          lineMessage = {
+            type: 'text',
+            text: 'アクセス回復設定が不正です'
+          }
+        }
+        break
+      }
         
       default:
         lineMessage = {

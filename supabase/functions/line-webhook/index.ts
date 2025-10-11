@@ -146,6 +146,8 @@ serve(async (req) => {
         await handleFollow(event, supabase, req)
       } else if (event.type === 'unfollow') {
         await handleUnfollow(event, supabase, req)
+      } else if (event.type === 'postback') {
+        await handlePostback(event, supabase, req)
       } else {
         console.log('Unhandled event type:', event.type)
       }
@@ -1515,5 +1517,125 @@ async function getStickerImageUrl(packageId: string, stickerId: string) {
   } catch (error) {
     console.error('Error getting sticker URL:', error)
     return { success: false, error: (error as Error)?.message || 'Unknown error' }
+  }
+}
+
+/**
+ * ポストバックイベントを処理（アクセス解除＆シナリオ再登録）
+ */
+async function handlePostback(event: any, supabase: any, req: Request) {
+  try {
+    const { postback, replyToken, source } = event
+    
+    console.log('📨 Postback Event Received')
+    console.log('  User:', source.userId)
+    console.log('  Data:', postback.data)
+    
+    // ポストバックデータのパース
+    let postbackData
+    try {
+      postbackData = JSON.parse(postback.data)
+    } catch (e) {
+      console.error('❌ Invalid postback JSON:', postback.data)
+      return
+    }
+    
+    // restore_access 以外は無視（他のポストバックに影響しない）
+    if (postbackData.action !== 'restore_access') {
+      console.log('ℹ️ Not a restore_access action, skipping')
+      return
+    }
+    
+    const scenarioId = postbackData.scenario_id
+    if (!scenarioId) {
+      console.error('❌ scenario_id missing in postback data')
+      return
+    }
+    
+    // 友だち情報の取得
+    const { data: friendData, error: friendError } = await supabase
+      .from('line_friends')
+      .select('id, user_id, display_name, picture_url')
+      .eq('line_user_id', source.userId)
+      .maybeSingle()
+    
+    if (friendError || !friendData) {
+      console.error('❌ Friend not found:', friendError)
+      await sendReplyMessage(replyToken, 'エラーが発生しました。', supabase)
+      return
+    }
+    
+    console.log('✓ Friend found:', friendData.id)
+    
+    // 既に押されているかチェック
+    const { data: existingLog } = await supabase
+      .from('postback_logs')
+      .select('id')
+      .eq('friend_id', friendData.id)
+      .eq('scenario_id', scenarioId)
+      .eq('action', 'restore_access')
+      .maybeSingle()
+    
+    if (existingLog) {
+      console.log('⚠️ Already pressed by this friend')
+      await sendReplyMessage(replyToken, '既に押されています。', supabase)
+      return
+    }
+    
+    // 1回目の処理開始
+    console.log('🔄 Starting restore_access process...')
+    
+    // ログに記録
+    const { error: logError } = await supabase
+      .from('postback_logs')
+      .insert({
+        friend_id: friendData.id,
+        scenario_id: scenarioId,
+        action: 'restore_access',
+        line_user_id: source.userId
+      })
+    
+    if (logError) {
+      console.error('❌ Failed to log postback:', logError)
+      await sendReplyMessage(replyToken, 'エラーが発生しました。', supabase)
+      return
+    }
+    
+    // 応答メッセージ送信
+    await sendReplyMessage(replyToken, '期間延長/再開', supabase)
+    console.log('✓ Reply sent: 期間延長/再開')
+    
+    // シナリオのページシェアコードを取得
+    const { data: scenarioData } = await supabase
+      .from('step_scenarios')
+      .select('page_share_code')
+      .eq('id', scenarioId)
+      .maybeSingle()
+    
+    const pageShareCode = scenarioData?.page_share_code
+    
+    // Edge Function経由でシナリオリセット実行
+    const { data: restoreResult, error: restoreError } = await supabase.functions.invoke(
+      'scenario-restore',
+      {
+        body: {
+          line_user_id: source.userId,
+          target_scenario_id: scenarioId,
+          page_share_code: pageShareCode
+        }
+      }
+    )
+    
+    if (restoreError || !restoreResult?.success) {
+      console.error('❌ Restore failed:', restoreError || restoreResult)
+      return
+    }
+    
+    console.log('✅ Restore completed:', restoreResult)
+    console.log('  - Steps registered:', restoreResult.steps_registered)
+    console.log('  - Friend ID:', restoreResult.friend_id)
+    
+  } catch (error) {
+    console.error('💥 Error in handlePostback:', error)
   }
 }

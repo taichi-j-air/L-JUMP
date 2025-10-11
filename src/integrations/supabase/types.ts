@@ -1430,6 +1430,48 @@ export type Database = {
         }
         Relationships: []
       }
+      postback_logs: {
+        Row: {
+          action: string
+          created_at: string
+          friend_id: string
+          id: string
+          line_user_id: string
+          scenario_id: string
+        }
+        Insert: {
+          action: string
+          created_at?: string
+          friend_id: string
+          id?: string
+          line_user_id: string
+          scenario_id: string
+        }
+        Update: {
+          action?: string
+          created_at?: string
+          friend_id?: string
+          id?: string
+          line_user_id?: string
+          scenario_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "postback_logs_friend_id_fkey"
+            columns: ["friend_id"]
+            isOneToOne: false
+            referencedRelation: "line_friends"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "postback_logs_scenario_id_fkey"
+            columns: ["scenario_id"]
+            isOneToOne: false
+            referencedRelation: "step_scenarios"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       product_actions: {
         Row: {
           action_type: string
