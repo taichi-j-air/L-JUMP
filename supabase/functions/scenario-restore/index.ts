@@ -31,13 +31,14 @@ serve(async (req) => {
     );
 
     console.log('友達情報を取得:', line_user_id);
-    const { data: friendData, error: friendErr } = await supabase
+    const { data: friendDataArray, error: friendErr } = await supabase
       .from('line_friends')
       .select('id, user_id')
       .eq('line_user_id', line_user_id)
       .order('created_at', { ascending: false })
-      .limit(1)
-      .maybeSingle();
+      .limit(1);
+
+    const friendData = friendDataArray?.[0];
 
     if (friendErr || !friendData) {
       console.error('友達が見つかりません:', friendErr);
