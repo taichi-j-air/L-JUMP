@@ -552,7 +552,15 @@ async function deliverStepMessages(supabase: any, stepTracking: any) {
       }
 
       try {
-        const sendResult = await sendLineMessage(accessToken, lineUserId, preparedMessage)
+  const sendResult = await sendLineMessage(
+    accessToken, 
+    lineUserId, 
+    preparedMessage,
+    { 
+      scenarioId: stepTracking.scenario_id,
+      stepId: stepTracking.step_id
+    }
+  )
         if (sendResult.sent) {
           console.log('✅ Message sent successfully:', message.id)
           if (i < messages.length - 1) {
@@ -676,7 +684,12 @@ function addUidToFormLinks(message: string, friendShortUid: string | null): stri
 }
 
 // Send a single message via LINE API
-async function sendLineMessage(accessToken: string, userId: string, message: any) {
+async function sendLineMessage(
+  accessToken: string, 
+  userId: string, 
+  message: any,
+  context?: { scenarioId?: string, stepId?: string }
+) {
   try {
     let lineMessage: any
     
@@ -740,7 +753,8 @@ async function sendLineMessage(accessToken: string, userId: string, message: any
                 label: config.button_text || 'OK',
                 data: JSON.stringify({
                   action: 'restore_access',
-                  scenario_id: stepTracking.scenario_id
+                  scenario_id: context?.scenarioId || '',
+                  target_scenario_id: config.target_scenario_id || context?.scenarioId || ''
                 })
               }]
             }
@@ -761,7 +775,8 @@ async function sendLineMessage(accessToken: string, userId: string, message: any
                 label: config.button_text || 'OK',
                 data: JSON.stringify({
                   action: 'restore_access',
-                  scenario_id: stepTracking.scenario_id
+                  scenario_id: context?.scenarioId || '',
+                  target_scenario_id: config.target_scenario_id || context?.scenarioId || ''
                 })
               }]
             }
