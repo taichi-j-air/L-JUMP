@@ -1605,14 +1605,14 @@ async function handlePostback(event: any, supabase: any, req: Request) {
     await sendReplyMessage(replyToken, '期間延長/再開', supabase)
     console.log('✓ Reply sent: 期間延長/再開')
     
-    // シナリオのページシェアコードを取得
-    const { data: scenarioData } = await supabase
-      .from('step_scenarios')
-      .select('page_share_code')
-      .eq('id', scenarioId)
+    // page_share_code を cms_pages から取得
+    const { data: cmsPage } = await supabase
+      .from('cms_pages')
+      .select('share_code')
+      .eq('timer_scenario_id', scenarioId)
       .maybeSingle()
     
-    const pageShareCode = scenarioData?.page_share_code
+    const pageShareCode = cmsPage?.share_code || null
     
     // Edge Function経由でシナリオリセット実行
     const { data: restoreResult, error: restoreError } = await supabase.functions.invoke(

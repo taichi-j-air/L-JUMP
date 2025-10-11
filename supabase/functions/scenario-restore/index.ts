@@ -143,7 +143,7 @@ serve(async (req) => {
           timer_start_at: new Date().toISOString(),
           updated_at: new Date().toISOString(),
         }, {
-          onConflict: 'friend_id,page_share_code'
+          onConflict: 'unique_friend_page'
         });
 
       if (accessErr) {
