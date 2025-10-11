@@ -632,6 +632,61 @@ async function deliverStepMessages(supabase: any, stepTracking: any) {
   }
 }
 
+// ────────────────────── LINE Flex 用サニタイズ
+function sanitize(node: any): any {
+  if (node == null) return node;
+  if (Array.isArray(node)) return node.map(sanitize);
+
+  if (typeof node === "object") {
+    // 型ごとに LINE が許容しないキーを定義
+    const invalid: Record<string, Set<string>> = {
+      text: new Set(["backgroundColor", "padding", "borderRadius", "borderWidth", "borderColor", "className"]),
+      image: new Set(["className"]),
+      box: new Set(["className"]),
+      button: new Set(["className"]),
+    };
+
+    const t = node.type as string | undefined;
+    const out: any = {};
+    for (const [k, v] of Object.entries(node)) {
+      if (t && invalid[t]?.has(k)) continue;
+      out[k] = sanitize(v);
+    }
+    return out;
+  }
+  return node;
+}
+
+// ────────────────────── Flex 正規化
+function normalize(input: any) {
+  if (!input) return null;
+
+  let normalized: any = null;
+
+  // ① すでに flex ラップ済み
+  if (input.type === "flex" && input.contents) {
+    normalized = { type: "flex", altText: input.altText?.trim() || "お知らせ", contents: sanitize(input.contents) };
+  }
+  // ② bubble / carousel がルート
+  else if (["bubble", "carousel"].includes(input.type)) {
+    normalized = { type: "flex", altText: "お知らせ", contents: sanitize(input) };
+  }
+  // ③ { contents: {...}, altText } 形式
+  else if (input.contents && ["bubble", "carousel"].includes(input.contents.type)) {
+    normalized = { type: "flex", altText: input.altText?.trim() || "お知らせ", contents: sanitize(input.contents) };
+  }
+
+  if (!normalized) return null;
+
+  // ★★★ styles.body.backgroundColor を contents.body.backgroundColor に適用する処理を追加 ★★★
+  if (input.styles?.body?.backgroundColor && normalized.contents?.type === 'bubble' && normalized.contents.body) {
+    // 元のbodyにbackgroundColorがすでにある場合でも、styles側を優先して上書きする
+    normalized.contents.body.backgroundColor = input.styles.body.backgroundColor;
+  }
+
+  return normalized;
+}
+
 // UIDパラメーター付与処理
 function addUidToFormLinks(message: string, friendShortUid: string | null): string {
   console.log(`addUidToFormLinks called with: "${message}", UID: ${friendShortUid}`);
