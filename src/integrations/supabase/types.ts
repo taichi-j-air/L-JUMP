@@ -2979,6 +2979,14 @@ export type Database = {
               p_picture_url?: string
               p_registration_source?: string
             }
+          | {
+              p_display_name?: string
+              p_invite_code: string
+              p_line_user_id: string
+              p_picture_url?: string
+              p_registration_source?: string
+              p_scenario_id?: string
+            }
         Returns: Json
       }
       register_friend_with_scenario: {

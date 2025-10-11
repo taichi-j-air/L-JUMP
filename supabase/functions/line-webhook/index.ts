@@ -629,10 +629,11 @@ async function handleFollow(event: LineEvent, supabase: any, req: Request) {
               const { data: registrationResult, error: registrationError } = await supabase
                 .rpc('register_friend_to_scenario', {
                   p_line_user_id: source.userId,
-                  p_invite_code: '', // Empty for greeting scenario
+                  p_invite_code: null,
                   p_display_name: userProfile.displayName,
                   p_picture_url: userProfile.pictureUrl,
-                  p_registration_source: 'greeting_message'
+                  p_registration_source: 'greeting_message',
+                  p_scenario_id: greetingSettings.scenario_id
                 })
 
               if (registrationError) {
