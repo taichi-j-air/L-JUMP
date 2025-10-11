@@ -41,14 +41,16 @@ const decodeParam = (value: string | null): string | null => {
 const buildStatus = (message: string, description?: string) => ({ message, description });
 
 export default function LiffAuth() {
-  const [status, setStatus] = useState(buildStatus("Preparing..."));
+  const [status, setStatus] = useState(buildStatus("準備中..."));
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     const run = async () => {
       try {
+        console.log("=== LIFF Auth Debug Start ===");
+        
         if (typeof window === "undefined") {
-          throw new Error("This page must run in a browser");
+          throw new Error("このページはブラウザで実行する必要があります");
         }
 
         const search = new URLSearchParams(window.location.search);
@@ -57,35 +59,48 @@ export default function LiffAuth() {
         const fallbackUrl = decodeParam(search.get("fallback"));
         const liffId = search.get("liffId")?.trim() || search.get("liff_id")?.trim();
 
-        if (!ownerUserId) throw new Error("Missing userId parameter");
-        if (!rawTarget) throw new Error("Missing target parameter");
-        if (!liffId) throw new Error("Missing liffId parameter");
+        console.log("1. パラメータ:", { ownerUserId, rawTarget, liffId, fallbackUrl });
 
-        setStatus(buildStatus("Loading LIFF SDK"));
+        if (!ownerUserId) throw new Error("userIdパラメータがありません");
+        if (!rawTarget) throw new Error("targetパラメータがありません");
+        if (!liffId) throw new Error("liffIdパラメータがありません");
+
+        setStatus(buildStatus("LIFFを読み込んでいます..."));
         await loadLiffSdk();
+        console.log("2. LIFF SDK読み込み完了:", !!window.liff);
 
-        if (!window.liff) throw new Error("LIFF SDK is not available");
+        if (!window.liff) throw new Error("LIFF SDKが利用できません");
 
-        setStatus(buildStatus("Initialising LIFF"));
+        setStatus(buildStatus("LIFFを初期化中..."));
         await window.liff.init({ liffId });
+        console.log("3. LIFF初期化完了");
 
         if (!window.liff.isLoggedIn()) {
-          setStatus(buildStatus("Redirecting to LINE login"));
+          setStatus(buildStatus("LINEログインに移動中..."));
+          console.log("4. LINEログインにリダイレクト");
           window.liff.login({ redirectUri: window.location.href });
           return;
         }
 
-        setStatus(buildStatus("Fetching profile"));
+        setStatus(buildStatus("プロフィールを取得中..."));
         const context = window.liff.getContext ? window.liff.getContext() : null;
         const profile = await window.liff.getProfile();
         const lineUserId: string | undefined = context?.userId || profile?.userId;
+        console.log("4. LINE ユーザーID取得:", lineUserId ? "成功" : "失敗");
 
         if (!lineUserId) {
-          throw new Error("Unable to obtain LINE user id");
+          throw new Error("LINE ユーザーIDを取得できませんでした");
         }
 
-        setStatus(buildStatus("Preparing redirect"));
-        const { data, error: fnError } = await supabase.functions.invoke("liff-rich-menu-redirect", {
+        setStatus(buildStatus("移動先を準備中..."));
+        console.log("5. Edge Function呼び出し開始");
+
+        // タイムアウト処理を追加
+        const timeoutPromise = new Promise<never>((_, reject) => {
+          setTimeout(() => reject(new Error("タイムアウト: サーバーからの応答がありません（30秒）")), 30000);
+        });
+
+        const invokePromise = supabase.functions.invoke("liff-rich-menu-redirect", {
           body: {
             ownerUserId,
             lineUserId,
@@ -93,13 +108,28 @@ export default function LiffAuth() {
           },
         });
 
+        const { data, error: fnError } = await Promise.race([invokePromise, timeoutPromise]) as any;
+
+        console.log("6. Edge Function応答:", { success: data?.success, hasUrl: !!data?.url, error: fnError });
+
         if (fnError) {
-          console.error("liff-rich-menu-redirect failure", fnError);
-          throw new Error(fnError.message ?? "Failed to resolve redirect URL");
+          console.error("liff-rich-menu-redirect エラー", fnError);
+          throw new Error(fnError.message ?? "リダイレクト先URLの解決に失敗しました");
         }
 
         if (!data?.success || !data.url) {
-          throw new Error(data?.error ?? "Failed to resolve redirect URL");
+          const errorMsg = data?.error ?? "リダイレクト先URLの解決に失敗しました";
+          console.error("Edge Function失敗:", errorMsg);
+          
+          // フォールバック: 元のtargetに直接移動（[UID]を除去）
+          const cleanTarget = rawTarget.replace(/\[UID\]/g, "");
+          if (cleanTarget && cleanTarget.startsWith("http")) {
+            console.log("フォールバック: 元のURLに直接移動", cleanTarget);
+            window.location.replace(cleanTarget);
+            return;
+          }
+          
+          throw new Error(errorMsg);
         }
 
         const destination: string = data.url;
@@ -108,7 +138,8 @@ export default function LiffAuth() {
         const openExternal: boolean = forceExternal ? true : Boolean(data.openExternal);
         const isInClient = window.liff.isInClient ? window.liff.isInClient() : false;
 
-        setStatus(buildStatus("Opening destination"));
+        console.log("7. 移動先:", { destination, openExternal, isInClient });
+        setStatus(buildStatus("ページを開いています..."));
 
         if (isInClient) {
           if (openExternal) {
@@ -127,22 +158,23 @@ export default function LiffAuth() {
           window.location.replace(destination);
         }
       } catch (err) {
-        console.error("LIFF redirect error", err);
+        console.error("=== LIFF Auth エラー ===", err);
         const params = new URLSearchParams(window.location.search);
         const fallback = decodeParam(params.get("fallback"));
         if (fallback) {
+          console.log("フォールバックURLに移動:", fallback);
           window.location.replace(fallback);
           return;
         }
-        setError((err as Error)?.message ?? "An unexpected error occurred");
+        setError((err as Error)?.message ?? "予期しないエラーが発生しました");
       }
     };
 
     run();
   }, []);
 
-  const message = error ? "Redirect failed" : status.message;
-  const description = error ?? status.description ?? "Please wait";
+  const message = error ? "リダイレクトに失敗しました" : status.message;
+  const description = error ?? status.description ?? "しばらくお待ちください";
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-background">
