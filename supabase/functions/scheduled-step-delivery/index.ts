@@ -692,10 +692,12 @@ async function sendLineMessage(accessToken: string, userId: string, message: any
             }
           }
         } else {
-          lineMessage = {
-            type: 'text',
-            text: 'アクセス回復設定が不正です'
-          }
+          // Invalid restore_access config - log error but skip sending message
+          console.warn('⚠️ Invalid restore_access config, skipping message delivery:', {
+            message_id: message.id,
+            config: config
+          })
+          continue // Skip this message without sending anything
         }
         break
       }
