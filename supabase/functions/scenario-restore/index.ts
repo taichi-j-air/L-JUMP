@@ -47,8 +47,8 @@ serve(async (req) => {
 
     console.log('✓ 友達ID:', friendData.id);
 
-    // 既存のシナリオ配信を停止（exited状態に）
-    console.log('既存配信を停止中...');
+    // 指定されたシナリオの配信を停止（exited状態に）
+    console.log('指定シナリオの既存配信を停止中...');
     const { error: stopError } = await supabase
       .from('step_delivery_tracking')
       .update({ 
@@ -56,6 +56,7 @@ serve(async (req) => {
         updated_at: new Date().toISOString() 
       })
       .eq('friend_id', friendData.id)
+      .eq('scenario_id', target_scenario_id)
       .in('status', ['waiting', 'ready', 'delivered']);
 
     if (stopError) {
@@ -86,6 +87,20 @@ serve(async (req) => {
 
     // 新しいトラッキングレコードを作成
     if (steps && steps.length > 0) {
+      // 既存の同一シナリオのトラッキングを削除
+      console.log('既存トラッキングを削除中...');
+      const { error: deleteErr } = await supabase
+        .from('step_delivery_tracking')
+        .delete()
+        .eq('friend_id', friendData.id)
+        .eq('scenario_id', target_scenario_id);
+
+      if (deleteErr) {
+        console.warn('既存トラッキング削除エラー:', deleteErr);
+      } else {
+        console.log('✓ 既存トラッキングを削除しました');
+      }
+
       const trackingData = steps.map((step, index) => ({
         scenario_id: target_scenario_id,
         step_id: step.id,
@@ -203,6 +218,22 @@ serve(async (req) => {
     // ページアクセス権限をリセット（該当するページがある場合）
     if (page_share_code) {
       console.log('ページアクセス権限をリセット中:', page_share_code);
+      
+      // CMSページ情報を取得してタイマー期限を再計算
+      const { data: pageData } = await supabase
+        .from('cms_pages')
+        .select('timer_duration_seconds, timer_mode')
+        .eq('share_code', page_share_code)
+        .single();
+
+      const now = new Date();
+      let timerEndAt = null;
+
+      if (pageData?.timer_duration_seconds && pageData.timer_mode === 'internal') {
+        timerEndAt = new Date(now.getTime() + pageData.timer_duration_seconds * 1000).toISOString();
+        console.log('✓ タイマー期限を再計算:', timerEndAt);
+      }
+
       const { error: accessErr } = await supabase
         .from('friend_page_access')
         .upsert({
@@ -212,8 +243,9 @@ serve(async (req) => {
           access_enabled: true,
           access_source: 'restore',
           first_access_at: null,
-          timer_start_at: new Date().toISOString(),
-          updated_at: new Date().toISOString(),
+          timer_start_at: now.toISOString(),
+          timer_end_at: timerEndAt,
+          updated_at: now.toISOString(),
         }, {
           onConflict: 'unique_friend_page'
         });
