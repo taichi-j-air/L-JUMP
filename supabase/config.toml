@@ -90,3 +90,6 @@ verify_jwt = false
 
 [functions.liff-rich-menu-redirect]
 verify_jwt = false
+
+[functions.liff-diagnostics]
+verify_jwt = false
