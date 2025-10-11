@@ -367,7 +367,7 @@ async function deliverStepMessages(supabase: any, stepTracking: any) {
     // Fetch messages for step
     const { data: messages, error: msgErr } = await supabase
       .from('step_messages')
-      .select('id, content, message_type, media_url, message_order, flex_message_id')
+      .select('id, content, message_type, media_url, message_order, flex_message_id, restore_config')
       .eq('step_id', step.id)
       .order('message_order', { ascending: true })
 
@@ -740,8 +740,25 @@ async function sendLineMessage(
 
       
       case 'restore_access': {
-        const config = message.restore_config
-        if (config && config.type === 'button') {
+        // restore_config from DB or fallback to content as JSON
+        let config = message.restore_config
+        if (!config) {
+          try {
+            const maybeConfig = typeof message.content === 'string' ? JSON.parse(message.content) : message.content
+            if (maybeConfig && typeof maybeConfig === 'object' && (maybeConfig.type === 'button' || maybeConfig.type === 'image')) {
+              config = maybeConfig
+            }
+          } catch {
+            // ignore parse errors
+          }
+        }
+        
+        if (!config) {
+          console.warn('❌ Invalid restore_access config, skipping message')
+          return { sent: false, reason: 'invalid_restore_config' }
+        }
+        
+        if (config.type === 'button') {
           lineMessage = {
             type: 'template',
             altText: config.title || 'アクセス回復',

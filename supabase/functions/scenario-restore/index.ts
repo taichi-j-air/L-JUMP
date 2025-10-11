@@ -225,6 +225,22 @@ serve(async (req) => {
       }
     }
 
+    // 復元後に即時配信を起動
+    try {
+      console.log('📨 scheduled-step-deliveryを起動中...');
+      const { data: deliveryData, error: deliveryError } = await supabase.functions.invoke('scheduled-step-delivery', {
+        body: { line_user_id, trigger: 'restore' }
+      });
+      
+      if (deliveryError) {
+        console.warn('⚠ 配信起動エラー（復元は成功）:', deliveryError);
+      } else {
+        console.log('✅ 配信起動成功:', deliveryData);
+      }
+    } catch (e) {
+      console.warn('⚠ 配信起動失敗（復元は成功扱い）:', e);
+    }
+
     console.log('=== SCENARIO RESTORE COMPLETED ===');
 
     return new Response(JSON.stringify({
