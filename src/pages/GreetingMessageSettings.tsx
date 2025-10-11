@@ -6,9 +6,10 @@ import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
-import { ArrowLeft, MessageCircle, QrCode, Link } from "lucide-react";
+import { ArrowLeft, MessageCircle, Link } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
+import { QRCodeSVG } from 'qrcode.react';
 
 interface Scenario {
   id: string;
@@ -39,14 +40,15 @@ const GreetingMessageSettings = () => {
 
       const { data, error } = await supabase
         .from('profiles')
-        .select('line_bot_id, add_friend_url')
+        .select('line_bot_id')
         .eq('user_id', user.id)
         .single();
 
       if (!error && data) {
         setProfile(data);
-        if (data.add_friend_url) {
-          setFriendUrl(data.add_friend_url);
+        if (data.line_bot_id) {
+          const botId = data.line_bot_id.startsWith('@') ? data.line_bot_id.substring(1) : data.line_bot_id;
+          setFriendUrl(`https://line.me/R/ti/p/%40${botId}`);
         }
       }
     } catch (error) {
@@ -248,10 +250,7 @@ const GreetingMessageSettings = () => {
                     </div>
                   </div>
                   <div className="flex items-center justify-center p-4 border rounded-lg bg-white">
-                    <QrCode className="w-32 h-32 text-muted-foreground" />
-                    <div className="ml-4 text-sm text-muted-foreground">
-                      QRコード生成機能は実装予定です
-                    </div>
+                    <QRCodeSVG value={friendUrl} size={128} />
                   </div>
                 </>
               ) : (
