@@ -693,20 +693,28 @@ async function handleFollow(event: LineEvent, supabase: any, req: Request) {
 
             // Replace tokens in greeting message
             let message = greetingSettings.greeting_message
+            console.log('トークン変換前のメッセージ:', greetingSettings.greeting_message)
+            
             if (friendData) {
               const uid = friendData.short_uid || null
               const lineName = friendData.display_name || userProfile?.displayName || null
               const lineNameSan = lineName ? lineName.replace(/[<>\"\']/g, '') + 'さん' : null
 
-              if (uid) {
-                message = message.replace(/\[UID\]/g, uid)
-              }
+              console.log('friendData:', JSON.stringify(friendData))
+              console.log('uid:', uid, 'lineName:', lineName, 'lineNameSan:', lineNameSan)
+
+              // 長いトークンから順に置換（部分一致を防ぐ）
               if (lineNameSan) {
-                message = message.replace(/\[LINE_NAME_SAN\]/g, lineNameSan)
+                message = message.split('[LINE_NAME_SAN]').join(lineNameSan)
               }
               if (lineName) {
-                message = message.replace(/\[LINE_NAME\]/g, lineName)
+                message = message.split('[LINE_NAME]').join(lineName)
               }
+              if (uid) {
+                message = message.split('[UID]').join(uid)
+              }
+
+              console.log('トークン変換後のメッセージ:', message)
             }
 
             await sendPushMessage(source.userId, message, supabase)
