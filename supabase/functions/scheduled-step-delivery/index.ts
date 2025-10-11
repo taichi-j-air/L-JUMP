@@ -527,55 +527,74 @@ async function deliverStepMessages(supabase: any, stepTracking: any) {
     for (let i = 0; i < messages.length; i++) {
       const message = messages[i]
 
-      // Validate and prepare flex content when applicable
-      let preparedMessage: any = { ...message }
+      // Step 1: 送信に使う元データ（文字列）を決定
+      let rawContentString: string | null = null;
+      
       if (message.message_type === 'flex') {
-        try {
-          // Prefer referenced flex_messages.content when available
-          if (message.flex_message_id) {
-            const { data: flex, error: flexErr } = await supabase
-              .from('flex_messages')
-              .select('content')
-              .eq('id', message.flex_message_id)
-              .maybeSingle()
-            if (!flexErr && flex?.content) {
-              try {
-                preparedMessage = { ...preparedMessage, _flexContent: typeof flex.content === 'string' ? JSON.parse(flex.content) : flex.content }
-              } catch (e) {
-                console.error('Failed to parse flex_messages.content:', e)
-              }
-            }
+        // Flex message の場合、flex_messages テーブルから取得または message.content を使用
+        if (message.flex_message_id) {
+          const { data: flexData, error: flexError } = await supabase
+            .from('flex_messages')
+            .select('content')
+            .eq('id', message.flex_message_id)
+            .maybeSingle();
+
+          if (flexError) {
+            console.error('Failed to fetch flex message:', flexError);
+            rawContentString = typeof message.content === 'string' ? message.content : JSON.stringify(message.content ?? {});
+          } else if (flexData?.content) {
+            rawContentString = typeof flexData.content === 'string' 
+              ? flexData.content 
+              : JSON.stringify(flexData.content);
+          } else {
+            rawContentString = typeof message.content === 'string' ? message.content : JSON.stringify(message.content ?? {});
           }
-          if (!preparedMessage._flexContent && message.content) {
-            try {
-              preparedMessage = { ...preparedMessage, _flexContent: typeof message.content === 'string' ? JSON.parse(message.content) : message.content }
-            } catch (e) {
-              console.error('Failed to parse message.content:', e)
-            }
-          }
-        } catch {
-          console.warn('Invalid flex content JSON for message', message.id)
+        } else {
+          rawContentString = typeof message.content === 'string' 
+            ? message.content 
+            : JSON.stringify(message.content ?? {});
         }
+      } else {
+        // テキストやその他のメッセージタイプ
+        rawContentString = typeof message.content === 'string' 
+          ? message.content 
+          : String(message.content ?? '');
       }
 
-      // Process message to add UID parameters to form links and replace tokens
-      const processedMessage = { ...message };
+      // Step 2: トークン置換を実行
+      const rawDisplayName = friend.display_name?.trim();
+      const fallbackName = rawDisplayName && rawDisplayName.length > 0 ? rawDisplayName : "あなた";
       
-      // トークン変換はメッセージタイプに関係なく、contentが文字列なら実行
-      if (typeof processedMessage.content === 'string') {
-        const rawDisplayName = friend.display_name?.trim();
-        const fallbackName = rawDisplayName && rawDisplayName.length > 0 ? rawDisplayName : "あなた";
-
-        // [LINE_NAME] / [LINE_NAME_SAN] を friend.display_name で置換（未設定時は "あなた"）
-        processedMessage.content = processedMessage.content
+      let processedContent = rawContentString;
+      if (processedContent) {
+        // [LINE_NAME] / [LINE_NAME_SAN] を friend.display_name で置換
+        processedContent = processedContent
           .replace(/\[LINE_NAME_SAN\]/g, fallbackName === "あなた" ? "あなた" : `${fallbackName}さん`)
           .replace(/\[LINE_NAME\]/g, fallbackName);
 
-        // [UID] 変換
+        // [UID] 変換とフォームURLへのuid付与
         if (friendData?.short_uid) {
-          processedMessage.content = addUidToFormLinks(processedMessage.content, friendData.short_uid);
-          console.log(`✅ トークン変換実行 (${message.message_type}): [UID]=${friendData.short_uid}, [LINE_NAME]=${fallbackName}`);
+          processedContent = addUidToFormLinks(processedContent, friendData.short_uid);
+          console.log(`✅ トークン変換 (${message.message_type}): [UID]=${friendData.short_uid}, [LINE_NAME]=${fallbackName}`);
         }
+      }
+
+      // Step 3: 置換後の文字列から preparedMessage を構築
+      let preparedMessage: any = { ...message };
+      
+      if (message.message_type === 'flex') {
+        try {
+          preparedMessage._flexContent = JSON.parse(processedContent);
+          preparedMessage.content = processedContent; // デバッグ用
+        } catch (e) {
+          console.error('Flex parse failed after token replacement:', e);
+          // フォールバック: 元のcontentを使用
+          preparedMessage._flexContent = typeof message.content === 'string'
+            ? JSON.parse(message.content)
+            : message.content;
+        }
+      } else {
+        preparedMessage.content = processedContent;
       }
 
       // Cancellation check mid-flight
