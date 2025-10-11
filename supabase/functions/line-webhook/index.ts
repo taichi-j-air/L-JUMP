@@ -681,10 +681,36 @@ async function handleFollow(event: LineEvent, supabase: any, req: Request) {
         console.log('✓ あいさつメッセージ設定が見つかりました:', greetingSettings.greeting_type)
 
         if (greetingSettings.greeting_type === 'message' && greetingSettings.greeting_message) {
-          // Send greeting message
+          // Send greeting message with token replacement
           try {
-            await sendPushMessage(source.userId, greetingSettings.greeting_message, supabase)
-            console.log('✓ あいさつメッセージを送信しました')
+            // Get friend information for token replacement
+            const { data: friendData } = await supabase
+              .from('line_friends')
+              .select('short_uid, display_name')
+              .eq('line_user_id', source.userId)
+              .eq('user_id', profile.user_id)
+              .maybeSingle()
+
+            // Replace tokens in greeting message
+            let message = greetingSettings.greeting_message
+            if (friendData) {
+              const uid = friendData.short_uid || null
+              const lineName = friendData.display_name || userProfile?.displayName || null
+              const lineNameSan = lineName ? lineName.replace(/[<>\"\']/g, '') : null
+
+              if (uid) {
+                message = message.replace(/\[UID\]/g, uid)
+              }
+              if (lineNameSan) {
+                message = message.replace(/\[LINE_NAME_SAN\]/g, lineNameSan)
+              }
+              if (lineName) {
+                message = message.replace(/\[LINE_NAME\]/g, lineName)
+              }
+            }
+
+            await sendPushMessage(source.userId, message, supabase)
+            console.log('✓ あいさつメッセージを送信しました（トークン変換済み）')
           } catch (error) {
             console.error('✗ あいさつメッセージ送信エラー:', error)
           }

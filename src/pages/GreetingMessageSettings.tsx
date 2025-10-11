@@ -236,9 +236,19 @@ const GreetingMessageSettings = () => {
                       placeholder="友だち追加ありがとうございます！"
                       rows={6}
                     />
-                    <p className="text-xs text-muted-foreground">
-                      最大500文字まで入力できます
-                    </p>
+                    <div className="space-y-1">
+                      <p className="text-xs text-muted-foreground">
+                        最大500文字まで入力できます
+                      </p>
+                      <div className="text-xs text-muted-foreground bg-muted p-3 rounded-md">
+                        <p className="font-medium mb-1">使用可能なトークン：</p>
+                        <ul className="space-y-0.5 ml-4">
+                          <li><code className="bg-background px-1 py-0.5 rounded">[UID]</code> - 友だちの固有ID</li>
+                          <li><code className="bg-background px-1 py-0.5 rounded">[LINE_NAME]</code> - 友だちの表示名</li>
+                          <li><code className="bg-background px-1 py-0.5 rounded">[LINE_NAME_SAN]</code> - 友だちの表示名（サニタイズ済み）</li>
+                        </ul>
+                      </div>
+                    </div>
                   </div>
                 )}
 
