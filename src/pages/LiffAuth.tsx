@@ -175,10 +175,10 @@ export default function LiffAuth() {
 
         const { data, error: fnError } = (await Promise.race([invokePromise, timeoutPromise])) as any;
 
-        console.log("6. Edge Function 応答", { success: data?.success, hasUrl: !!data?.url, error: fnError });
+        console.log("6. Edge Function 応答", { success: data?.success, hasUrl: !!data?.url, error: fnError, status: (fnError as any)?.status });
 
         if (fnError) {
-          console.error("liff-rich-menu-redirect エラー", fnError);
+          console.error("liff-rich-menu-redirect エラー", fnError, "status:", (fnError as any)?.status);
           throw new Error(fnError.message ?? "リダイレクト先URLの解決に失敗しました");
         }
 

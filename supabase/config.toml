@@ -87,3 +87,6 @@ verify_jwt = false
 
 [functions.member-site-progress]
 verify_jwt = false
+
+[functions.liff-rich-menu-redirect]
+verify_jwt = false

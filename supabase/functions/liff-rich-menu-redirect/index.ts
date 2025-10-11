@@ -34,6 +34,7 @@ serve(async (req) => {
   }
 
   try {
+    console.log('🔵 liff-rich-menu-redirect invoked');
     const { ownerUserId, lineUserId, target }: ResolveRequest = await req.json();
 
     if (!ownerUserId || !lineUserId || !target) {
