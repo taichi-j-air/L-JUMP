@@ -1556,12 +1556,14 @@ async function handlePostback(event: any, supabase: any, req: Request) {
       return
     }
     
-    // 友だち情報の取得
+    // 友だち情報の取得（最新のレコードを優先）
     const { data: friendData, error: friendError } = await supabase
       .from('line_friends')
       .select('id, user_id, display_name, picture_url')
       .eq('line_user_id', source.userId)
-      .maybeSingle()
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .single()
     
     if (friendError || !friendData) {
       console.error('❌ Friend not found:', friendError)
