@@ -521,11 +521,15 @@ async function handleFollow(event: LineEvent, supabase: any, req: Request) {
     // Get user profile using LINE Messaging API
     const userProfile = await getLineUserProfile(source.userId, supabase)
     
-    if (userProfile) {
-      console.log('Processing friend addition for user:', userProfile.displayName)
-      
-      // Check if invite code is provided - use scenario registration function
-      if (inviteCode) {
+    // プロフィール取得失敗でも処理を継続（display_name/picture_url は null 許容）
+    if (!userProfile) {
+      console.warn('⚠ LINE プロフィール取得に失敗しましたが、友だち登録・挨拶送信は続行します')
+    } else {
+      console.log('✓ 友だち追加処理を開始:', userProfile.displayName)
+    }
+    
+    // Check if invite code is provided - use scenario registration function
+    if (inviteCode) {
         console.log('友達追加を招待コード経由で処理します:', inviteCode)
         
         try {
@@ -534,8 +538,8 @@ async function handleFollow(event: LineEvent, supabase: any, req: Request) {
             .rpc('register_friend_to_scenario', {
               p_line_user_id: source.userId,
               p_invite_code: inviteCode,
-              p_display_name: userProfile.displayName,
-              p_picture_url: userProfile.pictureUrl
+              p_display_name: userProfile?.displayName || null,
+              p_picture_url: userProfile?.pictureUrl || null
             })
           
           if (registrationError) {
@@ -561,19 +565,44 @@ async function handleFollow(event: LineEvent, supabase: any, req: Request) {
         // Regular friend addition without invite code
         console.log('通常の友達追加を処理します（招待コードなし）')
         
-        // Find the profile that owns this LINE bot
-        const { data: profiles, error } = await supabase
-          .from('profiles')
-          .select('user_id, friends_count')
-          .not('line_channel_access_token', 'is', null)
+        // First, try to get user_id from secure_line_credentials
+        const { data: secureCredentials } = await supabase
+          .from('secure_line_credentials')
+          .select('user_id')
+          .eq('credential_type', 'channel_access_token')
           .limit(1)
+          .maybeSingle()
 
-        if (error || !profiles || profiles.length === 0) {
-          console.error('No profile found for this LINE bot:', error)
-          return
+        let profile
+        if (secureCredentials?.user_id) {
+          // Get profile using user_id from secure credentials
+          const { data: profileData, error: profileError } = await supabase
+            .from('profiles')
+            .select('user_id, friends_count')
+            .eq('user_id', secureCredentials.user_id)
+            .single()
+
+          if (profileError || !profileData) {
+            console.error('Profile not found for secure credentials user_id:', profileError)
+            return
+          }
+          profile = profileData
+          console.log('✓ secure_line_credentials から user_id を取得しました')
+        } else {
+          // Fallback to original method
+          const { data: profiles, error } = await supabase
+            .from('profiles')
+            .select('user_id, friends_count')
+            .not('line_channel_access_token', 'is', null)
+            .limit(1)
+
+          if (error || !profiles || profiles.length === 0) {
+            console.error('No profile found for this LINE bot:', error)
+            return
+          }
+          profile = profiles[0]
+          console.log('✓ profiles テーブルから user_id を取得しました（フォールバック）')
         }
-
-        const profile = profiles[0]
 
         // Check if friend already exists (e.g., after unblock)
         const { data: existingFriend } = await supabase
@@ -585,14 +614,14 @@ async function handleFollow(event: LineEvent, supabase: any, req: Request) {
 
         let friendData
         if (!existingFriend) {
-          // New friend - insert
+          // New friend - insert (allow null for display_name/picture_url)
           const { data: newFriend, error: insertError } = await supabase
             .from('line_friends')
             .insert({
               user_id: profile.user_id,
               line_user_id: source.userId,
-              display_name: userProfile.displayName,
-              picture_url: userProfile.pictureUrl,
+              display_name: userProfile?.displayName || null,
+              picture_url: userProfile?.pictureUrl || null,
               added_at: new Date().toISOString()
             })
             .select()
@@ -617,14 +646,14 @@ async function handleFollow(event: LineEvent, supabase: any, req: Request) {
             console.error('Error updating friends count:', updateError)
           }
 
-          console.log('新規友達追加が完了しました:', userProfile.displayName)
+          console.log('✓ 新規友達追加が完了しました:', userProfile?.displayName || source.userId)
         } else {
-          // Existing friend (e.g., after unblock) - update
+          // Existing friend (e.g., after unblock) - update (allow null for display_name/picture_url)
           const { data: updatedFriend, error: updateError } = await supabase
             .from('line_friends')
             .update({
-              display_name: userProfile.displayName,
-              picture_url: userProfile.pictureUrl,
+              display_name: userProfile?.displayName || null,
+              picture_url: userProfile?.pictureUrl || null,
               is_blocked: false,
               added_at: new Date().toISOString()
             })
@@ -638,7 +667,7 @@ async function handleFollow(event: LineEvent, supabase: any, req: Request) {
           }
 
           friendData = updatedFriend
-          console.log('既存友達の情報を更新しました（ブロック解除）:', userProfile.displayName)
+          console.log('✓ 既存友達の情報を更新しました（ブロック解除）:', userProfile?.displayName || source.userId)
         }
 
         // Check for greeting message settings
@@ -649,43 +678,48 @@ async function handleFollow(event: LineEvent, supabase: any, req: Request) {
           .maybeSingle()
 
         if (!greetingError && greetingSettings) {
-          console.log('あいさつメッセージ設定が見つかりました:', greetingSettings.greeting_type)
+          console.log('✓ あいさつメッセージ設定が見つかりました:', greetingSettings.greeting_type)
 
           if (greetingSettings.greeting_type === 'message' && greetingSettings.greeting_message) {
             // Send greeting message
-            await sendPushMessage(source.userId, greetingSettings.greeting_message, supabase)
-            console.log('あいさつメッセージを送信しました')
+            try {
+              await sendPushMessage(source.userId, greetingSettings.greeting_message, supabase)
+              console.log('✓ あいさつメッセージを送信しました')
+            } catch (error) {
+              console.error('✗ あいさつメッセージ送信エラー:', error)
+            }
           } else if (greetingSettings.greeting_type === 'scenario' && greetingSettings.scenario_id) {
             // Register to scenario
-            console.log('あいさつシナリオに登録します:', greetingSettings.scenario_id)
+            console.log('→ あいさつシナリオに登録します:', greetingSettings.scenario_id)
             
             try {
               const { data: registrationResult, error: registrationError } = await supabase
                 .rpc('register_friend_to_scenario', {
                   p_line_user_id: source.userId,
                   p_invite_code: null,
-                  p_display_name: userProfile.displayName,
-                  p_picture_url: userProfile.pictureUrl,
+                  p_display_name: userProfile?.displayName || null,
+                  p_picture_url: userProfile?.pictureUrl || null,
                   p_registration_source: 'greeting_message',
                   p_scenario_id: greetingSettings.scenario_id
                 })
 
               if (registrationError) {
-                console.error('シナリオ登録エラー:', registrationError)
+                console.error('✗ シナリオ登録エラー:', registrationError)
               } else if (registrationResult && registrationResult.success) {
-                console.log('あいさつシナリオに登録しました')
-                // Note: Step delivery will be handled by scheduled function
+                console.log('✓ あいさつシナリオに登録しました - ステップ配信は scheduled function が処理します')
+              } else {
+                console.error('✗ シナリオ登録失敗:', registrationResult?.error || '不明なエラー')
               }
             } catch (error) {
-              console.error('あいさつシナリオ登録エラー:', error)
+              console.error('✗ あいさつシナリオ登録エラー:', error)
             }
+          } else {
+            console.log('⚠ あいさつ設定はありますが、有効な message/scenario が未設定です')
           }
         } else {
-          console.log('あいさつメッセージ設定が見つかりません')
+          console.log('⚠ あいさつメッセージ設定が見つかりません')
         }
       }
-    } else {
-      console.error('LINE APIからユーザープロファイルを取得できませんでした')
     }
 
   } catch (error) {
@@ -1231,19 +1265,40 @@ async function ensureFriendExists(userId: string, supabase: any) {
 
 async function getLineUserProfile(userId: string, supabase: any) {
   try {
-    // Get a LINE channel access token
-    const { data: profiles, error } = await supabase
-      .from('profiles')
-      .select('line_channel_access_token')
-      .not('line_channel_access_token', 'is', null)
+    // First, try to get access token from secure_line_credentials
+    const { data: secureCredentials, error: secureError } = await supabase
+      .from('secure_line_credentials')
+      .select('encrypted_value, user_id')
+      .eq('credential_type', 'channel_access_token')
       .limit(1)
+      .maybeSingle()
 
-    if (error || !profiles || profiles.length === 0) {
-      console.error('No LINE access token found:', error)
-      return null
+    let accessToken = null
+
+    if (secureCredentials?.encrypted_value) {
+      accessToken = secureCredentials.encrypted_value
+      console.log('✓ secure_line_credentials からトークンを取得しました')
+    } else {
+      // Fallback to profiles table
+      const { data: profiles, error } = await supabase
+        .from('profiles')
+        .select('line_channel_access_token')
+        .not('line_channel_access_token', 'is', null)
+        .limit(1)
+
+      if (error || !profiles || profiles.length === 0) {
+        console.warn('⚠ LINE アクセストークンが見つかりません（profiles/secure_line_credentials 両方）:', error)
+        return null
+      }
+
+      accessToken = profiles[0].line_channel_access_token
+      console.log('✓ profiles テーブルからトークンを取得しました（フォールバック）')
     }
 
-    const accessToken = profiles[0].line_channel_access_token
+    if (!accessToken) {
+      console.warn('⚠ トークンが取得できませんでした')
+      return null
+    }
 
     const response = await fetch(`https://api.line.me/v2/bot/profile/${userId}`, {
       method: 'GET',
@@ -1253,15 +1308,16 @@ async function getLineUserProfile(userId: string, supabase: any) {
     })
 
     if (!response.ok) {
-      console.error('LINE API error getting profile:', response.status)
+      console.warn(`⚠ LINE API プロフィール取得エラー: ${response.status} - ただし処理は継続します`)
       return null
     }
 
     const profile = await response.json()
+    console.log('✓ LINE プロフィール取得成功:', profile.displayName)
     return profile
 
   } catch (error) {
-    console.error('Error getting user profile:', error)
+    console.warn('⚠ プロフィール取得エラー（処理は継続）:', error)
     return null
   }
 }
