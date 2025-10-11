@@ -54,10 +54,30 @@ export default function LiffAuth() {
         }
 
         const search = new URLSearchParams(window.location.search);
-        const ownerUserId = search.get("userId")?.trim();
-        const rawTarget = decodeParam(search.get("target"));
-        const fallbackUrl = decodeParam(search.get("fallback"));
-        const liffId = search.get("liffId")?.trim() || search.get("liff_id")?.trim();
+        
+        // liff.state からパラメータを取得（LINEが渡す場合がある）
+        let ownerUserId = search.get("userId")?.trim() || search.get("user_id")?.trim();
+        let rawTarget = decodeParam(search.get("target")) || decodeParam(search.get("target_url"));
+        let fallbackUrl = decodeParam(search.get("fallback"));
+        let liffId = search.get("liffId")?.trim() || search.get("liff_id")?.trim();
+        
+        const liffState = search.get("liff.state");
+        if (liffState) {
+          try {
+            const decodedState = decodeURIComponent(liffState);
+            const stateParams = new URLSearchParams(decodedState);
+            
+            // liff.state から不足パラメータを補完
+            if (!ownerUserId) ownerUserId = stateParams.get("userId")?.trim() || stateParams.get("user_id")?.trim();
+            if (!rawTarget) rawTarget = decodeParam(stateParams.get("target")) || decodeParam(stateParams.get("target_url"));
+            if (!fallbackUrl) fallbackUrl = decodeParam(stateParams.get("fallback"));
+            if (!liffId) liffId = stateParams.get("liffId")?.trim() || stateParams.get("liff_id")?.trim();
+            
+            console.log("liff.state から追加パラメータ取得:", { liffState, decodedState });
+          } catch (stateErr) {
+            console.warn("liff.state のパース失敗:", stateErr);
+          }
+        }
 
         console.log("1. パラメータ:", { ownerUserId, rawTarget, liffId, fallbackUrl });
 
@@ -175,6 +195,10 @@ export default function LiffAuth() {
 
   const message = error ? "リダイレクトに失敗しました" : status.message;
   const description = error ?? status.description ?? "しばらくお待ちください";
+  
+  // デバッグモード判定
+  const search = new URLSearchParams(window.location.search);
+  const isDebug = search.get("debug") === "1";
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-background">
@@ -182,6 +206,18 @@ export default function LiffAuth() {
         <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto"></div>
         <h2 className="text-xl font-semibold text-foreground">{message}</h2>
         <p className="text-muted-foreground whitespace-pre-line">{description}</p>
+        
+        {isDebug && (
+          <div className="mt-6 p-4 bg-muted rounded-lg text-left text-xs">
+            <p className="font-bold mb-2">デバッグ情報:</p>
+            <p>userId: {search.get("userId") || search.get("user_id") || "なし"}</p>
+            <p>target: {search.get("target") || search.get("target_url") || "なし"}</p>
+            <p>liffId: {search.get("liffId") || search.get("liff_id") || "なし"}</p>
+            <p>fallback: {search.get("fallback") || "なし"}</p>
+            <p>liff.state: {search.get("liff.state") || "なし"}</p>
+            <p className="mt-2">現在のURL: {window.location.href}</p>
+          </div>
+        )}
       </div>
     </div>
   );

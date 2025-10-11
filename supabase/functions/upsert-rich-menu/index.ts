@@ -61,6 +61,9 @@ const buildLineAction = (
     const hasTokens = /\[(UID|LINE_NAME|LINE_NAME_SAN)\]/i.test(uri);
     
     if (hasTokens && liffBaseUrl && liffId) {
+      // liffBaseUrl にクエリが残っている場合は削除（念のため再確認）
+      const cleanLiffBaseUrl = liffBaseUrl.split('?')[0];
+      
       const encodedTarget = encodeURIComponent(uri);
       const params = [
         `userId=${encodeURIComponent(userId)}`,
@@ -69,16 +72,17 @@ const buildLineAction = (
       ];
       
       // 外部リンクの場合は external=1 を追加
-      const isExternal = !uri.includes(liffBaseUrl.split('?')[0]);
+      const isExternal = !uri.includes(cleanLiffBaseUrl);
       if (isExternal) {
         params.push('external=1');
       }
       
-      const separator = liffBaseUrl.includes('?') ? '&' : '?';
-      uri = `${liffBaseUrl}${separator}${params.join('&')}`;
+      uri = `${cleanLiffBaseUrl}?${params.join('&')}`;
       
       console.log('Auto-converted URL with tokens to LIFF:', {
         original: area.action_value,
+        liffBaseUrl: cleanLiffBaseUrl,
+        params: params.join('&'),
         converted: uri
       });
     }
@@ -310,8 +314,20 @@ serve(async (req) => {
       .eq('user_id', user.id)
       .single();
     
-    const liffBaseUrl = profileData?.liff_url || null;
+    let liffBaseUrl = profileData?.liff_url || null;
     const liffId = profileData?.liff_id || null;
+    
+    // LIFF IDがある場合は https://liff.line.me/{liffId} を優先使用
+    if (liffId) {
+      liffBaseUrl = `https://liff.line.me/${liffId}`;
+      console.log('LIFF base URL set from liffId:', liffBaseUrl);
+    } else if (liffBaseUrl) {
+      // liff_url に ? が含まれている場合はクエリ部分を削除
+      if (liffBaseUrl.includes('?')) {
+        liffBaseUrl = liffBaseUrl.split('?')[0];
+        console.warn('Removed query parameters from liff_url:', liffBaseUrl);
+      }
+    }
     
     if (!liffBaseUrl || !liffId) {
       console.warn('LIFF not configured. Token-based URLs will not be auto-converted.');

@@ -149,6 +149,27 @@ export default function LineLoginSettings() {
 
   const handleLiffSave = async () => {
     if (!user) return
+    
+    // バリデーション: LIFF URLにクエリパラメータが含まれていないかチェック
+    if (liffSettings.liffUrl && liffSettings.liffUrl.includes('?')) {
+      toast({
+        title: "保存エラー",
+        description: "LIFF URLにはクエリパラメータ（?以降）を含めないでください",
+        variant: "destructive"
+      });
+      return;
+    }
+    
+    // バリデーション: LIFF URLの形式チェック
+    if (liffSettings.liffUrl && 
+        !liffSettings.liffUrl.startsWith('https://liff.line.me/') &&
+        !liffSettings.liffUrl.match(/^https:\/\/[^/]+\/liff$/)) {
+      toast({
+        title: "警告",
+        description: "LIFF URLは https://liff.line.me/{LIFF_ID} または https://{ドメイン}/liff の形式が推奨されます",
+        variant: "destructive"
+      });
+    }
 
     setSavingLiff(true)
     try {
@@ -316,11 +337,22 @@ export default function LineLoginSettings() {
                 <Input
                   id="liffUrl"
                   value={liffSettings.liffUrl}
-                  onChange={(e) => setLiffSettings(prev => ({ ...prev, liffUrl: e.target.value }))}
+                  onChange={(e) => {
+                    const value = e.target.value;
+                    if (value && value.includes('?')) {
+                      toast({
+                        title: "エラー",
+                        description: "LIFF URLにはクエリパラメータ（?以降）を含めないでください。例: https://liff.line.me/{LIFF_ID}",
+                        variant: "destructive"
+                      });
+                      return;
+                    }
+                    setLiffSettings(prev => ({ ...prev, liffUrl: value }));
+                  }}
                   placeholder="LIFF URLを入力 (例: https://liff.line.me/2007859465-L5VQg5q9)"
                 />
                 <p className="text-sm text-muted-foreground">
-                  完全なLIFF URLを入力してください
+                  <strong>重要:</strong> クエリパラメータ（?以降）は含めず、https://liff.line.me/&#123;LIFF_ID&#125; の形式で入力してください
                 </p>
               </div>
 
