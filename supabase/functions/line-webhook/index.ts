@@ -530,196 +530,196 @@ async function handleFollow(event: LineEvent, supabase: any, req: Request) {
     
     // Check if invite code is provided - use scenario registration function
     if (inviteCode) {
-        console.log('友達追加を招待コード経由で処理します:', inviteCode)
+      console.log('友達追加を招待コード経由で処理します:', inviteCode)
+      
+      try {
+        // Use the new scenario registration function
+        const { data: registrationResult, error: registrationError } = await supabase
+          .rpc('register_friend_to_scenario', {
+            p_line_user_id: source.userId,
+            p_invite_code: inviteCode,
+            p_display_name: userProfile?.displayName || null,
+            p_picture_url: userProfile?.pictureUrl || null
+          })
         
-        try {
-          // Use the new scenario registration function
-          const { data: registrationResult, error: registrationError } = await supabase
-            .rpc('register_friend_to_scenario', {
-              p_line_user_id: source.userId,
-              p_invite_code: inviteCode,
-              p_display_name: userProfile?.displayName || null,
-              p_picture_url: userProfile?.pictureUrl || null
-            })
+        if (registrationError) {
+          console.error('シナリオ登録エラー:', registrationError)
+        } else {
+          console.log('シナリオ登録結果:', registrationResult)
           
-          if (registrationError) {
-            console.error('シナリオ登録エラー:', registrationError)
-          } else {
-            console.log('シナリオ登録結果:', registrationResult)
+          if (registrationResult && registrationResult.success) {
+            console.log('友達をシナリオに正常に登録しました')
             
-            if (registrationResult && registrationResult.success) {
-              console.log('友達をシナリオに正常に登録しました')
-              
-              // Start step delivery process in background
-              // EdgeRuntime.waitUntil(
-              //   startStepDelivery(supabase, registrationResult.scenario_id, registrationResult.friend_id)
-              // )
-            } else {
-              console.error('シナリオ登録に失敗:', registrationResult?.error)
-            }
+            // Start step delivery process in background
+            // EdgeRuntime.waitUntil(
+            //   startStepDelivery(supabase, registrationResult.scenario_id, registrationResult.friend_id)
+            // )
+          } else {
+            console.error('シナリオ登録に失敗:', registrationResult?.error)
           }
-        } catch (error) {
-          console.error('招待コード処理中にエラー:', error)
+        }
+      } catch (error) {
+        console.error('招待コード処理中にエラー:', error)
+      }
+    } else {
+      // Regular friend addition without invite code
+      console.log('通常の友達追加を処理します（招待コードなし）')
+      
+      // First, try to get user_id from secure_line_credentials
+      const { data: secureCredentials } = await supabase
+        .from('secure_line_credentials')
+        .select('user_id')
+        .eq('credential_type', 'channel_access_token')
+        .limit(1)
+        .maybeSingle()
+
+      let profile
+      if (secureCredentials?.user_id) {
+        // Get profile using user_id from secure credentials
+        const { data: profileData, error: profileError } = await supabase
+          .from('profiles')
+          .select('user_id, friends_count')
+          .eq('user_id', secureCredentials.user_id)
+          .single()
+
+        if (profileError || !profileData) {
+          console.error('Profile not found for secure credentials user_id:', profileError)
+          return
+        }
+        profile = profileData
+        console.log('✓ secure_line_credentials から user_id を取得しました')
+      } else {
+        // Fallback to original method
+        const { data: profiles, error } = await supabase
+          .from('profiles')
+          .select('user_id, friends_count')
+          .not('line_channel_access_token', 'is', null)
+          .limit(1)
+
+        if (error || !profiles || profiles.length === 0) {
+          console.error('No profile found for this LINE bot:', error)
+          return
+        }
+        profile = profiles[0]
+        console.log('✓ profiles テーブルから user_id を取得しました（フォールバック）')
+      }
+
+      // Check if friend already exists (e.g., after unblock)
+      const { data: existingFriend } = await supabase
+        .from('line_friends')
+        .select('id')
+        .eq('user_id', profile.user_id)
+        .eq('line_user_id', source.userId)
+        .maybeSingle()
+
+      let friendData
+      if (!existingFriend) {
+        // New friend - insert (allow null for display_name/picture_url)
+        const { data: newFriend, error: insertError } = await supabase
+          .from('line_friends')
+          .insert({
+            user_id: profile.user_id,
+            line_user_id: source.userId,
+            display_name: userProfile?.displayName || null,
+            picture_url: userProfile?.pictureUrl || null,
+            added_at: new Date().toISOString()
+          })
+          .select()
+          .single()
+
+        if (insertError) {
+          console.error('Error inserting friend:', insertError)
+          return
+        }
+
+        friendData = newFriend
+
+        // Update friends count for new friend only
+        const { error: updateError } = await supabase
+          .from('profiles')
+          .update({ 
+            friends_count: (profile.friends_count || 0) + 1 
+          })
+          .eq('user_id', profile.user_id)
+
+        if (updateError) {
+          console.error('Error updating friends count:', updateError)
+        }
+
+        console.log('✓ 新規友達追加が完了しました:', userProfile?.displayName || source.userId)
+      } else {
+        // Existing friend (e.g., after unblock) - update (allow null for display_name/picture_url)
+        const { data: updatedFriend, error: updateError } = await supabase
+          .from('line_friends')
+          .update({
+            display_name: userProfile?.displayName || null,
+            picture_url: userProfile?.pictureUrl || null,
+            is_blocked: false,
+            added_at: new Date().toISOString()
+          })
+          .eq('id', existingFriend.id)
+          .select()
+          .single()
+
+        if (updateError) {
+          console.error('Error updating existing friend:', updateError)
+          return
+        }
+
+        friendData = updatedFriend
+        console.log('✓ 既存友達の情報を更新しました（ブロック解除）:', userProfile?.displayName || source.userId)
+      }
+
+      // Check for greeting message settings
+      const { data: greetingSettings, error: greetingError } = await supabase
+        .from('line_greeting_settings')
+        .select('*')
+        .eq('user_id', profile.user_id)
+        .maybeSingle()
+
+      if (!greetingError && greetingSettings) {
+        console.log('✓ あいさつメッセージ設定が見つかりました:', greetingSettings.greeting_type)
+
+        if (greetingSettings.greeting_type === 'message' && greetingSettings.greeting_message) {
+          // Send greeting message
+          try {
+            await sendPushMessage(source.userId, greetingSettings.greeting_message, supabase)
+            console.log('✓ あいさつメッセージを送信しました')
+          } catch (error) {
+            console.error('✗ あいさつメッセージ送信エラー:', error)
+          }
+        } else if (greetingSettings.greeting_type === 'scenario' && greetingSettings.scenario_id) {
+          // Register to scenario
+          console.log('→ あいさつシナリオに登録します:', greetingSettings.scenario_id)
+          
+          try {
+            const { data: registrationResult, error: registrationError } = await supabase
+              .rpc('register_friend_to_scenario', {
+                p_line_user_id: source.userId,
+                p_invite_code: null,
+                p_display_name: userProfile?.displayName || null,
+                p_picture_url: userProfile?.pictureUrl || null,
+                p_registration_source: 'greeting_message',
+                p_scenario_id: greetingSettings.scenario_id
+              })
+
+            if (registrationError) {
+              console.error('✗ シナリオ登録エラー:', registrationError)
+            } else if (registrationResult && registrationResult.success) {
+              console.log('✓ あいさつシナリオに登録しました - ステップ配信は scheduled function が処理します')
+            } else {
+              console.error('✗ シナリオ登録失敗:', registrationResult?.error || '不明なエラー')
+            }
+          } catch (error) {
+            console.error('✗ あいさつシナリオ登録エラー:', error)
+          }
+        } else {
+          console.log('⚠ あいさつ設定はありますが、有効な message/scenario が未設定です')
         }
       } else {
-        // Regular friend addition without invite code
-        console.log('通常の友達追加を処理します（招待コードなし）')
-        
-        // First, try to get user_id from secure_line_credentials
-        const { data: secureCredentials } = await supabase
-          .from('secure_line_credentials')
-          .select('user_id')
-          .eq('credential_type', 'channel_access_token')
-          .limit(1)
-          .maybeSingle()
-
-        let profile
-        if (secureCredentials?.user_id) {
-          // Get profile using user_id from secure credentials
-          const { data: profileData, error: profileError } = await supabase
-            .from('profiles')
-            .select('user_id, friends_count')
-            .eq('user_id', secureCredentials.user_id)
-            .single()
-
-          if (profileError || !profileData) {
-            console.error('Profile not found for secure credentials user_id:', profileError)
-            return
-          }
-          profile = profileData
-          console.log('✓ secure_line_credentials から user_id を取得しました')
-        } else {
-          // Fallback to original method
-          const { data: profiles, error } = await supabase
-            .from('profiles')
-            .select('user_id, friends_count')
-            .not('line_channel_access_token', 'is', null)
-            .limit(1)
-
-          if (error || !profiles || profiles.length === 0) {
-            console.error('No profile found for this LINE bot:', error)
-            return
-          }
-          profile = profiles[0]
-          console.log('✓ profiles テーブルから user_id を取得しました（フォールバック）')
-        }
-
-        // Check if friend already exists (e.g., after unblock)
-        const { data: existingFriend } = await supabase
-          .from('line_friends')
-          .select('id')
-          .eq('user_id', profile.user_id)
-          .eq('line_user_id', source.userId)
-          .maybeSingle()
-
-        let friendData
-        if (!existingFriend) {
-          // New friend - insert (allow null for display_name/picture_url)
-          const { data: newFriend, error: insertError } = await supabase
-            .from('line_friends')
-            .insert({
-              user_id: profile.user_id,
-              line_user_id: source.userId,
-              display_name: userProfile?.displayName || null,
-              picture_url: userProfile?.pictureUrl || null,
-              added_at: new Date().toISOString()
-            })
-            .select()
-            .single()
-
-          if (insertError) {
-            console.error('Error inserting friend:', insertError)
-            return
-          }
-
-          friendData = newFriend
-
-          // Update friends count for new friend only
-          const { error: updateError } = await supabase
-            .from('profiles')
-            .update({ 
-              friends_count: (profile.friends_count || 0) + 1 
-            })
-            .eq('user_id', profile.user_id)
-
-          if (updateError) {
-            console.error('Error updating friends count:', updateError)
-          }
-
-          console.log('✓ 新規友達追加が完了しました:', userProfile?.displayName || source.userId)
-        } else {
-          // Existing friend (e.g., after unblock) - update (allow null for display_name/picture_url)
-          const { data: updatedFriend, error: updateError } = await supabase
-            .from('line_friends')
-            .update({
-              display_name: userProfile?.displayName || null,
-              picture_url: userProfile?.pictureUrl || null,
-              is_blocked: false,
-              added_at: new Date().toISOString()
-            })
-            .eq('id', existingFriend.id)
-            .select()
-            .single()
-
-          if (updateError) {
-            console.error('Error updating existing friend:', updateError)
-            return
-          }
-
-          friendData = updatedFriend
-          console.log('✓ 既存友達の情報を更新しました（ブロック解除）:', userProfile?.displayName || source.userId)
-        }
-
-        // Check for greeting message settings
-        const { data: greetingSettings, error: greetingError } = await supabase
-          .from('line_greeting_settings')
-          .select('*')
-          .eq('user_id', profile.user_id)
-          .maybeSingle()
-
-        if (!greetingError && greetingSettings) {
-          console.log('✓ あいさつメッセージ設定が見つかりました:', greetingSettings.greeting_type)
-
-          if (greetingSettings.greeting_type === 'message' && greetingSettings.greeting_message) {
-            // Send greeting message
-            try {
-              await sendPushMessage(source.userId, greetingSettings.greeting_message, supabase)
-              console.log('✓ あいさつメッセージを送信しました')
-            } catch (error) {
-              console.error('✗ あいさつメッセージ送信エラー:', error)
-            }
-          } else if (greetingSettings.greeting_type === 'scenario' && greetingSettings.scenario_id) {
-            // Register to scenario
-            console.log('→ あいさつシナリオに登録します:', greetingSettings.scenario_id)
-            
-            try {
-              const { data: registrationResult, error: registrationError } = await supabase
-                .rpc('register_friend_to_scenario', {
-                  p_line_user_id: source.userId,
-                  p_invite_code: null,
-                  p_display_name: userProfile?.displayName || null,
-                  p_picture_url: userProfile?.pictureUrl || null,
-                  p_registration_source: 'greeting_message',
-                  p_scenario_id: greetingSettings.scenario_id
-                })
-
-              if (registrationError) {
-                console.error('✗ シナリオ登録エラー:', registrationError)
-              } else if (registrationResult && registrationResult.success) {
-                console.log('✓ あいさつシナリオに登録しました - ステップ配信は scheduled function が処理します')
-              } else {
-                console.error('✗ シナリオ登録失敗:', registrationResult?.error || '不明なエラー')
-              }
-            } catch (error) {
-              console.error('✗ あいさつシナリオ登録エラー:', error)
-            }
-          } else {
-            console.log('⚠ あいさつ設定はありますが、有効な message/scenario が未設定です')
-          }
-        } else {
-          console.log('⚠ あいさつメッセージ設定が見つかりません')
-        }
+        console.log('⚠ あいさつメッセージ設定が見つかりません')
       }
+    }
     }
 
   } catch (error) {
