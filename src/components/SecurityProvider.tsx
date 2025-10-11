@@ -136,7 +136,7 @@ export function SecurityProvider({ children }: SecurityProviderProps) {
     const meta = document.createElement('meta');
     meta.httpEquiv = 'Content-Security-Policy';
     // Enhanced CSP with stricter policies
-    meta.content = "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://unpkg.com https://esm.sh https://cdn.jsdelivr.net https://static.line-scdn.net; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: https: blob:; connect-src 'self' https://rtjxurmuaawyzjcdkqxt.supabase.co wss://rtjxurmuaawyzjcdkqxt.supabase.co https://api.line.me; frame-src 'self' https://www.youtube.com https://www.youtube-nocookie.com; frame-ancestors 'none'; base-uri 'self'; object-src 'none';";
+    meta.content = "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://static.line-scdn.net https://d.line-scdn.net; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; img-src 'self' data: https: blob:; font-src 'self' data: https://fonts.gstatic.com; connect-src 'self' https://rtjxurmuaawyzjcdkqxt.supabase.co wss://rtjxurmuaawyzjcdkqxt.supabase.co https://api.line.me https://liffsdk.line-scdn.net https://access.line.me; frame-src 'self' https://www.youtube.com https://www.youtube-nocookie.com; frame-ancestors 'none'; base-uri 'self'; object-src 'none';";
     document.head.appendChild(meta);
 
     // Add additional security headers via meta tags
