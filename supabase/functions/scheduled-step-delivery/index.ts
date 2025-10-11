@@ -558,24 +558,25 @@ async function deliverStepMessages(supabase: any, stepTracking: any) {
         }
       }
 
-      // Process message to add UID parameters to form links
+      // Process message to add UID parameters to form links and replace tokens
       const processedMessage = { ...message };
-        if (message.message_type === 'text') { // Check for text message type once
-          if (typeof processedMessage.content === 'string') {
-            const rawDisplayName = friend.display_name?.trim();
-            const fallbackName = rawDisplayName && rawDisplayName.length > 0 ? rawDisplayName : "あなた";
+      
+      // トークン変換はメッセージタイプに関係なく、contentが文字列なら実行
+      if (typeof processedMessage.content === 'string') {
+        const rawDisplayName = friend.display_name?.trim();
+        const fallbackName = rawDisplayName && rawDisplayName.length > 0 ? rawDisplayName : "あなた";
 
-            // [LINE_NAME] / [LINE_NAME_SAN] を friend.display_name で置換（未設定時は "あなた"）
-            processedMessage.content = processedMessage.content
-              .replace(/\[LINE_NAME_SAN\]/g, fallbackName === "あなた" ? "あなた" : `${fallbackName}さん`)
-              .replace(/\[LINE_NAME\]/g, fallbackName);
+        // [LINE_NAME] / [LINE_NAME_SAN] を friend.display_name で置換（未設定時は "あなた"）
+        processedMessage.content = processedMessage.content
+          .replace(/\[LINE_NAME_SAN\]/g, fallbackName === "あなた" ? "あなた" : `${fallbackName}さん`)
+          .replace(/\[LINE_NAME\]/g, fallbackName);
 
-            if (friendData?.short_uid) {
-              processedMessage.content = addUidToFormLinks(processedMessage.content, friendData.short_uid);
-              console.log(`UID変換実行: ${message.content} -> ${processedMessage.content}`);
-            }
-          }
+        // [UID] 変換
+        if (friendData?.short_uid) {
+          processedMessage.content = addUidToFormLinks(processedMessage.content, friendData.short_uid);
+          console.log(`✅ トークン変換実行 (${message.message_type}): [UID]=${friendData.short_uid}, [LINE_NAME]=${fallbackName}`);
         }
+      }
 
       // Cancellation check mid-flight
       const { data: curStatus } = await supabase
