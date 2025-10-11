@@ -10,64 +10,7 @@ function clone(value: any): any {
   return JSON.parse(JSON.stringify(value));
 }
 
-function sanitize(comp: any): any {
-  if (!comp || typeof comp !== 'object') return comp;
-  const c = clone(comp);
-  const t = c.type;
-  const disallowed: Record<string, string[]> = {
-    box: ['action','url','height','style','borderColor','cornerRadius','backgroundColor'],
-    button: ['height','borderColor','cornerRadius'],
-    filler: ['action','url','height','style','borderColor','cornerRadius','backgroundColor'],
-    icon: ['action','url','height','style','borderColor','cornerRadius','backgroundColor'],
-    image: ['height','cornerRadius','backgroundColor'],
-    separator: ['action','url','height','style','borderColor','cornerRadius','backgroundColor'],
-    spacer: ['action','url','height','style','borderColor','cornerRadius','backgroundColor'],
-    text: ['url','height','borderColor','cornerRadius','backgroundColor'],
-  };
-  if (t && disallowed[t]) {
-    disallowed[t].forEach(k => delete c[k]);
-  }
-  for (const key in c) {
-    if (c[key] && typeof c[key] === 'object') {
-      if (Array.isArray(c[key])) {
-        c[key] = c[key].map((item: any) => sanitize(item));
-      } else {
-        c[key] = sanitize(c[key]);
-      }
-    }
-  }
-  return c;
-}
-
-function normalize(raw: any): any {
-  if (!raw) return null;
-  try {
-    const data = typeof raw === 'string' ? JSON.parse(raw) : clone(raw);
-    if (!data) return null;
-
-    let altText = data.altText || 'Flex Message';
-    let contents = data.contents;
-
-    if (data.type === 'flex' && contents) {
-      // already normalized
-    } else if (data.type === 'bubble' || data.type === 'carousel') {
-      contents = data;
-    } else if (contents && (contents.type === 'bubble' || contents.type === 'carousel')) {
-      // data is wrapper
-    } else {
-      return null;
-    }
-
-    return {
-      type: 'flex',
-      altText,
-      contents: sanitize(contents)
-    };
-  } catch (e) {
-    console.error('Failed to normalize flex message:', e);
-    return null;
-  }
-}
+// 古い sanitize/normalize は削除（新しい実装を後半で使用）
 
 Deno.serve(async (req) => {
   console.log('🕐 Scheduled step delivery function started at:', new Date().toISOString())
@@ -678,10 +621,12 @@ function normalize(input: any) {
 
   if (!normalized) return null;
 
-  // ★★★ styles.body.backgroundColor を contents.body.backgroundColor に適用する処理を追加 ★★★
-  if (input.styles?.body?.backgroundColor && normalized.contents?.type === 'bubble' && normalized.contents.body) {
-    // 元のbodyにbackgroundColorがすでにある場合でも、styles側を優先して上書きする
-    normalized.contents.body.backgroundColor = input.styles.body.backgroundColor;
+  // ★★★ styles.body.backgroundColor を contents.body.backgroundColor に適用する処理 ★★★
+  // 優先順位: input.styles.body.backgroundColor > input.contents.styles.body.backgroundColor
+  const bgColor = input.styles?.body?.backgroundColor || input.contents?.styles?.body?.backgroundColor;
+  if (bgColor && normalized.contents?.type === 'bubble' && normalized.contents.body) {
+    normalized.contents.body.backgroundColor = bgColor;
+    console.info(`✅ Applied backgroundColor to bubble body: ${bgColor}`);
   }
 
   return normalized;
