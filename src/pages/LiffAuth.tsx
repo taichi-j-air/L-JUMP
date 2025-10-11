@@ -161,49 +161,58 @@ export default function LiffAuth() {
         setStatus(buildStatus("移動先を準備中..."));
         console.log("5. Edge Function 呼び出し開始");
 
-        const timeoutPromise = new Promise<never>((_, reject) => {
-          setTimeout(() => reject(new Error("タイムアウト: サーバーからの応答がありません (30秒)")), 30000);
-        });
+        let destination: string | null = null;
+        let usedFallback = false;
 
-        const invokePromise = supabase.functions.invoke("liff-rich-menu-redirect", {
-          body: {
-            ownerUserId,
-            lineUserId,
-            target: rawTarget,
-          },
-        });
+        try {
+          const timeoutPromise = new Promise<never>((_, reject) => {
+            setTimeout(() => reject(new Error("タイムアウト: サーバーからの応答がありません (30秒)")), 30000);
+          });
 
-        const { data, error: fnError } = (await Promise.race([invokePromise, timeoutPromise])) as any;
+          const invokePromise = supabase.functions.invoke("liff-rich-menu-redirect", {
+            body: {
+              ownerUserId,
+              lineUserId,
+              target: rawTarget,
+            },
+          });
 
-        console.log("6. Edge Function 応答", { success: data?.success, hasUrl: !!data?.url, error: fnError, status: (fnError as any)?.status });
+          const { data, error: fnError } = (await Promise.race([invokePromise, timeoutPromise])) as any;
 
-        if (fnError) {
-          console.error("liff-rich-menu-redirect エラー", fnError, "status:", (fnError as any)?.status);
-          throw new Error(fnError.message ?? "リダイレクト先URLの解決に失敗しました");
-        }
+          console.log("6. Edge Function 応答", { success: data?.success, hasUrl: !!data?.url, error: fnError, status: (fnError as any)?.status });
 
-        if (!data?.success || !data.url) {
-          const errorMsg = data?.error ?? "リダイレクト先URLの解決に失敗しました";
-          console.error("Edge Function 失敗", errorMsg);
-
-          const cleanTarget = rawTarget.replace(/\[UID\]/g, "");
-          if (cleanTarget && cleanTarget.startsWith("http")) {
-            console.log("フォールバック: 元のURLに直接移動", cleanTarget);
-            window.location.replace(cleanTarget);
-            return;
+          if (fnError) {
+            console.error("liff-rich-menu-redirect エラー", fnError, "status:", (fnError as any)?.status);
+            throw new Error(fnError.message ?? "リダイレクト先URLの解決に失敗しました");
           }
 
-          throw new Error(errorMsg);
+          if (!data?.success || !data.url) {
+            const errorMsg = data?.error ?? "リダイレクト先URLの解決に失敗しました";
+            console.error("Edge Function 失敗", errorMsg);
+            throw new Error(errorMsg);
+          }
+
+          destination = data.url;
+        } catch (invokeError) {
+          console.warn("Edge Function 呼び出し失敗、フォールバック実行", invokeError);
+          
+          const cleanTarget = rawTarget.replace(/\[UID\]/g, "");
+          if (cleanTarget && (cleanTarget.startsWith("http://") || cleanTarget.startsWith("https://"))) {
+            console.log("フォールバック: 元のURLに直接移動", cleanTarget);
+            destination = cleanTarget;
+            usedFallback = true;
+          } else {
+            throw invokeError;
+          }
         }
 
-        if (typeof data.url === "string" && data.url.includes("[UID]")) {
-          console.warn("UID が未解決のままです", data.url);
+        if (typeof destination === "string" && destination.includes("[UID]")) {
+          console.warn("UID が未解決のままです", destination);
         }
 
-        const destination: string = data.url;
         const openExternalParam = search.get("external");
         const forceExternal = openExternalParam === "1" || openExternalParam === "true";
-        const openExternal: boolean = forceExternal ? true : Boolean(data.openExternal);
+        const openExternal: boolean = usedFallback ? false : forceExternal;
         const isInClient = window.liff.isInClient ? window.liff.isInClient() : false;
 
         console.log("7. 移動先", { destination, openExternal, isInClient });
@@ -263,14 +272,22 @@ export default function LiffAuth() {
         <p className="text-muted-foreground whitespace-pre-line">{description}</p>
 
         {isDebug && (
-          <div className="mt-6 p-4 bg-muted rounded-lg text-left text-xs">
-            <p className="font-bold mb-2">デバッグ情報:</p>
-            <p>userId: {search.get("userId") || search.get("user_id") || "なし"}</p>
-            <p>target: {search.get("target") || search.get("target_url") || "なし"}</p>
-            <p>liffId: {search.get("liffId") || search.get("liff_id") || search.get("liffClientId") || search.get("liff_client_id") || "なし"}</p>
-            <p>fallback: {search.get("fallback") || "なし"}</p>
-            <p>liff.state: {search.get("liff.state") || "なし"}</p>
-            <p className="mt-2">現在のURL: {typeof window !== "undefined" ? window.location.href : ""}</p>
+          <div className="mt-6 p-4 bg-muted rounded-lg text-left text-xs space-y-2">
+            <p className="font-bold mb-2">🔍 デバッグ情報</p>
+            <div className="space-y-1">
+              <p><strong>Stage:</strong> {status.message}</p>
+              <p><strong>userId:</strong> {search.get("userId") || search.get("user_id") || "なし"}</p>
+              <p><strong>target:</strong> {search.get("target") || search.get("target_url") || "なし"}</p>
+              <p><strong>liffId:</strong> {search.get("liffId") || search.get("liff_id") || search.get("liffClientId") || search.get("liff_client_id") || "なし"}</p>
+              <p><strong>fallback:</strong> {search.get("fallback") || "なし"}</p>
+              {search.get("liff.state") && <p><strong>liff.state:</strong> {search.get("liff.state")}</p>}
+              {error && (
+                <div className="mt-2 p-2 bg-red-100 text-red-800 rounded">
+                  <p><strong>❌ Error:</strong> {error}</p>
+                </div>
+              )}
+              <p className="mt-2 break-all"><strong>現在のURL:</strong> {typeof window !== "undefined" ? window.location.href : ""}</p>
+            </div>
           </div>
         )}
       </div>

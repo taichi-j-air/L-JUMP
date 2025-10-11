@@ -40,9 +40,20 @@ export const RichMenuPreview = ({
 }: RichMenuPreviewProps) => {
   const [resizingArea, setResizingArea] = useState<string | null>(null);
   const [resizeHandle, setResizeHandle] = useState<string | null>(null);
+  const [draggingArea, setDraggingArea] = useState<string | null>(null);
   const previewRef = useRef<HTMLDivElement>(null);
 
   const selectedAreaData = tapAreas.find((area) => area.id === selectedArea);
+
+  /** 範囲制限ユーティリティ */
+  const clampArea = useCallback((area: Partial<TapArea> & Pick<TapArea, 'x_percent' | 'y_percent' | 'width_percent' | 'height_percent'>): Partial<TapArea> => {
+    const x = Math.max(0, Math.min(area.x_percent, 100 - area.width_percent));
+    const y = Math.max(0, Math.min(area.y_percent, 100 - area.height_percent));
+    const width = Math.max(1, Math.min(area.width_percent, 100 - x));
+    const height = Math.max(1, Math.min(area.height_percent, 100 - y));
+    
+    return { ...area, x_percent: x, y_percent: y, width_percent: width, height_percent: height };
+  }, []);
 
   /** リサイズ開始 */
   const handleResizeMouseDown = useCallback((e: React.MouseEvent, handle: string, areaId: string) => {
@@ -52,6 +63,13 @@ export const RichMenuPreview = ({
     setResizeHandle(handle);
   }, []);
 
+  /** ドラッグ移動開始 */
+  const handleDragMoveStart = useCallback((e: React.MouseEvent, areaId: string) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setDraggingArea(areaId);
+  }, []);
+
   /** 手入力更新 */
   const handleManualUpdate = (field: string, value: number) => {
     if (!selectedArea) return;
@@ -59,67 +77,81 @@ export const RichMenuPreview = ({
     onAreaUpdate(selectedArea, { [field]: clampedValue });
   };
 
-  /** マウス移動によるリサイズ処理 */
+  /** マウス移動によるリサイズ・ドラッグ処理 */
   useEffect(() => {
     const handleMouseMove = (e: MouseEvent) => {
-      if (!resizingArea || !resizeHandle || !editorRef.current) return;
+      if (!editorRef.current) return;
 
       const rect = editorRef.current.getBoundingClientRect();
       const deltaX = (e.movementX / rect.width) * 100;
       const deltaY = (e.movementY / rect.height) * 100;
 
-      const area = tapAreas.find((a) => a.id === resizingArea);
-      if (!area) return;
+      // リサイズ処理
+      if (resizingArea && resizeHandle) {
+        const area = tapAreas.find((a) => a.id === resizingArea);
+        if (!area) return;
 
-      let updates: Partial<TapArea> = {};
+        let newArea = { ...area };
 
-      switch (resizeHandle) {
-        case "se": // 右下
-          updates = {
-            width_percent: Math.max(1, Math.min(100, area.width_percent + deltaX)),
-            height_percent: Math.max(1, Math.min(100, area.height_percent + deltaY)),
-          };
-          break;
-        case "sw": // 左下
-          updates = {
-            x_percent: Math.max(0, Math.min(100, area.x_percent + deltaX)),
-            width_percent: Math.max(1, Math.min(100, area.width_percent - deltaX)),
-            height_percent: Math.max(1, Math.min(100, area.height_percent + deltaY)),
-          };
-          break;
-        case "ne": // 右上
-          updates = {
-            y_percent: Math.max(0, Math.min(100, area.y_percent + deltaY)),
-            width_percent: Math.max(1, Math.min(100, area.width_percent + deltaX)),
-            height_percent: Math.max(1, Math.min(100, area.height_percent - deltaY)),
-          };
-          break;
-        case "nw": // 左上
-          updates = {
-            x_percent: Math.max(0, Math.min(100, area.x_percent + deltaX)),
-            y_percent: Math.max(0, Math.min(100, area.y_percent + deltaY)),
-            width_percent: Math.max(1, Math.min(100, area.width_percent - deltaX)),
-            height_percent: Math.max(1, Math.min(100, area.height_percent - deltaY)),
-          };
-          break;
+        switch (resizeHandle) {
+          case "se": // 右下
+            newArea.width_percent = area.width_percent + deltaX;
+            newArea.height_percent = area.height_percent + deltaY;
+            break;
+          case "sw": // 左下
+            newArea.x_percent = area.x_percent + deltaX;
+            newArea.width_percent = area.width_percent - deltaX;
+            newArea.height_percent = area.height_percent + deltaY;
+            break;
+          case "ne": // 右上
+            newArea.y_percent = area.y_percent + deltaY;
+            newArea.width_percent = area.width_percent + deltaX;
+            newArea.height_percent = area.height_percent - deltaY;
+            break;
+          case "nw": // 左上
+            newArea.x_percent = area.x_percent + deltaX;
+            newArea.y_percent = area.y_percent + deltaY;
+            newArea.width_percent = area.width_percent - deltaX;
+            newArea.height_percent = area.height_percent - deltaY;
+            break;
+        }
+
+        const clamped = clampArea(newArea);
+        onAreaUpdate(area.id, clamped);
       }
 
-      onAreaUpdate(area.id, updates);
+      // ドラッグ移動処理
+      if (draggingArea) {
+        const area = tapAreas.find((a) => a.id === draggingArea);
+        if (!area) return;
+
+        const newArea = {
+          ...area,
+          x_percent: area.x_percent + deltaX,
+          y_percent: area.y_percent + deltaY,
+        };
+
+        const clamped = clampArea(newArea);
+        onAreaUpdate(area.id, clamped);
+      }
     };
 
     const handleMouseUp = () => {
       setResizingArea(null);
       setResizeHandle(null);
+      setDraggingArea(null);
     };
 
-    document.addEventListener("mousemove", handleMouseMove);
-    document.addEventListener("mouseup", handleMouseUp);
+    if (resizingArea || draggingArea) {
+      document.addEventListener("mousemove", handleMouseMove);
+      document.addEventListener("mouseup", handleMouseUp);
+    }
 
     return () => {
       document.removeEventListener("mousemove", handleMouseMove);
       document.removeEventListener("mouseup", handleMouseUp);
     };
-  }, [resizingArea, resizeHandle, tapAreas, editorRef, onAreaUpdate]);
+  }, [resizingArea, resizeHandle, draggingArea, tapAreas, editorRef, onAreaUpdate, clampArea]);
 
   const aspectRatio = size === "full" ? 1686 / 2500 : 843 / 2500;
 
@@ -220,11 +252,11 @@ export const RichMenuPreview = ({
                 {tapAreas.map((area) => (
                   <div
                     key={area.id}
-                    className={`absolute cursor-pointer group transition-all duration-200 ${
+                    className={`absolute group ${
                       selectedArea === area.id
                         ? "bg-blue-500/30 border-2 border-blue-600 shadow-lg"
-                        : "bg-red-500/15 border border-red-500/50 hover:bg-red-500/25 hover:border-red-500"
-                    }`}
+                        : "bg-red-500/15 border border-red-500/50 hover:bg-red-500/25 hover:border-red-500 transition-colors"
+                    } ${draggingArea === area.id || resizingArea === area.id ? "" : "cursor-pointer"}`}
                     style={{
                       left: `${area.x_percent}%`,
                       top: `${area.y_percent}%`,
@@ -232,7 +264,13 @@ export const RichMenuPreview = ({
                       height: `${area.height_percent}%`,
                       borderRadius: '4px'
                     }}
-                    onMouseDown={(e) => onMouseDown(e, area.id)}
+                    onMouseDown={(e) => {
+                      if (selectedArea === area.id && !resizingArea) {
+                        handleDragMoveStart(e, area.id);
+                      } else {
+                        onMouseDown(e, area.id);
+                      }
+                    }}
                     onClick={(e) => {
                       e.stopPropagation();
                       onAreaSelect(area.id);
@@ -252,24 +290,27 @@ export const RichMenuPreview = ({
                     {selectedArea === area.id && (
                       <>
                         <div
-                          className="absolute -top-1 -left-1 w-3 h-3 bg-blue-600 rounded-full cursor-nw-resize shadow-md"
+                          className="absolute -top-1 -left-1 w-3 h-3 bg-blue-600 rounded-full cursor-nw-resize shadow-md z-10"
                           onMouseDown={(e) => handleResizeMouseDown(e, "nw", area.id)}
                         />
                         <div
-                          className="absolute -top-1 -right-1 w-3 h-3 bg-blue-600 rounded-full cursor-ne-resize shadow-md"
+                          className="absolute -top-1 -right-1 w-3 h-3 bg-blue-600 rounded-full cursor-ne-resize shadow-md z-10"
                           onMouseDown={(e) => handleResizeMouseDown(e, "ne", area.id)}
                         />
                         <div
-                          className="absolute -bottom-1 -left-1 w-3 h-3 bg-blue-600 rounded-full cursor-sw-resize shadow-md"
+                          className="absolute -bottom-1 -left-1 w-3 h-3 bg-blue-600 rounded-full cursor-sw-resize shadow-md z-10"
                           onMouseDown={(e) => handleResizeMouseDown(e, "sw", area.id)}
                         />
                         <div
-                          className="absolute -bottom-1 -right-1 w-3 h-3 bg-blue-600 rounded-full cursor-se-resize shadow-md"
+                          className="absolute -bottom-1 -right-1 w-3 h-3 bg-blue-600 rounded-full cursor-se-resize shadow-md z-10"
                           onMouseDown={(e) => handleResizeMouseDown(e, "se", area.id)}
                         />
 
                         {/* 移動ハンドル */}
-                        <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 bg-blue-600/90 rounded-full p-1">
+                        <div 
+                          className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 bg-blue-600/90 rounded-full p-1 cursor-move z-10"
+                          onMouseDown={(e) => handleDragMoveStart(e, area.id)}
+                        >
                           <Move className="w-3 h-3 text-white" />
                         </div>
                       </>
