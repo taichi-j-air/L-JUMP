@@ -287,6 +287,7 @@ async function handleMessage(event: LineEvent, supabase: any, req: Request) {
           p_invite_code : inviteCode,
           p_display_name: userProfile?.displayName ?? null,
           p_picture_url : userProfile?.pictureUrl ?? null,
+          p_registration_source: 'invite_link',
         })
 
         if (regErr || !reg?.success) {
@@ -541,7 +542,8 @@ async function handleFollow(event: LineEvent, supabase: any, req: Request) {
             p_line_user_id: source.userId,
             p_invite_code: inviteCode,
             p_display_name: userProfile?.displayName || null,
-            p_picture_url: userProfile?.pictureUrl || null
+            p_picture_url: userProfile?.pictureUrl || null,
+            p_registration_source: 'invite_link',
           })
         
         if (registrationError) {
