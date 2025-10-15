@@ -973,6 +973,15 @@ async function syncStepDeliveryTimers(
 ) {
   const { scenarioId, stepId, friendId, deliveredAt } = params
 
+  if (!scenarioId || !stepId || !friendId) {
+    console.warn('syncStepDeliveryTimers skipped due to missing identifiers', {
+      scenarioId,
+      stepId,
+      friendId,
+    })
+    return
+  }
+
   try {
     const { data: pages, error: pageError } = await supabase
       .from('cms_pages')
@@ -1016,7 +1025,7 @@ async function syncStepDeliveryTimers(
             first_access_at: null,
             updated_at: updateTimestamp,
           },
-          { onConflict: 'unique_friend_page' }
+          { onConflict: 'friend_id,page_share_code' }
         )
 
       if (upsertError) {

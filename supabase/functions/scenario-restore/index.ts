@@ -250,7 +250,7 @@ serve(async (req) => {
           timer_end_at: timerEndAt,
           updated_at: now.toISOString(),
         }, {
-          onConflict: 'unique_friend_page'
+          onConflict: 'friend_id,page_share_code'
         });
 
       if (accessErr) {
