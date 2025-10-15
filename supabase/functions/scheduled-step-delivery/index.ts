@@ -456,7 +456,14 @@ async function deliverStepMessages(supabase: any, stepTracking: any) {
 
     if (!messages || messages.length === 0) {
       console.log('No messages to deliver for this step')
-      await markStepAsDelivered(supabase, stepTracking.id, stepTracking.scenario_id, stepTracking.friend_id, step.step_order)
+      await markStepAsDelivered(
+        supabase,
+        stepTracking.id,
+        stepTracking.scenario_id,
+        stepTracking.friend_id,
+        step.id,
+        step.step_order
+      )
       return
     }
     
@@ -575,7 +582,14 @@ async function deliverStepMessages(supabase: any, stepTracking: any) {
       }
     }
 
-    await markStepAsDelivered(supabase, stepTracking.id, stepTracking.scenario_id, stepTracking.friend_id, step.step_order)
+    await markStepAsDelivered(
+      supabase,
+      stepTracking.id,
+      stepTracking.scenario_id,
+      stepTracking.friend_id,
+      step.id,
+      step.step_order
+    )
 
   } catch (error) {
     console.error('Step message delivery error:', error)
@@ -843,8 +857,75 @@ async function sendLineMessage(
   }
 }
 
+async function syncStepDeliveryTimers(
+  supabase: any,
+  params: { scenarioId: string; stepId: string; friendId: string; deliveredAt: string }
+) {
+  const { scenarioId, stepId, friendId, deliveredAt } = params
+  try {
+    const { data: pages, error: pageError } = await supabase
+      .from('cms_pages')
+      .select('share_code, user_id, timer_duration_seconds')
+      .eq('timer_enabled', true)
+      .eq('timer_mode', 'step_delivery')
+      .eq('timer_scenario_id', scenarioId)
+      .eq('timer_step_id', stepId)
+
+    if (pageError) {
+      console.error('Failed to load step-delivery timer pages:', pageError)
+      return
+    }
+
+    if (!pages || pages.length === 0) {
+      return
+    }
+
+    const updateTimestamp = new Date().toISOString()
+    for (const page of pages) {
+      const duration = page.timer_duration_seconds ?? 0
+      let timerEndAt: string | null = null
+      if (duration > 0) {
+        const startDate = new Date(deliveredAt)
+        timerEndAt = new Date(startDate.getTime() + duration * 1000).toISOString()
+      }
+
+      const { error: upsertError } = await supabase
+        .from('friend_page_access')
+        .upsert(
+          {
+            user_id: page.user_id,
+            friend_id,
+            page_share_code: page.share_code,
+            scenario_id: scenarioId,
+            step_id: stepId,
+            access_enabled: true,
+            access_source: 'step_delivery',
+            timer_start_at: deliveredAt,
+            timer_end_at: timerEndAt,
+            first_access_at: null,
+            updated_at: updateTimestamp,
+          },
+          { onConflict: 'unique_friend_page' }
+        )
+
+      if (upsertError) {
+        console.error('Failed to upsert friend_page_access for step-delivery timer:', upsertError)
+      }
+    }
+  } catch (error) {
+    console.error('Error syncing step-delivery timers:', error)
+  }
+}
+
 // Mark step as delivered and prepare the next step with precise timing
-async function markStepAsDelivered(supabase: any, trackingId: string, scenarioId: string, friendId: string, currentStepOrder: number) {
+async function markStepAsDelivered(
+  supabase: any,
+  trackingId: string,
+  scenarioId: string,
+  friendId: string,
+  currentStepId: string,
+  currentStepOrder: number
+) {
   try {
     const deliveredAt = new Date().toISOString()
     
@@ -862,6 +943,13 @@ async function markStepAsDelivered(supabase: any, trackingId: string, scenarioId
       console.error('Status update error:', updateError)
       throw updateError
     }
+
+    await syncStepDeliveryTimers(supabase, {
+      scenarioId,
+      stepId: currentStepId,
+      friendId,
+      deliveredAt,
+    })
     
     console.log('Step marked as delivered:', currentStepOrder)
     

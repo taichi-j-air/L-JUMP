@@ -820,7 +820,14 @@ async function deliverStepMessages(supabase: any, stepTracking: any) {
       console.log('配信するメッセージがありません')
       
       // Mark as delivered even without messages
-      await markStepAsDelivered(supabase, stepTracking.id, stepTracking.scenario_id, stepTracking.friend_id, stepTracking.steps.step_order)
+      await markStepAsDelivered(
+        supabase,
+        stepTracking.id,
+        stepTracking.scenario_id,
+        stepTracking.friend_id,
+        stepTracking.step_id,
+        stepTracking.steps.step_order
+      )
       return
     }
     
@@ -866,7 +873,14 @@ async function deliverStepMessages(supabase: any, stepTracking: any) {
     }
     
     // Mark step as delivered and prepare next step
-    await markStepAsDelivered(supabase, stepTracking.id, stepTracking.scenario_id, stepTracking.friend_id, stepTracking.steps.step_order)
+    await markStepAsDelivered(
+      supabase,
+      stepTracking.id,
+      stepTracking.scenario_id,
+      stepTracking.friend_id,
+      stepTracking.step_id,
+      stepTracking.steps.step_order
+    )
     
   } catch (error) {
     console.error('ステップメッセージ配信エラー:', error)
@@ -953,7 +967,75 @@ async function sendLineMessage(accessToken: string, userId: string, message: any
 }
 
 // Mark step as delivered and prepare the next step
-async function markStepAsDelivered(supabase: any, trackingId: string, scenarioId: string, friendId: string, currentStepOrder: number) {
+async function syncStepDeliveryTimers(
+  supabase: any,
+  params: { scenarioId: string; stepId: string; friendId: string; deliveredAt: string }
+) {
+  const { scenarioId, stepId, friendId, deliveredAt } = params
+
+  try {
+    const { data: pages, error: pageError } = await supabase
+      .from('cms_pages')
+      .select('share_code, user_id, timer_duration_seconds')
+      .eq('timer_enabled', true)
+      .eq('timer_mode', 'step_delivery')
+      .eq('timer_scenario_id', scenarioId)
+      .eq('timer_step_id', stepId)
+
+    if (pageError) {
+      console.error('ステップ配信タイマー同期のページ取得エラー:', pageError)
+      return
+    }
+
+    if (!pages || pages.length === 0) {
+      return
+    }
+
+    const updateTimestamp = new Date().toISOString()
+    for (const page of pages) {
+      const duration = page.timer_duration_seconds ?? 0
+      let timerEndAt: string | null = null
+      if (duration > 0) {
+        const startDate = new Date(deliveredAt)
+        timerEndAt = new Date(startDate.getTime() + duration * 1000).toISOString()
+      }
+
+      const { error: upsertError } = await supabase
+        .from('friend_page_access')
+        .upsert(
+          {
+            user_id: page.user_id,
+            friend_id,
+            page_share_code: page.share_code,
+            scenario_id: scenarioId,
+            step_id: stepId,
+            access_enabled: true,
+            access_source: 'step_delivery',
+            timer_start_at: deliveredAt,
+            timer_end_at: timerEndAt,
+            first_access_at: null,
+            updated_at: updateTimestamp,
+          },
+          { onConflict: 'unique_friend_page' }
+        )
+
+      if (upsertError) {
+        console.error('ステップ配信タイマー同期のアップサートエラー:', upsertError)
+      }
+    }
+  } catch (error) {
+    console.error('ステップ配信タイマー同期処理のエラー:', error)
+  }
+}
+
+async function markStepAsDelivered(
+  supabase: any,
+  trackingId: string,
+  scenarioId: string,
+  friendId: string,
+  currentStepId: string,
+  currentStepOrder: number
+) {
   try {
     const deliveredAt = new Date().toISOString()
 
@@ -973,6 +1055,13 @@ async function markStepAsDelivered(supabase: any, trackingId: string, scenarioId
     }
 
     console.log('ステップを配信完了としてマーク:', currentStepOrder)
+
+    await syncStepDeliveryTimers(supabase, {
+      scenarioId,
+      stepId: currentStepId,
+      friendId,
+      deliveredAt,
+    })
 
     // 次のステップを取得（現在+1）
     const { data: nextStep, error: nextStepErr } = await supabase

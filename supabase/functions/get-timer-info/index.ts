@@ -60,84 +60,110 @@ Deno.serve(async (req) => {
         });
       }
 
+      // ページのタイマー設定を取得
+      const { data: pageData, error: pageError } = await supabase
+        .from('cms_pages')
+        .select('timer_duration_seconds, timer_mode')
+        .eq('share_code', pageShareCode)
+        .single();
+
+      if (pageError || !pageData) {
+        console.error('Failed to load page timer settings:', pageError);
+        return new Response(JSON.stringify({
+          success: false,
+          error: 'Failed to load page timer configuration'
+        }), {
+          status: 500,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+        });
+      }
+
       // 特定の友達のアクセス情報を取得
       const { data: friendAccess, error: friendError } = await supabase
         .from('friend_page_access')
         .select('*')
         .eq('page_share_code', pageShareCode)
         .eq('friend_id', friend.id)
-        .single();
+        .maybeSingle();
 
-      if (friendError || !friendAccess) {
-        console.log('Friend access not found, creating new record');
+      if (friendError) {
+        console.error('Failed to fetch friend page access:', friendError);
+        return new Response(JSON.stringify({
+          success: false,
+          error: 'Failed to load access record'
+        }), {
+          status: 500,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+        });
+      }
 
-        // ページのタイマー設定を取得
-        const { data: pageData } = await supabase
-          .from('cms_pages')
-          .select('timer_duration_seconds, timer_mode')
-          .eq('share_code', pageShareCode)
-          .single();
+      if (!friendAccess) {
+        if (pageData.timer_mode === 'step_delivery') {
+          console.log('Step-delivery timer pending start; skipping access record creation.');
+          timerInfo = {
+            success: true,
+            timer_start_at: null,
+            timer_end_at: null,
+            access_enabled: false,
+            expired: false
+          };
+        } else {
+          const now = new Date();
+          let timer_end_at = null;
+          
+          if (pageData.timer_duration_seconds > 0 && pageData.timer_mode === 'per_access') {
+            timer_end_at = new Date(now.getTime() + pageData.timer_duration_seconds * 1000).toISOString();
+          }
 
-        const now = new Date();
-        let timer_end_at = null;
-        
-        // timer_end_atを計算
-        if (pageData && pageData.timer_duration_seconds > 0 && pageData.timer_mode === 'per_access') {
-          timer_end_at = new Date(now.getTime() + pageData.timer_duration_seconds * 1000).toISOString();
+          const { data: newAccess, error: insertError } = await supabase
+            .from('friend_page_access')
+            .insert({
+              user_id: friend.user_id,
+              friend_id: friend.id,
+              page_share_code: pageShareCode,
+              access_enabled: true,
+              timer_start_at: now.toISOString(),
+              timer_end_at,
+              first_access_at: now.toISOString(),
+              access_source: 'direct'
+            })
+            .select()
+            .single();
+
+          if (insertError) {
+            console.error('Failed to create access record:', insertError);
+            return new Response(JSON.stringify({ 
+              success: false, 
+              error: 'Failed to create access record' 
+            }), {
+              status: 500,
+              headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+            });
+          }
+
+          timerInfo = {
+            success: true,
+            timer_start_at: newAccess.timer_start_at,
+            timer_end_at: newAccess.timer_end_at,
+            access_enabled: newAccess.access_enabled,
+            expired: false
+          };
         }
-
-        // 新しいアクセス記録を作成
-        const { data: newAccess, error: insertError } = await supabase
-          .from('friend_page_access')
-          .insert({
-            user_id: friend.user_id,
-            friend_id: friend.id,
-            page_share_code: pageShareCode,
-            access_enabled: true,
-            timer_start_at: now.toISOString(),
-            timer_end_at,
-            first_access_at: now.toISOString(),
-            access_source: 'direct'
-          })
-          .select()
-          .single();
-
-        if (insertError) {
-          console.error('Failed to create access record:', insertError);
-          return new Response(JSON.stringify({ 
-            success: false, 
-            error: 'Failed to create access record' 
-          }), {
-            status: 500,
-            headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-          });
-        }
-
-        timerInfo = {
-          success: true,
-          timer_start_at: newAccess.timer_start_at,
-          timer_end_at: newAccess.timer_end_at,
-          access_enabled: newAccess.access_enabled,
-          expired: false
-        };
       } else {
         // 既存のアクセス記録がある場合
         const now = new Date();
         let expired = false;
 
-        // first_access_atが未設定の場合は設定
         if (!friendAccess.first_access_at) {
+          const firstAccessAt = now.toISOString();
           await supabase
             .from('friend_page_access')
-            .update({ 
-              first_access_at: now.toISOString(),
-              timer_start_at: friendAccess.timer_start_at || now.toISOString()
-            })
+            .update({ first_access_at: firstAccessAt })
             .eq('id', friendAccess.id);
+          friendAccess.first_access_at = firstAccessAt;
         }
 
-        // timer_start_atが未設定の場合は設定
-        if (!friendAccess.timer_start_at) {
+        if (pageData.timer_mode === 'per_access' && !friendAccess.timer_start_at) {
           await supabase
             .from('friend_page_access')
             .update({ timer_start_at: now.toISOString() })
@@ -151,13 +177,10 @@ Deno.serve(async (req) => {
           expired = new Date(friendAccess.timer_end_at) <= now;
         } else if (friendAccess.timer_start_at) {
           // timer_end_atが設定されていない場合、ページの設定から計算
-          const { data: pageData } = await supabase
-            .from('cms_pages')
-            .select('timer_duration_seconds, timer_mode')
-            .eq('share_code', pageShareCode)
-            .single();
-          
-          if (pageData && pageData.timer_duration_seconds > 0 && pageData.timer_mode === 'per_access') {
+          if (
+            pageData.timer_duration_seconds > 0 &&
+            (pageData.timer_mode === 'per_access' || pageData.timer_mode === 'step_delivery')
+          ) {
             const startTime = new Date(friendAccess.timer_start_at);
             const endTime = new Date(startTime.getTime() + pageData.timer_duration_seconds * 1000);
             expired = now >= endTime;

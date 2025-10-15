@@ -80,6 +80,7 @@ export const TimerPreview = ({
   const [remainingMs, setRemainingMs] = useState<number>(0);
   const [serverSyncedStart, setServerSyncedStart] = useState<Date | null>(null);
   const [serverSyncExpired, setServerSyncExpired] = useState<boolean>(false);
+  const [waitingForStepTrigger, setWaitingForStepTrigger] = useState<boolean>(false);
   const intervalRef = useRef<number | null>(null);
   const expireNotifiedRef = useRef(false);
   const initializedRef = useRef(false);
@@ -93,11 +94,24 @@ export const TimerPreview = ({
             body: { pageShareCode: shareCode, uid },
           });
           if (error) return;
-          if (data?.success && data?.timer_start_at) {
-            setServerSyncedStart(new Date(data.timer_start_at));
-            setServerSyncExpired(Boolean(data.expired));
+          if (data?.success) {
+            if (data?.timer_start_at) {
+              setServerSyncedStart(new Date(data.timer_start_at));
+              setServerSyncExpired(Boolean(data.expired));
+              setWaitingForStepTrigger(false);
+            } else if (mode === "step_delivery") {
+              setServerSyncedStart(null);
+              setServerSyncExpired(Boolean(data?.expired));
+              setWaitingForStepTrigger(true);
+            } else {
+              setWaitingForStepTrigger(false);
+            }
           }
-        } catch {}
+        } catch {
+          if (mode === "step_delivery") {
+            setWaitingForStepTrigger(false);
+          }
+        }
       }
     };
     fetchTimerInfo();
@@ -108,45 +122,48 @@ export const TimerPreview = ({
       const t = new Date(deadline).getTime();
       return isNaN(t) ? Date.now() : t;
     }
-    if ((mode === "per_access" || mode === "step_delivery") && durationSeconds && durationSeconds > 0) {
+    if (mode === "per_access" && durationSeconds && durationSeconds > 0) {
       if (preview) return Date.now() + durationSeconds * 1000;
       if (serverSyncedStart) return serverSyncedStart.getTime() + durationSeconds * 1000;
 
-      if (mode === "step_delivery" && scenarioId && stepId && uid && shareCode) {
-        const key = `step_delivery_timer:${shareCode}:${uid}:${scenarioId}:${stepId}`;
-        try {
-          const stored = localStorage.getItem(key);
-          if (stored) {
-            const startTime = Number(stored);
-            if (!isNaN(startTime)) return startTime + durationSeconds * 1000;
-          }
-          const now = Date.now();
-          localStorage.setItem(key, String(now));
-          return now + durationSeconds * 1000;
-        } catch {
-          return Date.now() + durationSeconds * 1000;
-        }
-      } else {
-        const key = `cms_page_first_access:${shareCode || "preview"}:${uid || "anon"}`;
-        try {
-          const stored = localStorage.getItem(key);
-          let start = stored ? Number(stored) : Date.now();
-          if (isNaN(start)) start = Date.now();
-          if (!stored || isNaN(Number(stored))) localStorage.setItem(key, String(start));
-          return start + durationSeconds * 1000;
-        } catch {
-          return Date.now() + durationSeconds * 1000;
-        }
+      const key = `cms_page_first_access:${shareCode || "preview"}:${uid || "anon"}`;
+      try {
+        const stored = localStorage.getItem(key);
+        let start = stored ? Number(stored) : Date.now();
+        if (isNaN(start)) start = Date.now();
+        if (!stored || isNaN(Number(stored))) localStorage.setItem(key, String(start));
+        return start + durationSeconds * 1000;
+      } catch {
+        return Date.now() + durationSeconds * 1000;
       }
     }
+
+    if (mode === "step_delivery") {
+      if (durationSeconds && durationSeconds > 0) {
+        if (preview) return Date.now() + durationSeconds * 1000;
+        if (serverSyncedStart) return serverSyncedStart.getTime() + durationSeconds * 1000;
+        return Date.now() + durationSeconds * 1000;
+      }
+      return Date.now();
+    }
     return Date.now();
-  }, [mode, deadline, durationSeconds, shareCode, uid, preview, scenarioId, stepId, serverSyncedStart]);
+  }, [mode, deadline, durationSeconds, shareCode, uid, preview, serverSyncedStart]);
 
   useEffect(() => {
     if (intervalRef.current) {
       window.clearInterval(intervalRef.current);
       intervalRef.current = null;
     }
+
+    if (mode === "step_delivery" && !preview && !serverSyncedStart) {
+      initializedRef.current = false;
+      const fallbackMs = durationSeconds && durationSeconds > 0 ? durationSeconds * 1000 : 0;
+      setRemainingMs(fallbackMs);
+      return () => {
+        if (intervalRef.current) window.clearInterval(intervalRef.current);
+      };
+    }
+
     initializedRef.current = false;
     const tick = () => {
       const ms = Math.max(0, targetTime - Date.now());
@@ -160,7 +177,7 @@ export const TimerPreview = ({
     return () => {
       if (intervalRef.current) window.clearInterval(intervalRef.current);
     };
-  }, [targetTime, showMilliseconds]);
+  }, [targetTime, showMilliseconds, mode, preview, serverSyncedStart, durationSeconds]);
 
   const { days, hours, minutes, seconds, milli } = splitParts(remainingMs);
   const isExpired = useMemo(() => {
@@ -204,6 +221,9 @@ export const TimerPreview = ({
   }, [isExpired, onExpire]);
 
   const endDateText = useMemo(() => {
+    if (mode === "step_delivery" && waitingForStepTrigger && !preview) {
+      return null;
+    }
     const d = new Date(targetTime);
     if (isNaN(d.getTime())) return null;
     const y = d.getFullYear();
@@ -212,7 +232,7 @@ export const TimerPreview = ({
     const hh = d.getHours();
     const mm = d.getMinutes().toString().padStart(2, "0");
     return `${y}年${m}月${dd}日 ${hh}時${mm}分まで`;
-  }, [targetTime]);
+  }, [targetTime, mode, waitingForStepTrigger, preview]);
 
   /* ==================== スタイル別ビュー ==================== */
 
@@ -358,6 +378,11 @@ export const TimerPreview = ({
           </div>
         ) : (
           <>
+            {mode === "step_delivery" && waitingForStepTrigger && !preview && (
+              <div className="px-3 py-2 text-xs opacity-80" style={{ color: textColor }}>
+                ステップ配信が開始されるとカウントダウンがスタートします
+              </div>
+            )}
             {styleVariant === "solid" && (
               <div className="text-xl font-semibold tracking-wide" style={{ color: textColor }}>
                 残り
