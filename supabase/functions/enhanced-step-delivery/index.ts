@@ -83,6 +83,66 @@ function normalize(input: any) {
   return normalized;
 }
 
+async function syncStepDeliveryTimers(
+  supabase: any,
+  params: { scenarioId: string; stepId: string; friendId: string; deliveredAt: string }
+) {
+  const { scenarioId, stepId, friendId, deliveredAt } = params;
+  try {
+    const { data: pages, error: pageError } = await supabase
+      .from('cms_pages')
+      .select('share_code, user_id, timer_duration_seconds')
+      .eq('timer_enabled', true)
+      .eq('timer_mode', 'step_delivery')
+      .eq('timer_scenario_id', scenarioId)
+      .eq('timer_step_id', stepId);
+
+    if (pageError) {
+      console.error('Step delivery timer sync (enhanced) page fetch error:', pageError);
+      return;
+    }
+
+    if (!pages || pages.length === 0) {
+      return;
+    }
+
+    const updateTimestamp = new Date().toISOString();
+    for (const page of pages) {
+      const duration = page.timer_duration_seconds ?? 0;
+      let timerEndAt: string | null = null;
+      if (duration > 0) {
+        const startDate = new Date(deliveredAt);
+        timerEndAt = new Date(startDate.getTime() + duration * 1000).toISOString();
+      }
+
+      const { error: upsertError } = await supabase
+        .from('friend_page_access')
+        .upsert(
+          {
+            user_id: page.user_id,
+            friend_id,
+            page_share_code: page.share_code,
+            scenario_id: scenarioId,
+            step_id: stepId,
+            access_enabled: true,
+            access_source: 'step_delivery',
+            timer_start_at: deliveredAt,
+            timer_end_at: timerEndAt,
+            first_access_at: null,
+            updated_at: updateTimestamp,
+          },
+          { onConflict: 'unique_friend_page' }
+        );
+
+      if (upsertError) {
+        console.error('Step delivery timer sync (enhanced) upsert error:', upsertError);
+      }
+    }
+  } catch (error) {
+    console.error('Step delivery timer sync (enhanced) failure:', error);
+  }
+}
+
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
@@ -291,14 +351,22 @@ async function processReadySteps(supabase: any) {
       }
 
       // Update tracking status
+      const deliveredAt = new Date().toISOString();
       await supabase
         .from('step_delivery_tracking')
         .update({
           status: 'delivered',
-          delivered_at: new Date().toISOString(),
-          updated_at: new Date().toISOString()
+          delivered_at: deliveredAt,
+          updated_at: deliveredAt
         })
         .eq('id', tracking.id);
+
+      await syncStepDeliveryTimers(supabase, {
+        scenarioId: tracking.scenario_id,
+        stepId: tracking.step_id,
+        friendId: tracking.friend_id,
+        deliveredAt,
+      });
 
       // Log delivery
       await supabase
@@ -308,7 +376,7 @@ async function processReadySteps(supabase: any) {
           friend_id: tracking.friend_id,
           scenario_id: tracking.scenario_id,
           delivery_status: 'delivered',
-          delivered_at: new Date().toISOString()
+          delivered_at: deliveredAt
         });
 
       processedCount++;
