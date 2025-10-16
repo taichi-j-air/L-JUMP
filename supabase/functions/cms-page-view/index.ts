@@ -260,8 +260,9 @@ serve(async (req) => {
 
       if (page.timer_mode === "absolute" && page.timer_deadline) {
         const deadline = new Date(page.timer_deadline)
-        isTimerExpired = new Date() > deadline
-        console.log(`📅 Absolute timer check: deadline=${page.timer_deadline}, expired=${isTimerExpired}`)
+        const now = new Date()
+        isTimerExpired = now >= deadline
+        console.log(`📅 Absolute timer check: deadline=${deadline.toISOString()}, now=${now.toISOString()}, page.timer_deadline=${page.timer_deadline}, expired=${isTimerExpired}`)
       } else if ((page.timer_mode === "per_access" || page.timer_mode === "step_delivery") && friend) {
         const { data: accessData } = await supabase
           .from("friend_page_access")
