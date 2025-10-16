@@ -26,7 +26,6 @@ interface AppHeaderProps {
 export function AppHeader({ user }: AppHeaderProps) {
   const [profile, setProfile] = useState<Profile | null>(null)
   const [activeAccount, setActiveAccount] = useState<{ account_name: string; line_bot_id: string | null } | null>(null)
-  const [loading, setLoading] = useState(true)
   const navigate = useNavigate()
 
   useEffect(() => {
@@ -115,8 +114,6 @@ export function AppHeader({ user }: AppHeaderProps) {
       }
     } catch (error) {
       console.error('Error:', error)
-    } finally {
-      setLoading(false)
     }
   }
 
@@ -125,13 +122,9 @@ export function AppHeader({ user }: AppHeaderProps) {
     navigate('/auth')
   }
 
-  if (loading) {
-    return null
-  }
-
   const currentLineId = activeAccount?.line_bot_id ?? profile?.line_bot_id ?? null;
   const lineIdLabel = currentLineId ? (currentLineId.startsWith('@') ? currentLineId : `@${currentLineId}`) : '未設定';
-  const accountLabel = activeAccount?.account_name ?? lineIdLabel;
+  const accountLabel = activeAccount ? activeAccount.account_name : '読み込み中...';
 
   return (
     <header className="fixed top-0 left-0 right-0 z-50 bg-background border-b h-14 flex items-center px-4 gap-4">
@@ -194,22 +187,30 @@ export function AppHeader({ user }: AppHeaderProps) {
         {/* 月間配信数 */}
         <div className="flex items-center gap-2 text-sm">
           <span className="text-muted-foreground">月間配信:</span>
-          <Badge variant={
-            profile && profile.monthly_message_limit ? 
-              ((profile.monthly_message_limit - (profile.monthly_message_used || 0)) / profile.monthly_message_limit) <= 0.1 ? 
-                "destructive" : "secondary"
-              : "secondary"
-          }>
-            残り {((profile?.monthly_message_limit || 200) - (profile?.monthly_message_used || 0)).toLocaleString()} / {(profile?.monthly_message_limit || 200).toLocaleString()}
-          </Badge>
+          {profile ? (
+            <Badge variant={
+              profile && profile.monthly_message_limit ? 
+                ((profile.monthly_message_limit - (profile.monthly_message_used || 0)) / profile.monthly_message_limit) <= 0.1 ? 
+                  "destructive" : "secondary"
+                : "secondary"
+            }>
+              残り {((profile?.monthly_message_limit || 200) - (profile?.monthly_message_used || 0)).toLocaleString()} / {(profile?.monthly_message_limit || 200).toLocaleString()}
+            </Badge>
+          ) : (
+            <Badge>読み込み中...</Badge>
+          )}
         </div>
 
         {/* 友達数 */}
         <div className="flex items-center gap-2 text-sm">
           <Users className="h-4 w-4 text-muted-foreground" />
-          <Badge variant="outline">
-            {(profile?.friends_count ?? 0).toLocaleString()}/人
-          </Badge>
+          {profile ? (
+            <Badge variant="outline">
+              {(profile?.friends_count ?? 0).toLocaleString()}/人
+            </Badge>
+          ) : (
+            <Badge variant="outline">.../人</Badge>
+          )}
         </div>
       </div>
 
