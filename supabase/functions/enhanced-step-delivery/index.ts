@@ -135,7 +135,7 @@ async function syncStepDeliveryTimers(
 
       const payload = {
         user_id: page.user_id,
-        friend_id,
+        friend_id: friendId,
         page_share_code: page.share_code,
         scenario_id: scenarioId,
         step_id: stepId,
