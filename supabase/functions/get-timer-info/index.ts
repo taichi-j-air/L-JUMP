@@ -12,6 +12,8 @@ interface TimerResponse {
   timer_end_at?: string;
   access_enabled?: boolean;
   expired?: boolean;
+  scenario_id?: string | null;
+  step_id?: string | null;
   error?: string;
 }
 
@@ -63,7 +65,7 @@ Deno.serve(async (req) => {
       // ページのタイマー設定を取得
       const { data: pageData, error: pageError } = await supabase
         .from('cms_pages')
-        .select('timer_duration_seconds, timer_mode')
+        .select('timer_duration_seconds, timer_mode, timer_scenario_id, timer_step_id, share_code')
         .eq('share_code', pageShareCode)
         .single();
 
@@ -104,6 +106,8 @@ Deno.serve(async (req) => {
             success: true,
             timer_start_at: null,
             timer_end_at: null,
+            scenario_id: pageData.timer_scenario_id || null,
+            step_id: pageData.timer_step_id || null,
             access_enabled: false,
             expired: false
           };
@@ -145,6 +149,8 @@ Deno.serve(async (req) => {
             success: true,
             timer_start_at: newAccess.timer_start_at,
             timer_end_at: newAccess.timer_end_at,
+            scenario_id: pageData.timer_mode === 'step_delivery' ? pageData.timer_scenario_id || null : null,
+            step_id: pageData.timer_mode === 'step_delivery' ? pageData.timer_step_id || null : null,
             access_enabled: newAccess.access_enabled,
             expired: false
           };
@@ -199,6 +205,8 @@ Deno.serve(async (req) => {
           success: true,
           timer_start_at: friendAccess.timer_start_at,
           timer_end_at: friendAccess.timer_end_at,
+          scenario_id: friendAccess.scenario_id ?? null,
+          step_id: friendAccess.step_id ?? null,
           access_enabled: friendAccess.access_enabled && !expired,
           expired
         };
@@ -208,6 +216,8 @@ Deno.serve(async (req) => {
       timerInfo = {
         success: true,
         timer_start_at: new Date().toISOString(),
+        scenario_id: pageData.timer_scenario_id || null,
+        step_id: pageData.timer_step_id || null,
         access_enabled: false,
         expired: false
       };
