@@ -863,13 +863,20 @@ async function syncStepDeliveryTimers(
 ) {
   const { scenarioId, stepId, friendId, deliveredAt } = params
   if (!scenarioId || !stepId || !friendId) {
-    console.warn('syncStepDeliveryTimers skipped due to missing identifiers', {
+    console.warn('[syncStepDeliveryTimers] skipped (missing identifiers)', {
       scenarioId,
       stepId,
       friendId,
     })
     return
   }
+
+  console.log('[syncStepDeliveryTimers] start', {
+    scenarioId,
+    stepId,
+    friendId,
+    deliveredAt,
+  })
   try {
     const { data: pages, error: pageError } = await supabase
       .from('cms_pages')
@@ -880,13 +887,16 @@ async function syncStepDeliveryTimers(
       .eq('timer_step_id', stepId)
 
     if (pageError) {
-      console.error('Failed to load step-delivery timer pages:', pageError)
+      console.error('[syncStepDeliveryTimers] failed to load pages', pageError)
       return
     }
 
     if (!pages || pages.length === 0) {
+      console.log('[syncStepDeliveryTimers] no target pages found')
       return
     }
+
+    console.log('[syncStepDeliveryTimers] pages matched', pages.map((p: any) => p.share_code))
 
     const updateTimestamp = new Date().toISOString()
     for (const page of pages) {
@@ -897,31 +907,39 @@ async function syncStepDeliveryTimers(
         timerEndAt = new Date(startDate.getTime() + duration * 1000).toISOString()
       }
 
+      const payload = {
+        user_id: page.user_id,
+        friend_id,
+        page_share_code: page.share_code,
+        scenario_id: scenarioId,
+        step_id: stepId,
+        access_enabled: true,
+        access_source: 'step_delivery',
+        timer_start_at: deliveredAt,
+        timer_end_at: timerEndAt,
+        first_access_at: null,
+        updated_at: updateTimestamp,
+      }
+      console.log('[syncStepDeliveryTimers] upserting access', payload)
+
       const { error: upsertError } = await supabase
         .from('friend_page_access')
         .upsert(
-          {
-            user_id: page.user_id,
-            friend_id,
-            page_share_code: page.share_code,
-            scenario_id: scenarioId,
-            step_id: stepId,
-            access_enabled: true,
-            access_source: 'step_delivery',
-            timer_start_at: deliveredAt,
-            timer_end_at: timerEndAt,
-            first_access_at: null,
-            updated_at: updateTimestamp,
-          },
+          payload,
           { onConflict: 'friend_id,page_share_code' }
         )
 
       if (upsertError) {
-        console.error('Failed to upsert friend_page_access for step-delivery timer:', upsertError)
+        console.error('[syncStepDeliveryTimers] upsert error', upsertError)
+      } else {
+        console.log('[syncStepDeliveryTimers] upsert success', {
+          friend_id: friendId,
+          page_share_code: page.share_code,
+        })
       }
     }
   } catch (error) {
-    console.error('Error syncing step-delivery timers:', error)
+    console.error('[syncStepDeliveryTimers] unexpected error', error)
   }
 }
 
@@ -936,6 +954,14 @@ async function markStepAsDelivered(
 ) {
   try {
     const deliveredAt = new Date().toISOString()
+
+    console.log('[markStepAsDelivered] start', {
+      trackingId,
+      scenarioId,
+      friendId,
+      currentStepId,
+      currentStepOrder,
+    })
     
     // Mark current step as delivered
     const { error: updateError } = await supabase

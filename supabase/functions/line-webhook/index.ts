@@ -974,13 +974,20 @@ async function syncStepDeliveryTimers(
   const { scenarioId, stepId, friendId, deliveredAt } = params
 
   if (!scenarioId || !stepId || !friendId) {
-    console.warn('syncStepDeliveryTimers skipped due to missing identifiers', {
+    console.warn('[line-webhook syncStepDeliveryTimers] skipped (missing identifiers)', {
       scenarioId,
       stepId,
       friendId,
     })
     return
   }
+
+  console.log('[line-webhook syncStepDeliveryTimers] start', {
+    scenarioId,
+    stepId,
+    friendId,
+    deliveredAt,
+  })
 
   try {
     const { data: pages, error: pageError } = await supabase
@@ -992,13 +999,16 @@ async function syncStepDeliveryTimers(
       .eq('timer_step_id', stepId)
 
     if (pageError) {
-      console.error('ステップ配信タイマー同期のページ取得エラー:', pageError)
+      console.error('[line-webhook syncStepDeliveryTimers] page fetch error', pageError)
       return
     }
 
     if (!pages || pages.length === 0) {
+      console.log('[line-webhook syncStepDeliveryTimers] no pages found')
       return
     }
+
+    console.log('[line-webhook syncStepDeliveryTimers] pages matched', pages.map((p: any) => p.share_code))
 
     const updateTimestamp = new Date().toISOString()
     for (const page of pages) {
@@ -1009,31 +1019,39 @@ async function syncStepDeliveryTimers(
         timerEndAt = new Date(startDate.getTime() + duration * 1000).toISOString()
       }
 
+      const payload = {
+        user_id: page.user_id,
+        friend_id,
+        page_share_code: page.share_code,
+        scenario_id: scenarioId,
+        step_id: stepId,
+        access_enabled: true,
+        access_source: 'step_delivery',
+        timer_start_at: deliveredAt,
+        timer_end_at: timerEndAt,
+        first_access_at: null,
+        updated_at: updateTimestamp,
+      }
+      console.log('[line-webhook syncStepDeliveryTimers] upserting access', payload)
+
       const { error: upsertError } = await supabase
         .from('friend_page_access')
         .upsert(
-          {
-            user_id: page.user_id,
-            friend_id,
-            page_share_code: page.share_code,
-            scenario_id: scenarioId,
-            step_id: stepId,
-            access_enabled: true,
-            access_source: 'step_delivery',
-            timer_start_at: deliveredAt,
-            timer_end_at: timerEndAt,
-            first_access_at: null,
-            updated_at: updateTimestamp,
-          },
+          payload,
           { onConflict: 'friend_id,page_share_code' }
         )
 
       if (upsertError) {
-        console.error('ステップ配信タイマー同期のアップサートエラー:', upsertError)
+        console.error('[line-webhook syncStepDeliveryTimers] upsert error', upsertError)
+      } else {
+        console.log('[line-webhook syncStepDeliveryTimers] upsert success', {
+          friend_id: friendId,
+          page_share_code: page.share_code,
+        })
       }
     }
   } catch (error) {
-    console.error('ステップ配信タイマー同期処理のエラー:', error)
+    console.error('[line-webhook syncStepDeliveryTimers] unexpected error', error)
   }
 }
 

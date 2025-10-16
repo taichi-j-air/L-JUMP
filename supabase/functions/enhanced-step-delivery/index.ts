@@ -89,13 +89,20 @@ async function syncStepDeliveryTimers(
 ) {
   const { scenarioId, stepId, friendId, deliveredAt } = params;
   if (!scenarioId || !stepId || !friendId) {
-    console.warn('Step delivery timer sync skipped (missing identifiers)', {
+    console.warn('[enhanced syncStepDeliveryTimers] skipped (missing identifiers)', {
       scenarioId,
       stepId,
       friendId,
     });
     return;
   }
+
+    console.log('[enhanced syncStepDeliveryTimers] start', {
+      scenarioId,
+      stepId,
+      friendId,
+      deliveredAt,
+    });
   try {
     const { data: pages, error: pageError } = await supabase
       .from('cms_pages')
@@ -106,13 +113,16 @@ async function syncStepDeliveryTimers(
       .eq('timer_step_id', stepId);
 
     if (pageError) {
-      console.error('Step delivery timer sync (enhanced) page fetch error:', pageError);
+      console.error('[enhanced syncStepDeliveryTimers] page fetch error', pageError);
       return;
     }
 
     if (!pages || pages.length === 0) {
+      console.log('[enhanced syncStepDeliveryTimers] no matching pages');
       return;
     }
+
+    console.log('[enhanced syncStepDeliveryTimers] pages matched', pages.map((p: any) => p.share_code));
 
     const updateTimestamp = new Date().toISOString();
     for (const page of pages) {
@@ -123,31 +133,39 @@ async function syncStepDeliveryTimers(
         timerEndAt = new Date(startDate.getTime() + duration * 1000).toISOString();
       }
 
+      const payload = {
+        user_id: page.user_id,
+        friend_id,
+        page_share_code: page.share_code,
+        scenario_id: scenarioId,
+        step_id: stepId,
+        access_enabled: true,
+        access_source: 'step_delivery',
+        timer_start_at: deliveredAt,
+        timer_end_at: timerEndAt,
+        first_access_at: null,
+        updated_at: updateTimestamp,
+      };
+      console.log('[enhanced syncStepDeliveryTimers] upserting access', payload);
+
       const { error: upsertError } = await supabase
         .from('friend_page_access')
         .upsert(
-          {
-            user_id: page.user_id,
-            friend_id,
-            page_share_code: page.share_code,
-            scenario_id: scenarioId,
-            step_id: stepId,
-            access_enabled: true,
-            access_source: 'step_delivery',
-            timer_start_at: deliveredAt,
-            timer_end_at: timerEndAt,
-            first_access_at: null,
-            updated_at: updateTimestamp,
-          },
+          payload,
           { onConflict: 'friend_id,page_share_code' }
         );
 
       if (upsertError) {
-        console.error('Step delivery timer sync (enhanced) upsert error:', upsertError);
+        console.error('[enhanced syncStepDeliveryTimers] upsert error', upsertError);
+      } else {
+        console.log('[enhanced syncStepDeliveryTimers] upsert success', {
+          friend_id: friendId,
+          page_share_code: page.share_code,
+        });
       }
     }
   } catch (error) {
-    console.error('Step delivery timer sync (enhanced) failure:', error);
+    console.error('[enhanced syncStepDeliveryTimers] unexpected error', error);
   }
 }
 
