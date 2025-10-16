@@ -145,9 +145,14 @@ export default function CMSFriendsPageBuilder() {
   useEffect(() => {
     if (selectedScenario) {
       fetchScenarioSteps(selectedScenario);
+      if (selected?.timer_scenario_id !== selectedScenario) {
+        setSelectedStep("");
+      }
+    } else {
+      setScenarioSteps([]);
       setSelectedStep("");
     }
-  }, [selectedScenario]);
+  }, [selectedScenario, selected]);
 
   const resetForm = () => {
     setSlug("");
