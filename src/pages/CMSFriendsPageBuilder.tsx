@@ -324,7 +324,7 @@ export default function CMSFriendsPageBuilder() {
           toast.error("期限日時が正しくありません");
           return;
         }
-        validatedTimerDeadline = formatDatetimeLocal(deadlineDate.toISOString());
+        validatedTimerDeadline = deadlineDate.toISOString();
       }
 
       const payload = {
