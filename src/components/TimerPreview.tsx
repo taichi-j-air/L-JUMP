@@ -84,6 +84,7 @@ export const TimerPreview = ({
   const intervalRef = useRef<number | null>(null);
   const expireNotifiedRef = useRef(false);
   const initializedRef = useRef(false);
+  const firstExpiryCheckRef = useRef(false);
 
   // サーバー同期
   useEffect(() => {
@@ -155,8 +156,11 @@ export const TimerPreview = ({
       intervalRef.current = null;
     }
 
+    initializedRef.current = false;
+    expireNotifiedRef.current = false;
+    firstExpiryCheckRef.current = false;
+
     if (mode === "step_delivery" && !preview && !serverSyncedStart) {
-      initializedRef.current = false;
       const fallbackMs = durationSeconds && durationSeconds > 0 ? durationSeconds * 1000 : 0;
       setRemainingMs(fallbackMs);
       return () => {
@@ -164,7 +168,6 @@ export const TimerPreview = ({
       };
     }
 
-    initializedRef.current = false;
     const tick = () => {
       const ms = Math.max(0, targetTime - Date.now());
       setRemainingMs(ms);
@@ -207,9 +210,14 @@ export const TimerPreview = ({
   useEffect(() => {
     if (!onExpire) {
       expireNotifiedRef.current = false;
+      firstExpiryCheckRef.current = false;
       return;
     }
     if (!initializedRef.current) {
+      return;
+    }
+    if (!firstExpiryCheckRef.current) {
+      firstExpiryCheckRef.current = true;
       return;
     }
     if (isExpired && !expireNotifiedRef.current) {
