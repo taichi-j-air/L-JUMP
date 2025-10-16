@@ -122,6 +122,26 @@ function normalizeContentBlocks(raw: unknown): unknown[] {
   return Array.isArray(raw) ? raw : []
 }
 
+// Postgres timestamp parser utility
+function parsePgTimestamp(raw: unknown): Date {
+  if (typeof raw !== "string") {
+    return new Date(NaN)
+  }
+  
+  let normalized = raw.trim()
+  
+  // "YYYY-MM-DD HH:mm:ss..." の空白をTに置換
+  normalized = normalized.replace(/^(\d{4}-\d{2}-\d{2}) (\d{2}:\d{2}:\d{2})/, "$1T$2")
+  
+  // "+00" → "+00:00", "+09" → "+09:00"
+  normalized = normalized.replace(/([+-]\d{2})$/, "$1:00")
+  
+  // "+00:00" → "Z"
+  normalized = normalized.replace(/\+00:00$/, "Z")
+  
+  return new Date(normalized)
+}
+
 serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders })
@@ -259,9 +279,16 @@ serve(async (req) => {
       console.log(`🕒 Timer expiration check: mode=${page.timer_mode}, expire_action=${page.expire_action}`)
 
       if (page.timer_mode === "absolute" && page.timer_deadline) {
-        const deadline = new Date(page.timer_deadline)
-        isTimerExpired = new Date() > deadline
-        console.log(`📅 Absolute timer check: deadline=${page.timer_deadline}, expired=${isTimerExpired}`)
+        const deadline = parsePgTimestamp(page.timer_deadline)
+        const now = new Date()
+        
+        if (isNaN(deadline.getTime())) {
+          console.warn(`⚠️ [ABS] Invalid timer_deadline format: ${page.timer_deadline}`)
+          isTimerExpired = false
+        } else {
+          isTimerExpired = now >= deadline
+          console.log(`📅 [ABS] Timer check: deadlineRaw=${page.timer_deadline}, deadlineParsed=${deadline.toISOString()}, now=${now.toISOString()}, expired=${isTimerExpired}`)
+        }
       } else if ((page.timer_mode === "per_access" || page.timer_mode === "step_delivery") && friend) {
         const { data: accessData } = await supabase
           .from("friend_page_access")
@@ -273,13 +300,28 @@ serve(async (req) => {
         console.log(`🔍 Access data: ${JSON.stringify(accessData)}`)
 
         if (accessData && accessData.timer_end_at) {
-          isTimerExpired = new Date() >= new Date(accessData.timer_end_at)
-          console.log(`⏰ Timer end check: timer_end_at=${accessData.timer_end_at}, expired=${isTimerExpired}`)
+          const timerEnd = parsePgTimestamp(accessData.timer_end_at)
+          const now = new Date()
+          
+          if (isNaN(timerEnd.getTime())) {
+            console.warn(`⚠️ [PER] Invalid timer_end_at format: ${accessData.timer_end_at}`)
+            isTimerExpired = false
+          } else {
+            isTimerExpired = now >= timerEnd
+            console.log(`⏰ [PER] Timer end check: endRaw=${accessData.timer_end_at}, endParsed=${timerEnd.toISOString()}, now=${now.toISOString()}, expired=${isTimerExpired}`)
+          }
         } else if (accessData && accessData.timer_start_at && page.timer_duration_seconds && page.timer_duration_seconds > 0) {
-          const startTime = new Date(accessData.timer_start_at)
-          const endTime = new Date(startTime.getTime() + page.timer_duration_seconds * 1000)
-          isTimerExpired = new Date() >= endTime
-          console.log(`⏱ Duration check: start=${accessData.timer_start_at}, duration=${page.timer_duration_seconds}s, expired=${isTimerExpired}`)
+          const startTime = parsePgTimestamp(accessData.timer_start_at)
+          const now = new Date()
+          
+          if (isNaN(startTime.getTime())) {
+            console.warn(`⚠️ [PER] Invalid timer_start_at format: ${accessData.timer_start_at}`)
+            isTimerExpired = false
+          } else {
+            const endTime = new Date(startTime.getTime() + page.timer_duration_seconds * 1000)
+            isTimerExpired = now >= endTime
+            console.log(`⏱ [PER] Duration check: startRaw=${accessData.timer_start_at}, startParsed=${startTime.toISOString()}, duration=${page.timer_duration_seconds}s, endCalc=${endTime.toISOString()}, now=${now.toISOString()}, expired=${isTimerExpired}`)
+          }
 
           if (!accessData.timer_end_at) {
             await supabase
