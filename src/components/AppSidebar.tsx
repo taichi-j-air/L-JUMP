@@ -1,4 +1,4 @@
-import { Home, MessageSquare, Settings, FileImage, Webhook, User, Bot, Users, MessageCircle, ArrowRight, LogIn, ChevronRight, ChevronDown, FileText, BarChart3, CreditCard, Shield, Plus, Megaphone, DollarSign, ToggleLeft, Wrench, Settings2, Menu, Globe, Crown } from "lucide-react"
+import { Home, MessageSquare, Settings, FileImage, Webhook, User, Bot, Users, MessageCircle, ArrowRight, LogIn, ChevronDown, FileText, BarChart3, CreditCard, Shield, DollarSign, Settings2, Menu, Globe, Crown } from "lucide-react"
 import { NavLink, useLocation } from "react-router-dom"
 import { useState, useEffect } from "react"
 import { supabase } from "@/integrations/supabase/client"
@@ -24,14 +24,15 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 
-const menuItems = [
-  { title: "ダッシュボード", url: "/", icon: Home },
-  { title: "友達一覧", url: "/friends-list", icon: Users },
-  { title: "チャット受信箱", url: "/chat-inbox", icon: MessageCircle },
-  { title: "ステップ配信", url: "/step-delivery", icon: ArrowRight },
-  { title: "フレックスメッセージ作成", url: "/flex-message-designer", icon: MessageSquare },
-  { title: "メディアライブラリ", url: "/media-library", icon: FileImage },
-]
+const mainNavItems = {
+  dashboard: { title: "ダッシュボード", url: "/", icon: Home },
+  greeting: { title: "あいさつメッセージ一覧", url: "/greeting-message", icon: MessageCircle },
+  richMenu: { title: "リッチメニュー", url: "/rich-menu", icon: Menu },
+  chatInbox: { title: "チャット受信箱", url: "/chat-inbox", icon: MessageCircle },
+  stepDelivery: { title: "ステップ配信", url: "/step-delivery", icon: ArrowRight },
+  flexDesigner: { title: "フレックスメッセージ作成", url: "/flex-message-designer", icon: MessageSquare },
+  mediaLibrary: { title: "ファイルライブラリ", url: "/media-library", icon: FileImage },
+}
 
 const settingsItems = [
   { title: "LINE API設定", url: "/line-api-settings", icon: Bot },
@@ -68,6 +69,7 @@ export function AppSidebar({ user }: AppSidebarProps) {
   const [adminOpen, setAdminOpen] = useState(false)
   const [profile, setProfile] = useState<any>(null)
   const collapsed = state === "collapsed"
+  const { dashboard, greeting, richMenu, chatInbox, stepDelivery, flexDesigner, mediaLibrary } = mainNavItems
   const groupActiveFriends = currentPath.startsWith('/friends-list') || currentPath.startsWith('/tags')
   const groupActiveForms = currentPath.startsWith('/forms')
   const groupActiveCMS = currentPath.startsWith('/cms')
@@ -232,60 +234,30 @@ export function AppSidebar({ user }: AppSidebarProps) {
           <SidebarGroupLabel className="text-sm font-semibold">メインメニュー</SidebarGroupLabel>
           <SidebarGroupContent>
             <SidebarMenu>
-              {/* Rich Menu & Greeting Messages */}
               <SidebarMenuItem>
                 <SidebarMenuButton asChild>
-                  <NavLink to="/rich-menu" end className={getNavClass}>
-                    <Menu className="h-4 w-4" />
-                    {!collapsed && <span>リッチメニュー</span>}
+                  <NavLink to={dashboard.url} end className={getNavClass}>
+                    <dashboard.icon className="h-4 w-4" />
+                    {!collapsed && <span>{dashboard.title}</span>}
                   </NavLink>
                 </SidebarMenuButton>
               </SidebarMenuItem>
               <SidebarMenuItem>
                 <SidebarMenuButton asChild>
-                  <NavLink to="/greeting-message" end className={getNavClass}>
-                    <MessageCircle className="h-4 w-4" />
-                    {!collapsed && <span>あいさつメッセージ設定</span>}
+                  <NavLink to={greeting.url} end className={getNavClass}>
+                    <greeting.icon className="h-4 w-4" />
+                    {!collapsed && <span>{greeting.title}</span>}
                   </NavLink>
                 </SidebarMenuButton>
               </SidebarMenuItem>
-
-              {/* Member Sites dropdown */}
               <SidebarMenuItem>
-                <Collapsible>
-                  <CollapsibleTrigger asChild>
-                    <SidebarMenuButton>
-                      <Globe className="h-4 w-4" />
-                      {!collapsed && (
-                        <span className="flex items-center gap-1">
-                          会員サイト
-                          <ChevronDown className="h-3 w-3" />
-                        </span>
-                      )}
-                    </SidebarMenuButton>
-                  </CollapsibleTrigger>
-                  <CollapsibleContent>
-                    <SidebarMenuSub>
-                      <SidebarMenuSubItem>
-                        <SidebarMenuSubButton asChild>
-                          <NavLink to="/member-sites" end className={({ isActive }) => getNavClass({ isActive })}>
-                            <span>会員サイト一覧/作成</span>
-                          </NavLink>
-                        </SidebarMenuSubButton>
-                      </SidebarMenuSubItem>
-                      <SidebarMenuSubItem>
-                        <SidebarMenuSubButton asChild>
-                          <NavLink to="/member-sites/management" end className={({ isActive }) => getNavClass({ isActive })}>
-                            <span>サイト別/管理</span>
-                          </NavLink>
-                        </SidebarMenuSubButton>
-                      </SidebarMenuSubItem>
-                    </SidebarMenuSub>
-                  </CollapsibleContent>
-                </Collapsible>
+                <SidebarMenuButton asChild>
+                  <NavLink to={richMenu.url} end className={getNavClass}>
+                    <richMenu.icon className="h-4 w-4" />
+                    {!collapsed && <span>{richMenu.title}</span>}
+                  </NavLink>
+                </SidebarMenuButton>
               </SidebarMenuItem>
-
-              {/* Friends dropdown */}
               <SidebarMenuItem>
                 <SidebarMenuButton onClick={() => setFriendsOpen((v) => !v)} isActive={groupActiveFriends}>
                   <Users className="h-4 w-4" />
@@ -300,14 +272,14 @@ export function AppSidebar({ user }: AppSidebarProps) {
                   <SidebarMenuSub>
                     <SidebarMenuSubItem>
                       <SidebarMenuSubButton asChild>
-                        <NavLink to="/friends-list" end className={({ isActive }) => getNavClass({ isActive })}> 
+                        <NavLink to="/friends-list" end className={({ isActive }) => getNavClass({ isActive })}>
                           <span>友だち一覧</span>
                         </NavLink>
                       </SidebarMenuSubButton>
                     </SidebarMenuSubItem>
                     <SidebarMenuSubItem>
                       <SidebarMenuSubButton asChild>
-                        <NavLink to="/tags" end className={({ isActive }) => getNavClass({ isActive })}> 
+                        <NavLink to="/tags" end className={({ isActive }) => getNavClass({ isActive })}>
                           <span>タグ一覧/設定</span>
                         </NavLink>
                       </SidebarMenuSubButton>
@@ -315,8 +287,43 @@ export function AppSidebar({ user }: AppSidebarProps) {
                   </SidebarMenuSub>
                 )}
               </SidebarMenuItem>
+              <SidebarMenuItem>
+                <SidebarMenuButton asChild>
+                  <NavLink to={chatInbox.url} end className={getNavClass}>
+                    <chatInbox.icon className="h-4 w-4" />
+                    {!collapsed && <span>{chatInbox.title}</span>}
+                    {unreadCount > 0 && (
+                      <Badge
+                        variant="destructive"
+                        className="ml-auto h-5 w-5 flex items-center justify-center p-0 text-xs rounded-full"
+                      >
+                        {unreadCount}
+                      </Badge>
+                    )}
+                  </NavLink>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+            </SidebarMenu>
 
-              {/* Forms dropdown */}
+            <SidebarSeparator className="my-2" />
+
+            <SidebarMenu>
+              <SidebarMenuItem>
+                <SidebarMenuButton asChild>
+                  <NavLink to={stepDelivery.url} end className={getNavClass}>
+                    <stepDelivery.icon className="h-4 w-4" />
+                    {!collapsed && <span>{stepDelivery.title}</span>}
+                  </NavLink>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+              <SidebarMenuItem>
+                <SidebarMenuButton asChild>
+                  <NavLink to={flexDesigner.url} end className={getNavClass}>
+                    <flexDesigner.icon className="h-4 w-4" />
+                    {!collapsed && <span>{flexDesigner.title}</span>}
+                  </NavLink>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
               <SidebarMenuItem>
                 <SidebarMenuButton onClick={() => setFormsOpen((v) => !v)} isActive={groupActiveForms}>
                   <FileText className="h-4 w-4" />
@@ -331,23 +338,26 @@ export function AppSidebar({ user }: AppSidebarProps) {
                   <SidebarMenuSub>
                     <SidebarMenuSubItem>
                       <SidebarMenuSubButton asChild>
-                          <NavLink to="/forms" end className={({ isActive }) => getNavClass({ isActive })}> 
-                            <span>フォーム作成/一覧</span>
-                          </NavLink>
+                        <NavLink to="/forms" end className={({ isActive }) => getNavClass({ isActive })}>
+                          <span>フォーム作成/一覧</span>
+                        </NavLink>
                       </SidebarMenuSubButton>
                     </SidebarMenuSubItem>
                     <SidebarMenuSubItem>
                       <SidebarMenuSubButton asChild>
-                        <NavLink to="/forms/responses" end className={({ isActive }) => getNavClass({ isActive })}> 
-                          <span className="flex items-center gap-2">回答結果{responsesHasNew && <span className="inline-block h-2 w-2 rounded-full bg-destructive" aria-label="新着" />}</span>
+                        <NavLink to="/forms/responses" end className={({ isActive }) => getNavClass({ isActive })}>
+                          <span className="flex items-center gap-2">
+                            回答結果
+                            {responsesHasNew && (
+                              <span className="inline-block h-2 w-2 rounded-full bg-destructive" aria-label="新着" />
+                            )}
+                          </span>
                         </NavLink>
                       </SidebarMenuSubButton>
                     </SidebarMenuSubItem>
                   </SidebarMenuSub>
                 )}
               </SidebarMenuItem>
-
-              {/* CMS dropdown */}
               <SidebarMenuItem>
                 <SidebarMenuButton onClick={() => setCmsOpen((v) => !v)} isActive={groupActiveCMS}>
                   <BarChart3 className="h-4 w-4" />
@@ -377,8 +387,43 @@ export function AppSidebar({ user }: AppSidebarProps) {
                   </SidebarMenuSub>
                 )}
               </SidebarMenuItem>
-
-              {/* Payment Management dropdown */}
+              <SidebarMenuItem>
+                <Collapsible>
+                  <CollapsibleTrigger asChild>
+                    <SidebarMenuButton>
+                      <Globe className="h-4 w-4" />
+                      {!collapsed && (
+                        <span className="flex items-center gap-1">
+                          会員サイト
+                          <ChevronDown className="h-3 w-3" />
+                        </span>
+                      )}
+                    </SidebarMenuButton>
+                  </CollapsibleTrigger>
+                  <CollapsibleContent>
+                    <SidebarMenuSub>
+                      <SidebarMenuSubItem>
+                        <SidebarMenuSubButton asChild>
+                          <NavLink to="/member-sites" end className={({ isActive }) => getNavClass({ isActive })}>
+                            <span>会員サイト一覧/作成</span>
+                          </NavLink>
+                        </SidebarMenuSubButton>
+                      </SidebarMenuSubItem>
+                      <SidebarMenuSubItem>
+                        <SidebarMenuSubButton asChild>
+                          <NavLink
+                            to="/member-sites/management"
+                            end
+                            className={({ isActive }) => getNavClass({ isActive })}
+                          >
+                            <span>サイト別/管理</span>
+                          </NavLink>
+                        </SidebarMenuSubButton>
+                      </SidebarMenuSubItem>
+                    </SidebarMenuSub>
+                  </CollapsibleContent>
+                </Collapsible>
+              </SidebarMenuItem>
               <SidebarMenuItem>
                 <SidebarMenuButton onClick={() => setPaymentOpen((v) => !v)} isActive={groupActivePayment}>
                   <CreditCard className="h-4 w-4" />
@@ -415,26 +460,19 @@ export function AppSidebar({ user }: AppSidebarProps) {
                   </SidebarMenuSub>
                 )}
               </SidebarMenuItem>
+            </SidebarMenu>
 
-              {/* Other main items, excluding the original friends list */}
-              {menuItems.filter((item) => item.url !== "/friends-list").map((item) => (
-                <SidebarMenuItem key={item.title}>
-                  <SidebarMenuButton asChild>
-                    <NavLink to={item.url} end className={getNavClass}>
-                      <item.icon className="h-4 w-4" />
-                      {!collapsed && <span>{item.title}</span>}
-                      {item.title === "チャット受信箱" && unreadCount > 0 && (
-                        <Badge 
-                          variant="destructive" 
-                          className="ml-auto h-5 w-5 flex items-center justify-center p-0 text-xs rounded-full"
-                        >
-                          {unreadCount}
-                        </Badge>
-                      )}
-                    </NavLink>
-                  </SidebarMenuButton>
-                </SidebarMenuItem>
-              ))}
+            <SidebarSeparator className="my-2" />
+
+            <SidebarMenu>
+              <SidebarMenuItem>
+                <SidebarMenuButton asChild>
+                  <NavLink to={mediaLibrary.url} end className={getNavClass}>
+                    <mediaLibrary.icon className="h-4 w-4" />
+                    {!collapsed && <span>{mediaLibrary.title}</span>}
+                  </NavLink>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
             </SidebarMenu>
           </SidebarGroupContent>
         </SidebarGroup>
