@@ -74,7 +74,131 @@ export function FriendsList({ user }: FriendsListProps) {
     loadAux()
   }, [user.id])
 
-  const loadFriends = async () => { try { const { data: dbData, error: dbError } = await supabase .from('line_friends') .select('*') .eq('user_id', user.id) .order('added_at', { ascending: false }); if (dbError) { console.error('Error loading friends from DB:', dbError); } else { setFriends(dbData || []); const ids = (dbData || []).map((f:any)=>f.id); if (ids.length) { const { data: tracks } = await supabase .from('step_delivery_tracking') .select(` friend_id, scenario_id, status, step_scenarios!inner(prevent_auto_exit) `) .in('friend_id', ids) .neq('status','exited'); const map: Record<string,string[]> = {}; const protectedMap: Record<string,string[]> = {}; for (const t of (tracks||[]) as any[]) { const arr = map[t.friend_id] || []; if (!arr.includes(t.scenario_id)) arr.push(t.scenario_id); map[t.friend_id] = arr; if (t.step_scenarios?.prevent_auto_exit) { const protectedArr = protectedMap[t.friend_id] || []; if (!protectedArr.includes(t.scenario_id)) protectedArr.push(t.scenario_id); protectedMap[t.friend_id] = protectedArr; } } setFriendScenarioMap(map); setFriendProtectedScenarioMap(protectedMap); } if (ids.length) { const { data: fts } = await supabase .from('friend_tags') .select('friend_id, tag_id') .in('friend_id', ids); const tmap: Record<string,string[]> = {}; for (const r of (fts||[]) as any[]) { const arr = tmap[r.friend_id] || []; arr.push(r.tag_id); tmap[r.friend_id] = arr; } setFriendTagMap(tmap); } try { const { data: followersData, error: followersError } = await supabase.functions.invoke('get-line-friends', { body: {} }); if (!followersError && followersData?.friends) { const currentIds = new Set((followersData.friends as any[]).map((x:any)=>x.line_user_id)); const dbLineIds = (dbData || []).map((f:any)=>f.line_user_id); const blocked = dbLineIds.filter((id:string)=>!currentIds.has(id)); setBlockedSet(new Set(blocked)); } } catch (e) { console.error('Error fetching LINE followers:', e); } } } catch (error) { console.error('Error loading friends:', error); } finally { setLoading(false); } };
+  const loadFriends = async () => {
+    try {
+      const { data: dbData, error: dbError } = await supabase
+        .from("line_friends")
+        .select("*")
+        .eq("user_id", user.id)
+        .order("added_at", { ascending: false });
+
+      if (dbError) {
+        console.error("Error loading friends from DB:", dbError);
+        return;
+      }
+
+      const friendRows = dbData || [];
+      setFriends(friendRows);
+
+      const friendIds = friendRows.map((f: any) => f.id);
+
+      if (friendIds.length > 0) {
+        const [
+          { data: trackingRows, error: trackingError },
+          { data: scenarioLogRows, error: scenarioLogError },
+          { data: tagRows, error: tagError },
+        ] = await Promise.all([
+          supabase
+            .from("step_delivery_tracking")
+            .select(`
+              friend_id,
+              scenario_id,
+              status,
+              step_scenarios!inner(prevent_auto_exit)
+            `)
+            .in("friend_id", friendIds)
+            .neq("status", "exited"),
+          supabase
+            .from("scenario_friend_logs")
+            .select("friend_id, scenario_id, exited_at")
+            .in("friend_id", friendIds)
+            .is("exited_at", null),
+          supabase
+            .from("friend_tags")
+            .select("friend_id, tag_id")
+            .in("friend_id", friendIds),
+        ]);
+
+        if (trackingError) {
+          console.error("Error loading step tracking:", trackingError);
+        }
+        if (scenarioLogError) {
+          console.error("Error loading scenario logs:", scenarioLogError);
+        }
+        if (tagError) {
+          console.error("Error loading friend tags:", tagError);
+        }
+
+        const scenarioSetMap = new Map<string, Set<string>>();
+        const protectedSetMap = new Map<string, Set<string>>();
+
+        const addScenario = (friendId?: string | null, scenarioId?: string | null) => {
+          if (!friendId || !scenarioId) return;
+          const set = scenarioSetMap.get(friendId) ?? new Set<string>();
+          set.add(scenarioId);
+          scenarioSetMap.set(friendId, set);
+        };
+
+        for (const track of (trackingRows || []) as any[]) {
+          addScenario(track.friend_id as string | null, track.scenario_id as string | null);
+
+          if (track.friend_id && track.scenario_id && track.step_scenarios?.prevent_auto_exit) {
+            const set = protectedSetMap.get(track.friend_id) ?? new Set<string>();
+            set.add(track.scenario_id);
+            protectedSetMap.set(track.friend_id, set);
+          }
+        }
+
+        for (const log of (scenarioLogRows || []) as any[]) {
+          addScenario(log.friend_id as string | null, log.scenario_id as string | null);
+        }
+
+        const scenarioMap: Record<string, string[]> = {};
+        scenarioSetMap.forEach((value, key) => {
+          scenarioMap[key] = Array.from(value);
+        });
+        setFriendScenarioMap(scenarioMap);
+
+        const protectedMap: Record<string, string[]> = {};
+        protectedSetMap.forEach((value, key) => {
+          protectedMap[key] = Array.from(value);
+        });
+        setFriendProtectedScenarioMap(protectedMap);
+
+        const tagMap: Record<string, string[]> = {};
+        for (const row of (tagRows || []) as any[]) {
+          const friendId = row.friend_id as string | null;
+          const tagId = row.tag_id as string | null;
+          if (!friendId || !tagId) continue;
+          if (!tagMap[friendId]) {
+            tagMap[friendId] = [];
+          }
+          tagMap[friendId].push(tagId);
+        }
+        setFriendTagMap(tagMap);
+      } else {
+        setFriendScenarioMap({});
+        setFriendProtectedScenarioMap({});
+        setFriendTagMap({});
+      }
+
+      try {
+        const { data: followersData, error: followersError } = await supabase.functions.invoke("get-line-friends", { body: {} });
+        if (!followersError && followersData?.friends) {
+          const currentIds = new Set((followersData.friends as any[]).map((x: any) => x.line_user_id));
+          const dbLineIds = friendRows.map((f: any) => f.line_user_id);
+          const blocked = dbLineIds.filter((id: string) => !currentIds.has(id));
+          setBlockedSet(new Set(blocked));
+        }
+      } catch (e) {
+        console.error("Error fetching LINE followers:", e);
+      }
+    } catch (error) {
+      console.error("Error loading friends:", error);
+    } finally {
+      setLoading(false);
+    }
+  };
   const loadAux = async () => { const [{ data: tagRows }, { data: scenarioRows }] = await Promise.all([ supabase.from('tags').select('id, name').eq('user_id', user.id).order('name', { ascending: true }), supabase.from('step_scenarios').select('id, name').eq('user_id', user.id).order('name', { ascending: true }), ]); setTags((tagRows||[]) as any); setScenarios((scenarioRows||[]) as any); const blockTag = (tagRows || []).find((t) => t.name === "ブロック"); if (blockTag) { setBlockTagId(blockTag.id); } };
   const toggleBlockTag = async (friend: Friend) => { if (!blockTagId) { toast({ title: "エラー", description: "「ブロック」タグが見つかりません。", variant: "destructive" }); return; } const isBlocked = (friendTagMap[friend.id] || []).includes(blockTagId); try { if (isBlocked) { const { error } = await supabase.from("friend_tags").delete().eq("friend_id", friend.id).eq("tag_id", blockTagId); if (error) throw error; setFriendTagMap((prev) => { const newMap = { ...prev }; newMap[friend.id] = (newMap[friend.id] || []).filter((tId) => tId !== blockTagId); return newMap; }); toast({ title: "ブロック解除しました" }); } else { const { error } = await supabase.from("friend_tags").insert({ user_id: user.id, friend_id: friend.id, tag_id: blockTagId, }); if (error) throw error; setFriendTagMap((prev) => { const newMap = { ...prev }; if (!newMap[friend.id]) { newMap[friend.id] = []; } newMap[friend.id].push(blockTagId); return newMap; }); toast({ title: "ブロックしました" }); } window.dispatchEvent(new CustomEvent("refreshFriendTags")); } catch (error: any) { console.error("Error toggling block tag:", error); toast({ title: "操作に失敗しました", description: error.message, variant: "destructive" }); } };
 
@@ -82,7 +206,33 @@ export function FriendsList({ user }: FriendsListProps) {
   if (friends.length === 0) return <div className="p-4 text-center text-muted-foreground">まだ友達が追加されていません</div>;
   if (selectedFriend) return <ChatWindow user={user} friend={selectedFriend} onClose={() => setSelectedFriend(null)} />;
 
-  const filteredFriends = friends.filter((f) => { const q = searchTerm.trim().toLowerCase(); const withinSearch = !q || (f.display_name || '').toLowerCase().includes(q) || f.line_user_id.toLowerCase().includes(q); const d = new Date(f.added_at); const fromOk = !dateRange?.from || d >= startOfDay(dateRange.from); const toOk = !dateRange?.to || d <= endOfDay(dateRange.to); const tagOk = selectedTag === 'all' || (friendTagMap[f.id] || []).includes(selectedTag); const scenarioOk = selectedScenario === 'all' || (friendScenarioMap[f.id] || []).includes(selectedScenario); return withinSearch && fromOk && toOk && tagOk && scenarioOk; }).sort((a,b) => { if (sort === 'date_desc') return new Date(b.added_at).getTime() - new Date(a.added_at).getTime(); if (sort === 'date_asc') return new Date(a.added_at).getTime() - new Date(b.added_at).getTime(); return (a.display_name||'').localeCompare(b.display_name||''); });
+  const filteredFriends = friends
+    .filter((friend) => {
+      const query = searchTerm.trim().toLowerCase();
+      const searchTargets = [
+        (friend.display_name || "").toLowerCase(),
+        friend.line_user_id.toLowerCase(),
+        (friend.short_uid || "").toLowerCase(),
+        friend.id.toLowerCase(),
+      ];
+      const matchesSearch = !query || searchTargets.some((value) => value.includes(query));
+
+      const addedAt = new Date(friend.added_at);
+      const isAfterFrom = !dateRange?.from || addedAt >= startOfDay(dateRange.from);
+      const isBeforeTo = !dateRange?.to || addedAt <= endOfDay(dateRange.to);
+
+      const tagMatches = selectedTag === "all" || (friendTagMap[friend.id] || []).includes(selectedTag);
+
+      const activeScenarios = friendScenarioMap[friend.id] || [];
+      const scenarioMatches = selectedScenario === "all" || activeScenarios.includes(selectedScenario);
+
+      return matchesSearch && isAfterFrom && isBeforeTo && tagMatches && scenarioMatches;
+    })
+    .sort((a, b) => {
+      if (sort === "date_desc") return new Date(b.added_at).getTime() - new Date(a.added_at).getTime();
+      if (sort === "date_asc") return new Date(a.added_at).getTime() - new Date(b.added_at).getTime();
+      return (a.display_name || "").localeCompare(b.display_name || "");
+    });
   const totalPages = Math.max(1, Math.ceil(filteredFriends.length / pageSize));
   const pagedFriends = filteredFriends.slice((page-1)*pageSize, page*pageSize);
 
