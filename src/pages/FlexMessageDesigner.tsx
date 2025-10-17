@@ -207,8 +207,16 @@ const defaultBubble = (label = "バブル 1"): BubbleDesign => ({
   contents: [],
 });
 
+const generateElementId = () => {
+  const cryptoObj = typeof globalThis !== "undefined" ? (globalThis as { crypto?: Crypto }).crypto : undefined;
+  if (cryptoObj?.randomUUID) {
+    return `el-${cryptoObj.randomUUID()}`;
+  }
+  return `el-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+};
+
 const makeElement = (type: FlexElement["type"]): FlexElement => {
-  const id = `el-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+  const id = generateElementId();
   if (type === "text") {
     return {
       id, type,
@@ -266,9 +274,8 @@ function buildBubbleFromDesign(design: BubbleDesign) {
       }
     : undefined;
 
-  // ボタンとそれ以外の要素を分ける
-  const bodyElements: any[] = [];
-  const footerElements: any[] = [];
+  // 保存時の順序を維持したまま要素を組み立てる
+  const orderedElements: any[] = [];
 
   design.contents
     .filter((el) => !heroCandidate || el.id !== heroCandidate.id)
@@ -315,14 +322,13 @@ function buildBubbleFromDesign(design: BubbleDesign) {
           ...(p.action ? { action: p.action } : {}),
           ...(margin ? { margin } : {}),
         };
-        console.log("Button style:", p.style, "Final node:", node);
       }
 
       if (!node) return;
 
       // 2. Wrap the node in a box if padding or (for text) a background color is needed
       const pad = padToPx(p.padding);
-      const needsWrapper = (pad && pad !== "0px") || (el.type === 'text' && p.backgroundColor);
+      const needsWrapper = (pad && pad !== "0px") || (el.type === "text" && p.backgroundColor);
 
       if (needsWrapper) {
         // Move margin from the inner node to the outer wrapper box
@@ -337,16 +343,11 @@ function buildBubbleFromDesign(design: BubbleDesign) {
           contents: [innerNode],
           ...(margin && { margin }), // Apply margin to the wrapper
           ...(pad && pad !== "0px" && { paddingAll: pad }),
-          ...(el.type === 'text' && p.backgroundColor && { backgroundColor: p.backgroundColor }),
+          ...(el.type === "text" && p.backgroundColor && { backgroundColor: p.backgroundColor }),
         };
       }
 
-      // 3. Distribute the final node
-      if (el.type === "button") {
-        footerElements.push(node);
-      } else {
-        bodyElements.push(node);
-      }
+      orderedElements.push(node);
     });
 
   const bubble: any = {
@@ -356,24 +357,14 @@ function buildBubbleFromDesign(design: BubbleDesign) {
   };
 
   // bodyに要素がある場合のみbodyを追加
-  if (bodyElements.length > 0) {
+  if (orderedElements.length > 0) {
     bubble.body = {
       type: "box",
       layout: "vertical",
       spacing: design.bodySpacing || "none",
-      contents: bodyElements,
+      contents: orderedElements,
       ...(design.bodyBg ? { backgroundColor: design.bodyBg } : {}),
       paddingAll: "0px",
-    };
-  }
-
-  // footerにボタンがある場合のみfooterを追加
-  if (footerElements.length > 0) {
-    bubble.footer = {
-      type: "box",
-      layout: "vertical",
-      spacing: "sm",
-      contents: footerElements,
     };
   }
 
@@ -942,7 +933,7 @@ const { data: newData, error } = await supabase.from("flex_messages").insert({ u
             }
 
             items.push({
-              id: `el-${idxBase}-${i}`,
+              id: generateElementId(),
               type: innerNode.type,
               properties: finalProps,
             });
@@ -951,7 +942,7 @@ const { data: newData, error } = await supabase.from("flex_messages").insert({ u
 
         if (b.hero?.url) {
           items.push({
-            id: `el-h-${idxBase}`,
+            id: generateElementId(),
             type: "image",
             properties: {
               url: b.hero.url,
