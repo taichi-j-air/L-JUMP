@@ -20,16 +20,12 @@ const GreetingMessageSettings = () => {
   const navigate = useNavigate();
   const { toast } = useToast();
   const [loading, setLoading] = useState(false);
-  const [greetingType, setGreetingType] = useState<"message" | "scenario">("message");
   const [greetingMessage, setGreetingMessage] = useState("");
-  const [selectedScenario, setSelectedScenario] = useState("");
-  const [scenarios, setScenarios] = useState<Scenario[]>([]);
   const [friendUrl, setFriendUrl] = useState("");
   const [profile, setProfile] = useState<any>(null);
 
   useEffect(() => {
     loadGreetingMessage();
-    loadScenarios();
     loadProfile();
   }, []);
 
@@ -78,40 +74,15 @@ const GreetingMessageSettings = () => {
 
       const { data, error } = await supabase
         .from('line_greeting_settings')
-        .select('*')
+        .select('greeting_message')
         .eq('user_id', user.id)
         .maybeSingle();
 
       if (!error && data) {
-        setGreetingType(data.greeting_type as "message" | "scenario");
-        if (data.greeting_type === 'message') {
-          setGreetingMessage(data.greeting_message || '');
-        } else if (data.greeting_type === 'scenario') {
-          setSelectedScenario(data.scenario_id || '');
-        }
+        setGreetingMessage(data.greeting_message || '');
       }
     } catch (error) {
       console.error('Error loading greeting message:', error);
-    }
-  };
-
-  const loadScenarios = async () => {
-    try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return;
-
-      const { data, error } = await supabase
-        .from('step_scenarios')
-        .select('id, name')
-        .eq('is_active', true)
-        .eq('user_id', user.id)
-        .order('name');
-
-      if (!error && data) {
-        setScenarios(data);
-      }
-    } catch (error) {
-      console.error('Error loading scenarios:', error);
     }
   };
 
@@ -120,18 +91,7 @@ const GreetingMessageSettings = () => {
     setLoading(true);
 
     try {
-      // Check if greeting type is scenario and validate selection
-      if (greetingType === "scenario" && !selectedScenario) {
-        toast({
-          title: "エラー",
-          description: "シナリオを選択してください",
-          variant: "destructive",
-        });
-        return;
-      }
-
-      // Check if greeting type is message and validate content
-      if (greetingType === "message" && !greetingMessage.trim()) {
+      if (!greetingMessage.trim()) {
         toast({
           title: "エラー",
           description: "あいさつメッセージを入力してください",
@@ -152,9 +112,9 @@ const GreetingMessageSettings = () => {
 
       const payload = {
         user_id: user.id,
-        greeting_type: greetingType,
-        greeting_message: greetingType === 'message' ? greetingMessage : null,
-        scenario_id: greetingType === 'scenario' ? selectedScenario : null,
+        greeting_type: 'message',
+        greeting_message: greetingMessage,
+        scenario_id: null,
       };
 
       const { error } = await supabase
@@ -212,23 +172,8 @@ const GreetingMessageSettings = () => {
             </CardHeader>
             <CardContent>
               <form onSubmit={handleSave} className="space-y-6">
-                <div className="space-y-4">
-                  <Label className="text-base font-medium">あいさつメッセージの設定方法</Label>
-                  <RadioGroup value={greetingType} onValueChange={(value: "message" | "scenario") => setGreetingType(value)}>
-                    <div className="flex items-center space-x-2">
-                      <RadioGroupItem value="message" id="message" />
-                      <Label htmlFor="message">任意のメッセージを設定</Label>
-                    </div>
-                    <div className="flex items-center space-x-2">
-                      <RadioGroupItem value="scenario" id="scenario" />
-                      <Label htmlFor="scenario">作成済みのシナリオを利用</Label>
-                    </div>
-                  </RadioGroup>
-                </div>
-
-                {greetingType === "message" && (
-                  <div className="space-y-2">
-                    <Label htmlFor="greeting">あいさつメッセージ</Label>
+                <div className="space-y-2">
+                  <Label htmlFor="greeting">あいさつメッセージ</Label>
                     <Textarea
                       id="greeting"
                       value={greetingMessage}
@@ -250,28 +195,6 @@ const GreetingMessageSettings = () => {
                       </div>
                     </div>
                   </div>
-                )}
-
-                {greetingType === "scenario" && (
-                  <div className="space-y-2">
-                    <Label htmlFor="scenario-select">シナリオを選択</Label>
-                    <Select value={selectedScenario} onValueChange={setSelectedScenario}>
-                      <SelectTrigger>
-                        <SelectValue placeholder="シナリオを選択してください" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {scenarios.map((scenario) => (
-                          <SelectItem key={scenario.id} value={scenario.id}>
-                            {scenario.name}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    <p className="text-xs text-muted-foreground">
-                      選択したシナリオが友だち追加時に自動実行されます
-                    </p>
-                  </div>
-                )}
 
                 <Button type="submit" disabled={loading} className="w-full">
                   {loading ? "保存中..." : "設定を保存"}
