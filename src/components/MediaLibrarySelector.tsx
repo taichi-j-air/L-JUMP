@@ -5,12 +5,14 @@ import { Card, CardContent } from "@/components/ui/card"
 import { supabase } from "@/integrations/supabase/client"
 import { Image, Upload, X } from "lucide-react"
 import { toast } from "sonner"
+import { SHARED_FILES } from "@/hooks/useFileUpload"
 
 interface MediaFile {
   name: string
   publicUrl: string
   size: number
   created_at: string
+  isShared?: boolean
 }
 
 interface MediaLibrarySelectorProps {
@@ -70,8 +72,19 @@ export function MediaLibrarySelector({ trigger, onSelect, selectedUrl }: MediaLi
       )
 
       const imageFiles = files.filter(f => f.name.match(/\.(jpg|jpeg|png|gif|webp)$/i))
-      console.log('Loaded media files:', imageFiles)
-      setMediaFiles(imageFiles)
+      const sharedImages: MediaFile[] = SHARED_FILES
+        .filter(file => file.type.startsWith('image/'))
+        .map(file => ({
+          name: file.name,
+          publicUrl: file.url,
+          size: file.size,
+          created_at: file.uploadedAt.toISOString(),
+          isShared: true
+        }))
+
+      const combinedMedia = [...sharedImages, ...imageFiles]
+      console.log('Loaded media files:', combinedMedia)
+      setMediaFiles(combinedMedia)
     } catch (error: any) {
       console.error('メディアファイルの読み込みに失敗:', error)
       toast.error('メディアファイルの読み込みに失敗しました')
@@ -211,7 +224,7 @@ export function MediaLibrarySelector({ trigger, onSelect, selectedUrl }: MediaLi
               <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
                 {mediaFiles.map((file) => (
                   <Card 
-                    key={file.name}
+                    key={file.isShared ? `shared-${file.name}` : file.name}
                     className={`cursor-pointer transition-all hover:shadow-md ${
                       selectedUrl === file.publicUrl ? 'ring-2 ring-primary' : ''
                     }`}

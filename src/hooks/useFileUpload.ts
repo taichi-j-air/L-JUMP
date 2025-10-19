@@ -9,7 +9,20 @@ export interface UploadedFile {
   size: number
   type: string
   uploadedAt: Date
+  isShared?: boolean
 }
+
+export const SHARED_FILES: UploadedFile[] = [
+  {
+    id: 'shared/pngwin.png',
+    name: 'pngwin.png',
+    url: `${import.meta.env.BASE_URL ?? '/'}pngwin.png`,
+    size: 160117,
+    type: 'image/png',
+    uploadedAt: new Date('2024-01-01T00:00:00Z'),
+    isShared: true
+  }
+]
 
 export const useFileUpload = () => {
   const [uploading, setUploading] = useState(false)
@@ -94,13 +107,25 @@ export const useFileUpload = () => {
         }
       })
 
-      setFiles(fileList)
+      const combinedFiles = [
+        ...SHARED_FILES,
+        ...fileList.filter(
+          file => !SHARED_FILES.some(shared => shared.url === file.url || shared.id === file.id)
+        )
+      ]
+
+      setFiles(combinedFiles)
     } catch (error) {
       console.error('Error loading files:', error)
     }
   }
 
   const deleteFile = async (fileId: string) => {
+    if (SHARED_FILES.some(file => file.id === fileId)) {
+      toast.error('共有ファイルは削除できません')
+      return false
+    }
+
     try {
       const { error } = await supabase.storage
         .from('media-files')

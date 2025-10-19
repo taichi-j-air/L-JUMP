@@ -99,15 +99,22 @@ export default function MediaLibrary() {
                     <Badge variant="outline" className="text-xs">
                       {getFileTypeLabel(file.type)}
                     </Badge>
+                    {file.isShared && (
+                      <Badge variant="secondary" className="text-xs">
+                        共有
+                      </Badge>
+                    )}
                   </div>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => deleteFile(file.id)}
-                    className="text-destructive hover:text-destructive"
-                  >
-                    <Trash2 className="h-4 w-4" />
-                  </Button>
+                  {!file.isShared && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => deleteFile(file.id)}
+                      className="text-destructive hover:text-destructive"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  )}
                 </div>
               </CardHeader>
               
