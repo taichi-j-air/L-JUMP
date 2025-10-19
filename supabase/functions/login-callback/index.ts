@@ -18,7 +18,21 @@ const corsHeaders = createSecureHeaders();
 serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
+}
+
+const getFrontendBaseUrl = () => {
+  const raw =
+    Deno.env.get("APP_BASE_URL") ||
+    Deno.env.get("PUBLIC_APP_URL") ||
+    Deno.env.get("FRONTEND_BASE_URL") ||
+    Deno.env.get("CLIENT_BASE_URL");
+  if (raw && raw.trim().length > 0) {
+    return raw.trim().replace(/\/+$/, "");
   }
+  return "https://rtjxurmuaawyzjcdkqxt.supabase.co";
+};
+
+const FRONTEND_BASE_URL = getFrontendBaseUrl();
 
   // Rate limiting check
   const clientIP = req.headers.get('x-forwarded-for') || req.headers.get('x-real-ip') || 'unknown';
@@ -259,7 +273,7 @@ serve(async (req) => {
         } else if (profile.line_bot_id) {
           fallbackUrl = `https://line.me/R/ti/p/${encodeURIComponent(profile.line_bot_id)}`;
         } else {
-          fallbackUrl = `https://74048ab5-8d5a-425a-ab29-bd5cc50dc2fe.lovableproject.com/login-success?error=invalid_grant`;
+          fallbackUrl = `${FRONTEND_BASE_URL}/login-success?error=invalid_grant`;
         }
         
         console.log("Fallback redirect URL:", fallbackUrl);
@@ -301,7 +315,7 @@ serve(async (req) => {
       console.log("General login successful for user:", lineProfile.userId);
       
       /* ── 9. 完了ページへリダイレクト ── */
-      const generalLoginSuccessUrl = `https://74048ab5-8d5a-425a-ab29-bd5cc50dc2fe.lovableproject.com/login-success?user_name=${encodeURIComponent(display)}`;
+      const generalLoginSuccessUrl = `${FRONTEND_BASE_URL}/login-success?user_name=${encodeURIComponent(display)}`;
       return Response.redirect(generalLoginSuccessUrl, 302);
     }
 
@@ -371,7 +385,7 @@ serve(async (req) => {
       } else if (profile.line_bot_id) {
         redirectUrl = `https://line.me/R/ti/p/${encodeURIComponent(profile.line_bot_id)}`;
       } else {
-        redirectUrl = `https://74048ab5-8d5a-425a-ab29-bd5cc50dc2fe.lovableproject.com/login-success?user_name=${encodeURIComponent(display)}&scenario=${scenarioCode}&already_registered=true`;
+        redirectUrl = `${FRONTEND_BASE_URL}/login-success?user_name=${encodeURIComponent(display)}&scenario=${scenarioCode}&already_registered=true`;
       }
       
       console.log("Redirecting existing friend to:", redirectUrl);
@@ -544,7 +558,7 @@ serve(async (req) => {
         redirectUrl = `https://line.me/R/ti/p/${encodeURIComponent(profile.line_bot_id)}`;
       } else {
         // 最終フォールバック
-        redirectUrl = `https://74048ab5-8d5a-425a-ab29-bd5cc50dc2fe.lovableproject.com/login-success?user_name=${encodeURIComponent(display)}&scenario=${scenarioCode}&message=already_friend`;
+        redirectUrl = `${FRONTEND_BASE_URL}/login-success?user_name=${encodeURIComponent(display)}&scenario=${scenarioCode}&message=already_friend`;
       }
     } else {
       // 新規友だち = 友だち追加が必要
