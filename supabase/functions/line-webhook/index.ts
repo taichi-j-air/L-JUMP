@@ -36,6 +36,188 @@ interface LineWebhookBody {
   events: LineEvent[]
 }
 
+const textEncoder = new TextEncoder();
+const textDecoder = new TextDecoder();
+const botOwnerCache = new Map<string, string>();
+
+function normalizeBotIdentifier(value: string | null | undefined): string | null {
+  if (!value) return null;
+  return value.startsWith('@') ? value.substring(1) : value;
+}
+
+function expandBotIdentifiers(value: string | null | undefined): string[] {
+  const normalized = normalizeBotIdentifier(value);
+  const candidates = new Set<string>();
+  if (value) candidates.add(value);
+  if (normalized) candidates.add(normalized);
+  return Array.from(candidates);
+}
+
+async function decryptBotCredential(encryptedValue: string, userId: string): Promise<string | null> {
+  if (!encryptedValue.startsWith('enc:')) {
+    return encryptedValue;
+  }
+
+  try {
+    const encoded = encryptedValue.substring(4);
+    const binary = atob(encoded);
+    const bytes = new Uint8Array(binary.length);
+    for (let i = 0; i < binary.length; i++) {
+      bytes[i] = binary.charCodeAt(i);
+    }
+
+    const iv = bytes.slice(0, 12);
+    const cipherText = bytes.slice(12);
+    const keyMaterial = textEncoder.encode(userId.substring(0, 32).padEnd(32, '0'));
+    const cryptoKey = await crypto.subtle.importKey(
+      'raw',
+      keyMaterial,
+      { name: 'AES-GCM' },
+      false,
+      ['encrypt', 'decrypt']
+    );
+
+    const decrypted = await crypto.subtle.decrypt(
+      { name: 'AES-GCM', iv },
+      cryptoKey,
+      cipherText
+    );
+
+    return textDecoder.decode(decrypted);
+  } catch (error) {
+    console.error('Failed to decrypt bot credential for user', userId, error);
+    return null;
+  }
+}
+
+async function resolveAppUserIdForBot(supabase: any, botUserId: string): Promise<string | null> {
+  if (botOwnerCache.has(botUserId)) {
+    return botOwnerCache.get(botUserId)!;
+  }
+
+  try {
+    const { data: directBotMatch, error: directBotError } = await supabase
+      .from('secure_line_credentials')
+      .select('user_id')
+      .eq('credential_type', 'bot_id')
+      .eq('encrypted_value', botUserId)
+      .maybeSingle();
+
+    if (directBotError && directBotError.code && directBotError.code !== 'PGRST116') {
+      console.error('Error during plaintext bot_id lookup:', directBotError);
+    }
+
+    if (directBotMatch?.user_id) {
+      console.log('Matched bot via plaintext bot_id credential');
+      botOwnerCache.set(botUserId, directBotMatch.user_id);
+      return directBotMatch.user_id;
+    }
+  } catch (error) {
+    console.error('resolveAppUserIdForBot bot_id lookup exception:', error);
+  }
+
+  try {
+    const { data: legacyChannelMatch, error: legacyChannelError } = await supabase
+      .from('secure_line_credentials')
+      .select('user_id')
+      .eq('credential_type', 'channel_id')
+      .eq('encrypted_value', botUserId)
+      .maybeSingle();
+
+    if (legacyChannelError && legacyChannelError.code && legacyChannelError.code !== 'PGRST116') {
+      console.error('Error during legacy channel_id lookup:', legacyChannelError);
+    }
+
+    if (legacyChannelMatch?.user_id) {
+      console.log('Matched bot via legacy channel_id credential');
+      botOwnerCache.set(botUserId, legacyChannelMatch.user_id);
+      return legacyChannelMatch.user_id;
+    }
+  } catch (error) {
+    console.error('resolveAppUserIdForBot channel_id lookup exception:', error);
+  }
+
+  const { data: botCredentials, error: credentialsError } = await supabase
+    .from('secure_line_credentials')
+    .select('user_id, encrypted_value')
+    .eq('credential_type', 'bot_id')
+    .not('encrypted_value', 'is', null);
+
+  if (credentialsError) {
+    console.error('Error loading bot_id credentials for matching:', credentialsError);
+    return null;
+  }
+
+  for (const credential of botCredentials ?? []) {
+    const userId = credential.user_id;
+    const storedValue = credential.encrypted_value;
+    if (!storedValue) continue;
+
+    if (!storedValue.startsWith('enc:')) {
+      for (const candidate of expandBotIdentifiers(storedValue)) {
+        if (candidate === botUserId) {
+          console.log('Matched bot via stored plaintext bot_id credential');
+          botOwnerCache.set(botUserId, userId);
+          return userId;
+        }
+      }
+      continue;
+    }
+
+    const decryptedValue = await decryptBotCredential(storedValue, userId);
+    if (!decryptedValue) continue;
+
+    for (const candidate of expandBotIdentifiers(decryptedValue)) {
+      if (candidate === botUserId) {
+        console.log('Matched bot via decrypted bot_id credential');
+        botOwnerCache.set(botUserId, userId);
+        return userId;
+      }
+    }
+  }
+
+  const { data: profileCandidates, error: profileError } = await supabase
+    .from('profiles')
+    .select('user_id, line_channel_access_token, line_bot_id')
+    .not('line_channel_access_token', 'is', null)
+    .not('line_bot_id', 'is', null);
+
+  if (profileError) {
+    console.error('Error loading profiles for bot lookup fallback:', profileError);
+  } else {
+    for (const profile of profileCandidates ?? []) {
+      const accessToken = profile.line_channel_access_token;
+      if (!accessToken) continue;
+
+      try {
+        const botInfoResponse = await fetch('https://api.line.me/v2/bot/info', {
+          method: 'GET',
+          headers: {
+            'Authorization': `Bearer ${accessToken}`,
+            'Content-Type': 'application/json'
+          }
+        });
+
+        if (!botInfoResponse.ok) {
+          continue;
+        }
+
+        const botInfo = await botInfoResponse.json();
+        if (botInfo?.userId === botUserId) {
+          console.log('Matched bot via LINE API lookup for user', profile.user_id);
+          botOwnerCache.set(botUserId, profile.user_id);
+          return profile.user_id;
+        }
+      } catch (error) {
+        console.error('Failed to resolve bot via LINE API lookup for user', profile.user_id, error);
+      }
+    }
+  }
+
+  console.warn('No user mapping found for bot destination:', botUserId);
+  return null;
+}
+
 serve(async (req) => {
   console.log('=== LINE Webhook Function Called ===')
   console.log('Method:', req.method)
@@ -131,20 +313,14 @@ serve(async (req) => {
     }
 
     // Find the app user associated with this LINE bot
-    const { data: credential, error: credError } = await supabase
-      .from('secure_line_credentials')
-      .select('user_id')
-      .eq('credential_type', 'channel_id')
-      .eq('encrypted_value', botUserId)
-      .single();
+    const appUserId = await resolveAppUserIdForBot(supabase, botUserId);
 
-    if (credError || !credential) {
-      console.error('Could not find a user for bot ID:', botUserId, credError);
+    if (!appUserId) {
+      console.error('Could not find a user for bot ID:', botUserId);
       // 200 OKを返してLINEプラットフォームからの再送を防ぐ
       return new Response('OK (User not found for bot)', { status: 200, headers: corsHeaders });
     }
 
-    const appUserId = credential.user_id;
     console.log(`Webhook received for bot ${botUserId}, mapped to app user ${appUserId}`);
 
     // Process each event with validation
