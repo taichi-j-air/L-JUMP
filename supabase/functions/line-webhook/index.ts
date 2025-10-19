@@ -497,6 +497,7 @@ async function sendPushMessage(userId: string, text: string, supabase: any) {
 }
 
 async function handleFollow(event: LineEvent, supabase: any, req: Request) {
+  console.log('--- handleFollow: START ---');
   try {
     const { source } = event
     console.log(`User ${source.userId} followed the bot`)
@@ -618,6 +619,8 @@ async function handleFollow(event: LineEvent, supabase: any, req: Request) {
         .eq('line_user_id', source.userId)
         .maybeSingle()
 
+      console.log('--- handleFollow: existingFriend check ---', { existingFriend });
+
       let friendData
       if (!existingFriend) {
         // New friend - insert (allow null for display_name/picture_url)
@@ -683,6 +686,8 @@ async function handleFollow(event: LineEvent, supabase: any, req: Request) {
         .eq('user_id', profile.user_id)
         .maybeSingle()
 
+      console.log('--- handleFollow: greetingSettings check ---', { greetingSettings, greetingError });
+
       if (!greetingError && greetingSettings) {
         console.log('✓ あいさつメッセージ設定が見つかりました:', greetingSettings.greeting_type)
 
@@ -723,6 +728,7 @@ async function handleFollow(event: LineEvent, supabase: any, req: Request) {
               console.log('トークン変換後のメッセージ:', message)
             }
 
+            console.log('--- handleFollow: Sending greeting message ---', { userId: source.userId, message });
             await sendPushMessage(source.userId, message, supabase)
             console.log('✓ あいさつメッセージを送信しました（トークン変換済み）')
           } catch (error) {
