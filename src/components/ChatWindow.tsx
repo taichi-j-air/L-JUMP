@@ -238,7 +238,7 @@ export function ChatWindow({ user, friend, onClose }: ChatWindowProps) {
       // Check if this is a test friend
       if (friend.line_user_id.startsWith('test_')) {
         // Add message to local state for test friends
-        setMessages(prev => [...prev, savedMessage as ChatMessage])
+        setMessages(prev => [...prev, savedMessage as unknown as ChatMessage])
         
         // Simulate a test reply after 1 second
         setTimeout(() => {
@@ -262,7 +262,7 @@ export function ChatWindow({ user, friend, onClose }: ChatWindowProps) {
       }
 
       // Add message to local state
-      setMessages(prev => [...prev, savedMessage as ChatMessage])
+      setMessages(prev => [...prev, savedMessage as unknown as ChatMessage])
 
       // Send message via LINE API (処理済みメッセージを使用)
       const { error: sendError } = await supabase.functions.invoke('send-line-message', {
