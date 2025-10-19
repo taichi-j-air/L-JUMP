@@ -15,9 +15,16 @@ interface FormEmbedComponentProps {
   uid?: string;
   className?: string;
   delaySeconds?: number;
+  delayHeadline?: string;
   delayMessage?: string;
   showCountdown?: boolean;
   accessStartAt?: string;
+  delayStyle?: {
+    labelColor?: string;
+    labelSize?: string;
+    timerColor?: string;
+    timerSize?: string;
+  };
 }
 
 interface FormField {
@@ -73,9 +80,11 @@ export default function FormEmbedComponent({
   uid,
   className,
   delaySeconds,
+  delayHeadline,
   delayMessage,
   showCountdown,
   accessStartAt,
+  delayStyle,
 }: FormEmbedComponentProps) {
   const [formData, setFormData] = useState<FormData | null>(null);
   const [formValues, setFormValues] = useState<Record<string, any>>({});
@@ -96,6 +105,17 @@ export default function FormEmbedComponent({
   const availableAt = normalizedDelay > 0 && startsAt !== null ? startsAt + normalizedDelay * 1000 : null;
   const remainingMs = availableAt ? Math.max(availableAt - now, 0) : 0;
   const isWaiting = availableAt !== null && remainingMs > 0;
+  const toCssSize = (value?: string) => {
+    if (!value) return undefined;
+    const trimmed = value.trim();
+    if (!trimmed) return undefined;
+    return /^\d+(\.\d+)?$/.test(trimmed) ? `${trimmed}px` : trimmed;
+  };
+  const headlineText = delayHeadline && delayHeadline.trim().length > 0 ? delayHeadline.trim() : "まもなくフォームが表示されます";
+  const labelColor = delayStyle?.labelColor && delayStyle.labelColor.trim() ? delayStyle.labelColor.trim() : undefined;
+  const labelFontSize = toCssSize(delayStyle?.labelSize);
+  const timerColor = delayStyle?.timerColor && delayStyle.timerColor.trim() ? delayStyle.timerColor.trim() : undefined;
+  const timerFontSize = toCssSize(delayStyle?.timerSize);
 
   useEffect(() => {
     setNow(Date.now());
@@ -333,10 +353,23 @@ export default function FormEmbedComponent({
     return (
       <Card className={`${className}`} style={{ ["--form-accent" as any]: formData?.accent_color || '#0cb386' }}>
         <CardContent className="p-6 space-y-3 text-center">
-          <h3 className="text-lg font-semibold">まもなくフォームが表示されます</h3>
-          <p className="text-muted-foreground whitespace-pre-wrap">{message}</p>
+          <h3
+            className="font-semibold"
+            style={{ color: labelColor, fontSize: labelFontSize }}
+          >
+            {headlineText}
+          </h3>
+          <p
+            className="whitespace-pre-wrap"
+            style={{ color: labelColor, fontSize: labelFontSize }}
+          >
+            {message}
+          </p>
           {(showCountdown ?? true) && (
-            <div className="text-2xl font-mono tracking-widest text-[var(--form-accent,#0cb386)]">
+            <div
+              className="font-mono tracking-widest text-[var(--form-accent,#0cb386)]"
+              style={{ color: timerColor || formData?.accent_color, fontSize: timerFontSize }}
+            >
               {formatted.digital}
             </div>
           )}

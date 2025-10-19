@@ -205,10 +205,12 @@ const renderBlock = (block: Block, uid?: string, viewerAccess?: PagePayload["vie
           <FormEmbedComponent
             formId={content.formId}
             uid={uid}
+            delayHeadline={content.delayHeadline}
             delaySeconds={content.delayEnabled ? Number(content.delaySeconds) || 0 : undefined}
             delayMessage={content.delayMessage}
             showCountdown={content.delayShowCountdown !== false}
             accessStartAt={viewerAccess?.timer_start_at || undefined}
+            delayStyle={content.delayStyle}
           />
         </div>
       );

@@ -389,7 +389,14 @@ export const EnhancedBlockEditor: React.FC<EnhancedBlockEditorProps> = (props) =
         description: 'ここにフォームが埋め込まれます。',
         delayEnabled: false,
         delaySeconds: 0,
+        delayHeadline: '',
         delayMessage: '',
+        delayStyle: {
+          labelColor: '',
+          labelSize: '',
+          timerColor: '',
+          timerSize: '',
+        },
         delayShowCountdown: true,
       };
       case 'note': return { ...baseContent, text: '', fontSize: '16px', color: '#454545', backgroundColor: 'transparent', bold: false, italic: false, underline: false, alignment: 'left' };
@@ -953,6 +960,17 @@ export const EnhancedBlockEditor: React.FC<EnhancedBlockEditorProps> = (props) =
         const delayEnabled = !!block.content?.delayEnabled && totalDelaySeconds > 0;
         const delayMinutes = Math.floor(totalDelaySeconds / 60);
         const delaySeconds = totalDelaySeconds % 60;
+        const delayStyle = (block.content?.delayStyle && typeof block.content.delayStyle === 'object')
+          ? block.content.delayStyle
+          : {};
+        const labelColor = typeof delayStyle.labelColor === 'string' ? delayStyle.labelColor : '';
+        const labelSize = typeof delayStyle.labelSize === 'string' ? delayStyle.labelSize : '';
+        const timerColor = typeof delayStyle.timerColor === 'string' ? delayStyle.timerColor : '';
+        const timerSize = typeof delayStyle.timerSize === 'string' ? delayStyle.timerSize : '';
+        const updateDelayStyle = (partial: Record<string, string>) => {
+          const nextStyle = { ...(delayStyle as Record<string, string>), ...partial };
+          updateBlock(block.id, { ...block.content, delayStyle: nextStyle });
+        };
         return (
           <div className="space-y-2">
             <Label>埋め込むフォームを選択</Label>
@@ -1053,12 +1071,126 @@ export const EnhancedBlockEditor: React.FC<EnhancedBlockEditorProps> = (props) =
                     </div>
                   </div>
                   <div className="space-y-1">
+                    <Label className="text-xs text-muted-foreground">待機中に表示するヘッドライン（未入力でデフォルト文言）</Label>
+                    <Input
+                      value={block.content.delayHeadline || ''}
+                      onChange={(e) => updateBlock(block.id, { ...block.content, delayHeadline: e.target.value })}
+                      placeholder="例：まもなくフォームが表示されます"
+                    />
+                  </div>
+                  <div className="space-y-1">
                     <Label className="text-xs text-muted-foreground">待機中に表示するテキスト（{`{time}`} が残り時間に置き換わります）</Label>
                     <Input
                       value={block.content.delayMessage || ''}
                       onChange={(e) => updateBlock(block.id, { ...block.content, delayMessage: e.target.value })}
                       placeholder="例：フォームはあと {time} で表示されます"
                     />
+                  </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="space-y-1">
+                      <Label className="text-xs text-muted-foreground flex items-center justify-between">
+                        テキスト色
+                        {labelColor && (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-auto px-2 py-1 text-xs"
+                            onClick={() => updateDelayStyle({ labelColor: '' })}
+                          >
+                            クリア
+                          </Button>
+                        )}
+                      </Label>
+                      <div className="flex items-center gap-2">
+                        <Input
+                          type="color"
+                          value={labelColor || '#222222'}
+                          onChange={(e) => updateDelayStyle({ labelColor: e.target.value })}
+                          className="h-10 w-14 p-1"
+                        />
+                        <Input
+                          value={labelColor}
+                          onChange={(e) => updateDelayStyle({ labelColor: e.target.value })}
+                          placeholder="#222222"
+                        />
+                      </div>
+                    </div>
+                    <div className="space-y-1">
+                      <Label className="text-xs text-muted-foreground flex items-center justify-between">
+                        テキストサイズ（px）
+                        {labelSize && (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-auto px-2 py-1 text-xs"
+                            onClick={() => updateDelayStyle({ labelSize: '' })}
+                          >
+                            クリア
+                          </Button>
+                        )}
+                      </Label>
+                      <Input
+                        type="number"
+                        min={10}
+                        max={72}
+                        value={labelSize}
+                        onChange={(e) => updateDelayStyle({ labelSize: e.target.value })}
+                        placeholder="例: 20"
+                      />
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="space-y-1">
+                      <Label className="text-xs text-muted-foreground flex items-center justify-between">
+                        カウントダウン色
+                        {timerColor && (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-auto px-2 py-1 text-xs"
+                            onClick={() => updateDelayStyle({ timerColor: '' })}
+                          >
+                            クリア
+                          </Button>
+                        )}
+                      </Label>
+                      <div className="flex items-center gap-2">
+                        <Input
+                          type="color"
+                          value={timerColor || '#0cb386'}
+                          onChange={(e) => updateDelayStyle({ timerColor: e.target.value })}
+                          className="h-10 w-14 p-1"
+                        />
+                        <Input
+                          value={timerColor}
+                          onChange={(e) => updateDelayStyle({ timerColor: e.target.value })}
+                          placeholder="#0cb386"
+                        />
+                      </div>
+                    </div>
+                    <div className="space-y-1">
+                      <Label className="text-xs text-muted-foreground flex items-center justify-between">
+                        カウントダウンサイズ（px）
+                        {timerSize && (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-auto px-2 py-1 text-xs"
+                            onClick={() => updateDelayStyle({ timerSize: '' })}
+                          >
+                            クリア
+                          </Button>
+                        )}
+                      </Label>
+                      <Input
+                        type="number"
+                        min={14}
+                        max={96}
+                        value={timerSize}
+                        onChange={(e) => updateDelayStyle({ timerSize: e.target.value })}
+                        placeholder="例: 28"
+                      />
+                    </div>
                   </div>
                   <div className="flex items-center gap-2">
                     <Switch

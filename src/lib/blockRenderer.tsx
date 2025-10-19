@@ -274,10 +274,12 @@ export const renderBlock = (block: Block, options: RenderOptions = {}) => {
           <FormEmbedComponent
             formId={formId}
             uid={options.uid}
+            delayHeadline={content.delayHeadline}
             delaySeconds={delaySeconds}
             delayMessage={content.delayMessage}
             showCountdown={content.delayShowCountdown !== false}
             accessStartAt={options.viewerAccess?.timer_start_at || undefined}
+            delayStyle={content.delayStyle}
           />
         </div>
       );
