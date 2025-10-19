@@ -1,4 +1,4 @@
-import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
+﻿import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { 
   validateLineUserId, 
@@ -616,7 +616,12 @@ async function sendReplyMessage(replyToken: string, text: string, supabase: any,
   }
 }
 
-async function sendPushMessage(userId: string, text: string, supabase: any, appUserId: string) {
+async function sendPushMessages(userId: string, messages: any[], supabase: any, appUserId: string) {
+  if (!messages || messages.length === 0) {
+    console.warn('sendPushMessages called with empty message array')
+    return
+  }
+
   try {
     const { data: secureCredentials, error: secureError } = await supabase
       .from('secure_line_credentials')
@@ -635,12 +640,7 @@ async function sendPushMessage(userId: string, text: string, supabase: any, appU
 
     const pushData = {
       to: userId,
-      messages: [
-        {
-          type: 'text',
-          text: text
-        }
-      ]
+      messages
     }
 
     const response = await fetch('https://api.line.me/v2/bot/message/push', {
@@ -662,6 +662,115 @@ async function sendPushMessage(userId: string, text: string, supabase: any, appU
 
   } catch (error) {
     console.error('Error sending push message:', error)
+  }
+}
+
+async function sendPushMessage(userId: string, text: string, supabase: any, appUserId: string) {
+  return sendPushMessages(userId, [
+    {
+      type: 'text',
+      text
+    }
+  ], supabase, appUserId)
+}
+
+function buildGreetingImageMessage(config: any): any | null {
+  if (!config || typeof config !== 'object') {
+    return null
+  }
+
+  const mode = typeof config.mode === 'string' ? config.mode : 'none'
+  if (mode === 'none') {
+    return null
+  }
+
+  const imageUrl = typeof config.imageUrl === 'string' ? config.imageUrl.trim() : ''
+  if (!imageUrl) {
+    return null
+  }
+
+  const aspectRatio =
+    typeof config.aspectRatio === 'string' && config.aspectRatio.trim()
+      ? config.aspectRatio.trim()
+      : '1:1'
+
+  const baseImage: Record<string, any> = {
+    type: 'image',
+    url: imageUrl,
+    size: 'full',
+    aspectMode: 'fit',
+    aspectRatio,
+    gravity: 'center'
+  }
+
+  const actionLabel =
+    typeof config.actionLabel === 'string' && config.actionLabel.trim()
+      ? config.actionLabel.trim()
+      : undefined
+
+  if (mode === 'link') {
+    const linkUrl = typeof config.linkUrl === 'string' ? config.linkUrl.trim() : ''
+    if (!linkUrl) {
+      return null
+    }
+
+    baseImage.action = {
+      type: 'uri',
+      label: actionLabel || 'open',
+      uri: linkUrl
+    }
+  } else if (mode === 'postback') {
+    const postback = typeof config.postback === 'object' && config.postback !== null ? config.postback : {}
+    const dataPayload: Record<string, unknown> = {
+      action: 'trigger_scenario',
+      source: 'greeting_image',
+      once: postback.once !== false
+    }
+
+    if (typeof postback.scenarioId === 'string' && postback.scenarioId.trim()) {
+      dataPayload.scenario_id = postback.scenarioId.trim()
+    }
+
+    if (typeof postback.token === 'string' && postback.token.trim()) {
+      dataPayload.token = postback.token.trim()
+    }
+
+    const postbackAction: Record<string, any> = {
+      type: 'postback',
+      label:
+        actionLabel ||
+        (typeof postback.label === 'string' && postback.label.trim()
+          ? postback.label.trim()
+          : 'action'),
+      data: JSON.stringify(dataPayload)
+    }
+
+    if (typeof postback.displayText === 'string' && postback.displayText.trim()) {
+      postbackAction.displayText = postback.displayText.trim()
+    }
+
+    baseImage.action = postbackAction
+  } else {
+    return null
+  }
+
+  const altText =
+    typeof config.altText === 'string' && config.altText.trim()
+      ? config.altText.trim()
+      : 'Greeting image'
+
+  return {
+    type: 'flex',
+    altText,
+    contents: {
+      type: 'bubble',
+      body: {
+        type: 'box',
+        layout: 'vertical',
+        contents: [baseImage],
+        paddingAll: '0px'
+      }
+    }
   }
 }
 
@@ -872,9 +981,23 @@ async function handleFollow(event: LineEvent, supabase: any, req: Request, appUs
               console.log('トークン変換後のメッセージ:', message)
             }
 
-            console.log('--- handleFollow: Sending greeting message ---', { userId: source.userId, message });
-            await sendPushMessage(source.userId, message, supabase, appUserId)
-            console.log('✓ あいさつメッセージを送信しました（トークン変換済み）')
+            console.log('--- handleFollow: Sending greeting message ---', { userId: source.userId, message })
+
+            const greetingMessages: any[] = [
+              {
+                type: 'text',
+                text: message
+              }
+            ]
+
+            const greetingImageMessage = buildGreetingImageMessage(greetingSettings.greeting_image_config)
+            if (greetingImageMessage) {
+              greetingMessages.push(greetingImageMessage)
+              console.log('--- handleFollow: Added greeting image message ---', greetingImageMessage)
+            }
+
+            await sendPushMessages(source.userId, greetingMessages, supabase, appUserId)
+            console.log('✓ あいさつメッセージを送信しました（トークン変換済み + 画像設定）')
           } catch (error) {
             console.error('✗ あいさつメッセージ送信エラー:', error)
           }
@@ -1757,21 +1880,186 @@ async function handlePostback(event: any, supabase: any, req: Request, appUserId
     console.log('  Data:', postback.data)
     
     // ポストバックデータのパース
-    let postbackData
+    let postbackData: any
     try {
       postbackData = JSON.parse(postback.data)
     } catch (e) {
-      console.error('❌ Invalid postback JSON:', postback.data)
-      return
+      postbackData = { raw: postback.data }
     }
-    
+    if (!postbackData || typeof postbackData !== 'object') {
+      postbackData = { raw: postback.data }
+    }
+    if (!postbackData.action && typeof postbackData.raw === 'string') {
+      const rawString = postbackData.raw.trim()
+      if (rawString.startsWith('{') || rawString.startsWith('[')) {
+        try {
+          postbackData = JSON.parse(rawString)
+        } catch {
+          postbackData = { raw: rawString }
+        }
+      } else if (rawString.includes('=')) {
+        const params = new URLSearchParams(rawString)
+        const queryPayload: Record<string, string> = {}
+        params.forEach((value, key) => {
+          queryPayload[key] = value
+        })
+        postbackData = {
+          ...queryPayload,
+          action: queryPayload['action'] ?? postbackData.action ?? undefined
+        }
+      }
+    }
+
+    const action = typeof postbackData?.action === 'string'
+      ? postbackData.action
+      : undefined
+
+    if (action === 'trigger_scenario') {
+      const scenarioId =
+        postbackData.scenario_id ||
+        postbackData.scenario ||
+        postbackData.target_scenario_id ||
+        postbackData.scenarioId
+
+      if (!scenarioId || typeof scenarioId !== 'string') {
+        console.error('trigger_scenario missing scenario_id in postback data')
+        await sendReplyMessage(
+          replyToken,
+          postbackData?.error_message ?? 'シナリオが設定されていません。',
+          supabase,
+          appUserId
+        )
+        return
+      }
+
+      await ensureFriendExists(source.userId, supabase, appUserId)
+
+      const { data: friendData, error: friendError } = await supabase
+        .from('line_friends')
+        .select('id, display_name, picture_url')
+        .eq('line_user_id', source.userId)
+        .eq('user_id', appUserId)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle()
+
+      if (friendError || !friendData) {
+        console.error('trigger_scenario friend lookup failed:', friendError)
+        await sendReplyMessage(
+          replyToken,
+          postbackData?.error_message ?? '処理に失敗しました。時間をおいて再度お試しください。',
+          supabase,
+          appUserId
+        )
+        return
+      }
+
+      const onceRaw = postbackData?.once
+      const allowOnlyOnce =
+        onceRaw === undefined ||
+        onceRaw === null ||
+        onceRaw === true ||
+        onceRaw === 'true' ||
+        onceRaw === '1'
+
+      const logAction =
+        typeof postbackData?.log_action === 'string' && postbackData.log_action.trim().length > 0
+          ? postbackData.log_action.trim()
+          : 'trigger_scenario'
+
+      if (allowOnlyOnce) {
+        const { data: existingTrigger } = await supabase
+          .from('postback_logs')
+          .select('id')
+          .eq('friend_id', friendData.id)
+          .eq('scenario_id', scenarioId)
+          .eq('action', logAction)
+          .maybeSingle()
+
+        if (existingTrigger) {
+          console.log('trigger_scenario already processed for this friend/scenario/action')
+          await sendReplyMessage(
+            replyToken,
+            postbackData?.already_message ?? 'この操作は既に完了しています。',
+            supabase,
+            appUserId
+          )
+          return
+        }
+      }
+
+      try {
+        const registrationSource =
+          typeof postbackData?.source === 'string' && postbackData.source.trim().length > 0
+            ? postbackData.source.trim()
+            : 'greeting_postback'
+
+        const { data: reg, error: regErr } = await supabase.rpc('register_friend_to_scenario', {
+          p_line_user_id: source.userId,
+          p_invite_code: postbackData?.invite_code ?? 'DIRECT_SCENARIO',
+          p_display_name: friendData.display_name ?? null,
+          p_picture_url: friendData.picture_url ?? null,
+          p_registration_source: registrationSource,
+          p_scenario_id: scenarioId,
+          p_user_id: appUserId
+        })
+
+        if (regErr || !reg?.success) {
+          console.error('trigger_scenario register_friend_to_scenario failed:', regErr, reg)
+          await sendReplyMessage(
+            replyToken,
+            postbackData?.error_message ?? 'シナリオの開始に失敗しました。時間をおいて再度お試しください。',
+            supabase,
+            appUserId
+          )
+          return
+        }
+
+        if (allowOnlyOnce) {
+          const { error: logError } = await supabase
+            .from('postback_logs')
+            .insert({
+              friend_id: friendData.id,
+              scenario_id: scenarioId,
+              action: logAction,
+              line_user_id: source.userId
+            })
+
+          if (logError) {
+            console.error('trigger_scenario failed to log postback:', logError)
+          }
+        }
+
+        await sendReplyMessage(
+          replyToken,
+          postbackData?.success_message ?? 'シナリオを開始しました。',
+          supabase,
+          appUserId
+        )
+
+        const scenarioForDelivery = reg?.scenario_id ?? scenarioId
+        const friendForDelivery = reg?.friend_id ?? friendData.id
+
+        await startStepDelivery(supabase, scenarioForDelivery, friendForDelivery, appUserId)
+        return
+      } catch (error) {
+        console.error('trigger_scenario processing error:', error)
+        await sendReplyMessage(
+          replyToken,
+          postbackData?.error_message ?? '処理に失敗しました。時間をおいて再度お試しください。',
+          supabase,
+          appUserId
+        )
+        return
+      }
+    }
     // restore_access 以外は無視（他のポストバックに影響しない）
-    if (postbackData.action !== 'restore_access') {
+    if (action !== 'restore_access') {
       console.log('ℹ️ Not a restore_access action, skipping')
       return
     }
-    
-    const scenarioId = postbackData.scenario_id
+
+    const scenarioId = postbackData.scenario_id || postbackData.scenario || postbackData.scenarioId
     if (!scenarioId) {
       console.error('❌ scenario_id missing in postback data')
       return
