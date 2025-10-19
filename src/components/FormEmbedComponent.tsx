@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -14,6 +14,10 @@ interface FormEmbedComponentProps {
   formId: string;
   uid?: string;
   className?: string;
+  delaySeconds?: number;
+  delayMessage?: string;
+  showCountdown?: boolean;
+  accessStartAt?: string;
 }
 
 interface FormField {
@@ -41,13 +45,71 @@ interface FormData {
   is_public: boolean;
 }
 
-export default function FormEmbedComponent({ formId, uid, className }: FormEmbedComponentProps) {
+const DEFAULT_DELAY_MESSAGE = "フォームは {time} 後に表示されます";
+
+const formatDelay = (ms: number) => {
+  const totalSeconds = Math.max(Math.ceil(ms / 1000), 0);
+  const hours = Math.floor(totalSeconds / 3600);
+  const minutes = Math.floor((totalSeconds % 3600) / 60);
+  const seconds = totalSeconds % 60;
+
+  const verboseParts: string[] = [];
+  if (hours > 0) verboseParts.push(`${hours}時間`);
+  if (minutes > 0 || hours > 0) verboseParts.push(`${minutes}分`);
+  verboseParts.push(`${seconds}秒`);
+
+  const digital = `${hours > 0 ? `${hours.toString()}:` : ""}${hours > 0 ? minutes.toString().padStart(2, "0") : minutes.toString()}:${seconds
+    .toString()
+    .padStart(2, "0")}`;
+
+  return {
+    verbose: verboseParts.join(""),
+    digital,
+  };
+};
+
+export default function FormEmbedComponent({
+  formId,
+  uid,
+  className,
+  delaySeconds,
+  delayMessage,
+  showCountdown,
+  accessStartAt,
+}: FormEmbedComponentProps) {
   const [formData, setFormData] = useState<FormData | null>(null);
   const [formValues, setFormValues] = useState<Record<string, any>>({});
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [submitted, setSubmitted] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [now, setNow] = useState(() => Date.now());
+
+  const normalizedDelay = typeof delaySeconds === "number" && delaySeconds > 0 ? delaySeconds : 0;
+  const startsAt = useMemo(() => {
+    if (normalizedDelay === 0) return null;
+    if (!accessStartAt) return Date.now();
+    const parsed = Date.parse(accessStartAt);
+    return Number.isFinite(parsed) ? parsed : Date.now();
+  }, [normalizedDelay, accessStartAt]);
+
+  const availableAt = normalizedDelay > 0 && startsAt !== null ? startsAt + normalizedDelay * 1000 : null;
+  const remainingMs = availableAt ? Math.max(availableAt - now, 0) : 0;
+  const isWaiting = availableAt !== null && remainingMs > 0;
+
+  useEffect(() => {
+    setNow(Date.now());
+  }, [normalizedDelay, accessStartAt]);
+
+  useEffect(() => {
+    if (!isWaiting) return;
+    const interval = window.setInterval(() => {
+      setNow(Date.now());
+    }, 500);
+    return () => {
+      window.clearInterval(interval);
+    };
+  }, [isWaiting]);
 
   useEffect(() => {
     const fetchFormData = async () => {
@@ -238,7 +300,7 @@ export default function FormEmbedComponent({ formId, uid, className }: FormEmbed
     }
   };
 
-  if (loading) {
+  if (loading && !isWaiting) {
     return (
       <Card className={className}>
         <CardContent className="p-6">
@@ -258,6 +320,26 @@ export default function FormEmbedComponent({ formId, uid, className }: FormEmbed
           <div className="text-center">
             <p className="text-destructive">{error}</p>
           </div>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  if (isWaiting) {
+    const formatted = formatDelay(remainingMs);
+    const template = delayMessage && delayMessage.trim().length > 0 ? delayMessage.trim() : DEFAULT_DELAY_MESSAGE;
+    const message = template.replace(/\{time\}/gi, formatted.verbose);
+
+    return (
+      <Card className={`${className}`} style={{ ["--form-accent" as any]: formData?.accent_color || '#0cb386' }}>
+        <CardContent className="p-6 space-y-3 text-center">
+          <h3 className="text-lg font-semibold">まもなくフォームが表示されます</h3>
+          <p className="text-muted-foreground whitespace-pre-wrap">{message}</p>
+          {(showCountdown ?? true) && (
+            <div className="text-2xl font-mono tracking-widest text-[var(--form-accent,#0cb386)]">
+              {formatted.digital}
+            </div>
+          )}
         </CardContent>
       </Card>
     );

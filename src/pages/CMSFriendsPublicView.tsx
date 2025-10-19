@@ -34,6 +34,10 @@ interface PagePayload {
   expire_action?: "hide_page" | "hide" | "keep_public";
   show_remaining_text?: boolean;
   show_end_date?: boolean;
+  viewer_access?: {
+    timer_start_at?: string | null;
+    timer_end_at?: string | null;
+  } | null;
 }
 
 interface FriendInfo {
@@ -54,7 +58,7 @@ type KnownErrors =
   | "tag_required";
 
 // Block renderer function
-const renderBlock = (block: Block, uid?: string) => {
+const renderBlock = (block: Block, uid?: string, viewerAccess?: PagePayload["viewer_access"]) => {
   const { type, content } = block;
 
   const textStyle = (block.type === 'paragraph' || block.type === 'heading' || block.type === 'note') ? {
@@ -198,7 +202,14 @@ const renderBlock = (block: Block, uid?: string) => {
     case 'form_embed':
       return (
         <div className="my-4">
-          <FormEmbedComponent formId={content.formId} uid={uid} />
+          <FormEmbedComponent
+            formId={content.formId}
+            uid={uid}
+            delaySeconds={content.delayEnabled ? Number(content.delaySeconds) || 0 : undefined}
+            delayMessage={content.delayMessage}
+            showCountdown={content.delayShowCountdown !== false}
+            accessStartAt={viewerAccess?.timer_start_at || undefined}
+          />
         </div>
       );
 
@@ -792,7 +803,7 @@ export default function CMSFriendsPublicView() {
         <article className="prose max-w-none dark:prose-invert flex-1 p-4 ql-content">
           {filteredBlocks.length > 0 ? (
             filteredBlocks.map((block) => (
-              <div key={block.id} className="not-prose">{renderBlock(block, uid)}</div>
+              <div key={block.id} className="not-prose">{renderBlock(block, uid, data.viewer_access)}</div>
             ))
           ) : (
             <div dangerouslySetInnerHTML={{ __html: sanitizeHtml(data.content || "") }} />

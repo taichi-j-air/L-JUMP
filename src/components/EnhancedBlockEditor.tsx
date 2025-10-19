@@ -382,7 +382,16 @@ export const EnhancedBlockEditor: React.FC<EnhancedBlockEditorProps> = (props) =
       case 'list': return { ...baseContent, items: [''], type: 'bullet' };
       case 'code': return { ...baseContent, code: '', language: 'javascript' };
       case 'separator': return { ...baseContent };
-      case 'form_embed': return { ...baseContent, formId: '', title: 'フォーム埋め込み', description: 'ここにフォームが埋め込まれます。' };
+      case 'form_embed': return {
+        ...baseContent,
+        formId: '',
+        title: 'フォーム埋め込み',
+        description: 'ここにフォームが埋め込まれます。',
+        delayEnabled: false,
+        delaySeconds: 0,
+        delayMessage: '',
+        delayShowCountdown: true,
+      };
       case 'note': return { ...baseContent, text: '', fontSize: '16px', color: '#454545', backgroundColor: 'transparent', bold: false, italic: false, underline: false, alignment: 'left' };
       case 'dialogue': return {
         ...baseContent, leftIcon: '/placeholder.svg', rightIcon: '/placeholder.svg',
@@ -504,7 +513,9 @@ export const EnhancedBlockEditor: React.FC<EnhancedBlockEditorProps> = (props) =
             forms.find(form => form.id === formId)?.name ||
             block.content?.title ||
             block.content?.formName;
-          previewContent = formName || formId || '';
+          const delayEnabled = block.content?.delayEnabled && (block.content?.delaySeconds ?? 0) > 0;
+          const delayLabel = delayEnabled ? `（遅延${Math.floor(Number(block.content.delaySeconds) / 60)}分）` : '';
+          previewContent = `${formName || formId || ''}${delayLabel}`;
           break;
         }
         default:
@@ -938,6 +949,10 @@ export const EnhancedBlockEditor: React.FC<EnhancedBlockEditorProps> = (props) =
         const selectedForm = forms.find(f => f.id === block.content.formId);
         const selectedFormAvailable = !!availableForms.find(f => f.id === block.content.formId);
         const extraForms = (!selectedFormAvailable && selectedForm) ? [selectedForm] : [];
+        const totalDelaySeconds = Number(block.content?.delaySeconds) || 0;
+        const delayEnabled = !!block.content?.delayEnabled && totalDelaySeconds > 0;
+        const delayMinutes = Math.floor(totalDelaySeconds / 60);
+        const delaySeconds = totalDelaySeconds % 60;
         return (
           <div className="space-y-2">
             <Label>埋め込むフォームを選択</Label>
@@ -990,6 +1005,77 @@ export const EnhancedBlockEditor: React.FC<EnhancedBlockEditorProps> = (props) =
             ) : (
               <p className="text-sm text-muted-foreground">フォームを選択してください。</p>
             )}
+            <div className="pt-3 border-t border-dashed mt-4 space-y-3">
+              <div className="flex items-center justify-between">
+                <Label className="text-sm font-medium">表示を遅らせる</Label>
+                <Switch
+                  id={`form-delay-${block.id}`}
+                  checked={!!block.content.delayEnabled}
+                  onCheckedChange={(checked) => {
+                    const nextSeconds = checked ? (totalDelaySeconds > 0 ? totalDelaySeconds : 600) : 0;
+                    updateBlock(block.id, {
+                      ...block.content,
+                      delayEnabled: checked,
+                      delaySeconds: nextSeconds,
+                    });
+                  }}
+                />
+              </div>
+              {block.content.delayEnabled && (
+                <div className="space-y-3 rounded-md bg-muted/40 p-3">
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="space-y-1">
+                      <Label className="text-xs text-muted-foreground">待機時間（分）</Label>
+                      <Input
+                        type="number"
+                        min={0}
+                        value={delayMinutes}
+                        onChange={(e) => {
+                          const minutes = Math.max(0, parseInt(e.target.value || '0', 10));
+                          const nextSeconds = minutes * 60 + delaySeconds;
+                          updateBlock(block.id, { ...block.content, delaySeconds: nextSeconds });
+                        }}
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <Label className="text-xs text-muted-foreground">待機時間（秒）</Label>
+                      <Input
+                        type="number"
+                        min={0}
+                        max={59}
+                        value={delaySeconds}
+                        onChange={(e) => {
+                          const seconds = Math.min(59, Math.max(0, parseInt(e.target.value || '0', 10)));
+                          const nextSeconds = delayMinutes * 60 + seconds;
+                          updateBlock(block.id, { ...block.content, delaySeconds: nextSeconds });
+                        }}
+                      />
+                    </div>
+                  </div>
+                  <div className="space-y-1">
+                    <Label className="text-xs text-muted-foreground">待機中に表示するテキスト（{`{time}`} が残り時間に置き換わります）</Label>
+                    <Input
+                      value={block.content.delayMessage || ''}
+                      onChange={(e) => updateBlock(block.id, { ...block.content, delayMessage: e.target.value })}
+                      placeholder="例：フォームはあと {time} で表示されます"
+                    />
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Switch
+                      id={`form-delay-countdown-${block.id}`}
+                      checked={block.content.delayShowCountdown !== false}
+                      onCheckedChange={(checked) => updateBlock(block.id, { ...block.content, delayShowCountdown: checked })}
+                    />
+                    <Label htmlFor={`form-delay-countdown-${block.id}`} className="text-sm font-normal">デジタルカウントダウンを表示</Label>
+                  </div>
+                  {delayEnabled && (
+                    <p className="text-xs text-muted-foreground">
+                      現在の設定: 約 {delayMinutes}分{delaySeconds.toString().padStart(2, '0')}秒 後にフォームを表示
+                    </p>
+                  )}
+                </div>
+              )}
+            </div>
           </div>
         );
       }

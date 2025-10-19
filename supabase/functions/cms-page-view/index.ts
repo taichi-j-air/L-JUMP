@@ -200,17 +200,21 @@ serve(async (req) => {
 
     let friend: FriendRow | null = null
 
-    if (!isPreview) {
-      const normalizeVisibility = (value: unknown) => {
-        if (typeof value !== "string") return null
-        return value.trim().toLowerCase()
-      }
-      const pageVisibility = normalizeVisibility(page.visibility)
-      const pageTypeValue = normalizeVisibility(page.page_type)
-      const requiresFriend =
-        pageVisibility === "friends_only" ||
-        pageTypeValue === "friends_only"
+    const normalizeVisibility = (value: unknown) => {
+      if (typeof value !== "string") return null
+      return value.trim().toLowerCase()
+    }
 
+    const pageVisibility = normalizeVisibility(page.visibility)
+    const pageTypeValue = normalizeVisibility(page.page_type)
+    const requiresFriend =
+      pageVisibility === "friends_only" ||
+      pageTypeValue === "friends_only"
+
+    let viewerTimerStart: Date | null = null
+    let viewerTimerEnd: Date | null = null
+
+    if (!isPreview) {
       if (requiresFriend && !normalizedUid) {
         return errorResponse("access_denied", "UID is required to view this page", 403)
       }
@@ -289,7 +293,7 @@ serve(async (req) => {
       if (page.timer_mode === "absolute" && page.timer_deadline) {
         const deadline = parsePgTimestamp(page.timer_deadline)
         const now = new Date()
-        
+
         if (isNaN(deadline.getTime())) {
           console.warn(`⚠️ [ABS] Invalid timer_deadline format: ${page.timer_deadline}`)
           isTimerExpired = false
@@ -310,7 +314,7 @@ serve(async (req) => {
         if (accessData && accessData.timer_end_at) {
           const timerEnd = parsePgTimestamp(accessData.timer_end_at)
           const now = new Date()
-          
+
           if (isNaN(timerEnd.getTime())) {
             console.warn(`⚠️ [PER] Invalid timer_end_at format: ${accessData.timer_end_at}`)
             isTimerExpired = false
@@ -318,10 +322,14 @@ serve(async (req) => {
             isTimerExpired = now >= timerEnd
             console.log(`⏰ [PER] Timer end check: endRaw=${accessData.timer_end_at}, endParsed=${timerEnd.toISOString()}, now=${now.toISOString()}, expired=${isTimerExpired}`)
           }
+
+          if (!isNaN(timerEnd.getTime())) {
+            viewerTimerEnd = timerEnd
+          }
         } else if (accessData && accessData.timer_start_at && page.timer_duration_seconds && page.timer_duration_seconds > 0) {
           const startTime = parsePgTimestamp(accessData.timer_start_at)
           const now = new Date()
-          
+
           if (isNaN(startTime.getTime())) {
             console.warn(`⚠️ [PER] Invalid timer_start_at format: ${accessData.timer_start_at}`)
             isTimerExpired = false
@@ -329,6 +337,9 @@ serve(async (req) => {
             const endTime = new Date(startTime.getTime() + page.timer_duration_seconds * 1000)
             isTimerExpired = now >= endTime
             console.log(`⏱ [PER] Duration check: startRaw=${accessData.timer_start_at}, startParsed=${startTime.toISOString()}, duration=${page.timer_duration_seconds}s, endCalc=${endTime.toISOString()}, now=${now.toISOString()}, expired=${isTimerExpired}`)
+
+            viewerTimerStart = startTime
+            viewerTimerEnd = endTime
           }
 
           if (!accessData.timer_end_at) {
@@ -341,6 +352,17 @@ serve(async (req) => {
         } else if (accessData && accessData.timer_start_at && (!page.timer_duration_seconds || page.timer_duration_seconds <= 0)) {
           console.log("⚠️ Timer duration is 0 or null - timer disabled")
           isTimerExpired = false
+          const startTime = parsePgTimestamp(accessData.timer_start_at)
+          if (!isNaN(startTime.getTime())) {
+            viewerTimerStart = startTime
+          }
+        }
+
+        if (accessData?.timer_start_at && !viewerTimerStart) {
+          const startTime = parsePgTimestamp(accessData.timer_start_at)
+          if (!isNaN(startTime.getTime())) {
+            viewerTimerStart = startTime
+          }
         }
       }
 
@@ -389,7 +411,15 @@ serve(async (req) => {
 
     console.log("✅ Success - returning page content with tokens applied")
 
-    return new Response(JSON.stringify({ ...processedPageData, token_values: tokenValues }), {
+    const viewerAccess =
+      viewerTimerStart || viewerTimerEnd
+        ? {
+            timer_start_at: viewerTimerStart ? viewerTimerStart.toISOString() : null,
+            timer_end_at: viewerTimerEnd ? viewerTimerEnd.toISOString() : null,
+          }
+        : null
+
+    return new Response(JSON.stringify({ ...processedPageData, token_values: tokenValues, viewer_access: viewerAccess }), {
       status: 200,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     })

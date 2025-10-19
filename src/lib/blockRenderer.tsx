@@ -22,6 +22,14 @@ const buttonAlignment: Record<string, string> = {
   right: "text-right",
 };
 
+interface RenderOptions {
+  uid?: string;
+  viewerAccess?: {
+    timer_start_at?: string | null;
+    timer_end_at?: string | null;
+  } | null;
+}
+
 export const HeadingDesignStyles = (
   <style>{`
     .heading-style-1 {
@@ -83,7 +91,7 @@ const convertYouTubeUrl = (url: string) => {
   return url;
 };
 
-export const renderBlock = (block: Block) => {
+export const renderBlock = (block: Block, options: RenderOptions = {}) => {
   const type = (block as any)?.type as string | undefined;
   const rawContent = (block as any)?.content;
   const content: Record<string, any> =
@@ -257,9 +265,20 @@ export const renderBlock = (block: Block) => {
     case "form_embed": {
       const formId = content.formId || legacyValue;
       if (!formId) return null;
+      const delaySeconds =
+        content.delayEnabled && Number(content.delaySeconds) > 0
+          ? Number(content.delaySeconds)
+          : undefined;
       return (
         <div className="my-4">
-          <FormEmbedComponent formId={formId} />
+          <FormEmbedComponent
+            formId={formId}
+            uid={options.uid}
+            delaySeconds={delaySeconds}
+            delayMessage={content.delayMessage}
+            showCountdown={content.delayShowCountdown !== false}
+            accessStartAt={options.viewerAccess?.timer_start_at || undefined}
+          />
         </div>
       );
     }
@@ -369,12 +388,12 @@ export const renderBlock = (block: Block) => {
   }
 };
 
-export const renderBlocks = (blocks: Block[]) =>
+export const renderBlocks = (blocks: Block[], options: RenderOptions = {}) =>
   blocks.map((block) => {
     const key = block.id || `${block.type}-${Math.random().toString(36).slice(2)}`;
     return (
       <div key={key} className="not-prose">
-        {renderBlock(block)}
+        {renderBlock(block, options)}
       </div>
     );
   });
