@@ -374,6 +374,69 @@ async function processReadySteps(supabase: any) {
           processedMessage,
           accessToken
         );
+
+        // Log sent message to chat_messages table for history
+        try {
+          const sentAt = new Date().toISOString();
+          const chatMessage: any = {
+            user_id: tracking.step_scenarios.user_id,
+            friend_id: tracking.friend_id,
+            message_type: 'outgoing',
+            sent_at: sentAt,
+          };
+
+          let textContent: string | null = null;
+          let mediaUrl: string | null = null;
+          let mediaKind: string | null = null;
+
+          switch (message.message_type) {
+            case 'text':
+              textContent = processedMessage.content;
+              break;
+            case 'image':
+            case 'media':
+              textContent = message.alt_text || '[画像]';
+              mediaUrl = message.media_url;
+              mediaKind = 'image';
+              break;
+            case 'flex': {
+              let altText = '[Flexメッセージ]';
+              if (message.flex_message_id) {
+                const { data: flexData } = await supabase
+                  .from('flex_messages')
+                  .select('content')
+                  .eq('id', message.flex_message_id)
+                  .single();
+                if (flexData?.content?.altText) {
+                  altText = flexData.content.altText;
+                }
+              } else if (message.content?.altText) {
+                altText = message.content.altText;
+              }
+              textContent = altText;
+              break;
+            }
+            default:
+              if (typeof message.content === 'string') {
+                textContent = message.content;
+              }
+          }
+
+          if (textContent || mediaUrl) {
+            const payload = {
+              ...chatMessage,
+              message_text: textContent,
+              media_url: mediaUrl,
+              media_kind: mediaKind,
+            };
+            const { error: logError } = await supabase.from('chat_messages').insert(payload);
+            if (logError) {
+              console.error('Failed to log step delivery to chat_messages:', logError.message);
+            }
+          }
+        } catch (logEx) {
+          console.error('Exception while logging step delivery to chat_messages:', logEx.message);
+        }
       }
 
       // Update tracking status
