@@ -828,22 +828,16 @@ async function deliverStepMessages(supabase: any, stepTracking: any, appUserId: 
     
     const lineUserId = friendInfo.line_user_id
     
-    // Get secure LINE credentials for the specific user
-    const { data: secureCredentials, error: credError } = await supabase
-      .from('secure_line_credentials')
-      .select('encrypted_value')
-      .eq('credential_type', 'channel_access_token')
-      .eq('user_id', appUserId) // RLS-like security - use the correct user
-      .not('encrypted_value', 'is', null)
-      .single()
+    // Get secure LINE credentials
+    const { data: credentials, error: credError } = await supabase
+      .rpc('get_line_credentials_for_user', { p_user_id: appUserId });
     
-    if (credError || !secureCredentials) {
-      console.error('LINE アクセストークンが見つかりません (user:', appUserId, '):', credError)
+    if (credError || !credentials?.channel_access_token) {
+      console.error('LINE アクセストークンが見つかりません:', credError)
       return
     }
     
-    const accessToken = secureCredentials.encrypted_value
-    console.log('Using LINE credentials for user:', appUserId)
+    const accessToken = credentials.channel_access_token
     
     // Send each message
     for (const message of sortedMessages) {
