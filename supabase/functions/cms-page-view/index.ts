@@ -201,7 +201,15 @@ serve(async (req) => {
     let friend: FriendRow | null = null
 
     if (!isPreview) {
-      const requiresFriend = page.visibility === "friends_only"
+      const normalizeVisibility = (value: unknown) => {
+        if (typeof value !== "string") return null
+        return value.trim().toLowerCase()
+      }
+      const pageVisibility = normalizeVisibility(page.visibility)
+      const pageTypeValue = normalizeVisibility(page.page_type)
+      const requiresFriend =
+        pageVisibility === "friends_only" ||
+        pageTypeValue === "friends_only"
 
       if (requiresFriend && !normalizedUid) {
         return errorResponse("access_denied", "UID is required to view this page", 403)
