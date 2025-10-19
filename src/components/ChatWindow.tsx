@@ -45,6 +45,7 @@ export function ChatWindow({ user, friend, onClose }: ChatWindowProps) {
   const [newMessage, setNewMessage] = useState("")
   const [sending, setSending] = useState(false)
   const [loading, setLoading] = useState(true)
+  const [supportsMetadata, setSupportsMetadata] = useState(true)
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const { toast } = useToast()
 
@@ -58,7 +59,7 @@ export function ChatWindow({ user, friend, onClose }: ChatWindowProps) {
 
   useEffect(() => {
     loadMessages()
-  }, [friend.id])
+  }, [friend.id, supportsMetadata])
 
   // リアルタイム購読の追加
   useEffect(() => {
@@ -70,7 +71,10 @@ export function ChatWindow({ user, friend, onClose }: ChatWindowProps) {
         table: 'chat_messages',
         filter: `friend_id=eq.${friend.id}`
       }, (payload) => {
-        const newMessage = payload.new as ChatMessage
+        const rawMessage = payload.new as ChatMessage
+        const newMessage = supportsMetadata
+          ? rawMessage
+          : { ...rawMessage, metadata: null }
         setMessages(prev => {
           if (prev.some(message => message.id === newMessage.id)) {
             return prev
@@ -87,18 +91,32 @@ export function ChatWindow({ user, friend, onClose }: ChatWindowProps) {
     };
   }, [friend.id])
 
-  const loadMessages = async () => {
+  const loadMessages = async (tryMetadata = supportsMetadata) => {
     try {
+      const selectFields = tryMetadata
+        ? 'id, message_text, message_type, sent_at, media_kind, content_type, media_url, thumbnail_url, file_name, file_size, sticker_id, sticker_package_id, metadata'
+        : 'id, message_text, message_type, sent_at, media_kind, content_type, media_url, thumbnail_url, file_name, file_size, sticker_id, sticker_package_id'
+
       const { data, error } = await supabase
         .from('chat_messages')
-        .select('id, message_text, message_type, sent_at, media_kind, content_type, media_url, thumbnail_url, file_name, file_size, sticker_id, sticker_package_id, metadata')
+        .select(selectFields)
         .eq('friend_id', friend.id)
         .order('sent_at', { ascending: true })
 
       if (error) {
-        console.error('Error loading messages:', error)
+        if (error.code === '42703' && tryMetadata) {
+          console.warn('Metadata column not available; falling back without metadata')
+          setSupportsMetadata(false)
+          await loadMessages(false)
+        } else {
+          console.error('Error loading messages:', error)
+        }
       } else {
-        setMessages((data || []) as ChatMessage[])
+        const normalized = (data || []).map((msg: any) => ({
+          ...msg,
+          metadata: tryMetadata ? (msg.metadata ?? null) : null
+        })) as ChatMessage[]
+        setMessages(normalized)
       }
     } catch (error) {
       console.error('Error:', error)
@@ -180,16 +198,32 @@ export function ChatWindow({ user, friend, onClose }: ChatWindowProps) {
       const processedMessage = addUidToFormLinks(newMessage, friendData?.short_uid || null)
 
       // Save message to database first
-      const { data: savedMessage, error: saveError } = await supabase
-        .from('chat_messages')
-        .insert({
-          user_id: user.id,
-          friend_id: friend.id,
-          message_text: processedMessage,
-          message_type: 'outgoing'
-        })
-        .select('id, message_text, message_type, sent_at, metadata')
-        .single()
+      const insertMessage = async (tryMetadata = supportsMetadata) => {
+        const selectFields = tryMetadata
+          ? 'id, message_text, message_type, sent_at, metadata'
+          : 'id, message_text, message_type, sent_at'
+
+        const { data, error } = await supabase
+          .from('chat_messages')
+          .insert({
+            user_id: user.id,
+            friend_id: friend.id,
+            message_text: processedMessage,
+            message_type: 'outgoing'
+          })
+          .select(selectFields)
+          .single()
+
+        if (error && error.code === '42703' && tryMetadata) {
+          console.warn('Metadata column not available during insert; retrying without metadata')
+          setSupportsMetadata(false)
+          return insertMessage(false)
+        }
+
+        return { data, error }
+      }
+
+      const { data: savedMessage, error: saveError } = await insertMessage()
 
       if (saveError) {
         console.error('Error saving message:', saveError)

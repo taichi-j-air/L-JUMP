@@ -105,7 +105,7 @@ const renderElement = (element: any, key: string): React.ReactNode => {
 }
 
 export function FlexMessageBubble({ payload, altText }: FlexMessageBubbleProps) {
-  if (!payload) {
+  if (payload == null) {
     return (
       <div className="rounded-md border bg-background/60 p-3 text-xs text-muted-foreground">
         Flexメッセージの内容を表示できませんでした。
@@ -113,13 +113,31 @@ export function FlexMessageBubble({ payload, altText }: FlexMessageBubbleProps) 
     )
   }
 
+  let resolvedPayload: any = payload
+  if (typeof resolvedPayload === "string") {
+    try {
+      resolvedPayload = JSON.parse(resolvedPayload)
+    } catch (err) {
+      console.warn("Failed to parse Flex payload string:", err)
+      resolvedPayload = null
+    }
+  }
+
+  if (!resolvedPayload || typeof resolvedPayload !== "object") {
+    return (
+      <div className="rounded-md border bg-background/60 p-3 text-xs text-muted-foreground">
+        Flexメッセージをプレビューできませんでした。
+      </div>
+    )
+  }
+
   const normalized =
-    payload.type === "flex"
-      ? payload
+    resolvedPayload.type === "flex"
+      ? resolvedPayload
       : {
           type: "flex",
           altText: altText || "Flexメッセージ",
-          contents: payload
+          contents: resolvedPayload
         }
 
   const contents = normalized.contents
