@@ -124,6 +124,29 @@ serve(async (req) => {
 
     const supabase = createClient(supabaseUrl, supabaseServiceKey)
 
+    // Get the bot's user ID from the destination
+    const botUserId = webhookData.destination;
+    if (!botUserId) {
+      return createErrorResponse('Missing destination in webhook payload', 400);
+    }
+
+    // Find the app user associated with this LINE bot
+    const { data: credential, error: credError } = await supabase
+      .from('secure_line_credentials')
+      .select('user_id')
+      .eq('credential_type', 'channel_id')
+      .eq('encrypted_value', botUserId)
+      .single();
+
+    if (credError || !credential) {
+      console.error('Could not find a user for bot ID:', botUserId, credError);
+      // 200 OKを返してLINEプラットフォームからの再送を防ぐ
+      return new Response('OK (User not found for bot)', { status: 200, headers: corsHeaders });
+    }
+
+    const appUserId = credential.user_id;
+    console.log(`Webhook received for bot ${botUserId}, mapped to app user ${appUserId}`);
+
     // Process each event with validation
     for (const event of webhookData.events) {
       console.log('Processing event:', event.type)
@@ -141,13 +164,13 @@ serve(async (req) => {
       }
       
       if (event.type === 'message' && event.message) {
-        await handleMessage(event, supabase, req)
+        await handleMessage(event, supabase, req, appUserId)
       } else if (event.type === 'follow') {
-        await handleFollow(event, supabase, req)
+        await handleFollow(event, supabase, req, appUserId)
       } else if (event.type === 'unfollow') {
-        await handleUnfollow(event, supabase, req)
+        await handleUnfollow(event, supabase, req, appUserId)
       } else if (event.type === 'postback') {
-        await handlePostback(event, supabase, req)
+        await handlePostback(event, supabase, req, appUserId)
       } else {
         console.log('Unhandled event type:', event.type)
       }
@@ -167,7 +190,7 @@ serve(async (req) => {
   }
 })
 
-async function handleMessage(event: LineEvent, supabase: any, req: Request) {
+async function handleMessage(event: LineEvent, supabase: any, req: Request, appUserId: string) {
   try {
     const { message, replyToken, source } = event
     
@@ -198,7 +221,7 @@ async function handleMessage(event: LineEvent, supabase: any, req: Request) {
         line_message_id: message.id
       };
       // Download and store image
-      const mediaResult = await downloadLineMedia(message.id, source.userId, supabase)
+      const mediaResult = await downloadLineMedia(message.id, source.userId, supabase, appUserId)
       if (mediaResult.success) {
         mediaInfo.media_url = mediaResult.public_url
         mediaInfo.thumbnail_url = mediaResult.public_url
@@ -212,7 +235,7 @@ async function handleMessage(event: LineEvent, supabase: any, req: Request) {
         line_message_id: message.id
       };
       // Download and store video
-      const mediaResult = await downloadLineMedia(message.id, source.userId, supabase)
+      const mediaResult = await downloadLineMedia(message.id, source.userId, supabase, appUserId)
       if (mediaResult.success) {
         mediaInfo.media_url = mediaResult.public_url
         messageText = '' // Clear placeholder text
@@ -225,7 +248,7 @@ async function handleMessage(event: LineEvent, supabase: any, req: Request) {
         line_message_id: message.id
       };
       // Download and store audio
-      const mediaResult = await downloadLineMedia(message.id, source.userId, supabase)
+      const mediaResult = await downloadLineMedia(message.id, source.userId, supabase, appUserId)
       if (mediaResult.success) {
         mediaInfo.media_url = mediaResult.public_url
         mediaInfo.file_name = `audio_${message.id}.m4a`
@@ -240,7 +263,7 @@ async function handleMessage(event: LineEvent, supabase: any, req: Request) {
         line_message_id: message.id
       };
       // Download and store file
-      const mediaResult = await downloadLineMedia(message.id, source.userId, supabase)
+      const mediaResult = await downloadLineMedia(message.id, source.userId, supabase, appUserId)
       if (mediaResult.success) {
         mediaInfo.media_url = mediaResult.public_url
         messageText = '' // Clear placeholder text
@@ -271,15 +294,15 @@ async function handleMessage(event: LineEvent, supabase: any, req: Request) {
       if (inviteMatch) {
       const inviteCode = inviteMatch[1]
       if (!validateInviteCode(inviteCode)) {
-        await sendReplyMessage(replyToken, '招待コードの形式が正しくありません。', supabase)
+        await sendReplyMessage(replyToken, '招待コードの形式が正しくありません。', supabase, appUserId)
         return
       }
 
       // 友だち情報を確実に作成
-      await ensureFriendExists(source.userId, supabase)
+      await ensureFriendExists(source.userId, supabase, appUserId)
 
       // LINEプロフィール取得
-      const userProfile = await getLineUserProfile(source.userId, supabase)
+      const userProfile = await getLineUserProfile(source.userId, supabase, appUserId)
 
       try {
         const { data: reg, error: regErr } = await supabase.rpc('register_friend_to_scenario', {
@@ -289,36 +312,37 @@ async function handleMessage(event: LineEvent, supabase: any, req: Request) {
           p_picture_url : userProfile?.pictureUrl ?? null,
           p_registration_source: 'invite_link',
           p_scenario_id: null,
+          p_user_id: appUserId // Pass the user ID to the RPC function
         })
 
         if (regErr || !reg?.success) {
           console.error('register_friend_to_scenario failed:', regErr, reg)
-          await sendReplyMessage(replyToken, 'シナリオ登録に失敗しました。時間をおいて再度お試しください。', supabase)
+          await sendReplyMessage(replyToken, 'シナリオ登録に失敗しました。時間をおいて再度お試しください。', supabase, appUserId)
           return
         }
 
         console.log('INVITE registration result:', reg)
-        await sendReplyMessage(replyToken, 'ご登録ありがとうございます。ステップ配信を開始します。', supabase)
+        await sendReplyMessage(replyToken, 'ご登録ありがとうございます。ステップ配信を開始します。', supabase, appUserId)
 
         // 即時配信をサーバ側で開始
-        await startStepDelivery(supabase, reg.scenario_id, reg.friend_id)
+        await startStepDelivery(supabase, reg.scenario_id, reg.friend_id, appUserId)
         return
 
       } catch (e) {
         console.error('INVITE processing error:', e)
-        await sendReplyMessage(replyToken, '処理中にエラーが発生しました。', supabase)
+        await sendReplyMessage(replyToken, '処理中にエラーが発生しました。', supabase, appUserId)
         return
       }
       }
     }
 
     // 通常メッセージ処理
-    await ensureFriendExists(source.userId, supabase)
-    await saveIncomingMessage(source.userId, messageText, mediaInfo, supabase)
+    await ensureFriendExists(source.userId, supabase, appUserId)
+    await saveIncomingMessage(source.userId, messageText, mediaInfo, supabase, appUserId)
     
     // Reply only to text messages 
     if (message.type === 'text') {
-      await sendReplyMessage(replyToken, `受信しました: ${messageText}`, supabase)
+      await sendReplyMessage(replyToken, `受信しました: ${messageText}`, supabase, appUserId)
     }
 
   } catch (error) {
@@ -326,13 +350,14 @@ async function handleMessage(event: LineEvent, supabase: any, req: Request) {
   }
 }
 
-async function saveIncomingMessage(userId: string, messageText: string, mediaInfo: any, supabase: any) {
+async function saveIncomingMessage(userId: string, messageText: string, mediaInfo: any, supabase: any, appUserId: string) {
   try {
     // Find the friend record directly without complex joins
     const { data: friend, error: friendError } = await supabase
       .from('line_friends')
       .select('id, user_id')
       .eq('line_user_id', userId)
+      .eq('user_id', appUserId) // RLS-like security
       .single()
 
     if (friendError || !friend) {
@@ -346,7 +371,7 @@ async function saveIncomingMessage(userId: string, messageText: string, mediaInf
     const { error: messageError } = await supabase
       .from('chat_messages')
       .insert({
-        user_id: friend.user_id,
+        user_id: appUserId,
         friend_id: friend.id,
         message_text: messageText,
         message_type: 'incoming',
@@ -357,7 +382,7 @@ async function saveIncomingMessage(userId: string, messageText: string, mediaInf
     if (messageError) {
       console.error('Error saving incoming message:', messageError)
     } else {
-      console.log('Incoming message saved successfully for user:', friend.user_id)
+      console.log('Incoming message saved successfully for user:', appUserId)
     }
 
   } catch (error) {
@@ -365,40 +390,23 @@ async function saveIncomingMessage(userId: string, messageText: string, mediaInf
   }
 }
 
-async function sendReplyMessage(replyToken: string, text: string, supabase: any) {
+async function sendReplyMessage(replyToken: string, text: string, supabase: any, appUserId: string) {
   try {
-    // First try to get credentials from secure_line_credentials
+    // Get credentials for the specific user
     const { data: secureCredentials, error: secureError } = await supabase
       .from('secure_line_credentials')
-      .select('encrypted_value, user_id')
+      .select('encrypted_value')
       .eq('credential_type', 'channel_access_token')
+      .eq('user_id', appUserId) // RLS-like security
       .not('encrypted_value', 'is', null)
-      .limit(1)
+      .single()
 
-    let accessToken = null
-
-    if (!secureError && secureCredentials && secureCredentials.length > 0) {
-      // Use the encrypted value directly for now (until decryption is implemented in webhook)
-      accessToken = secureCredentials[0].encrypted_value
-    } else {
-      // Fallback to profiles table
-      const { data: profiles, error } = await supabase
-        .from('profiles')
-        .select('line_channel_access_token')
-        .not('line_channel_access_token', 'is', null)
-        .limit(1)
-
-      if (error || !profiles || profiles.length === 0) {
-        console.error('No LINE access token found:', error)
-        return
-      }
-      accessToken = profiles[0].line_channel_access_token
-    }
-
-    if (!accessToken) {
-      console.error('No LINE access token found')
+    if (secureError || !secureCredentials) {
+      console.error('No LINE access token found for user:', appUserId, secureError)
       return
     }
+
+    const accessToken = secureCredentials.encrypted_value
 
     const replyData = {
       replyToken: replyToken,
@@ -432,37 +440,22 @@ async function sendReplyMessage(replyToken: string, text: string, supabase: any)
   }
 }
 
-async function sendPushMessage(userId: string, text: string, supabase: any) {
+async function sendPushMessage(userId: string, text: string, supabase: any, appUserId: string) {
   try {
     const { data: secureCredentials, error: secureError } = await supabase
       .from('secure_line_credentials')
-      .select('encrypted_value, user_id')
+      .select('encrypted_value')
       .eq('credential_type', 'channel_access_token')
+      .eq('user_id', appUserId) // RLS-like security
       .not('encrypted_value', 'is', null)
-      .limit(1)
+      .single()
 
-    let accessToken = null
-
-    if (!secureError && secureCredentials && secureCredentials.length > 0) {
-      accessToken = secureCredentials[0].encrypted_value
-    } else {
-      const { data: profiles, error } = await supabase
-        .from('profiles')
-        .select('line_channel_access_token')
-        .not('line_channel_access_token', 'is', null)
-        .limit(1)
-
-      if (error || !profiles || profiles.length === 0) {
-        console.error('No LINE access token found:', error)
-        return
-      }
-      accessToken = profiles[0].line_channel_access_token
-    }
-
-    if (!accessToken) {
-      console.error('No LINE access token found')
+    if (secureError || !secureCredentials) {
+      console.error('No LINE access token found for user:', appUserId, secureError)
       return
     }
+
+    const accessToken = secureCredentials.encrypted_value
 
     const pushData = {
       to: userId,
@@ -496,7 +489,7 @@ async function sendPushMessage(userId: string, text: string, supabase: any) {
   }
 }
 
-async function handleFollow(event: LineEvent, supabase: any, req: Request) {
+async function handleFollow(event: LineEvent, supabase: any, req: Request, appUserId: string) {
   console.log('--- handleFollow: START ---');
   try {
     const { source } = event
@@ -524,7 +517,7 @@ async function handleFollow(event: LineEvent, supabase: any, req: Request) {
     console.log('Invite code from follow event:', inviteCode)
 
     // Get user profile using LINE Messaging API
-    const userProfile = await getLineUserProfile(source.userId, supabase)
+    const userProfile = await getLineUserProfile(source.userId, supabase, appUserId)
     
     // プロフィール取得失敗でも処理を継続（display_name/picture_url は null 許容）
     if (!userProfile) {
@@ -547,6 +540,7 @@ async function handleFollow(event: LineEvent, supabase: any, req: Request) {
             p_picture_url: userProfile?.pictureUrl || null,
             p_registration_source: 'invite_link',
             p_scenario_id: null,
+            p_user_id: appUserId // Pass the user ID to the RPC function
           })
         
         if (registrationError) {
@@ -572,50 +566,24 @@ async function handleFollow(event: LineEvent, supabase: any, req: Request) {
       // Regular friend addition without invite code
       console.log('通常の友達追加を処理します（招待コードなし）')
       
-      // First, try to get user_id from secure_line_credentials
-      const { data: secureCredentials } = await supabase
-        .from('secure_line_credentials')
-        .select('user_id')
-        .eq('credential_type', 'channel_access_token')
-        .limit(1)
-        .maybeSingle()
+      // Get the profile for the current app user
+      const { data: profile, error: profileError } = await supabase
+        .from('profiles')
+        .select('user_id, friends_count')
+        .eq('user_id', appUserId) // RLS-like security
+        .single()
 
-      let profile
-      if (secureCredentials?.user_id) {
-        // Get profile using user_id from secure credentials
-        const { data: profileData, error: profileError } = await supabase
-          .from('profiles')
-          .select('user_id, friends_count')
-          .eq('user_id', secureCredentials.user_id)
-          .single()
-
-        if (profileError || !profileData) {
-          console.error('Profile not found for secure credentials user_id:', profileError)
-          return
-        }
-        profile = profileData
-        console.log('✓ secure_line_credentials から user_id を取得しました')
-      } else {
-        // Fallback to original method
-        const { data: profiles, error } = await supabase
-          .from('profiles')
-          .select('user_id, friends_count')
-          .not('line_channel_access_token', 'is', null)
-          .limit(1)
-
-        if (error || !profiles || profiles.length === 0) {
-          console.error('No profile found for this LINE bot:', error)
-          return
-        }
-        profile = profiles[0]
-        console.log('✓ profiles テーブルから user_id を取得しました（フォールバック）')
+      if (profileError || !profile) {
+        console.error('No profile found for this LINE bot owner:', appUserId, profileError)
+        return
       }
+      console.log('✓ Bot owner profile found:', profile.user_id)
 
       // Check if friend already exists (e.g., after unblock)
       const { data: existingFriend } = await supabase
         .from('line_friends')
         .select('id')
-        .eq('user_id', profile.user_id)
+        .eq('user_id', appUserId) // RLS-like security
         .eq('line_user_id', source.userId)
         .maybeSingle()
 
@@ -627,7 +595,7 @@ async function handleFollow(event: LineEvent, supabase: any, req: Request) {
         const { data: newFriend, error: insertError } = await supabase
           .from('line_friends')
           .insert({
-            user_id: profile.user_id,
+            user_id: appUserId,
             line_user_id: source.userId,
             display_name: userProfile?.displayName || null,
             picture_url: userProfile?.pictureUrl || null,
@@ -649,7 +617,7 @@ async function handleFollow(event: LineEvent, supabase: any, req: Request) {
           .update({ 
             friends_count: (profile.friends_count || 0) + 1 
           })
-          .eq('user_id', profile.user_id)
+          .eq('user_id', appUserId)
 
         if (updateError) {
           console.error('Error updating friends count:', updateError)
@@ -683,7 +651,7 @@ async function handleFollow(event: LineEvent, supabase: any, req: Request) {
       const { data: greetingSettings, error: greetingError } = await supabase
         .from('line_greeting_settings')
         .select('*')
-        .eq('user_id', profile.user_id)
+        .eq('user_id', appUserId) // RLS-like security
         .maybeSingle()
 
       console.log('--- handleFollow: greetingSettings check ---', { greetingSettings, greetingError });
@@ -695,23 +663,23 @@ async function handleFollow(event: LineEvent, supabase: any, req: Request) {
           // Send greeting message with token replacement
           try {
             // Get friend information for token replacement
-            const { data: friendData } = await supabase
+            const { data: friendDataForToken } = await supabase
               .from('line_friends')
               .select('short_uid, display_name')
               .eq('line_user_id', source.userId)
-              .eq('user_id', profile.user_id)
+              .eq('user_id', appUserId) // RLS-like security
               .maybeSingle()
 
             // Replace tokens in greeting message
             let message = greetingSettings.greeting_message
             console.log('トークン変換前のメッセージ:', greetingSettings.greeting_message)
             
-            if (friendData) {
-              const uid = friendData.short_uid || null
-              const lineName = friendData.display_name || userProfile?.displayName || null
+            if (friendDataForToken) {
+              const uid = friendDataForToken.short_uid || null
+              const lineName = friendDataForToken.display_name || userProfile?.displayName || null
               const lineNameSan = lineName ? lineName.replace(/[<>\"\']/g, '') + 'さん' : null
 
-              console.log('friendData:', JSON.stringify(friendData))
+              console.log('friendData:', JSON.stringify(friendDataForToken))
               console.log('uid:', uid, 'lineName:', lineName, 'lineNameSan:', lineNameSan)
 
               // 長いトークンから順に置換（部分一致を防ぐ）
@@ -729,7 +697,7 @@ async function handleFollow(event: LineEvent, supabase: any, req: Request) {
             }
 
             console.log('--- handleFollow: Sending greeting message ---', { userId: source.userId, message });
-            await sendPushMessage(source.userId, message, supabase)
+            await sendPushMessage(source.userId, message, supabase, appUserId)
             console.log('✓ あいさつメッセージを送信しました（トークン変換済み）')
           } catch (error) {
             console.error('✗ あいさつメッセージ送信エラー:', error)
@@ -746,7 +714,8 @@ async function handleFollow(event: LineEvent, supabase: any, req: Request) {
                 p_display_name: userProfile?.displayName || null,
                 p_picture_url: userProfile?.pictureUrl || null,
                 p_registration_source: 'greeting_message',
-                p_scenario_id: greetingSettings.scenario_id
+                p_scenario_id: greetingSettings.scenario_id,
+                p_user_id: appUserId // Pass the user ID to the RPC function
               })
 
             if (registrationError) {
@@ -772,9 +741,9 @@ async function handleFollow(event: LineEvent, supabase: any, req: Request) {
 }
 
 // Step delivery process for scenario-based friend additions
-async function startStepDelivery(supabase: any, scenarioId: string, friendId: string) {
+async function startStepDelivery(supabase: any, scenarioId: string, friendId: string, appUserId: string) {
   try {
-    console.log('ステップ配信プロセスを開始:', { scenarioId, friendId })
+    console.log('ステップ配信プロセスを開始:', { scenarioId, friendId, appUserId })
     
     // Get steps that are ready for immediate delivery (scheduled time has passed or is immediate)
     const { data: readySteps, error: stepsError } = await supabase
@@ -787,11 +756,14 @@ async function startStepDelivery(supabase: any, scenarioId: string, friendId: st
             id, content, message_type, media_url, message_order,
             flex_messages (content)
           )
-        )
+        ),
+        line_friends!inner(user_id)
       `)
       .eq('scenario_id', scenarioId)
       .eq('friend_id', friendId)
       .eq('status', 'ready')
+      // Ensure the friend belongs to the correct user to prevent data leaks
+      .eq('line_friends.user_id', appUserId) 
       .order('step_order', { foreignTable: 'steps', ascending: true })
       .limit(1)
     
@@ -809,7 +781,7 @@ async function startStepDelivery(supabase: any, scenarioId: string, friendId: st
     console.log('即座に配信するステップ:', firstStep.steps.step_order)
     
     // Deliver immediately eligible steps
-    await deliverStepMessages(supabase, firstStep)
+    await deliverStepMessages(supabase, firstStep, appUserId)
     
   } catch (error) {
     console.error('ステップ配信プロセスエラー:', error)
@@ -817,7 +789,7 @@ async function startStepDelivery(supabase: any, scenarioId: string, friendId: st
 }
 
 // Deliver messages for a specific step
-async function deliverStepMessages(supabase: any, stepTracking: any) {
+async function deliverStepMessages(supabase: any, stepTracking: any, appUserId: string) {
   try {
     console.log('ステップメッセージを配信中:', stepTracking.step_id)
     
@@ -832,7 +804,8 @@ async function deliverStepMessages(supabase: any, stepTracking: any) {
         stepTracking.scenario_id,
         stepTracking.friend_id,
         stepTracking.step_id,
-        stepTracking.steps.step_order
+        stepTracking.steps.step_order,
+        appUserId
       )
       return
     }
@@ -843,8 +816,9 @@ async function deliverStepMessages(supabase: any, stepTracking: any) {
     // Get LINE user ID and access token for sending
     const { data: friendInfo, error: friendError } = await supabase
       .from('line_friends')
-      .select('line_user_id, profiles!inner(line_channel_access_token)')
+      .select('line_user_id')
       .eq('id', stepTracking.friend_id)
+      .eq('user_id', appUserId) // RLS-like security
       .single()
     
     if (friendError || !friendInfo) {
@@ -856,7 +830,7 @@ async function deliverStepMessages(supabase: any, stepTracking: any) {
     
     // Get secure LINE credentials
     const { data: credentials, error: credError } = await supabase
-      .rpc('get_line_credentials_for_user', { p_user_id: friendInfo.user_id });
+      .rpc('get_line_credentials_for_user', { p_user_id: appUserId });
     
     if (credError || !credentials?.channel_access_token) {
       console.error('LINE アクセストークンが見つかりません:', credError)
@@ -885,7 +859,8 @@ async function deliverStepMessages(supabase: any, stepTracking: any) {
       stepTracking.scenario_id,
       stepTracking.friend_id,
       stepTracking.step_id,
-      stepTracking.steps.step_order
+      stepTracking.steps.step_order,
+      appUserId
     )
     
   } catch (error) {
@@ -1067,7 +1042,8 @@ async function markStepAsDelivered(
   scenarioId: string,
   friendId: string,
   currentStepId: string,
-  currentStepOrder: number
+  currentStepOrder: number,
+  appUserId: string
 ) {
   try {
     const deliveredAt = new Date().toISOString()
@@ -1229,6 +1205,7 @@ async function markStepAsDelivered(
         .from('line_friends')
         .select('added_at')
         .eq('id', friendId)
+        .eq('user_id', appUserId) // RLS-like security
         .maybeSingle()
 
       if (friendErr) {
@@ -1294,24 +1271,10 @@ async function markStepAsDelivered(
   }
 }
 
-async function handleUnfollow(event: LineEvent, supabase: any, req: Request) {
+async function handleUnfollow(event: LineEvent, supabase: any, req: Request, appUserId: string) {
   try {
     const { source } = event
     console.log(`User ${source.userId} unfollowed the bot`)
-
-    // Find the profile that owns this LINE bot
-    const { data: profiles, error } = await supabase
-      .from('profiles')
-      .select('user_id, friends_count')
-      .not('line_channel_access_token', 'is', null)
-      .limit(1)
-
-    if (error || !profiles || profiles.length === 0) {
-      console.error('No profile found for this LINE bot:', error)
-      return
-    }
-
-    const profile = profiles[0]
 
     // Mark friend as blocked instead of deleting
     const { error: updateError } = await supabase
@@ -1320,7 +1283,7 @@ async function handleUnfollow(event: LineEvent, supabase: any, req: Request) {
         is_blocked: true,
         updated_at: new Date().toISOString() 
       })
-      .eq('user_id', profile.user_id)
+      .eq('user_id', appUserId) // RLS-like security
       .eq('line_user_id', source.userId)
 
     if (updateError) {
@@ -1334,44 +1297,42 @@ async function handleUnfollow(event: LineEvent, supabase: any, req: Request) {
   }
 }
 
-async function ensureFriendExists(userId: string, supabase: any) {
+async function ensureFriendExists(userId: string, supabase: any, appUserId: string) {
   try {
-    // Find the profile that owns this LINE bot
-    const { data: profiles, error } = await supabase
-      .from('profiles')
-      .select('user_id, line_channel_access_token, friends_count')
-      .not('line_channel_access_token', 'is', null)
-      .limit(1)
-
-    if (error || !profiles || profiles.length === 0) {
-      console.error('No profile found for this LINE bot:', error)
-      return
-    }
-
-    const profile = profiles[0]
-
-    // Check if friend already exists
+    // Check if friend already exists for the specific user
     const { data: existingFriend, error: friendError } = await supabase
       .from('line_friends')
       .select('id')
-      .eq('user_id', profile.user_id)
+      .eq('user_id', appUserId) // RLS-like security
       .eq('line_user_id', userId)
       .single()
 
     if (existingFriend) {
-      console.log('Friend already exists:', userId)
+      console.log('Friend already exists for this user:', userId)
       return
     }
 
-    // Get user profile from LINE API
-    const userProfile = await getLineUserProfile(userId, supabase)
+    // If friend doesn't exist, get profile and add them
+    const userProfile = await getLineUserProfile(userId, supabase, appUserId)
     
     if (userProfile) {
       console.log('Got user profile:', userProfile)
       
+      // Get the app user's profile to update friend count
+      const { data: profile, error: profileError } = await supabase
+        .from('profiles')
+        .select('friends_count')
+        .eq('user_id', appUserId)
+        .single()
+
+      if (profileError) {
+        console.error('Could not get owner profile to update friend count', profileError)
+        // Continue anyway, friend count will be off but core logic proceeds
+      }
+
       // Insert friend data
       const insertData = {
-        user_id: profile.user_id,
+        user_id: appUserId,
         line_user_id: userId,
         display_name: userProfile.displayName,
         picture_url: userProfile.pictureUrl,
@@ -1389,24 +1350,26 @@ async function ensureFriendExists(userId: string, supabase: any) {
       } else {
         console.log('Friend inserted successfully')
         
-        // Update friends count
-        const { error: updateError } = await supabase
-          .from('profiles')
-          .update({ 
-            friends_count: (profile.friends_count || 0) + 1 
-          })
-          .eq('user_id', profile.user_id)
+        // Update friends count if profile was found
+        if (profile) {
+          const { error: updateError } = await supabase
+            .from('profiles')
+            .update({ 
+              friends_count: (profile.friends_count || 0) + 1 
+            })
+            .eq('user_id', appUserId)
 
-        if (updateError) {
-          console.error('Error updating friends count:', updateError)
-        } else {
-          console.log('Friends count updated successfully')
+          if (updateError) {
+            console.error('Error updating friends count:', updateError)
+          } else {
+            console.log('Friends count updated successfully')
+          }
         }
 
         console.log('Friend added successfully:', userProfile.displayName)
       }
     } else {
-      console.error('Could not get user profile from LINE API')
+      console.error('Could not get user profile from LINE API, cannot create friend record.')
     }
 
   } catch (error) {
@@ -1414,42 +1377,23 @@ async function ensureFriendExists(userId: string, supabase: any) {
   }
 }
 
-async function getLineUserProfile(userId: string, supabase: any) {
+async function getLineUserProfile(userId: string, supabase: any, appUserId: string) {
   try {
-    // First, try to get access token from secure_line_credentials
+    // Get the access token for the specific user
     const { data: secureCredentials, error: secureError } = await supabase
       .from('secure_line_credentials')
-      .select('encrypted_value, user_id')
+      .select('encrypted_value')
+      .eq('user_id', appUserId) // RLS-like security
       .eq('credential_type', 'channel_access_token')
-      .limit(1)
-      .maybeSingle()
+      .single()
 
-    let accessToken = null
-
-    if (secureCredentials?.encrypted_value) {
-      accessToken = secureCredentials.encrypted_value
-      console.log('✓ secure_line_credentials からトークンを取得しました')
-    } else {
-      // Fallback to profiles table
-      const { data: profiles, error } = await supabase
-        .from('profiles')
-        .select('line_channel_access_token')
-        .not('line_channel_access_token', 'is', null)
-        .limit(1)
-
-      if (error || !profiles || profiles.length === 0) {
-        console.warn('⚠ LINE アクセストークンが見つかりません（profiles/secure_line_credentials 両方）:', error)
-        return null
-      }
-
-      accessToken = profiles[0].line_channel_access_token
-      console.log('✓ profiles テーブルからトークンを取得しました（フォールバック）')
-    }
-
-    if (!accessToken) {
-      console.warn('⚠ トークンが取得できませんでした')
+    if (secureError || !secureCredentials?.encrypted_value) {
+      console.warn('⚠ LINE アクセストークンが見つかりません for user:', appUserId, secureError)
       return null
     }
+
+    const accessToken = secureCredentials.encrypted_value
+    console.log('✓ secure_line_credentials からトークンを取得しました for user:', appUserId)
 
     const response = await fetch(`https://api.line.me/v2/bot/profile/${userId}`, {
       method: 'GET',
@@ -1509,30 +1453,18 @@ async function findRecentInviteCode(lineUserId: string, supabase: any) {
 }
 
 // Function to download LINE media content and store in Supabase Storage
-async function downloadLineMedia(messageId: string, lineUserId: string, supabase: any) {
+async function downloadLineMedia(messageId: string, lineUserId: string, supabase: any, appUserId: string) {
   try {
-    // Get user's LINE access token
-    const { data: friendData } = await supabase
-      .from('line_friends')
-      .select('user_id')
-      .eq('line_user_id', lineUserId)
-      .single()
-
-    if (!friendData) {
-      console.error('Friend not found for media download')
-      return { success: false, error: 'Friend not found' }
-    }
-
-    // Get access token from secure credentials
+    // Get access token from secure credentials for the specific user
     const { data: credentials } = await supabase
       .from('secure_line_credentials')
       .select('encrypted_value')
-      .eq('user_id', friendData.user_id)
+      .eq('user_id', appUserId) // RLS-like security
       .eq('credential_type', 'channel_access_token')
       .single()
 
     if (!credentials?.encrypted_value) {
-      console.error('No access token found for media download')
+      console.error('No access token found for media download for user:', appUserId)
       return { success: false, error: 'No access token found' }
     }
 
@@ -1640,7 +1572,7 @@ async function getStickerImageUrl(packageId: string, stickerId: string) {
 /**
  * ポストバックイベントを処理（アクセス解除＆シナリオ再登録）
  */
-async function handlePostback(event: any, supabase: any, req: Request) {
+async function handlePostback(event: any, supabase: any, req: Request, appUserId: string) {
   try {
     const { postback, replyToken, source } = event
     
@@ -1674,13 +1606,14 @@ async function handlePostback(event: any, supabase: any, req: Request) {
       .from('line_friends')
       .select('id, user_id, display_name, picture_url')
       .eq('line_user_id', source.userId)
+      .eq('user_id', appUserId) // RLS-like security
       .order('created_at', { ascending: false })
       .limit(1)
       .single()
     
     if (friendError || !friendData) {
       console.error('❌ Friend not found:', friendError)
-      await sendReplyMessage(replyToken, 'エラーが発生しました。', supabase)
+      await sendReplyMessage(replyToken, 'エラーが発生しました。', supabase, appUserId)
       return
     }
     
@@ -1697,7 +1630,7 @@ async function handlePostback(event: any, supabase: any, req: Request) {
     
     if (existingLog) {
       console.log('⚠️ Already pressed by this friend')
-      await sendReplyMessage(replyToken, '既に押されています。', supabase)
+      await sendReplyMessage(replyToken, '既に押されています。', supabase, appUserId)
       return
     }
     
@@ -1716,12 +1649,12 @@ async function handlePostback(event: any, supabase: any, req: Request) {
     
     if (logError) {
       console.error('❌ Failed to log postback:', logError)
-      await sendReplyMessage(replyToken, 'エラーが発生しました。', supabase)
+      await sendReplyMessage(replyToken, 'エラーが発生しました。', supabase, appUserId)
       return
     }
     
     // 応答メッセージ送信
-    await sendReplyMessage(replyToken, '期間延長/再開', supabase)
+    await sendReplyMessage(replyToken, '期間延長/再開', supabase, appUserId)
     console.log('✓ Reply sent: 期間延長/再開')
     
     // page_share_code を cms_pages から取得
@@ -1729,6 +1662,7 @@ async function handlePostback(event: any, supabase: any, req: Request) {
       .from('cms_pages')
       .select('share_code')
       .eq('timer_scenario_id', scenarioId)
+      .eq('user_id', appUserId) // RLS-like security
       .maybeSingle()
     
     const pageShareCode = cmsPage?.share_code || null
@@ -1740,7 +1674,8 @@ async function handlePostback(event: any, supabase: any, req: Request) {
         body: {
           line_user_id: source.userId,
           target_scenario_id: scenarioId,
-          page_share_code: pageShareCode
+          page_share_code: pageShareCode,
+          user_id: appUserId // Pass the user ID to the function
         }
       }
     )
