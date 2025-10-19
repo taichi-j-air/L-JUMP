@@ -270,7 +270,12 @@ function buildBubbleFromDesign(design: BubbleDesign) {
         size: heroCandidate.properties.imgSize || "full",
         aspectRatio: heroCandidate.properties.aspectRatio || "20:13",
         aspectMode: heroCandidate.properties.aspectMode || "cover",
-        ...(heroCandidate.properties.action ? { action: heroCandidate.properties.action } : {}),
+        ...(heroCandidate.properties.action ? { action: (({ type, text, uri, data }) => {
+          if (type === 'message') return { type, text };
+          if (type === 'uri') return { type, uri };
+          if (type === 'postback') return { type, data };
+          return { type };
+        })(heroCandidate.properties.action) } : {}),
       }
     : undefined;
 
@@ -309,7 +314,12 @@ function buildBubbleFromDesign(design: BubbleDesign) {
           ...(p.imgSize && { size: p.imgSize }),
           ...(p.aspectRatio && { aspectRatio: p.aspectRatio }),
           ...(p.aspectMode && { aspectMode: p.aspectMode }),
-          ...(p.action ? { action: p.action } : {}),
+          ...(p.action ? { action: (({type, text, uri, data}) => {
+            if (type === 'message') return { type, text };
+            if (type === 'uri') return { type, uri };
+            if (type === 'postback') return { type, data };
+            return { type };
+          })(p.action) } : {}),
           ...(margin ? { margin } : {}),
         };
       } else if (el.type === "button") {
@@ -319,7 +329,12 @@ function buildBubbleFromDesign(design: BubbleDesign) {
           style: p.style || "primary",
           color: p.buttonColor || defaultColor,
           ...(p.height && p.height !== "md" ? { height: p.height } : {}),
-          ...(p.action ? { action: p.action } : {}),
+          ...(p.action ? { action: (({type, label, text, uri, data}) => {
+            if (type === 'message') return { type, label, text };
+            if (type === 'uri') return { type, label, uri };
+            if (type === 'postback') return { type, label, data };
+            return { type, label };
+          })(p.action) } : {}),
           ...(margin ? { margin } : {}),
         };
       }
