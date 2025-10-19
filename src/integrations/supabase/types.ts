@@ -910,34 +910,28 @@ export type Database = {
       line_greeting_settings: {
         Row: {
           created_at: string
-          greeting_image_config: Json | null
           greeting_message: string | null
           greeting_type: string
           id: string
           scenario_id: string | null
-          scenario_invite_code: string | null
           updated_at: string
           user_id: string
         }
         Insert: {
           created_at?: string
-          greeting_image_config?: Json | null
           greeting_message?: string | null
           greeting_type: string
           id?: string
           scenario_id?: string | null
-          scenario_invite_code?: string | null
           updated_at?: string
           user_id: string
         }
         Update: {
           created_at?: string
-          greeting_image_config?: Json | null
           greeting_message?: string | null
           greeting_type?: string
           id?: string
           scenario_id?: string | null
-          scenario_invite_code?: string | null
           updated_at?: string
           user_id?: string
         }
