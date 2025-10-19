@@ -11,6 +11,7 @@ import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { MediaLibrarySelector } from "@/components/MediaLibrarySelector";
 import { RichMenuPreview } from "@/components/RichMenuPreview";
+import { FunctionsHttpError } from "@supabase/supabase-js";
 
 interface RichMenu { id: string; name: string; background_image_url?: string; chat_bar_text: string; is_default: boolean; is_active: boolean; size: 'full' | 'half'; selected?: boolean; line_rich_menu_id?: string | null; line_rich_menu_alias_id?: string | null; }
 interface TapArea { id: string; x_percent: number; y_percent: number; width_percent: number; height_percent: number; action_type: 'uri' | 'message' | 'richmenuswitch'; action_value: string; }
@@ -39,17 +40,26 @@ export const RichMenuEditor = ({ menu, onSave, onCancel }: RichMenuEditorProps) 
   const [liffUrl, setLiffUrl] = useState<string | null>(null);
   const [liffId, setLiffId] = useState<string | null>(null);
 
-  const getFunctionErrorMessage = (err: unknown): string => {
-    if (typeof err === 'object' && err !== null) {
-      const contextError = (err as { context?: { response?: { error?: unknown } } }).context?.response?.error;
-      if (typeof contextError === 'string' && contextError.trim().length > 0) {
-        return contextError;
+  const getFunctionErrorMessage = async (err: unknown): Promise<string> => {
+    if (err instanceof FunctionsHttpError) {
+      const response = err.context?.response;
+      if (response) {
+        try {
+          const cloned = response.clone();
+          const data = await cloned.json();
+          const message = typeof data?.error === "string" ? data.error : typeof data?.message === "string" ? data.message : null;
+          if (message) {
+            return message;
+          }
+        } catch {
+          // ignore JSON parse errors
+        }
       }
     }
     if (err instanceof Error) {
       return err.message;
     }
-    return '不明なエラーが発生しました';
+    return "不明なエラーが発生しました";
   };
 
   useEffect(() => {
@@ -139,6 +149,50 @@ export const RichMenuEditor = ({ menu, onSave, onCancel }: RichMenuEditorProps) 
       return;
     }
 
+    if (chatBarText.trim().length === 0) {
+      toast({ title: "エラー", description: "チャットバーテキストを入力してください", variant: "destructive" });
+      return;
+    }
+
+    if (chatBarText.trim().length > 14) {
+      toast({ title: "エラー", description: "チャットバーテキストは14文字以内で入力してください", variant: "destructive" });
+      return;
+    }
+
+    const expectedWidth = 2500;
+    const expectedHeight = size === 'full' ? 1686 : 843;
+
+    const verifyImageDimensions = async (url: string) => {
+      return new Promise<{ ok: boolean; width: number; height: number }>((resolve, reject) => {
+        const img = new Image();
+        img.crossOrigin = "anonymous";
+        img.onload = () => {
+          const width = img.naturalWidth || img.width;
+          const height = img.naturalHeight || img.height;
+          resolve({
+            ok: width === expectedWidth && height === expectedHeight,
+            width,
+            height
+          });
+        };
+        img.onerror = () => reject(new Error("画像を読み込めませんでした"));
+        img.src = url;
+      });
+    };
+
+    try {
+      const dimensionCheck = await verifyImageDimensions(backgroundImageUrl);
+      if (!dimensionCheck.ok) {
+        toast({
+          title: "画像サイズに注意してください",
+          description: `選択した画像は ${dimensionCheck.width}×${dimensionCheck.height}px です。LINE の推奨サイズは ${expectedWidth}×${expectedHeight}px です。`,
+        });
+      }
+    } catch (error) {
+      console.error("Failed to validate image dimensions:", error);
+      toast({ title: "警告", description: "画像サイズを確認できませんでしたが、そのまま保存を試みます。", variant: "default" });
+    }
+
     const switchAreas = tapAreas.filter(area => area.action_type === 'richmenuswitch');
 
     if (switchAreas.some(area => !area.action_value)) {
@@ -204,7 +258,12 @@ export const RichMenuEditor = ({ menu, onSave, onCancel }: RichMenuEditorProps) 
 
     } catch (error) {
       console.error('Error saving rich menu:', error);
-      const fallbackMessage = getFunctionErrorMessage(error);
+      let fallbackMessage = '不明なエラーが発生しました';
+      try {
+        fallbackMessage = await getFunctionErrorMessage(error);
+      } catch (parseError) {
+        console.error("Failed to parse function error:", parseError);
+      }
       toast({ title: "エラー", description: `保存に失敗しました: ${fallbackMessage}`, variant: "destructive" });
     } finally {
       setLoading(false);
@@ -231,7 +290,19 @@ export const RichMenuEditor = ({ menu, onSave, onCancel }: RichMenuEditorProps) 
               <div className="space-y-6">
                 <Card>
                   <CardHeader><CardTitle>背景画像</CardTitle><CardDescription>1MB以下の画像を選択してください。推奨サイズ: {size === 'full' ? '2500×1686px' : '2500×843px'}</CardDescription></CardHeader>
-                  <CardContent><MediaLibrarySelector trigger={<Button variant="outline" className="w-full">{backgroundImageUrl ? '画像を変更' : '画像を選択'}</Button>} onSelect={setBackgroundImageUrl} selectedUrl={backgroundImageUrl} />{backgroundImageUrl && (<div className="mt-4 rounded border overflow-hidden"><img src={backgroundImageUrl} alt="Background" className="w-full h-auto" /></div>)}</CardContent>
+                  <CardContent>
+                    <MediaLibrarySelector trigger={<Button variant="outline" className="w-full">{backgroundImageUrl ? '画像を変更' : '画像を選択'}</Button>} onSelect={setBackgroundImageUrl} selectedUrl={backgroundImageUrl} />
+                    <p className="mt-3 text-sm text-muted-foreground">
+                      {size === 'full'
+                        ? 'フルサイズのリッチメニューは 2500×1686px の画像が必要です。'
+                        : 'ハーフサイズのリッチメニューは 2500×843px の画像が必要です。'}
+                    </p>
+                    {backgroundImageUrl && (
+                      <div className="mt-4 rounded border overflow-hidden">
+                        <img src={backgroundImageUrl} alt="Background" className="w-full h-auto" />
+                      </div>
+                    )}
+                  </CardContent>
                 </Card>
                 <Card>
                   <CardHeader>
@@ -279,4 +350,3 @@ export const RichMenuEditor = ({ menu, onSave, onCancel }: RichMenuEditorProps) 
     </div>
   );
 };
-
