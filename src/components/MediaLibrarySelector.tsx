@@ -221,26 +221,35 @@ export function MediaLibrarySelector({ trigger, onSelect, selectedUrl }: MediaLi
                 <p className="text-sm text-muted-foreground">上記のボタンから画像をアップロードしてください</p>
               </div>
             ) : (
-              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
                 {mediaFiles.map((file) => (
                   <Card 
                     key={file.isShared ? `shared-${file.name}` : file.name}
-                    className={`cursor-pointer transition-all hover:shadow-md ${
+                    className={`cursor-pointer transition-all hover:shadow-sm border border-border ${
                       selectedUrl === file.publicUrl ? 'ring-2 ring-primary' : ''
                     }`}
                     onClick={() => handleSelect(file.publicUrl)}
                   >
-                    <CardContent className="p-2">
-                      <div className="aspect-square mb-2">
+                    <CardContent className="p-2 space-y-2">
+                      <div className="bg-muted/60 rounded-sm overflow-hidden h-28 flex items-center justify-center">
                         <img
                           src={file.publicUrl}
                           alt={file.name}
-                          className="w-full h-full object-cover rounded"
+                          className="max-h-full max-w-full object-contain"
                         />
                       </div>
-                      <div className="text-xs">
-                        <p className="truncate font-medium">{file.name}</p>
-                        <p className="text-muted-foreground">{formatFileSize(file.size)}</p>
+                      <div className="space-y-1">
+                        <div className="flex items-center gap-1 text-[10px] text-muted-foreground">
+                          <span className="truncate flex-1 font-medium text-xs text-foreground">{file.name}</span>
+                          {file.isShared && (
+                            <span className="px-1 py-[1px] rounded bg-muted text-[10px]">
+                              共有
+                            </span>
+                          )}
+                        </div>
+                        <p className="text-[10px] text-muted-foreground">
+                          {formatFileSize(file.size)}
+                        </p>
                       </div>
                     </CardContent>
                   </Card>

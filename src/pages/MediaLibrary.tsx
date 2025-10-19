@@ -89,14 +89,14 @@ export default function MediaLibrary() {
           </CardContent>
         </Card>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 gap-4">
           {files.map((file) => (
-            <Card key={file.id} className="overflow-hidden hover:shadow-md transition-shadow">
-              <CardHeader className="p-4">
+            <Card key={file.id} className="overflow-hidden hover:shadow-sm transition-shadow border border-border">
+              <CardHeader className="p-3 pb-2">
                 <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-1.5">
                     {getFileIcon(file.type)}
-                    <Badge variant="outline" className="text-xs">
+                    <Badge variant="outline" className="text-[10px]">
                       {getFileTypeLabel(file.type)}
                     </Badge>
                     {file.isShared && (
@@ -118,22 +118,22 @@ export default function MediaLibrary() {
                 </div>
               </CardHeader>
               
-              <CardContent className="p-4 pt-0">
+              <CardContent className="p-3 pt-0 space-y-3">
                 {isImageFile(file.type) && (
-                  <div className="aspect-video bg-muted rounded-lg mb-3 overflow-hidden">
+                  <div className="bg-muted/50 rounded-md overflow-hidden h-32 flex items-center justify-center">
                     <img
                       src={file.url}
                       alt={file.name}
-                      className="w-full h-full object-cover"
+                      className="max-h-full max-w-full object-contain"
                     />
                   </div>
                 )}
                 
                 {isVideoFile(file.type) && (
-                  <div className="aspect-video bg-muted rounded-lg mb-3 overflow-hidden">
+                  <div className="bg-muted/50 rounded-md overflow-hidden h-32 flex items-center justify-center">
                     <video
                       src={file.url}
-                      className="w-full h-full object-cover"
+                      className="max-h-full max-w-full object-contain"
                       controls
                       preload="metadata"
                     />
@@ -141,10 +141,10 @@ export default function MediaLibrary() {
                 )}
 
                 <div className="space-y-2">
-                  <h4 className="font-medium text-sm truncate" title={file.name}>
+                  <h4 className="font-medium text-xs truncate" title={file.name}>
                     {file.name}
                   </h4>
-                  <p className="text-xs text-muted-foreground">
+                  <p className="text-[11px] text-muted-foreground">
                     {formatFileSize(file.size)} • {file.uploadedAt.toLocaleDateString('ja-JP')}
                   </p>
                   

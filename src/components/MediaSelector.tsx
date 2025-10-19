@@ -42,7 +42,7 @@ export const MediaSelector = ({ onSelect, selectedUrl }: MediaSelectorProps) => 
         <img
           src={file.url}
           alt={file.name}
-          className="w-full h-full object-cover"
+          className="max-h-full max-w-full object-contain"
         />
       )
     }
@@ -50,15 +50,13 @@ export const MediaSelector = ({ onSelect, selectedUrl }: MediaSelectorProps) => 
       return (
         <video
           src={file.url}
-          className="w-full h-full object-cover"
+          className="max-h-full max-w-full object-contain"
           muted
         />
       )
     }
     return (
-      <div className="w-full h-full flex items-center justify-center bg-muted">
-        <FileIcon className="h-8 w-8 text-muted-foreground" />
-      </div>
+      <FileIcon className="h-8 w-8 text-muted-foreground" />
     )
   }
 
@@ -86,7 +84,7 @@ export const MediaSelector = ({ onSelect, selectedUrl }: MediaSelectorProps) => 
                 </p>
               </div>
             ) : (
-              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
                 {files.map((file) => (
                   <Card
                     key={file.id}
@@ -95,10 +93,10 @@ export const MediaSelector = ({ onSelect, selectedUrl }: MediaSelectorProps) => 
                     }`}
                     onClick={() => handleSelect(file)}
                   >
-                    <CardContent className="p-2">
-                      <div className="aspect-square bg-muted rounded-lg overflow-hidden mb-2">
-                        {getFilePreview(file)}
-                      </div>
+                  <CardContent className="p-2">
+                    <div className="h-28 bg-muted/60 rounded-md overflow-hidden flex items-center justify-center mb-2">
+                      {getFilePreview(file)}
+                    </div>
                       <div className="flex items-center gap-1">
                         {getFileIcon(file.type)}
                         <p className="text-xs truncate flex-1" title={file.name}>
