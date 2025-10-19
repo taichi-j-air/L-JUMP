@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from "react"
+import { useState, useEffect } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -252,10 +252,7 @@ export default function LineLoginSettings() {
 
   const isConfigured = settings.channelId && settings.channelSecret
   const isLiffConfigured = liffSettings.liffId && liffSettings.liffUrl
-  const customLoginUrl = useMemo(
-    () => generateLoginUrl(settings.channelId, user?.id, customNext || null),
-    [settings.channelId, user?.id, customNext]
-  )
+  const customLoginUrl = generateLoginUrl(settings.channelId, user?.id, customNext || null)
 
   return (
     <div className="min-h-screen bg-background">
