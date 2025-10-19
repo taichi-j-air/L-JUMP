@@ -238,9 +238,9 @@ export type Database = {
           line_message_id: string | null
           media_kind: string | null
           media_url: string | null
-          metadata: Json | null
           message_text: string
           message_type: Database["public"]["Enums"]["message_kind"]
+          metadata: Json | null
           read_at: string | null
           sent_at: string
           sticker_id: string | null
@@ -259,9 +259,9 @@ export type Database = {
           line_message_id?: string | null
           media_kind?: string | null
           media_url?: string | null
-          metadata?: Json | null
           message_text: string
           message_type?: Database["public"]["Enums"]["message_kind"]
+          metadata?: Json | null
           read_at?: string | null
           sent_at?: string
           sticker_id?: string | null
@@ -280,9 +280,9 @@ export type Database = {
           line_message_id?: string | null
           media_kind?: string | null
           media_url?: string | null
-          metadata?: Json | null
           message_text?: string
           message_type?: Database["public"]["Enums"]["message_kind"]
+          metadata?: Json | null
           read_at?: string | null
           sent_at?: string
           sticker_id?: string | null
