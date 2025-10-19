@@ -34,6 +34,35 @@ const getFrontendBaseUrl = () => {
 
 const FRONTEND_BASE_URL = getFrontendBaseUrl();
 
+const sanitizeOrigin = (value: string | null | undefined): string | null => {
+  if (!value) return null;
+  try {
+    const url = new URL(value);
+    if (!/^https?:$/.test(url.protocol)) return null;
+    return `${url.protocol}//${url.host}`;
+  } catch {
+    return null;
+  }
+};
+
+const buildFrontendUrl = (path: string, origin?: string | null) => {
+  const base = sanitizeOrigin(origin) || FRONTEND_BASE_URL;
+  const normalizedPath = path.startsWith('/') ? path : `/${path}`;
+  return `${base}${normalizedPath}`;
+};
+
+const tryDecodeState = (raw: string | null) => {
+  if (!raw) return null;
+  try {
+    const normalized = raw.replace(/-/g, '+').replace(/_/g, '/');
+    const pad = normalized.length % 4 ? '='.repeat(4 - (normalized.length % 4)) : '';
+    const json = atob(normalized + pad);
+    return JSON.parse(json);
+  } catch {
+    return null;
+  }
+};
+
   // Rate limiting check
   const clientIP = req.headers.get('x-forwarded-for') || req.headers.get('x-real-ip') || 'unknown';
   const rateAllowed = await rateLimiter.isAllowed(`login:${clientIP}`, 10, 60000); // 10 requests per minute
@@ -76,26 +105,33 @@ const FRONTEND_BASE_URL = getFrontendBaseUrl();
     validateRequiredParams({ code, state }, ['code', 'state']);
     
     // Parse state: supports raw invite code or Base64URL JSON
+    const decodedState = tryDecodeState(state);
     let scenarioCode: string | null = null;
     let campaign: string | null = null;
     let source: string | null = null;
+    let loginOrigin = sanitizeOrigin(decodedState?.origin);
+    const stateMode = typeof decodedState?.mode === "string" ? decodedState.mode : null;
+    const stateUserId = typeof decodedState?.userId === "string" ? decodedState.userId : null;
 
-    if (state && state !== "login") {
-      try {
-        const b64 = state.replace(/-/g, '+').replace(/_/g, '/');
-        const pad = b64.length % 4 ? '='.repeat(4 - (b64.length % 4)) : '';
-        const json = atob(b64 + pad);
-        const obj = JSON.parse(json);
-        console.log('🔍 Decoded state object:', JSON.stringify(obj));
-        if (obj?.inviteCode || obj?.scenario) {
-          scenarioCode = String(obj.inviteCode || obj.scenario);
-          if (obj.campaign != null) campaign = String(obj.campaign);
-          if (obj.source != null) source = String(obj.source);
-        }
-      } catch (_) {
-        // ignore, fallback to raw state
+    let isGeneralLogin = false;
+
+    if (stateMode === "login") {
+      isGeneralLogin = true;
+    } else if (state === "login") {
+      isGeneralLogin = true;
+      if (!loginOrigin) {
+        const referer = req.headers.get("origin") ?? req.headers.get("referer");
+        loginOrigin = sanitizeOrigin(referer ?? null);
       }
+    } else if (state) {
+      if (decodedState && (decodedState.inviteCode || decodedState.scenario)) {
+        scenarioCode = String(decodedState.inviteCode || decodedState.scenario);
+        if (decodedState.campaign != null) campaign = String(decodedState.campaign);
+        if (decodedState.source != null) source = String(decodedState.source);
+      }
+
       if (!scenarioCode) scenarioCode = state;
+
       if (!validateInviteCode(scenarioCode)) {
         console.error('❌ Invalid invite code format:', scenarioCode);
         throw new Error("Invalid invite code format");
@@ -110,29 +146,43 @@ const FRONTEND_BASE_URL = getFrontendBaseUrl();
     );
 
     let profile: any;
-    let isGeneralLogin = false;
     let scenarioUserId: string | null = null;
 
     /* ── 3. 一般ログインかシナリオ招待かを判定 ── */
-    if (state === "login") {
+    if (isGeneralLogin) {
       console.log("Processing general login test");
-      // 一般ログインの場合は、認証済みユーザーのプロファイルを取得
-      // TODO: 実際の実装では、認証されたユーザーのIDを使用する必要があります
-      // 現在は最初のプロファイルを使用（テスト用）
-      const { data: profiles, error: profileErr } = await supabase
-        .from("profiles")
-        .select("line_login_channel_id, line_login_channel_secret, display_name, user_id")
-        .not("line_login_channel_id", "is", null)
-        .not("line_login_channel_secret", "is", null)
-        .limit(1);
 
-      console.log("Profile query result:", { profiles, profileErr });
+      if (stateUserId) {
+        const { data: specificProfile, error: specificError } = await supabase
+          .from("profiles")
+          .select("line_login_channel_id, line_login_channel_secret, display_name, user_id")
+          .eq("user_id", stateUserId)
+          .maybeSingle();
 
-      if (profileErr || !profiles || profiles.length === 0) {
-        throw new Error("No valid LINE login configuration found. Please configure LINE login settings first.");
+        if (!specificError && specificProfile?.line_login_channel_id && specificProfile?.line_login_channel_secret) {
+          profile = specificProfile;
+          console.log("Using user-specific profile for general login:", profile.display_name);
+        } else if (specificError) {
+          console.warn("Failed to load user-specific profile for general login:", specificError.message);
+        }
       }
-      profile = profiles[0];
-      isGeneralLogin = true;
+
+      if (!profile) {
+        const { data: profiles, error: profileErr } = await supabase
+          .from("profiles")
+          .select("line_login_channel_id, line_login_channel_secret, display_name, user_id")
+          .not("line_login_channel_id", "is", null)
+          .not("line_login_channel_secret", "is", null)
+          .limit(1);
+
+        console.log("Profile fallback query result:", { profiles, profileErr });
+
+        if (profileErr || !profiles || profiles.length === 0) {
+          throw new Error("No valid LINE login configuration found. Please configure LINE login settings first.");
+        }
+        profile = profiles[0];
+      }
+
       console.log("Using profile for general login:", profile.display_name);
     } else {
       console.log("Processing scenario invite with code:", scenarioCode);
@@ -273,7 +323,7 @@ const FRONTEND_BASE_URL = getFrontendBaseUrl();
         } else if (profile.line_bot_id) {
           fallbackUrl = `https://line.me/R/ti/p/${encodeURIComponent(profile.line_bot_id)}`;
         } else {
-          fallbackUrl = `${FRONTEND_BASE_URL}/login-success?error=invalid_grant`;
+          fallbackUrl = buildFrontendUrl('/login-success?error=invalid_grant', loginOrigin);
         }
         
         console.log("Fallback redirect URL:", fallbackUrl);
@@ -315,7 +365,7 @@ const FRONTEND_BASE_URL = getFrontendBaseUrl();
       console.log("General login successful for user:", lineProfile.userId);
       
       /* ── 9. 完了ページへリダイレクト ── */
-      const generalLoginSuccessUrl = `${FRONTEND_BASE_URL}/login-success?user_name=${encodeURIComponent(display)}`;
+      const generalLoginSuccessUrl = buildFrontendUrl(`/login-success?user_name=${encodeURIComponent(display)}`, loginOrigin);
       return Response.redirect(generalLoginSuccessUrl, 302);
     }
 
@@ -385,7 +435,7 @@ const FRONTEND_BASE_URL = getFrontendBaseUrl();
       } else if (profile.line_bot_id) {
         redirectUrl = `https://line.me/R/ti/p/${encodeURIComponent(profile.line_bot_id)}`;
       } else {
-        redirectUrl = `${FRONTEND_BASE_URL}/login-success?user_name=${encodeURIComponent(display)}&scenario=${scenarioCode}&already_registered=true`;
+        redirectUrl = buildFrontendUrl(`/login-success?user_name=${encodeURIComponent(display)}&scenario=${scenarioCode}&already_registered=true`);
       }
       
       console.log("Redirecting existing friend to:", redirectUrl);
@@ -558,7 +608,7 @@ const FRONTEND_BASE_URL = getFrontendBaseUrl();
         redirectUrl = `https://line.me/R/ti/p/${encodeURIComponent(profile.line_bot_id)}`;
       } else {
         // 最終フォールバック
-        redirectUrl = `${FRONTEND_BASE_URL}/login-success?user_name=${encodeURIComponent(display)}&scenario=${scenarioCode}&message=already_friend`;
+        redirectUrl = buildFrontendUrl(`/login-success?user_name=${encodeURIComponent(display)}&scenario=${scenarioCode}&message=already_friend`);
       }
     } else {
       // 新規友だち = 友だち追加が必要

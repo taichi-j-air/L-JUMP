@@ -63,7 +63,7 @@ export default function LineLoginSettings() {
         const callbackUrl = `https://rtjxurmuaawyzjcdkqxt.supabase.co/functions/v1/login-callback`
         const channelId = profile.line_login_channel_id || profile.line_channel_id || ''
         const channelSecret = profile.line_login_channel_secret || profile.line_channel_secret || ''
-        const loginUrl = generateLoginUrl(channelId)
+        const loginUrl = generateLoginUrl(channelId, userId)
         const liffId = profile.liff_id || ''
         const liffUrl = profile.liff_url || ''
         const lineBotId = profile.line_bot_id || ''
@@ -91,18 +91,42 @@ export default function LineLoginSettings() {
     }
   }
 
-  const generateLoginUrl = (channelId: string) => {
+  const encodeState = (payload: Record<string, unknown>) => {
+    try {
+      const json = JSON.stringify(payload)
+      const encoded = btoa(json)
+        .replace(/\+/g, '-')
+        .replace(/\//g, '_')
+        .replace(/=+$/, '')
+      return encoded
+    } catch (error) {
+      console.error('State encoding error:', error)
+      return 'login'
+    }
+  }
+
+  const generateLoginUrl = (channelId: string, userId?: string | null) => {
     if (!channelId) return ''
     
-    // LINE Login の正確な URL 構造を使用
     const baseUrl = 'https://access.line.me/oauth2/v2.1/authorize'
+    let stateParam = 'login'
+
+    if (typeof window !== 'undefined') {
+      stateParam = encodeState({
+        mode: 'login',
+        origin: window.location.origin,
+        userId: userId ?? null,
+        ts: Date.now()
+      })
+    }
+
     const params = {
       response_type: 'code',
       client_id: channelId,
       redirect_uri: 'https://rtjxurmuaawyzjcdkqxt.supabase.co/functions/v1/login-callback',
-      state: 'login',
+      state: stateParam,
       scope: 'openid profile',
-      bot_prompt: 'aggressive'  // 友だち追加を促進
+      bot_prompt: 'aggressive'
     }
     
     const searchParams = new URLSearchParams(params)
@@ -128,7 +152,7 @@ export default function LineLoginSettings() {
       if (error) throw error
 
       // ログインURLを更新
-      const loginUrl = generateLoginUrl(settings.channelId)
+      const loginUrl = generateLoginUrl(settings.channelId, user?.id)
       setSettings(prev => ({ ...prev, loginUrl }))
 
       toast({
