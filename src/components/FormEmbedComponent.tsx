@@ -38,6 +38,7 @@ interface FormData {
   accent_color: string;
   require_line_friend: boolean;
   prevent_duplicate_per_friend: boolean;
+  is_public: boolean;
 }
 
 export default function FormEmbedComponent({ formId, uid, className }: FormEmbedComponentProps) {
@@ -55,12 +56,16 @@ export default function FormEmbedComponent({ formId, uid, className }: FormEmbed
           .from('forms')
           .select('*')
           .eq('id', formId)
-          .eq('is_public', true)
-          .single();
+          .maybeSingle();
 
-        if (error) {
+        if (error || !data) {
           console.error('Error fetching form:', error);
           setError('フォームが見つかりません');
+          return;
+        }
+
+        if (!data.is_public && !uid) {
+          setError('このフォームは外部公開がオフのため表示できません。フォーム編集画面で「外部公開」をオンにしてください。');
           return;
         }
 
@@ -70,7 +75,8 @@ export default function FormEmbedComponent({ formId, uid, className }: FormEmbed
 
         const formDataTyped: FormData = {
           ...data,
-          fields: parsedFields
+          fields: parsedFields,
+          is_public: data.is_public
         };
 
         setFormData(formDataTyped);

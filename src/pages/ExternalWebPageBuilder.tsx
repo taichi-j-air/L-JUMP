@@ -261,7 +261,7 @@ export default function ExternalWebPageBuilder() {
       const { error } = await supabase.from('cms_pages').delete().eq('id', pageId);
       if (error) throw error;
       
-      setPages(prev => prev.filter(p => p.id !== pageId));
+      await fetchPages();
       if (selectedId === pageId) {
         setSelectedId("");
         resetForm();
@@ -295,14 +295,14 @@ export default function ExternalWebPageBuilder() {
       const currentDurationSeconds = toSeconds(durDays, durHours, durMinutes, durSecs);
       const oldTimerDurationSeconds = selected.timer_duration_seconds;
 
-      let validatedTimerDeadline = null;
+      let validatedTimerDeadline: string | null = null;
       if (timerMode === "absolute" && timerDeadline) {
         const deadlineDate = new Date(timerDeadline);
         if (isNaN(deadlineDate.getTime())) {
           toast.error("期限日時が正しくありません");
           return;
         }
-        validatedTimerDeadline = formatDatetimeLocal(deadlineDate.toISOString());
+        validatedTimerDeadline = deadlineDate.toISOString();
       }
 
       const payload = {
@@ -333,7 +333,7 @@ export default function ExternalWebPageBuilder() {
         force_external_browser: forceExternalBrowser,
       };
 
-      const { data, error } = await supabase
+      const { error } = await supabase
         .from('cms_pages')
         .update({
           ...payload,
@@ -351,7 +351,7 @@ export default function ExternalWebPageBuilder() {
       // Note: External web pages use absolute timer only
       // External web pages don't use per-access timers
 
-      setPages(prev => prev.map(p => (p.id === selected.id ? { ...(p as any), ...(data as any) } : p)) as any);
+      await fetchPages();
       toast.success("保存しました");
       return Promise.resolve();
     } catch (e: any) {
@@ -533,6 +533,7 @@ export default function ExternalWebPageBuilder() {
                       key={selected?.id || 'no-selection'}
                       blocks={contentBlocks}
                       onChange={setContentBlocks}
+                      requirePublicForms
                     />
                   </div>
                 </>

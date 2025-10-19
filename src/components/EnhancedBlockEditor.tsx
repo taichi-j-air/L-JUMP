@@ -69,6 +69,7 @@ interface EnhancedBlockEditorProps {
   onChange: (blocks: Block[]) => void;
   hideBackgroundBlockButton?: boolean; // 追加
   hideTemplateButton?: boolean;       // 追加
+  requirePublicForms?: boolean;
 }
 
 /* =========================
@@ -320,12 +321,23 @@ export const EnhancedBlockEditor: React.FC<EnhancedBlockEditorProps> = (props) =
   const blockIds = useMemo(() => safeBlocks.map(block => block.id), [safeBlocks]);
   const hasBackgroundBlock = useMemo(() => safeBlocks.some(block => block.type === 'background'), [safeBlocks]);
 
-  const [forms, setForms] = useState<any[]>([]);
+  const [forms, setForms] = useState<Array<{ id: string; name: string; is_public?: boolean }>>([]);
+  const availableForms = useMemo(
+    () =>
+      props.requirePublicForms
+        ? forms.filter((form) => form.is_public)
+        : forms,
+    [forms, props.requirePublicForms]
+  );
 
   useEffect(() => {
     const fetchForms = async () => {
-      const { data, error } = await supabase.from('forms').select('id, name');
-      if (!error) setForms(data || []);
+      const query = supabase
+        .from('forms')
+        .select('id, name, is_public')
+        .order('name', { ascending: true });
+      const { data, error } = await query;
+      if (!error) setForms((data as Array<{ id: string; name: string; is_public?: boolean }>) || []);
       else console.error('Error fetching forms:', error);
     };
     fetchForms();
@@ -486,9 +498,15 @@ export const EnhancedBlockEditor: React.FC<EnhancedBlockEditorProps> = (props) =
         case 'background':
           previewContent = block.content?.color || '';
           break;
-        case 'form_embed':
-          previewContent = block.content?.formId || '';
+        case 'form_embed': {
+          const formId = block.content?.formId;
+          const formName =
+            forms.find(form => form.id === formId)?.name ||
+            block.content?.title ||
+            block.content?.formName;
+          previewContent = formName || formId || '';
           break;
+        }
         default:
           previewContent = '...';
       }
@@ -916,35 +934,65 @@ export const EnhancedBlockEditor: React.FC<EnhancedBlockEditorProps> = (props) =
           </div>
         );
 
-      case 'form_embed':
+      case 'form_embed': {
+        const selectedForm = forms.find(f => f.id === block.content.formId);
+        const selectedFormAvailable = !!availableForms.find(f => f.id === block.content.formId);
+        const extraForms = (!selectedFormAvailable && selectedForm) ? [selectedForm] : [];
         return (
           <div className="space-y-2">
             <Label>埋め込むフォームを選択</Label>
             <Select
               value={block.content.formId || ''}
               onValueChange={(value) => {
-                const selectedForm = forms.find(f => f.id === value);
-                updateBlock(block.id, { ...block.content, formId: value, title: selectedForm?.name || 'フォーム埋め込み' });
+                const nextForm = forms.find(f => f.id === value);
+                updateBlock(block.id, {
+                  ...block.content,
+                  formId: value,
+                  title: nextForm?.name || 'フォーム埋め込み',
+                  formName: nextForm?.name || '',
+                });
               }}
+              disabled={props.requirePublicForms && availableForms.length === 0}
             >
               <SelectTrigger>
-                <SelectValue placeholder="フォームを選択" />
+                <SelectValue placeholder={props.requirePublicForms ? '外部公開済みフォームを選択' : 'フォームを選択'} />
               </SelectTrigger>
               <SelectContent>
-                {forms.map((form) => (
+                {availableForms.map((form) => (
                   <SelectItem key={form.id} value={form.id}>
                     {form.name}
                   </SelectItem>
                 ))}
+                {extraForms.map((form) => (
+                  <SelectItem key={`non-public-${form.id}`} value={form.id} disabled>
+                    {form.name}（外部公開オフ）
+                  </SelectItem>
+                ))}
               </SelectContent>
             </Select>
+            {props.requirePublicForms && availableForms.length === 0 && (
+              <p className="text-sm text-muted-foreground">
+                外部公開済みのフォームがありません。フォーム管理で「外部公開」をオンにするとここに表示されます。
+              </p>
+            )}
+            {props.requirePublicForms && block.content.formId && !selectedFormAvailable && (
+              <div className="flex items-start gap-2 rounded-md border border-destructive/30 bg-destructive/5 p-2">
+                <AlertTriangle className="h-4 w-4 text-destructive mt-0.5" aria-hidden="true" />
+                <p className="text-sm leading-snug text-destructive">
+                  このフォームは外部公開がオフのためページには表示されません。フォーム編集画面で「外部公開」をオンにしてください。
+                </p>
+              </div>
+            )}
             {block.content.formId ? (
-              <p className="text-sm text-muted-foreground">選択されたフォーム: {forms.find(f => f.id === block.content.formId)?.name || block.content.formId}</p>
+              <p className="text-sm text-muted-foreground">
+                選択されたフォーム: {selectedForm?.name || block.content.formName || block.content.formId}
+              </p>
             ) : (
               <p className="text-sm text-muted-foreground">フォームを選択してください。</p>
             )}
           </div>
         );
+      }
 
       case 'video': {
         const convertYouTubeUrl = (url: string) => {
