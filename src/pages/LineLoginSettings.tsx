@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react"
+import { useState, useEffect, useMemo } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -29,6 +29,7 @@ export default function LineLoginSettings() {
     liffUrl: '',
     liffEndpointUrl: ''
   })
+  const [customNext, setCustomNext] = useState('')
 
   useEffect(() => {
     checkUser()
@@ -105,18 +106,20 @@ export default function LineLoginSettings() {
     }
   }
 
-  const generateLoginUrl = (channelId: string, userId?: string | null) => {
+  const generateLoginUrl = (channelId: string, userId?: string | null, next?: string | null) => {
     if (!channelId) return ''
     
     const baseUrl = 'https://access.line.me/oauth2/v2.1/authorize'
     let stateParam = 'login'
 
     if (typeof window !== 'undefined') {
+      const sanitizedNext = typeof next === 'string' && next.trim().length > 0 ? next.trim() : undefined;
       stateParam = encodeState({
         mode: 'login',
         origin: window.location.origin,
         userId: userId ?? null,
-        ts: Date.now()
+        ts: Date.now(),
+        next: sanitizedNext ?? undefined
       })
     }
 
@@ -249,6 +252,10 @@ export default function LineLoginSettings() {
 
   const isConfigured = settings.channelId && settings.channelSecret
   const isLiffConfigured = liffSettings.liffId && liffSettings.liffUrl
+  const customLoginUrl = useMemo(
+    () => generateLoginUrl(settings.channelId, user?.id, customNext || null),
+    [settings.channelId, user?.id, customNext]
+  )
 
   return (
     <div className="min-h-screen bg-background">
@@ -292,7 +299,7 @@ export default function LineLoginSettings() {
                   onChange={(e) => setSettings(prev => ({ 
                     ...prev, 
                     channelId: e.target.value,
-                    loginUrl: generateLoginUrl(e.target.value)
+                    loginUrl: generateLoginUrl(e.target.value, user?.id)
                   }))}
                   placeholder="チャネルIDを入力"
                 />
@@ -487,6 +494,31 @@ export default function LineLoginSettings() {
                     >
                       LINE Loginをテスト
                     </Button>
+                  </div>
+
+                  <Separator />
+
+                  <div className="space-y-2">
+                    <Label>リダイレクト先（任意）</Label>
+                    <p className="text-xs text-muted-foreground">
+                      ログイン完了後に遷移させたいパスまたは同一ドメインのURLを入力すると、専用のログインURLを生成できます。
+                    </p>
+                    <Input
+                      value={customNext}
+                      onChange={(e) => setCustomNext(e.target.value)}
+                      placeholder="/cms/f/XXXXXXXX"
+                    />
+                    <div className="flex items-center gap-2">
+                      <Input value={customLoginUrl || ''} readOnly className="font-mono text-sm" />
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => copyToClipboard(customLoginUrl, "カスタムログインURL")}
+                        disabled={!customLoginUrl}
+                      >
+                        <Copy className="h-4 w-4" />
+                      </Button>
+                    </div>
                   </div>
                 </div>
               </CardContent>

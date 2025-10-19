@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import { Button } from "@/components/ui/button";
 
 const LIFF_SDK_URL = "https://static.line-scdn.net/liff/edge/2/sdk.js";
 
@@ -62,6 +63,7 @@ export default function LiffAuth() {
   const [showDebug, setShowDebug] = useState(false);
   const [tapCount, setTapCount] = useState(0);
   const [diagnosticData, setDiagnosticData] = useState<any>(null);
+  const [showLoginPrompt, setShowLoginPrompt] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -170,12 +172,17 @@ export default function LiffAuth() {
         console.log("3. LIFF初期化完了");
 
         if (!window.liff.isLoggedIn()) {
-          setStatus(buildStatus("LINEログインに移動しています..."));
-          console.log("4. LINEログインへリダイレクト");
-          window.liff.login({ redirectUri: window.location.href });
+          console.log("4. LINEログインが必要です (未ログイン)");
+          diagnostic.stage = "await_login";
+          diagnostic.destination = null;
+          diagnostic.usedFallback = false;
+          setDiagnosticData(diagnostic);
+          setShowLoginPrompt(true);
+          setStatus(buildStatus("LINEログインが必要です", "下のボタンを押してログインしてください"));
           return;
         }
 
+        setShowLoginPrompt(false);
         setStatus(buildStatus("プロフィールを取得中..."));
         const context = window.liff.getContext ? window.liff.getContext() : null;
         const profile = await window.liff.getProfile();
@@ -391,6 +398,17 @@ export default function LiffAuth() {
     }
   };
 
+  const handleStartLogin = () => {
+    if (!window.liff) return;
+    setStatus(buildStatus("LINEログインに移動しています..."));
+    try {
+      window.liff.login({ redirectUri: window.location.href });
+    } catch (loginError) {
+      console.error("LIFF login start failed", loginError);
+      setError((loginError as Error)?.message ?? "LINEログインを開始できませんでした");
+    }
+  };
+
   const message = error ? "リダイレクトに失敗しました" : status.message;
   const description = error ?? status.description ?? "しばらくお待ちください";
 
@@ -411,6 +429,11 @@ export default function LiffAuth() {
           {message}
         </h2>
         <p className="text-muted-foreground whitespace-pre-line">{description}</p>
+        {showLoginPrompt && !error && (
+          <Button onClick={handleStartLogin} className="w-full">
+            LINEログイン
+          </Button>
+        )}
 
         {(isDebug || showDebug) && (
           <div className="mt-6 p-4 bg-muted rounded-lg text-left text-xs space-y-3 max-h-[80vh] overflow-y-auto">

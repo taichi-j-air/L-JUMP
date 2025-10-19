@@ -63,6 +63,24 @@ const tryDecodeState = (raw: string | null) => {
   }
 };
 
+const sanitizeNextTarget = (value: unknown, origin?: string | null): string | null => {
+  if (typeof value !== "string" || value.trim().length === 0) return null;
+  const trimmed = value.trim();
+
+  try {
+    const baseOrigin = sanitizeOrigin(origin) || FRONTEND_BASE_URL;
+    const baseUrl = new URL(baseOrigin);
+    const resolved = new URL(trimmed, baseUrl);
+    if (resolved.origin !== baseUrl.origin) return null;
+    return `${resolved.pathname}${resolved.search}${resolved.hash}`;
+  } catch {
+    if (trimmed.startsWith('/')) {
+      return trimmed;
+    }
+    return null;
+  }
+};
+
   // Rate limiting check
   const clientIP = req.headers.get('x-forwarded-for') || req.headers.get('x-real-ip') || 'unknown';
   const rateAllowed = await rateLimiter.isAllowed(`login:${clientIP}`, 10, 60000); // 10 requests per minute
@@ -113,6 +131,7 @@ const tryDecodeState = (raw: string | null) => {
     const stateMode = typeof decodedState?.mode === "string" ? decodedState.mode : null;
     const stateUserId = typeof decodedState?.userId === "string" ? decodedState.userId : null;
 
+    let sanitizedNext: string | null = sanitizeNextTarget(decodedState?.next, loginOrigin);
     let isGeneralLogin = false;
 
     if (stateMode === "login") {
@@ -323,7 +342,10 @@ const tryDecodeState = (raw: string | null) => {
         } else if (profile.line_bot_id) {
           fallbackUrl = `https://line.me/R/ti/p/${encodeURIComponent(profile.line_bot_id)}`;
         } else {
-          fallbackUrl = buildFrontendUrl('/login-success?error=invalid_grant', loginOrigin);
+          const fallbackPath = sanitizedNext
+            ? `/login-success?error=invalid_grant&next=${encodeURIComponent(sanitizedNext)}`
+            : '/login-success?error=invalid_grant';
+          fallbackUrl = buildFrontendUrl(fallbackPath, loginOrigin);
         }
         
         console.log("Fallback redirect URL:", fallbackUrl);
@@ -365,7 +387,8 @@ const tryDecodeState = (raw: string | null) => {
       console.log("General login successful for user:", lineProfile.userId);
       
       /* ── 9. 完了ページへリダイレクト ── */
-      const generalLoginSuccessUrl = buildFrontendUrl(`/login-success?user_name=${encodeURIComponent(display)}`, loginOrigin);
+      const nextQuery = sanitizedNext ? `&next=${encodeURIComponent(sanitizedNext)}` : "";
+      const generalLoginSuccessUrl = buildFrontendUrl(`/login-success?user_name=${encodeURIComponent(display)}${nextQuery}`, loginOrigin);
       return Response.redirect(generalLoginSuccessUrl, 302);
     }
 

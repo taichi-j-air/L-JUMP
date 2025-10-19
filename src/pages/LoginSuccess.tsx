@@ -1,16 +1,34 @@
 import { useEffect, useState } from "react";
-import { useSearchParams, useNavigate } from "react-router-dom";
+import { useSearchParams } from "react-router-dom";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { CheckCircle } from "lucide-react";
 
 export default function LoginSuccess() {
   const [searchParams] = useSearchParams();
-  const navigate = useNavigate();
   const [countdown, setCountdown] = useState(5);
 
   const userName = searchParams.get('user_name');
   const scenario = searchParams.get('scenario');
+  const nextParam = searchParams.get('next');
+
+  const sanitizeNext = (raw: string | null) => {
+    if (!raw) return '/';
+    if (typeof window === "undefined") return '/';
+    try {
+      const base = window.location.origin;
+      const resolved = new URL(raw, base);
+      if (resolved.origin !== base) {
+        return '/';
+      }
+      return `${resolved.pathname}${resolved.search}${resolved.hash}` || '/';
+    } catch {
+      if (raw.startsWith('/')) return raw;
+      return '/';
+    }
+  };
+
+  const targetUrl = sanitizeNext(nextParam);
 
   useEffect(() => {
     // シナリオ招待の場合は最初のステップ配信をトリガー
@@ -35,7 +53,7 @@ export default function LoginSuccess() {
       setCountdown((prev) => {
         if (prev <= 1) {
           clearInterval(timer);
-          navigate('/');
+          window.location.assign(targetUrl);
           return 0;
         }
         return prev - 1;
@@ -43,7 +61,11 @@ export default function LoginSuccess() {
     }, 1000);
 
     return () => clearInterval(timer);
-  }, [navigate, scenario]);
+  }, [scenario, targetUrl]);
+
+  const handleManualRedirect = () => {
+    window.location.assign(targetUrl);
+  };
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-green-50 to-blue-100">
@@ -77,10 +99,10 @@ export default function LoginSuccess() {
             </p>
             
             <Button 
-              onClick={() => navigate('/')}
+              onClick={handleManualRedirect}
               className="w-full"
             >
-              今すぐホームに戻る
+              次のページへ移動する
             </Button>
           </div>
         </CardContent>
