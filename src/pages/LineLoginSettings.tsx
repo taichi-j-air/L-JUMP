@@ -29,7 +29,6 @@ export default function LineLoginSettings() {
     liffUrl: '',
     liffEndpointUrl: ''
   })
-  const [customNext, setCustomNext] = useState('')
 
   useEffect(() => {
     checkUser()
@@ -252,7 +251,6 @@ export default function LineLoginSettings() {
 
   const isConfigured = settings.channelId && settings.channelSecret
   const isLiffConfigured = liffSettings.liffId && liffSettings.liffUrl
-  const customLoginUrl = generateLoginUrl(settings.channelId, user?.id, customNext || null)
 
   return (
     <div className="min-h-screen bg-background">
@@ -493,30 +491,6 @@ export default function LineLoginSettings() {
                     </Button>
                   </div>
 
-                  <Separator />
-
-                  <div className="space-y-2">
-                    <Label>リダイレクト先（任意）</Label>
-                    <p className="text-xs text-muted-foreground">
-                      ログイン完了後に遷移させたいパスまたは同一ドメインのURLを入力すると、専用のログインURLを生成できます。
-                    </p>
-                    <Input
-                      value={customNext}
-                      onChange={(e) => setCustomNext(e.target.value)}
-                      placeholder="/cms/f/XXXXXXXX"
-                    />
-                    <div className="flex items-center gap-2">
-                      <Input value={customLoginUrl || ''} readOnly className="font-mono text-sm" />
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => copyToClipboard(customLoginUrl, "カスタムログインURL")}
-                        disabled={!customLoginUrl}
-                      >
-                        <Copy className="h-4 w-4" />
-                      </Button>
-                    </div>
-                  </div>
                 </div>
               </CardContent>
             </Card>

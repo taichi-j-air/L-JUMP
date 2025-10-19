@@ -12,23 +12,27 @@ export default function LoginSuccess() {
   const scenario = searchParams.get('scenario');
   const nextParam = searchParams.get('next');
 
+  const defaultTarget = '/auth?line_login=success';
+
   const sanitizeNext = (raw: string | null) => {
-    if (!raw) return '/';
+    if (!raw) return defaultTarget;
     if (typeof window === "undefined") return '/';
     try {
       const base = window.location.origin;
       const resolved = new URL(raw, base);
       if (resolved.origin !== base) {
-        return '/';
+        return defaultTarget;
       }
-      return `${resolved.pathname}${resolved.search}${resolved.hash}` || '/';
+      const combined = `${resolved.pathname}${resolved.search}${resolved.hash}` || '/';
+      return combined;
     } catch {
       if (raw.startsWith('/')) return raw;
-      return '/';
+      return defaultTarget;
     }
   };
 
   const targetUrl = sanitizeNext(nextParam);
+  const finalTarget = targetUrl === '/' ? defaultTarget : targetUrl;
 
   useEffect(() => {
     // シナリオ招待の場合は最初のステップ配信をトリガー
@@ -53,7 +57,7 @@ export default function LoginSuccess() {
       setCountdown((prev) => {
         if (prev <= 1) {
           clearInterval(timer);
-          window.location.assign(targetUrl);
+          window.location.assign(finalTarget);
           return 0;
         }
         return prev - 1;
@@ -61,10 +65,10 @@ export default function LoginSuccess() {
     }, 1000);
 
     return () => clearInterval(timer);
-  }, [scenario, targetUrl]);
+  }, [scenario, finalTarget]);
 
   const handleManualRedirect = () => {
-    window.location.assign(targetUrl);
+    window.location.assign(finalTarget);
   };
 
   return (
