@@ -111,11 +111,40 @@ export default function FormEmbedComponent({
     if (!trimmed) return undefined;
     return /^\d+(\.\d+)?$/.test(trimmed) ? `${trimmed}px` : trimmed;
   };
+  const styleConfig = delayStyle && typeof delayStyle === "object" ? delayStyle : undefined;
+  const resolveColor = (primary?: string, fallback?: string) => {
+    if (primary && primary.trim()) return primary.trim();
+    return fallback && fallback.trim() ? fallback.trim() : undefined;
+  };
   const headlineText = delayHeadline && delayHeadline.trim().length > 0 ? delayHeadline.trim() : "まもなくフォームが表示されます";
-  const labelColor = delayStyle?.labelColor && delayStyle.labelColor.trim() ? delayStyle.labelColor.trim() : undefined;
-  const labelFontSize = toCssSize(delayStyle?.labelSize);
-  const timerColor = delayStyle?.timerColor && delayStyle.timerColor.trim() ? delayStyle.timerColor.trim() : undefined;
-  const timerFontSize = toCssSize(delayStyle?.timerSize);
+  const headlineColor = resolveColor(
+    typeof styleConfig?.headlineColor === "string" ? styleConfig?.headlineColor : undefined,
+    typeof styleConfig?.labelColor === "string" ? styleConfig?.labelColor : undefined
+  );
+  const messageColor = resolveColor(
+    typeof styleConfig?.messageColor === "string" ? styleConfig?.messageColor : undefined,
+    typeof styleConfig?.labelColor === "string" ? styleConfig?.labelColor : undefined
+  );
+  const headlineFontSize = toCssSize(
+    typeof styleConfig?.headlineSize === "string" && styleConfig.headlineSize.trim()
+      ? styleConfig.headlineSize
+      : typeof styleConfig?.labelSize === "string"
+      ? styleConfig.labelSize
+      : undefined
+  );
+  const messageFontSize = toCssSize(
+    typeof styleConfig?.messageSize === "string" && styleConfig.messageSize.trim()
+      ? styleConfig.messageSize
+      : typeof styleConfig?.labelSize === "string"
+      ? styleConfig.labelSize
+      : undefined
+  );
+  const timerColor = resolveColor(
+    typeof styleConfig?.timerColor === "string" ? styleConfig.timerColor : undefined
+  );
+  const timerFontSize = toCssSize(
+    typeof styleConfig?.timerSize === "string" ? styleConfig.timerSize : undefined
+  );
 
   useEffect(() => {
     setNow(Date.now());
@@ -355,13 +384,13 @@ export default function FormEmbedComponent({
         <CardContent className="p-6 space-y-3 text-center">
           <h3
             className="font-semibold"
-            style={{ color: labelColor, fontSize: labelFontSize }}
+            style={{ color: headlineColor, fontSize: headlineFontSize }}
           >
             {headlineText}
           </h3>
           <p
             className="whitespace-pre-wrap"
-            style={{ color: labelColor, fontSize: labelFontSize }}
+            style={{ color: messageColor ?? headlineColor, fontSize: messageFontSize ?? headlineFontSize }}
           >
             {message}
           </p>

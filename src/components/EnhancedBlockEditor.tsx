@@ -392,8 +392,10 @@ export const EnhancedBlockEditor: React.FC<EnhancedBlockEditorProps> = (props) =
         delayHeadline: '',
         delayMessage: '',
         delayStyle: {
-          labelColor: '',
-          labelSize: '',
+          headlineColor: '',
+          headlineSize: '',
+          messageColor: '',
+          messageSize: '',
           timerColor: '',
           timerSize: '',
         },
@@ -960,15 +962,27 @@ export const EnhancedBlockEditor: React.FC<EnhancedBlockEditorProps> = (props) =
         const delayEnabled = !!block.content?.delayEnabled && totalDelaySeconds > 0;
         const delayMinutes = Math.floor(totalDelaySeconds / 60);
         const delaySeconds = totalDelaySeconds % 60;
-        const delayStyle = (block.content?.delayStyle && typeof block.content.delayStyle === 'object')
+        const rawDelayStyle = (block.content?.delayStyle && typeof block.content.delayStyle === 'object')
           ? block.content.delayStyle
           : {};
-        const labelColor = typeof delayStyle.labelColor === 'string' ? delayStyle.labelColor : '';
-        const labelSize = typeof delayStyle.labelSize === 'string' ? delayStyle.labelSize : '';
-        const timerColor = typeof delayStyle.timerColor === 'string' ? delayStyle.timerColor : '';
-        const timerSize = typeof delayStyle.timerSize === 'string' ? delayStyle.timerSize : '';
+        const headlineColor = typeof rawDelayStyle.headlineColor === 'string'
+          ? rawDelayStyle.headlineColor
+          : (typeof rawDelayStyle.labelColor === 'string' ? rawDelayStyle.labelColor : '');
+        const headlineSize = typeof rawDelayStyle.headlineSize === 'string'
+          ? rawDelayStyle.headlineSize
+          : (typeof rawDelayStyle.labelSize === 'string' ? rawDelayStyle.labelSize : '');
+        const messageColor = typeof rawDelayStyle.messageColor === 'string'
+          ? rawDelayStyle.messageColor
+          : (typeof rawDelayStyle.labelColor === 'string' ? rawDelayStyle.labelColor : '');
+        const messageSize = typeof rawDelayStyle.messageSize === 'string'
+          ? rawDelayStyle.messageSize
+          : (typeof rawDelayStyle.labelSize === 'string' ? rawDelayStyle.labelSize : '');
+        const timerColor = typeof rawDelayStyle.timerColor === 'string' ? rawDelayStyle.timerColor : '';
+        const timerSize = typeof rawDelayStyle.timerSize === 'string' ? rawDelayStyle.timerSize : '';
         const updateDelayStyle = (partial: Record<string, string>) => {
-          const nextStyle = { ...(delayStyle as Record<string, string>), ...partial };
+          const nextStyle = { ...(rawDelayStyle as Record<string, string>), ...partial };
+          delete nextStyle.labelColor;
+          delete nextStyle.labelSize;
           updateBlock(block.id, { ...block.content, delayStyle: nextStyle });
         };
         return (
@@ -1078,6 +1092,59 @@ export const EnhancedBlockEditor: React.FC<EnhancedBlockEditorProps> = (props) =
                       placeholder="例：まもなくフォームが表示されます"
                     />
                   </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="space-y-1">
+                      <Label className="text-xs text-muted-foreground flex items-center justify-between">
+                        ヘッドライン色
+                        {headlineColor && (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-auto px-2 py-1 text-xs"
+                            onClick={() => updateDelayStyle({ headlineColor: '' })}
+                          >
+                            クリア
+                          </Button>
+                        )}
+                      </Label>
+                      <div className="flex items-center gap-2">
+                        <Input
+                          type="color"
+                          value={headlineColor || '#222222'}
+                          onChange={(e) => updateDelayStyle({ headlineColor: e.target.value })}
+                          className="h-10 w-14 p-1"
+                        />
+                        <Input
+                          value={headlineColor}
+                          onChange={(e) => updateDelayStyle({ headlineColor: e.target.value })}
+                          placeholder="#222222"
+                        />
+                      </div>
+                    </div>
+                    <div className="space-y-1">
+                      <Label className="text-xs text-muted-foreground flex items-center justify-between">
+                        ヘッドラインサイズ（px）
+                        {headlineSize && (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-auto px-2 py-1 text-xs"
+                            onClick={() => updateDelayStyle({ headlineSize: '' })}
+                          >
+                            クリア
+                          </Button>
+                        )}
+                      </Label>
+                      <Input
+                        type="number"
+                        min={10}
+                        max={72}
+                        value={headlineSize}
+                        onChange={(e) => updateDelayStyle({ headlineSize: e.target.value })}
+                        placeholder="例: 20"
+                      />
+                    </div>
+                  </div>
                   <div className="space-y-1">
                     <Label className="text-xs text-muted-foreground">待機中に表示するテキスト（{`{time}`} が残り時間に置き換わります）</Label>
                     <Input
@@ -1089,13 +1156,13 @@ export const EnhancedBlockEditor: React.FC<EnhancedBlockEditorProps> = (props) =
                   <div className="grid grid-cols-2 gap-3">
                     <div className="space-y-1">
                       <Label className="text-xs text-muted-foreground flex items-center justify-between">
-                        テキスト色
-                        {labelColor && (
+                        本文色
+                        {messageColor && (
                           <Button
                             variant="ghost"
                             size="sm"
                             className="h-auto px-2 py-1 text-xs"
-                            onClick={() => updateDelayStyle({ labelColor: '' })}
+                            onClick={() => updateDelayStyle({ messageColor: '' })}
                           >
                             クリア
                           </Button>
@@ -1104,26 +1171,26 @@ export const EnhancedBlockEditor: React.FC<EnhancedBlockEditorProps> = (props) =
                       <div className="flex items-center gap-2">
                         <Input
                           type="color"
-                          value={labelColor || '#222222'}
-                          onChange={(e) => updateDelayStyle({ labelColor: e.target.value })}
+                          value={messageColor || '#555555'}
+                          onChange={(e) => updateDelayStyle({ messageColor: e.target.value })}
                           className="h-10 w-14 p-1"
                         />
                         <Input
-                          value={labelColor}
-                          onChange={(e) => updateDelayStyle({ labelColor: e.target.value })}
-                          placeholder="#222222"
+                          value={messageColor}
+                          onChange={(e) => updateDelayStyle({ messageColor: e.target.value })}
+                          placeholder="#555555"
                         />
                       </div>
                     </div>
                     <div className="space-y-1">
                       <Label className="text-xs text-muted-foreground flex items-center justify-between">
-                        テキストサイズ（px）
-                        {labelSize && (
+                        本文サイズ（px）
+                        {messageSize && (
                           <Button
                             variant="ghost"
                             size="sm"
                             className="h-auto px-2 py-1 text-xs"
-                            onClick={() => updateDelayStyle({ labelSize: '' })}
+                            onClick={() => updateDelayStyle({ messageSize: '' })}
                           >
                             クリア
                           </Button>
@@ -1133,9 +1200,9 @@ export const EnhancedBlockEditor: React.FC<EnhancedBlockEditorProps> = (props) =
                         type="number"
                         min={10}
                         max={72}
-                        value={labelSize}
-                        onChange={(e) => updateDelayStyle({ labelSize: e.target.value })}
-                        placeholder="例: 20"
+                        value={messageSize}
+                        onChange={(e) => updateDelayStyle({ messageSize: e.target.value })}
+                        placeholder="例: 16"
                       />
                     </div>
                   </div>
@@ -1188,7 +1255,7 @@ export const EnhancedBlockEditor: React.FC<EnhancedBlockEditorProps> = (props) =
                         max={96}
                         value={timerSize}
                         onChange={(e) => updateDelayStyle({ timerSize: e.target.value })}
-                        placeholder="例: 28"
+                        placeholder="例: 32"
                       />
                     </div>
                   </div>
