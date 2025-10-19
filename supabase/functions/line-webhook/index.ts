@@ -1307,29 +1307,20 @@ async function handleUnfollow(event: LineEvent, supabase: any, req: Request) {
 
     const profile = profiles[0]
 
-    // Remove friend from database
-    const { error: deleteError } = await supabase
+    // Mark friend as blocked instead of deleting
+    const { error: updateError } = await supabase
       .from('line_friends')
-      .delete()
+      .update({ 
+        is_blocked: true,
+        updated_at: new Date().toISOString() 
+      })
       .eq('user_id', profile.user_id)
       .eq('line_user_id', source.userId)
 
-    if (deleteError) {
-      console.error('Error removing friend:', deleteError)
+    if (updateError) {
+      console.error('Error marking friend as blocked:', updateError)
     } else {
-      // Update friends count
-      const { error: updateError } = await supabase
-        .from('profiles')
-        .update({ 
-          friends_count: Math.max(0, (profile.friends_count || 1) - 1) 
-        })
-        .eq('user_id', profile.user_id)
-
-      if (updateError) {
-        console.error('Error updating friends count:', updateError)
-      }
-
-      console.log('Friend removed successfully:', source.userId)
+      console.log('Friend marked as blocked:', source.userId)
     }
 
   } catch (error) {
