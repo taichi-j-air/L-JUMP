@@ -250,7 +250,7 @@ serve(async (req) => {
     console.log("Fetching friends list for user:", userId);
     const { data: friends, error: fErr } = await supabase
       .from("line_friends")
-      .select("line_user_id, short_uid, display_name")
+      .select("id, line_user_id, short_uid, display_name")
       .eq("user_id", userId);
       
     if (fErr) {
@@ -315,6 +315,39 @@ serve(async (req) => {
         if (res.ok) {
           console.log(`Successfully sent message to ${lineUserId}`);
           results.push({ lineUserId, success: true });
+
+          try {
+            const sentAt = new Date().toISOString();
+            const altText = typeof normalized?.altText === 'string' && normalized.altText.trim().length > 0
+              ? normalized.altText.trim()
+              : 'Flexメッセージ';
+            const metadata = {
+              source: 'flex_message_designer',
+              message_type: 'flex',
+              flex_payload: normalized,
+              flex_alt_text: normalized?.altText ?? null,
+              sent_via: 'send-flex-message',
+              line_user_id: lineUserId,
+              short_uid: shortUid
+            };
+            const { error: logError } = await supabase
+              .from('chat_messages')
+              .insert({
+                user_id: userId,
+                friend_id: friend.id,
+                message_type: 'outgoing',
+                message_text: altText,
+                sent_at: sentAt,
+                media_kind: 'flex',
+                content_type: 'application/vnd.line.flex+json',
+                metadata
+              });
+            if (logError) {
+              console.error(`Failed to log flex delivery for ${lineUserId}:`, logError);
+            }
+          } catch (logException) {
+            console.error(`Exception while logging flex delivery for ${lineUserId}:`, logException);
+          }
         } else {
           console.error(`Failed to send message to ${lineUserId}, status: ${res.status}`);
           const errorText = await res.text();

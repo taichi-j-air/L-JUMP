@@ -710,7 +710,20 @@ export default function StepDeliveryPage() {
                           <Input
                             type="datetime-local"
                             className="h-8"
-                            value={selectedStep.specific_time?.substring(0, 16) || ''}
+                            value={(() => {
+                              if (!selectedStep.specific_time) return '';
+                              try {
+                                const d = new Date(selectedStep.specific_time);
+                                const year = d.getFullYear();
+                                const month = String(d.getMonth() + 1).padStart(2, '0');
+                                const day = String(d.getDate()).padStart(2, '0');
+                                const hours = String(d.getHours()).padStart(2, '0');
+                                const minutes = String(d.getMinutes()).padStart(2, '0');
+                                return `${year}-${month}-${day}T${hours}:${minutes}`;
+                              } catch (e) {
+                                return '';
+                              }
+                            })()}
                             onChange={(e) => handleUpdateStepTiming({ specific_time: e.target.value ? new Date(e.target.value).toISOString() : undefined })}
                           />
                         </div>

@@ -570,6 +570,98 @@ async function deliverStepMessages(supabase: any, stepTracking: any) {
   )
         if (sendResult.sent) {
           console.log('✅ Message sent successfully:', message.id)
+
+          try {
+            const sentAt = new Date().toISOString()
+            let textContent: string | null = null
+            let mediaUrl: string | null = null
+            let mediaKind: string | null = null
+            let contentType: string | null = null
+            const metadata: Record<string, any> = {
+              source: 'step_delivery',
+              scenario_id: stepTracking.scenario_id,
+              step_id: stepTracking.step_id,
+              step_message_id: message.id,
+              message_type: message.message_type,
+              sent_via: 'scheduled-step-delivery',
+              line_message: sendResult.lineMessage ?? null
+            }
+
+            switch (message.message_type) {
+              case 'text':
+                textContent = processedContent ?? preparedMessage.content ?? ''
+                contentType = 'text/plain'
+                metadata.processed_content = processedContent ?? preparedMessage.content ?? ''
+                if (typeof message.content === 'string') {
+                  metadata.original_content = message.content
+                }
+                break
+              case 'media':
+                mediaUrl = message.media_url ?? null
+                mediaKind = 'image'
+                contentType = message.content_type || 'image'
+                textContent = message.alt_text || '[画像]'
+                metadata.media_url = mediaUrl
+                break
+              case 'flex': {
+                const altText =
+                  sendResult.lineMessage?.altText ||
+                  message.alt_text ||
+                  (typeof message.content === 'string'
+                    ? (() => {
+                        try {
+                          const parsed = JSON.parse(message.content)
+                          return parsed?.altText
+                        } catch (_) {
+                          return null
+                        }
+                      })()
+                    : message.content?.altText) ||
+                  'Flexメッセージ'
+                textContent = altText
+                mediaKind = 'flex'
+                contentType = 'application/vnd.line.flex+json'
+                metadata.flex_message_id = message.flex_message_id || null
+                metadata.flex_payload = sendResult.lineMessage ?? null
+                break
+              }
+              default:
+                textContent = typeof preparedMessage.content === 'string'
+                  ? preparedMessage.content
+                  : String(preparedMessage.content ?? '')
+                contentType = 'text/plain'
+                metadata.processed_content = textContent
+                if (typeof message.content === 'string') {
+                  metadata.original_content = message.content
+                }
+            }
+
+            if (!textContent && mediaUrl) {
+              textContent = mediaKind === 'flex' ? '[Flexメッセージ]' : '[メディア]'
+            }
+
+            const payload = {
+              user_id: friend.user_id,
+              friend_id: stepTracking.friend_id,
+              message_type: 'outgoing',
+              sent_at: sentAt,
+              message_text: textContent || '',
+              media_url: mediaUrl,
+              media_kind: mediaKind,
+              content_type: contentType,
+              metadata
+            }
+
+            const { error: logError } = await supabase
+              .from('chat_messages')
+              .insert(payload)
+            if (logError) {
+              console.error('Failed to log scheduled step delivery:', logError)
+            }
+          } catch (logException) {
+            console.error('Exception while logging scheduled step delivery:', logException)
+          }
+
           if (i < messages.length - 1) {
             await new Promise(resolve => setTimeout(resolve, 300))
           }
@@ -849,7 +941,7 @@ async function sendLineMessage(
     }
     
     console.log('LINE message sent successfully')
-    return { sent: true }
+    return { sent: true, lineMessage }
     
   } catch (error) {
     console.error('LINE message send error:', error)

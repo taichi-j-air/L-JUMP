@@ -9,6 +9,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "./ui/avatar"
 import { supabase } from "@/integrations/supabase/client"
 import { useToast } from "./ui/use-toast"
 import { MessageQuotaDisplay } from "./MessageQuotaDisplay"
+import { FlexMessageBubble } from "./FlexMessageBubble"
 
 interface Friend {
   id: string
@@ -30,6 +31,7 @@ interface ChatMessage {
   file_size?: number
   sticker_id?: string
   sticker_package_id?: string
+  metadata?: Record<string, any> | null
 }
 
 interface ChatWindowProps {
@@ -68,10 +70,15 @@ export function ChatWindow({ user, friend, onClose }: ChatWindowProps) {
         table: 'chat_messages',
         filter: `friend_id=eq.${friend.id}`
       }, (payload) => {
-        const newMessage = payload.new as ChatMessage;
-        if (newMessage.message_type === 'incoming') {
-          setMessages(prev => [...prev, newMessage]);
-        }
+        const newMessage = payload.new as ChatMessage
+        setMessages(prev => {
+          if (prev.some(message => message.id === newMessage.id)) {
+            return prev
+          }
+          return [...prev, newMessage].sort(
+            (a, b) => new Date(a.sent_at).getTime() - new Date(b.sent_at).getTime()
+          )
+        })
       })
       .subscribe();
 
@@ -84,7 +91,7 @@ export function ChatWindow({ user, friend, onClose }: ChatWindowProps) {
     try {
       const { data, error } = await supabase
         .from('chat_messages')
-        .select('id, message_text, message_type, sent_at, media_kind, content_type, media_url, thumbnail_url, file_name, file_size, sticker_id, sticker_package_id')
+        .select('id, message_text, message_type, sent_at, media_kind, content_type, media_url, thumbnail_url, file_name, file_size, sticker_id, sticker_package_id, metadata')
         .eq('friend_id', friend.id)
         .order('sent_at', { ascending: true })
 
@@ -181,7 +188,7 @@ export function ChatWindow({ user, friend, onClose }: ChatWindowProps) {
           message_text: processedMessage,
           message_type: 'outgoing'
         })
-        .select('id, message_text, message_type, sent_at')
+        .select('id, message_text, message_type, sent_at, metadata')
         .single()
 
       if (saveError) {
@@ -265,6 +272,18 @@ export function ChatWindow({ user, friend, onClose }: ChatWindowProps) {
     }
   }
 
+  const getSourceLabel = (metadata?: Record<string, any> | null) => {
+    const source = metadata?.source
+    switch (source) {
+      case 'step_delivery':
+        return 'ステップ配信'
+      case 'flex_message_designer':
+        return 'Flexメッセージ配信'
+      default:
+        return null
+    }
+  }
+
   return (
     <div className="flex gap-4 h-full">
       <Card className="min-h-[600px] max-h-[80vh] flex flex-col w-[700px] overflow-x-hidden">
@@ -296,127 +315,146 @@ export function ChatWindow({ user, friend, onClose }: ChatWindowProps) {
                 <p className="text-sm">最初のメッセージを送信してみましょう</p>
               </div>
             ) : (
-              messages.map((message) => (
-                <div
-                  key={message.id}
-                  className={`flex ${message.message_type === 'outgoing' ? 'justify-end' : 'justify-start'}`}
-                >
+              messages.map((message) => {
+                const sourceLabel = getSourceLabel(message.metadata)
+                const isOutgoing = message.message_type === 'outgoing'
+                const flexPayload =
+                  message.metadata?.flex_payload ??
+                  message.metadata?.line_message ??
+                  null
+                const isFlex =
+                  message.media_kind === 'flex' ||
+                  message.content_type === 'application/vnd.line.flex+json'
+
+                return (
                   <div
-                     className={`max-w-[80%] rounded-lg mx-2 word-wrap break-words ${
-                       message.media_kind === 'sticker' 
-                         ? '' 
-                         : `px-3 py-2 ${
-                             message.message_type === 'outgoing'
-                               ? 'bg-primary text-primary-foreground'
-                               : 'bg-muted'
-                           }`
-                     }`}
-                   >
-                     {message.media_kind === 'image' && message.media_url ? (
-                       <div className="space-y-2">
-                         <img 
-                           src={message.media_url} 
-                           alt="送信された画像" 
-                           className="max-w-full h-auto rounded-lg cursor-pointer hover:opacity-90 transition-opacity"
-                           onError={(e) => {
-                             console.error('Image failed to load:', message.media_url);
-                             e.currentTarget.src = 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjAwIiBoZWlnaHQ9IjEwMCIgdmlld0JveD0iMCAwIDIwMCAxMDAiIGZpbGw9Im5vbmUiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+CjxyZWN0IHdpZHRoPSIyMDAiIGhlaWdodD0iMTAwIiBmaWxsPSIjRjNGNEY2Ii8+Cjx0ZXh0IHg9IjEwMCIgeT0iNTUiIGZvbnQtZmFtaWx5PSJBcmlhbCIgZm9udC1zaXplPSIxNCIgZmlsbD0iIzZCNzI4MCIgdGV4dC1hbmNob3I9Im1pZGRsZSI+55S75YOP44GM6Kqt44G/6L6844KB44G+44Gb44KT44Gn44GX44GfPC90ZXh0Pgo8L3N2Zz4K';
-                           }}
-                           onClick={() => window.open(message.media_url, '_blank')}
-                         />
-                         {message.message_text && (
-                           <p className="text-sm">{message.message_text}</p>
-                         )}
-                       </div>
-                     ) : message.media_kind === 'video' && message.media_url ? (
-                       <div className="space-y-2">
-                         <video 
-                           controls 
-                           className="max-w-full h-auto rounded-lg"
-                           poster={message.thumbnail_url}
-                           preload="metadata"
-                         >
-                           <source src={message.media_url} type={message.content_type || 'video/mp4'} />
-                           お使いのブラウザは動画をサポートしていません。
-                         </video>
-                         {message.message_text && (
-                           <p className="text-sm">{message.message_text}</p>
-                         )}
-                       </div>
-                     ) : message.media_kind === 'audio' && message.media_url ? (
-                       <div className="space-y-2">
-                         <div className="bg-muted/50 rounded-lg p-3">
-                           <div className="flex items-center gap-2 mb-2">
-                             <span className="text-lg">🎵</span>
-                             <span className="text-sm font-medium">音声メッセージ</span>
-                           </div>
-                           <audio controls className="w-full">
-                             <source src={message.media_url} type={message.content_type || 'audio/m4a'} />
-                             お使いのブラウザは音声をサポートしていません。
-                           </audio>
-                         </div>
-                         {message.message_text && (
-                           <p className="text-sm">{message.message_text}</p>
-                         )}
-                       </div>
-                     ) : message.media_kind === 'sticker' ? (
-                       <div className="space-y-2">
-                         {message.media_url ? (
-                           <img 
-                             src={message.media_url}
-                             alt="スタンプ"
-                             className="w-32 h-32 object-contain rounded-lg"
-                             onError={(e) => {
-                               console.error('Sticker failed to load:', message.media_url);
-                               // Fallback to emoji
-                               e.currentTarget.style.display = 'none';
-                               const fallback = e.currentTarget.nextElementSibling as HTMLElement;
-                               if (fallback) fallback.style.display = 'block';
-                             }}
-                           />
-                         ) : null}
-                         <div className="text-4xl" style={{ display: message.media_url ? 'none' : 'block' }}>
-                           🎨
-                         </div>
+                    key={message.id}
+                    className={`flex ${isOutgoing ? 'justify-end' : 'justify-start'}`}
+                  >
+                    <div
+                      className={`max-w-[80%] rounded-lg mx-2 word-wrap break-words ${
+                        message.media_kind === 'sticker' || isFlex
+                          ? ''
+                          : `px-3 py-2 ${
+                              isOutgoing
+                                ? 'bg-primary text-primary-foreground'
+                                : 'bg-muted'
+                            }`
+                      }`}
+                    >
+                      {sourceLabel ? (
+                        <div className="text-[10px] uppercase tracking-wide text-muted-foreground mb-1">
+                          {sourceLabel}
+                        </div>
+                      ) : null}
+
+                      {isFlex ? (
+                        <FlexMessageBubble payload={flexPayload} altText={message.message_text} />
+                      ) : message.media_kind === 'image' && message.media_url ? (
+                        <div className="space-y-2">
+                          <img
+                            src={message.media_url}
+                            alt="送信された画像"
+                            className="max-w-full h-auto rounded-lg cursor-pointer hover:opacity-90 transition-opacity"
+                            onError={(e) => {
+                              console.error('Image failed to load:', message.media_url)
+                              e.currentTarget.src =
+                                'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjAwIiBoZWlnaHQ9IjEwMCIgdmlld0JveD0iMCAwIDIwMCAxMDAiIGZpbGw9Im5vbmUiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+CjxyZWN0IHdpZHRoPSIyMDAiIGhlaWdodD0iMTAwIiBmaWxsPSIjRjNGNEY2Ii8+Cjx0ZXh0IHg9IjEwMCIgeT0iNTUiIGZvbnQtZmFtaWx5PSJBcmlhbCIgZm9udC1zaXplPSIxNCIgZmlsbD0iIzZCNzI4MCIgdGV4dC1hbmNob3I9Im1pZGRsZSI+55S75YOP44GM6Kqt44G/6L6844KB44G+44Gb44KT44Gn44GX44GfPC90ZXh0Pgo8L3N2Zz4K'
+                            }}
+                            onClick={() => window.open(message.media_url ?? '', '_blank')}
+                          />
                           {message.message_text && (
                             <p className="text-sm">{message.message_text}</p>
                           )}
-                       </div>
-                     ) : message.media_kind === 'file' ? (
-                       <div className="space-y-2">
-                         <div className="bg-muted/50 rounded-lg p-3">
-                           <div className="flex items-center gap-2">
-                             <span className="text-lg">📎</span>
-                             <div className="flex-1 min-w-0">
-                               {message.media_url ? (
-                                 <a 
-                                   href={message.media_url}
-                                   download={message.file_name}
-                                   className="text-sm font-medium text-primary hover:underline truncate block"
-                                 >
-                                   {message.file_name || 'ファイル'}
-                                 </a>
-                               ) : (
-                                 <span className="text-sm font-medium truncate block">
-                                   {message.file_name || 'ファイル'}
-                                 </span>
-                               )}
-                               {message.file_size && (
-                                 <span className="text-xs text-muted-foreground">
-                                   {(message.file_size / 1024).toFixed(1)}KB
-                                 </span>
-                               )}
-                             </div>
-                           </div>
-                         </div>
-                         {message.message_text && (
-                           <p className="text-sm">{message.message_text}</p>
-                         )}
-                       </div>
-                     ) : (
-                       <p className="text-sm whitespace-pre-wrap">{message.message_text}</p>
-                     )}
-                     <p className="text-xs opacity-70 mt-1">
+                        </div>
+                      ) : message.media_kind === 'video' && message.media_url ? (
+                        <div className="space-y-2">
+                          <video
+                            controls
+                            className="max-w-full h-auto rounded-lg"
+                            poster={message.thumbnail_url}
+                            preload="metadata"
+                          >
+                            <source src={message.media_url} type={message.content_type || 'video/mp4'} />
+                            お使いのブラウザは動画をサポートしていません。
+                          </video>
+                          {message.message_text && (
+                            <p className="text-sm">{message.message_text}</p>
+                          )}
+                        </div>
+                      ) : message.media_kind === 'audio' && message.media_url ? (
+                        <div className="space-y-2">
+                          <div className="bg-muted/50 rounded-lg p-3">
+                            <div className="flex items-center gap-2 mb-2">
+                              <span className="text-lg">🎵</span>
+                              <span className="text-sm font-medium">音声メッセージ</span>
+                            </div>
+                            <audio controls className="w-full">
+                              <source src={message.media_url} type={message.content_type || 'audio/m4a'} />
+                              お使いのブラウザは音声をサポートしていません。
+                            </audio>
+                          </div>
+                          {message.message_text && (
+                            <p className="text-sm">{message.message_text}</p>
+                          )}
+                        </div>
+                      ) : message.media_kind === 'sticker' ? (
+                        <div className="space-y-2">
+                          {message.media_url ? (
+                            <img
+                              src={message.media_url}
+                              alt="スタンプ"
+                              className="w-32 h-32 object-contain rounded-lg"
+                              onError={(e) => {
+                                console.error('Sticker failed to load:', message.media_url)
+                                e.currentTarget.style.display = 'none'
+                                const fallback = e.currentTarget.nextElementSibling as HTMLElement
+                                if (fallback) fallback.style.display = 'block'
+                              }}
+                            />
+                          ) : null}
+                          <div className="text-4xl" style={{ display: message.media_url ? 'none' : 'block' }}>
+                            🎨
+                          </div>
+                          {message.message_text && (
+                            <p className="text-sm">{message.message_text}</p>
+                          )}
+                        </div>
+                      ) : message.media_kind === 'file' ? (
+                        <div className="space-y-2">
+                          <div className="bg-muted/50 rounded-lg p-3">
+                            <div className="flex items-center gap-2">
+                              <span className="text-lg">📎</span>
+                              <div className="flex-1 min-w-0">
+                                {message.media_url ? (
+                                  <a
+                                    href={message.media_url}
+                                    download={message.file_name}
+                                    className="text-sm font-medium text-primary hover:underline truncate block"
+                                  >
+                                    {message.file_name || 'ファイル'}
+                                  </a>
+                                ) : (
+                                  <span className="text-sm font-medium truncate block">
+                                    {message.file_name || 'ファイル'}
+                                  </span>
+                                )}
+                                {message.file_size && (
+                                  <span className="text-xs text-muted-foreground">
+                                    {(message.file_size / 1024).toFixed(1)}KB
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+                          {message.message_text && (
+                            <p className="text-sm">{message.message_text}</p>
+                          )}
+                        </div>
+                      ) : (
+                        <p className="text-sm whitespace-pre-wrap">{message.message_text}</p>
+                      )}
+                      <p className={`text-xs opacity-70 ${isFlex ? 'mt-2' : 'mt-1'}`}>
                         {new Date(message.sent_at).toLocaleString('ja-JP', {
                           year: 'numeric',
                           month: '2-digit',
@@ -425,9 +463,10 @@ export function ChatWindow({ user, friend, onClose }: ChatWindowProps) {
                           minute: '2-digit'
                         })}
                       </p>
-                   </div>
-                </div>
-              ))
+                    </div>
+                  </div>
+                )
+              })
             )}
             <div ref={messagesEndRef} />
           </div>
