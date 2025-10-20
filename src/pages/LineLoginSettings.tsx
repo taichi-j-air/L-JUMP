@@ -416,17 +416,7 @@ export default function LineLoginSettings() {
                 </p>
               </div>
 
-              {liffSettings.liffUrl && user && (
-                <div className="rounded-lg border p-4 space-y-2">
-                  <p className="font-medium">Rich menu LIFF link example</p>
-                  <p className="text-sm text-muted-foreground break-all">
-                    {`${liffSettings.liffUrl}?userId=${user.id}&target=${encodeURIComponent('https://example.com/?uid=[UID]')}`}
-                  </p>
-                  <p className="text-xs text-muted-foreground">
-                    Update the encoded URL to the page you want to open (include [UID] when you need personalised links).
-                  </p>
-                </div>
-              )}
+              
 
               <Button onClick={handleLiffSave} disabled={savingLiff}>
                 {savingLiff ? "保存中..." : "LIFF設定を保存"}
@@ -478,20 +468,7 @@ export default function LineLoginSettings() {
                     </div>
                   </div>
                   
-                  <Separator />
-                  
-                  <div className="space-y-2">
-                    <Label>テスト用</Label>
-                    <Button
-                      variant="outline"
-                      onClick={() => window.open(settings.loginUrl, '_blank')}
-                      disabled={!isConfigured}
-                    >
-                      LINE Loginをテスト
-                    </Button>
                   </div>
-
-                </div>
               </CardContent>
             </Card>
           )}

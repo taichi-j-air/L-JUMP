@@ -195,7 +195,7 @@ const ProfileManagement = () => {
       case 'not_configured':
         return <Badge variant="destructive"><XCircle className="w-3 h-3 mr-1" />未設定</Badge>;
       case 'configured':
-        return <Badge variant="secondary"><AlertCircle className="w-3 h-3 mr-1" />設定済み</Badge>;
+        return <Badge variant="default"><CheckCircle className="w-3 h-3 mr-1" />設定済み</Badge>;
       case 'verified':
         return <Badge variant="default"><CheckCircle className="w-3 h-3 mr-1" />検証済み</Badge>;
       default:
@@ -511,26 +511,7 @@ const ProfileManagement = () => {
             </CardContent>
           </Card>
 
-          {/* アカウント操作カード */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-destructive">危険な操作</CardTitle>
-              <CardDescription>
-                これらの操作は慎重に実行してください
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="p-4 border border-destructive/20 rounded-lg bg-destructive/5">
-                <p className="text-sm text-muted-foreground mb-2">
-                  アカウントを削除すると、すべてのデータが永久に失われます。
-                  この操作は取り消すことができません。
-                </p>
-                <Button variant="destructive" disabled>
-                  アカウントを削除（未実装）
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
+          
         </div>
       </main>
     </div>
