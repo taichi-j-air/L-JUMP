@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react"
+import { useEffect, useMemo, useState } from "react"
 import { supabase } from "@/integrations/supabase/client"
 import { User } from "@supabase/supabase-js"
 import { Avatar, AvatarFallback, AvatarImage } from "./ui/avatar"
@@ -31,7 +31,19 @@ interface Friend {
   added_at: string
   updated_at: string
   is_blocked: boolean
+  blocked_at?: string | null
   short_uid?: string | null
+  total_payment_amount?: number | null
+}
+
+interface PaymentHistoryEntry {
+  id: string
+  created_at: string
+  amount: number
+  currency: string
+  status: string
+  productLabel: string
+  livemode: boolean | null
 }
 
 interface FriendsListProps {
@@ -69,6 +81,63 @@ export function FriendsList({ user }: FriendsListProps) {
   const [detailFriend, setDetailFriend] = useState<Friend | null>(null)
   const [detailForms, setDetailForms] = useState<any[]>([])
   const [detailLogs, setDetailLogs] = useState<any[]>([])
+  const [detailPayments, setDetailPayments] = useState<PaymentHistoryEntry[]>([])
+  const [detailPaymentTotals, setDetailPaymentTotals] = useState<Record<string, number>>({})
+  const [detailRichMenuName, setDetailRichMenuName] = useState<string | null>(null)
+
+  const formatDateTime = (value?: string | null) => {
+    if (!value) return "-"
+    try {
+      return format(new Date(value), "yyyy/MM/dd HH:mm")
+    } catch {
+      return value
+    }
+  }
+
+  const addedAtText = detailFriend ? formatDateTime(detailFriend.added_at) : "-"
+  const blockedStatusText = detailFriend
+    ? detailFriend.is_blocked
+      ? formatDateTime(detailFriend.updated_at)
+      : "ブロックなし"
+    : "-"
+
+  const copyText = (value: string | null | undefined, label: string) => {
+    if (!value) return
+    navigator.clipboard.writeText(value)
+    toast({ title: `${label} をコピーしました`, description: value })
+  }
+
+  const normalizeAmount = (value: number | string | null | undefined) => {
+    if (value === null || value === undefined) return 0
+    if (typeof value === "string") {
+      const parsed = parseFloat(value)
+      return Number.isNaN(parsed) ? 0 : parsed
+    }
+    return value
+  }
+
+  const formatCurrencyDisplay = (amount: number, currency?: string | null) => {
+    const upperCurrency = (currency || "JPY").toUpperCase()
+    if (upperCurrency === "JPY") {
+      return `¥${amount.toLocaleString()}`
+    }
+    const normalized = amount / 100
+    return `${upperCurrency} ${normalized.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+  }
+
+  const detailTagNames = useMemo(() => {
+    if (!detailFriend) return []
+    const tagIds = friendTagMap[detailFriend.id] || []
+    if (tagIds.length === 0) return []
+    const tagLookup = new Map(tags.map((tag) => [tag.id, tag.name]))
+    return tagIds.map((id) => tagLookup.get(id)).filter((name): name is string => Boolean(name))
+  }, [detailFriend, friendTagMap, tags])
+
+  const primaryIdentifier = detailFriend?.short_uid || detailFriend?.display_name || detailFriend?.line_user_id || ""
+  const shortUidValue = detailFriend?.short_uid || ""
+  const hasShortUid = Boolean(shortUidValue)
+  const nameDisplayValue = hasShortUid ? shortUidValue : (detailFriend?.display_name || "")
+  const hasNameDisplay = Boolean(nameDisplayValue)
 
   useEffect(() => {
     loadFriends()
@@ -242,22 +311,208 @@ export function FriendsList({ user }: FriendsListProps) {
                   onClick={async ()=>{
                     setDetailFriend(friend)
                     setDetailOpen(true)
+                    setDetailForms([])
+                    setDetailLogs([])
+                    setDetailPayments([])
+                    setDetailPaymentTotals({})
+                    setDetailRichMenuName(null)
                     try {
-                       const [{ data: forms }, { data: logs }, { data: exitLogs }] = await Promise.all([
-                         supabase.from('form_submissions').select(`
-                           id, submitted_at, data, form_id,
-                           forms(name, fields)
-                         `).eq('user_id', user.id).eq('friend_id', friend.id).order('submitted_at',{ascending:false}).limit(50),
-                         supabase.from('scenario_friend_logs').select('added_at, scenario_id').eq('line_user_id', friend.line_user_id).order('added_at',{ascending:false}).limit(100),
-                         supabase.from('step_delivery_tracking').select('updated_at, scenario_id, status').eq('friend_id', friend.id).eq('status','exited').order('updated_at',{ascending:false}).limit(100)
-                       ])
-                      setDetailForms(forms||[])
-                      const combined = [
-                        ...((logs||[]).map((l:any)=>({ type:'registered', date:l.added_at, scenario_id:l.scenario_id }))),
-                        ...((exitLogs||[]).map((l:any)=>({ type:'exited', date:l.updated_at, scenario_id:l.scenario_id }))),
-                      ].sort((a:any,b:any)=> new Date(b.date).getTime() - new Date(a.date).getTime())
-                      setDetailLogs(combined)
-                    } catch(e) { setDetailForms([]); setDetailLogs([]) }
+                      const friendUidVariants = Array.from(
+                        new Set(
+                          [friend.short_uid, friend.short_uid?.toUpperCase(), friend.short_uid?.toLowerCase()].filter(
+                            (value): value is string => Boolean(value)
+                          )
+                        )
+                      )
+
+                      const paymentsPromise = friendUidVariants.length > 0
+                        ? (() => {
+                            let query = supabase
+                              .from('orders')
+                              .select('id, amount, currency, status, created_at, product_id, metadata, livemode, friend_uid')
+                              .eq('user_id', user.id)
+                              .order('created_at', { ascending: false })
+                              .limit(50)
+                            if (friendUidVariants.length === 1) {
+                              query = query.eq('friend_uid', friendUidVariants[0])
+                            } else {
+                              query = query.or(friendUidVariants.map((uid) => `friend_uid.eq.${uid}`).join(','))
+                            }
+                            return query
+                          })()
+                        : Promise.resolve({ data: [], error: null } as { data: any[]; error: any })
+
+                      const [
+                        formsResult,
+                        logsResult,
+                        exitLogsResult,
+                        paymentsResult
+                      ] = await Promise.all([
+                        supabase
+                          .from('form_submissions')
+                          .select(`
+                            id, submitted_at, data, form_id,
+                            forms(name, fields)
+                          `)
+                          .eq('user_id', user.id)
+                          .eq('friend_id', friend.id)
+                          .order('submitted_at', { ascending: false })
+                          .limit(50),
+                        supabase
+                          .from('scenario_friend_logs')
+                          .select('added_at, scenario_id')
+                          .eq('line_user_id', friend.line_user_id)
+                          .order('added_at', { ascending: false })
+                          .limit(100),
+                        supabase
+                          .from('step_delivery_tracking')
+                          .select('updated_at, scenario_id, status')
+                          .eq('friend_id', friend.id)
+                          .eq('status', 'exited')
+                          .order('updated_at', { ascending: false })
+                          .limit(100),
+                        paymentsPromise
+                      ])
+
+                      if (formsResult.error) {
+                        console.error('Error loading form submissions:', formsResult.error)
+                        setDetailForms([])
+                      } else {
+                        setDetailForms(formsResult.data || [])
+                      }
+
+                      if (logsResult.error) {
+                        console.error('Error loading scenario logs:', logsResult.error)
+                      }
+                      if (exitLogsResult.error) {
+                        console.error('Error loading exit logs:', exitLogsResult.error)
+                      }
+
+                      const combinedLogs = [
+                        ...((logsResult.data || []).map((l: any) => ({ type: 'registered', date: l.added_at, scenario_id: l.scenario_id }))),
+                        ...((exitLogsResult.data || []).map((l: any) => ({ type: 'exited', date: l.updated_at, scenario_id: l.scenario_id })))
+                      ].sort((a: any, b: any) => new Date(b.date).getTime() - new Date(a.date).getTime())
+                      setDetailLogs(combinedLogs)
+
+                      if (paymentsResult.error) {
+                        console.error('Error loading payment history:', paymentsResult.error)
+                        setDetailPayments([])
+                        setDetailPaymentTotals({})
+                      } else {
+                        const rawPayments = (paymentsResult.data || []) as any[]
+                        if (rawPayments.length > 0) {
+                          const productIds = Array.from(
+                            new Set(
+                              rawPayments
+                                .map((payment) => payment.product_id)
+                                .filter((id: string | null | undefined): id is string => Boolean(id))
+                            )
+                          )
+                          let productNameMap: Record<string, string> = {}
+                          if (productIds.length > 0) {
+                            const { data: productRows, error: productError } = await supabase
+                              .from('products')
+                              .select('id, name')
+                              .in('id', productIds)
+                              .eq('user_id', user.id)
+                            if (productError) {
+                              console.error('Error loading product names for payments:', productError)
+                            } else if (productRows) {
+                              productNameMap = productRows.reduce((acc: Record<string, string>, product: any) => {
+                                acc[product.id] = product.name
+                                return acc
+                              }, {})
+                            }
+                          }
+
+                          const payments: PaymentHistoryEntry[] = rawPayments.map((payment) => {
+                            const amountNumber = normalizeAmount(payment.amount)
+                            const currency = (payment.currency || 'JPY').toString().toUpperCase()
+                            const metadataProductName = typeof payment.metadata === 'object' && payment.metadata
+                              ? (payment.metadata as any).product_name
+                              : undefined
+                            const productLabel =
+                              productNameMap[payment.product_id ?? ''] ||
+                              metadataProductName ||
+                              '不明な商品'
+                            return {
+                              id: payment.id,
+                              created_at: payment.created_at,
+                              amount: amountNumber,
+                              currency,
+                              status: payment.status || '',
+                              productLabel,
+                              livemode: payment.livemode ?? null
+                            }
+                          })
+
+                          setDetailPayments(payments)
+
+                          const totals = payments
+                            .filter((entry) => entry.status === 'paid')
+                            .reduce((acc: Record<string, number>, entry) => {
+                              acc[entry.currency] = (acc[entry.currency] ?? 0) + entry.amount
+                              return acc
+                            }, {})
+
+                          if (Object.keys(totals).length === 0) {
+                            const fallbackTotal = normalizeAmount(friend.total_payment_amount)
+                            if (fallbackTotal > 0) {
+                              totals['JPY'] = fallbackTotal
+                            }
+                          }
+
+                          setDetailPaymentTotals(totals)
+                        } else {
+                          setDetailPayments([])
+                          const fallbackTotal = normalizeAmount(friend.total_payment_amount)
+                          setDetailPaymentTotals(fallbackTotal > 0 ? { JPY: fallbackTotal } : {})
+                        }
+                      }
+
+                      if (friend.line_user_id) {
+                        try {
+                          const { data: currentMenuData, error: currentMenuError } = await supabase.functions.invoke('get-user-rich-menu', {
+                            body: { userId: friend.line_user_id }
+                          })
+                          if (currentMenuError) {
+                            const status = currentMenuError?.context?.status ?? currentMenuError?.status
+                            if (status && Number(status) === 404) {
+                              setDetailRichMenuName(null)
+                            } else {
+                              console.error('Error fetching current rich menu:', currentMenuError)
+                            }
+                          } else if (currentMenuData) {
+                            const menuId = currentMenuData.richMenuId || currentMenuData.menuId || null
+                            if (menuId) {
+                              const { data: menuRecord, error: menuError } = await supabase
+                                .from('rich_menus')
+                                .select('name')
+                                .eq('id', menuId)
+                                .eq('user_id', user.id)
+                                .maybeSingle()
+                              if (menuError) {
+                                console.error('Error loading rich menu name:', menuError)
+                                setDetailRichMenuName(menuId)
+                              } else {
+                                setDetailRichMenuName(menuRecord?.name || menuId)
+                              }
+                            } else {
+                              setDetailRichMenuName(null)
+                            }
+                          }
+                        } catch (richMenuError) {
+                          console.error('Unexpected error loading rich menu:', richMenuError)
+                        }
+                      }
+                    } catch(e) {
+                      console.error('Error loading friend detail:', e)
+                      setDetailForms([])
+                      setDetailLogs([])
+                      setDetailPayments([])
+                      setDetailPaymentTotals({})
+                      setDetailRichMenuName(null)
+                    }
                   }}
                 >
                   <div className="flex items-center gap-2">
@@ -403,73 +658,236 @@ export function FriendsList({ user }: FriendsListProps) {
       )}
 
       <Dialog open={detailOpen} onOpenChange={setDetailOpen}>
-        <DialogContent className="max-w-2xl">
+        <DialogContent className="max-w-4xl w-full">
           <DialogHeader>
-            <DialogTitle>{detailFriend?.display_name || detailFriend?.line_user_id}</DialogTitle>
+            <DialogTitle>
+              <button
+                type="button"
+                className="w-full text-left text-lg font-semibold hover:text-primary transition-colors disabled:cursor-not-allowed disabled:text-muted-foreground"
+                onClick={() => copyText(primaryIdentifier, "UID")}
+                disabled={!primaryIdentifier}
+              >
+                {primaryIdentifier || "友だち詳細"}
+              </button>
+            </DialogTitle>
             <DialogDescription>フォーム回答やシナリオ履歴を確認できます。</DialogDescription>
           </DialogHeader>
-          <div className="grid grid-cols-2 gap-4 max-h-[70vh] overflow-y-auto">
-            <div>
-              <h4 className="text-sm font-medium mb-2">フォーム回答</h4>
-              <div className="space-y-2 text-xs">
-                {detailForms.length === 0 && <div className="text-muted-foreground">履歴なし</div>}
-                {detailForms.length > 0 && (
-                  <Accordion type="single" collapsible className="w-full">
-                     {detailForms.map((f:any)=> {
-                       const formFields = f.forms?.fields || [];
-                       return (
-                         <AccordionItem key={f.id} value={f.id}>
-                           <AccordionTrigger className="text-xs">
-                             {f.forms?.name || 'フォーム'} - {format(new Date(f.submitted_at), "yyyy/MM/dd HH:mm")}
-                           </AccordionTrigger>
-                           <AccordionContent>
-                             <div className="space-y-2">
-                               {Object.entries(f.data).map(([key, value]) => {
-                                 const field = formFields.find((field: any) => field.name === key || field.id === key);
-                                 const label = field?.label || key;
-                                 return (
-                                   <div key={key}>
-                                     <div className="font-medium text-xs">{label}</div>
-                                     <div className="text-xs text-muted-foreground">
-                                       {Array.isArray(value) ? value.join(', ') : String(value)}
-                                     </div>
-                                   </div>
-                                 );
-                               })}
-                             </div>
-                           </AccordionContent>
-                         </AccordionItem>
-                       );
-                     })}
-                  </Accordion>
+          <div className="space-y-4">
+            <div className="grid gap-4 md:grid-cols-3 lg:grid-cols-4">
+              <div className="flex flex-col items-center gap-2 md:col-span-1">
+                <Avatar className="h-28 w-28 border shadow-sm">
+                  <AvatarImage src={detailFriend?.picture_url || ""} alt={detailFriend?.display_name || ""} />
+                  <AvatarFallback className="text-2xl">
+                    {detailFriend?.display_name?.charAt(0) || "?"}
+                  </AvatarFallback>
+                </Avatar>
+              </div>
+              <div className="grid gap-3 text-sm md:col-span-2 lg:col-span-3">
+                <div className="flex flex-wrap items-center gap-4">
+                  <div className="space-y-1">
+                    <div className="text-xs text-muted-foreground">UID</div>
+                    {hasShortUid ? (
+                      <button
+                        type="button"
+                        className="inline-flex items-center gap-2 rounded px-2 py-1 font-mono text-base hover:bg-primary/10"
+                        onClick={() => copyText(shortUidValue, "UID")}
+                      >
+                        {shortUidValue}
+                      </button>
+                    ) : (
+                      <div className="text-sm text-muted-foreground">未設定</div>
+                    )}
+                  </div>
+                  <div className="space-y-1">
+                    <div className="text-xs text-muted-foreground">名前</div>
+                    {hasNameDisplay ? (
+                      <button
+                        type="button"
+                        className="inline-flex items-center gap-2 rounded px-2 py-1 hover:bg-primary/10"
+                        onClick={() => copyText(nameDisplayValue, "名前")}
+                      >
+                        {nameDisplayValue}
+                      </button>
+                    ) : (
+                      <div className="text-sm text-muted-foreground">未設定</div>
+                    )}
+                  </div>
+                </div>
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <div className="space-y-1">
+                    <div className="text-xs text-muted-foreground">友だち追加日時</div>
+                    <div>{addedAtText}</div>
+                  </div>
+                  <div className="space-y-1">
+                    <div className="text-xs text-muted-foreground">ブロック日時</div>
+                    <div>{detailFriend?.is_blocked ? blockedStatusText : "ブロックなし"}</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+              <div className="border rounded-md p-3 space-y-2">
+                <div className="text-sm font-medium">累計決済金額</div>
+                <div className="space-y-1.5 text-sm">
+                  {Object.entries(detailPaymentTotals).length > 0 ? (
+                    Object.entries(detailPaymentTotals).map(([currency, total]) => (
+                      <div key={currency} className="flex items-center justify-between rounded bg-muted px-2 py-1">
+                        <span className="text-xs text-muted-foreground">{currency.toUpperCase()}</span>
+                        <span className="font-semibold">{formatCurrencyDisplay(total, currency)}</span>
+                      </div>
+                    ))
+                  ) : (
+                    <div className="text-xs text-muted-foreground">決済データなし</div>
+                  )}
+                </div>
+              </div>
+              <div className="border rounded-md p-3 space-y-2">
+                <div className="text-sm font-medium">現在のリッチメニュー</div>
+                <div className="text-sm">
+                  {detailRichMenuName ? (
+                    <button
+                      type="button"
+                      className="text-primary underline-offset-2 hover:underline"
+                      onClick={() => copyText(detailRichMenuName, "リッチメニュー")}
+                    >
+                      {detailRichMenuName}
+                    </button>
+                  ) : (
+                    <span className="text-xs text-muted-foreground">連携なし</span>
+                  )}
+                </div>
+              </div>
+              <div className="border rounded-md p-3 space-y-2 sm:col-span-2 lg:col-span-1">
+                <div className="text-sm font-medium">設定中のタグ</div>
+                {detailTagNames.length > 0 ? (
+                  <div className="flex flex-wrap gap-2">
+                    {detailTagNames.map((name) => (
+                      <Badge key={name} variant="secondary" className="text-xs">
+                        {name}
+                      </Badge>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="text-xs text-muted-foreground">タグなし</div>
                 )}
               </div>
             </div>
-            <div>
-              <h4 className="text-sm font-medium mb-2">シナリオ遷移ログ</h4>
-              <div className="space-y-2 text-xs">
-                {detailLogs.length === 0 && <div className="text-muted-foreground">履歴なし</div>}
-                {detailLogs.map((l:any, idx:number)=> {
-                  const scenarioName = scenarios.find(s => s.id === l.scenario_id)?.name || 'Unknown'
-                  return (
-                    <div key={idx} className="p-2 border rounded">
-                      <div className="text-muted-foreground">{format(new Date(l.date), "yyyy/MM/dd HH:mm")}</div>
-                      <div className="mt-1 flex items-center gap-2">
-                        <Badge 
-                          className={cn(
-                            "text-white text-xs rounded",
-                            l.type === 'registered' 
-                              ? "bg-[rgb(12,179,134)]" 
-                              : "bg-red-500"
-                          )}
-                        >
-                          {l.type === 'registered' ? '登録' : '解除'}
-                        </Badge>
-                        <span>{scenarioName}</span>
+
+            <div className="grid gap-3 lg:grid-cols-3">
+              <div className="space-y-1.5 max-h-[60vh] overflow-y-auto pr-1">
+                <div className="flex items-center justify-between">
+                  <h4 className="text-sm font-medium">決済履歴</h4>
+                  <span className="text-[11px] text-muted-foreground">最新50件</span>
+                </div>
+                {detailPayments.length === 0 && (
+                  <div className="text-xs text-muted-foreground">決済履歴なし</div>
+                )}
+                {detailPayments.length > 0 && (
+                  <div className="space-y-1.5">
+                    {detailPayments.map((payment) => (
+                      <div key={payment.id} className="border rounded-md p-2.5 space-y-2">
+                        <div className="flex items-center justify-between">
+                          <span className="text-xs text-muted-foreground">
+                            {formatDateTime(payment.created_at)}
+                          </span>
+                          <span className="font-semibold">
+                            {formatCurrencyDisplay(payment.amount, payment.currency)}
+                          </span>
+                        </div>
+                        <div className="text-sm font-medium break-all">{payment.productLabel}</div>
+                        <div className="flex items-center justify-between text-xs">
+                          <Badge
+                            variant={
+                              payment.status === "paid"
+                                ? "default"
+                                : payment.status === "refunded"
+                                  ? "destructive"
+                                  : "secondary"
+                            }
+                          >
+                            {payment.status || "status不明"}
+                          </Badge>
+                          <span className="text-muted-foreground">
+                            {payment.livemode ? "本番" : "テスト"}
+                          </span>
+                        </div>
                       </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+              <div className="space-y-1.5 max-h-[60vh] overflow-y-auto pr-1">
+                <h4 className="text-sm font-medium">フォーム回答</h4>
+                <div className="space-y-1.5 text-xs">
+                  {detailForms.length === 0 && <div className="text-muted-foreground">履歴なし</div>}
+                  {detailForms.length > 0 && (
+                    <Accordion type="single" collapsible className="w-full">
+                      {detailForms.map((f: any) => {
+                        const formFields = f.forms?.fields || []
+                        return (
+                          <AccordionItem key={f.id} value={f.id}>
+                            <AccordionTrigger className="text-xs">
+                              {f.forms?.name || "フォーム"} - {format(new Date(f.submitted_at), "yyyy/MM/dd HH:mm")}
+                            </AccordionTrigger>
+                            <AccordionContent>
+                              <div className="space-y-2">
+                                {Object.entries(f.data).map(([key, value]) => {
+                                  const field = formFields.find(
+                                    (field: any) => field.name === key || field.id === key
+                                  )
+                                  const label = field?.label || key
+                                  return (
+                                    <div key={key}>
+                                      <div className="font-medium text-xs">{label}</div>
+                                      <div className="text-xs text-muted-foreground">
+                                        {Array.isArray(value) ? value.join(", ") : String(value)}
+                                      </div>
+                                    </div>
+                                  )
+                                })}
+                              </div>
+                            </AccordionContent>
+                          </AccordionItem>
+                        )
+                      })}
+                    </Accordion>
+                  )}
+                </div>
+              </div>
+              <div className="space-y-1.5 max-h-[60vh] overflow-y-auto pr-1">
+                <h4 className="text-sm font-medium">シナリオ遷移ログ</h4>
+                <div className="space-y-1.5 text-xs">
+                  {detailLogs.length === 0 && <div className="text-muted-foreground">履歴なし</div>}
+                  {detailLogs.length > 0 && (
+                    <div className="space-y-1.5">
+                      {detailLogs.map((log: any, idx: number) => {
+                        const scenarioName = scenarios.find((s) => s.id === log.scenario_id)?.name || "Unknown"
+                        return (
+                          <div key={idx} className="border rounded-md p-2.5 space-y-2">
+                            <div className="flex items-center justify-between">
+                              <Badge
+                                className={cn(
+                                  "text-xs rounded px-2 py-0.5",
+                                  log.type === "registered" ? "bg-[rgb(12,179,134)]" : "bg-red-500"
+                                )}
+                              >
+                                {log.type === "registered" ? "登録" : "解除"}
+                              </Badge>
+                              <span className="text-xs text-muted-foreground">
+                                {format(new Date(log.date), "yyyy/MM/dd HH:mm")}
+                              </span>
+                            </div>
+                            <div className="text-sm font-medium">{scenarioName}</div>
+                            <div className="text-xs text-muted-foreground">
+                              シナリオID: {log.scenario_id}
+                            </div>
+                          </div>
+                        )
+                      })}
                     </div>
-                  )
-                })}
+                  )}
+                </div>
               </div>
             </div>
           </div>
