@@ -4,7 +4,7 @@ import { User } from "@supabase/supabase-js"
 import { Avatar, AvatarFallback, AvatarImage } from "./ui/avatar"
 import { Badge } from "./ui/badge"
 import { Button } from "./ui/button"
-import { MessageCircle, Tag as TagIcon, ListChecks, Calendar as CalendarIcon, MenuSquare } from "lucide-react"
+import { MessageCircle, Tag as TagIcon, ListChecks, Calendar as CalendarIcon, MenuSquare, Ban } from "lucide-react"
 import { format, startOfDay, endOfDay } from "date-fns"
 import { ChatWindow } from "./ChatWindow"
 import { Input } from "./ui/input"
@@ -16,6 +16,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from ".
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "./ui/dialog"
 import { Calendar } from "./ui/calendar"
 import { Popover, PopoverContent, PopoverTrigger } from "./ui/popover"
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "./ui/tooltip"
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "./ui/accordion"
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "./ui/alert-dialog"
 import { cn } from "@/lib/utils"
@@ -28,6 +29,7 @@ interface Friend {
   display_name: string | null
   picture_url: string | null
   added_at: string
+  is_blocked: boolean
   short_uid?: string | null
 }
 
@@ -55,7 +57,6 @@ export function FriendsList({ user }: FriendsListProps) {
   const [selectedScenario, setSelectedScenario] = useState<string>("all")
   const [friendTagMap, setFriendTagMap] = useState<Record<string, string[]>>({})
   const [friendScenarioMap, setFriendScenarioMap] = useState<Record<string, string[]>>({})
-  const [friendProtectedScenarioMap, setFriendProtectedScenarioMap] = useState<Record<string, string[]>>({})
   const [blockTagId, setBlockTagId] = useState<string | null>(null)
   const [bulkScenarioId, setBulkScenarioId] = useState<string>("")
   const [bulkTagAddId, setBulkTagAddId] = useState<string>("")
@@ -67,7 +68,6 @@ export function FriendsList({ user }: FriendsListProps) {
   const [detailFriend, setDetailFriend] = useState<Friend | null>(null)
   const [detailForms, setDetailForms] = useState<any[]>([])
   const [detailLogs, setDetailLogs] = useState<any[]>([])
-  const [blockedSet, setBlockedSet] = useState<Set<string>>(new Set())
 
   useEffect(() => {
     loadFriends()
@@ -104,7 +104,7 @@ export function FriendsList({ user }: FriendsListProps) {
               friend_id,
               scenario_id,
               status,
-              step_scenarios!inner(prevent_auto_exit)
+              step_scenarios!step_delivery_tracking_scenario_id_fkey(prevent_auto_exit)
             `)
             .in("friend_id", friendIds)
             .neq("status", "exited"),
@@ -130,7 +130,6 @@ export function FriendsList({ user }: FriendsListProps) {
         }
 
         const scenarioSetMap = new Map<string, Set<string>>();
-        const protectedSetMap = new Map<string, Set<string>>();
 
         const addScenario = (friendId?: string | null, scenarioId?: string | null) => {
           if (!friendId || !scenarioId) return;
@@ -142,11 +141,6 @@ export function FriendsList({ user }: FriendsListProps) {
         for (const track of (trackingRows || []) as any[]) {
           addScenario(track.friend_id as string | null, track.scenario_id as string | null);
 
-          if (track.friend_id && track.scenario_id && track.step_scenarios?.prevent_auto_exit) {
-            const set = protectedSetMap.get(track.friend_id) ?? new Set<string>();
-            set.add(track.scenario_id);
-            protectedSetMap.set(track.friend_id, set);
-          }
         }
 
         for (const log of (scenarioLogRows || []) as any[]) {
@@ -158,12 +152,6 @@ export function FriendsList({ user }: FriendsListProps) {
           scenarioMap[key] = Array.from(value);
         });
         setFriendScenarioMap(scenarioMap);
-
-        const protectedMap: Record<string, string[]> = {};
-        protectedSetMap.forEach((value, key) => {
-          protectedMap[key] = Array.from(value);
-        });
-        setFriendProtectedScenarioMap(protectedMap);
 
         const tagMap: Record<string, string[]> = {};
         for (const row of (tagRows || []) as any[]) {
@@ -178,21 +166,10 @@ export function FriendsList({ user }: FriendsListProps) {
         setFriendTagMap(tagMap);
       } else {
         setFriendScenarioMap({});
-        setFriendProtectedScenarioMap({});
         setFriendTagMap({});
       }
 
-      try {
-        const { data: followersData, error: followersError } = await supabase.functions.invoke("get-line-friends", { body: {} });
-        if (!followersError && followersData?.friends) {
-          const currentIds = new Set((followersData.friends as any[]).map((x: any) => x.line_user_id));
-          const dbLineIds = friendRows.map((f: any) => f.line_user_id);
-          const blocked = dbLineIds.filter((id: string) => !currentIds.has(id));
-          setBlockedSet(new Set(blocked));
-        }
-      } catch (e) {
-        console.error("Error fetching LINE followers:", e);
-      }
+      
     } catch (error) {
       console.error("Error loading friends:", error);
     } finally {
@@ -283,12 +260,28 @@ export function FriendsList({ user }: FriendsListProps) {
                   }}
                 >
                   <div className="flex items-center gap-2">
-                    <Avatar className="h-8 w-8">
-                      <AvatarImage src={friend.picture_url || ""} alt={friend.display_name || ""} />
-                      <AvatarFallback>
-                        {friend.display_name?.charAt(0) || "?"}
-                      </AvatarFallback>
-                    </Avatar>
+                    <div className="relative">
+                      <Avatar className="h-8 w-8">
+                        <AvatarImage src={friend.picture_url || ""} alt={friend.display_name || ""} />
+                        <AvatarFallback>
+                          {friend.display_name?.charAt(0) || "?"}
+                        </AvatarFallback>
+                      </Avatar>
+                      {friend.is_blocked && (
+                        <TooltipProvider delayDuration={0}>
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <div className="absolute inset-0 flex items-center justify-center bg-black/50 rounded-full">
+                                <Ban className="h-5 w-5 text-red-500" />
+                              </div>
+                            </TooltipTrigger>
+                            <TooltipContent>
+                              <p className="text-xs text-muted-foreground">このユーザーはあなたをブロックしています</p>
+                            </TooltipContent>
+                          </Tooltip>
+                        </TooltipProvider>
+                      )}
+                    </div>
 
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2">
@@ -308,14 +301,7 @@ export function FriendsList({ user }: FriendsListProps) {
                             {format(new Date(friend.added_at), "yyyy/MM/dd HH:mm")}
                           </Badge>
                         </span>
-                        {blockedSet.has(friend.line_user_id) && (
-                          <Badge variant="destructive" className="text-xs">ブロック中</Badge>
-                        )}
-                        {(friendProtectedScenarioMap[friend.id]?.length || 0) > 0 && (
-                          <Badge variant="outline" className="text-xs border-orange-500 text-orange-600">
-                            🛡️ 解除防止
-                          </Badge>
-                        )}
+                        
                       </div>
                       <div className="text-xs text-muted-foreground">
                         <p className="font-mono font-bold">
