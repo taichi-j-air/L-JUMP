@@ -11,6 +11,23 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { MediaLibrarySelector } from '@/components/MediaLibrarySelector';
 import { supabase } from '@/integrations/supabase/client';
 import {
+  DndContext,
+  closestCenter,
+  KeyboardSensor,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  DragEndEvent,
+} from '@dnd-kit/core';
+import {
+  arrayMove,
+  SortableContext,
+  sortableKeyboardCoordinates,
+  verticalListSortingStrategy,
+  useSortable,
+} from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
+import {
   Plus,
   Type,
   Image,
@@ -300,16 +317,18 @@ export const EnhancedBlockEditor: React.FC<EnhancedBlockEditorProps> = (props) =
     [props.blocks, props.value]
   );
 
-  // map安全化
-  const safeBlocks: Block[] = useMemo(
+  // map安全化 and sort
+  const sortedBlocks: Block[] = useMemo(
     () =>
       Array.isArray(incomingBlocks)
-        ? incomingBlocks.map(b => ({
-            id: b?.id ?? uid(),
-            type: b?.type ?? 'paragraph',
-            order: typeof b?.order === 'number' ? b.order : 0,
-            content: (b?.content && typeof b.content === 'object') ? b.content : {},
-          }))
+        ? incomingBlocks
+            .map(b => ({
+              id: b?.id ?? uid(),
+              type: b?.type ?? 'paragraph',
+              order: typeof b?.order === 'number' ? b.order : 0,
+              content: (b?.content && typeof b.content === 'object') ? b.content : {},
+            }))
+            .sort((a, b) => a.order - b.order)
         : [],
     [incomingBlocks]
   );
@@ -318,8 +337,8 @@ export const EnhancedBlockEditor: React.FC<EnhancedBlockEditorProps> = (props) =
   const [templateDialogOpenFor, setTemplateDialogOpenFor] = useState<string | null>(null);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const lastAddedBlockTypeRef = useRef<Block['type'] | null>(null);
-  const blockIds = useMemo(() => safeBlocks.map(block => block.id), [safeBlocks]);
-  const hasBackgroundBlock = useMemo(() => safeBlocks.some(block => block.type === 'background'), [safeBlocks]);
+  const blockIds = useMemo(() => sortedBlocks.map(block => block.id), [sortedBlocks]);
+  const hasBackgroundBlock = useMemo(() => sortedBlocks.some(block => block.type === 'background'), [sortedBlocks]);
 
   const [forms, setForms] = useState<Array<{ id: string; name: string; is_public?: boolean }>>([]);
   const availableForms = useMemo(
@@ -355,7 +374,7 @@ export const EnhancedBlockEditor: React.FC<EnhancedBlockEditorProps> = (props) =
       scrollContainerRef.current.scrollTo({ top: scrollContainerRef.current.scrollHeight, behavior: 'smooth' });
     }
     lastAddedBlockTypeRef.current = null;
-  }, [safeBlocks.length]);
+  }, [sortedBlocks.length]);
 
   const emit = (next: Block[]) => props.onChange(Array.isArray(next) ? next : []);
 
@@ -418,51 +437,74 @@ export const EnhancedBlockEditor: React.FC<EnhancedBlockEditorProps> = (props) =
   };
 
   const addBlock = (type: Block['type']) => {
-    const newBlock: Block = { id: uid(), type, content: getDefaultContent(type), order: safeBlocks.length };
-    emit([...safeBlocks, newBlock]);
+    const newBlock: Block = { id: uid(), type, content: getDefaultContent(type), order: sortedBlocks.length };
+    emit([...sortedBlocks, newBlock].map((b, i) => ({ ...b, order: i })));
     setExpandedBlocks(prev => (prev.includes(newBlock.id) ? prev : [...prev, newBlock.id]));
     lastAddedBlockTypeRef.current = type;
   };
 
   const updateBlock = (id: string, content: any) => {
-    const updated = safeBlocks.map(block => (block.id === id ? { ...block, content } : block));
+    const updated = sortedBlocks.map(block => (block.id === id ? { ...block, content } : block));
     emit(updated);
   };
 
   const deleteBlock = (id: string) => {
-    emit(safeBlocks.filter(block => block.id !== id));
+    const newBlocks = sortedBlocks.filter(block => block.id !== id);
+    emit(newBlocks.map((b, i) => ({ ...b, order: i })));
   };
 
   const duplicateBlock = (id: string) => {
-    const blockToDuplicate = safeBlocks.find(block => block.id === id);
+    const blockToDuplicate = sortedBlocks.find(block => block.id === id);
     if (!blockToDuplicate) return;
     const newBlock: Block = { ...blockToDuplicate, id: uid(), order: (blockToDuplicate.order ?? 0) + 0.5 };
-    const reorderedBlocks = [...safeBlocks, newBlock]
+    const reorderedBlocks = [...sortedBlocks, newBlock]
       .sort((a, b) => (a.order ?? 0) - (b.order ?? 0))
       .map((b, i) => ({ ...b, order: i }));
     emit(reorderedBlocks);
   };
 
   const moveBlock = (id: string, direction: 'up' | 'down') => {
-    const blockIndex = safeBlocks.findIndex(block => block.id === id);
+    const blockIndex = sortedBlocks.findIndex(block => block.id === id);
     if (blockIndex < 0) return;
-    if ((direction === 'up' && blockIndex === 0) || (direction === 'down' && blockIndex === safeBlocks.length - 1)) return;
-
-    const newBlocks = [...safeBlocks];
+    
+    const newBlocks = [...sortedBlocks];
     const targetIndex = direction === 'up' ? blockIndex - 1 : blockIndex + 1;
+
+    if (targetIndex < 0 || targetIndex >= newBlocks.length) return;
 
     const isBackground = (i: number) => newBlocks[i]?.type === 'background';
     if (isBackground(blockIndex) || isBackground(targetIndex)) return;
 
-    const tempOrder = newBlocks[blockIndex].order;
-    newBlocks[blockIndex].order = newBlocks[targetIndex].order;
-    newBlocks[targetIndex].order = tempOrder;
+    [newBlocks[blockIndex], newBlocks[targetIndex]] = [newBlocks[targetIndex], newBlocks[blockIndex]];
 
-    emit(newBlocks.sort((a, b) => (a.order ?? 0) - (b.order ?? 0)));
+    emit(newBlocks.map((b, i) => ({ ...b, order: i })));
   };
 
   const toggleCollapse = (id: string) => {
     setExpandedBlocks(prev => (prev.includes(id) ? prev.filter(blockId => blockId !== id) : [...prev, id]));
+  };
+
+  /* -------- DND Handlers -------- */
+  const sensors = useSensors(
+    useSensor(PointerSensor),
+    useSensor(KeyboardSensor, {
+      coordinateGetter: sortableKeyboardCoordinates,
+    })
+  );
+
+  const handleDragEnd = (event: DragEndEvent) => {
+    const { active, over } = event;
+    if (over && active.id !== over.id) {
+      const oldIndex = sortedBlocks.findIndex((b) => b.id === active.id);
+      const newIndex = sortedBlocks.findIndex((b) => b.id === over.id);
+      
+      if (sortedBlocks[oldIndex]?.type === 'background' || sortedBlocks[newIndex]?.type === 'background') {
+        return;
+      }
+
+      const newBlocks = arrayMove(sortedBlocks, oldIndex, newIndex);
+      emit(newBlocks.map((b, i) => ({ ...b, order: i })));
+    }
   };
 
   /* -------- UI helpers -------- */
@@ -1345,8 +1387,8 @@ export const EnhancedBlockEditor: React.FC<EnhancedBlockEditorProps> = (props) =
                   </TooltipTrigger>
                   <TooltipContent>
                     <p className="text-xs text-gray-600">
-                      ・動画の下に表示される小さな文字です。<br />
-                      ・動画のタイトルや補足テキストを入力してください。<br />
+                      ・動画の下に表示される小さな文字です.<br />
+                      ・動画のタイトルや補足テキストを入力してください.<br />
                       ・未入力でも大丈夫です
                     </p>
                   </TooltipContent>
@@ -1666,23 +1708,152 @@ export const EnhancedBlockEditor: React.FC<EnhancedBlockEditorProps> = (props) =
     }
   };
 
-  const renderBlock = (block: Block) => {
-    const isCollapsed = !expandedBlocks.includes(block.id);
+  /* =========================
+     Render
+  ========================= */
+  return (
+    <div className="relative min-h-[700px] h-[700px] max-h-[700px] flex flex-col border rounded-md bg-white">
+      <div ref={scrollContainerRef} className="flex-1 overflow-y-auto p-4 border border-gray-300" style={{ backgroundColor: '#ffffe0' }}>
+        {sortedBlocks.length === 0 && (
+          <div className="flex items-center justify-center h-full">
+            <div className="text-center">
+              <p className="text-muted-foreground mb-4">ブロックを追加して記事を作成しましょう</p>
+              <Button onClick={() => addBlock('paragraph')} >
+                <Plus className="h-4 w-4 mr-2" />
+                最初のブロックを追加
+              </Button>
+            </div>
+          </div>
+        )}
 
-    const blockIndex = safeBlocks.findIndex(b => b.id === block.id);
-    const isBackgroundBlock = block.type === 'background';
-    const previousBlock = blockIndex > 0 ? safeBlocks[blockIndex - 1] : undefined;
-    const nextBlock = blockIndex >= 0 && blockIndex < safeBlocks.length - 1 ? safeBlocks[blockIndex + 1] : undefined;
-    const canMoveUp = !isBackgroundBlock && blockIndex > 0 && previousBlock?.type !== 'background';
-    const canMoveDown = !isBackgroundBlock && blockIndex < safeBlocks.length - 1 && nextBlock?.type !== 'background';
+        <DndContext
+          sensors={sensors}
+          collisionDetection={closestCenter}
+          onDragEnd={handleDragEnd}
+        >
+          <SortableContext
+            items={blockIds}
+            strategy={verticalListSortingStrategy}
+          >
+            {sortedBlocks.map(block => 
+              <SortableBlockItem 
+                key={block.id} 
+                block={block}
+                isCollapsed={!expandedBlocks.includes(block.id)}
+                renderCollapsedPreview={renderCollapsedPreview}
+                renderBlockContent={renderBlockContent}
+                toggleCollapse={toggleCollapse}
+                moveBlock={moveBlock}
+                duplicateBlock={duplicateBlock}
+                deleteBlock={deleteBlock}
+                updateBlock={updateBlock}
+                sortedBlocks={sortedBlocks}
+              />
+            )}
+          </SortableContext>
+        </DndContext>
+      </div>
 
-    return (
+      <div className="flex-none border-t border-gray-300 bg-background/95">
+        <div className="p-2">
+          <div className="grid grid-cols-6 gap-1">
+            <Button variant="ghost" className="flex flex-col h-auto py-2" onClick={() => addBlock('heading')}><Type className="h-5 w-5 mb-1" /><span className="text-xs">見出し</span></Button>
+            <Button variant="ghost" className="flex flex-col h-auto py-2" onClick={() => addBlock('paragraph')}><Type className="h-5 w-5 mb-1" /><span className="text-xs">テキスト</span></Button>
+            <Button variant="ghost" className="flex flex-col h-auto py-2" onClick={() => addBlock('dialogue')}><MessageSquare className="h-5 w-5 mb-1" /><span className="text-xs">対話</span></Button>
+            <Button variant="ghost" className="flex flex-col h-auto py-2" onClick={() => addBlock('note')}><AlertTriangle className="h-5 w-5 mb-1" /><span className="text-xs">注意事項</span></Button>
+            <Button variant="ghost" className="flex flex-col h-auto py-2" onClick={() => addBlock('list')}><List className="h-5 w-5 mb-1" /><span className="text-xs">リスト</span></Button>
+            <Button variant="ghost" className="flex flex-col h-auto py-2" onClick={() => addBlock('separator')}><Minus className="h-5 w-5 mb-1" /><span className="text-xs">区切り線</span></Button>
+            <Button variant="ghost" className="flex flex-col h-auto py-2" onClick={() => addBlock('image')}><Image className="h-5 w-5 mb-1" /><span className="text-xs">画像</span></Button>
+            <Button variant="ghost" className="flex flex-col h-auto py-2" onClick={() => addBlock('video')}><Video className="h-5 w-5 mb-1" /><span className="text-xs">動画</span></Button>
+            <Button variant="ghost" className="flex flex-col h-auto py-2" onClick={() => addBlock('button')}><Link className="h-5 w-5 mb-1" /><span className="text-xs">ボタン</span></Button>
+            <Button variant="ghost" className="flex flex-col h-auto py-2" onClick={() => addBlock('form_embed')}><FileText className="h-5 w-5 mb-1" /><span className="text-xs">フォーム</span></Button>
+            {!props.hideBackgroundBlockButton && (
+              <Button variant="ghost" className="flex flex-col h-auto py-2 hover:bg-[#0cb386] group" onClick={() => addBlock('background')} disabled={hasBackgroundBlock}>
+                <Palette className="h-5 w-5 mb-1 text-[#0cb386] group-hover:text-white" />
+                <span className="text-xs text-[#0cb386] group-hover:text-white">背景色</span>
+              </Button>
+            )}
+            {!props.hideTemplateButton && (
+              <Dialog>
+                <DialogTrigger asChild>
+                  <Button variant="ghost" className="flex flex-col h-auto py-2 hover:bg-[#0cb386] group">
+                    <Folder className="h-5 w-5 mb-1 text-[#0cb386] group-hover:text-white" />
+                    <span className="text-xs text-[#0cb386] group-hover:text-white">テンプレート</span>
+                  </Button>
+                </DialogTrigger>
+                <DialogContent>
+                  <DialogHeader>
+                    <DialogTitle>テンプレートを選択</DialogTitle>
+                  </DialogHeader>
+                  <p>ポップアップウィンドウの内容は後で指定されます。</p>
+                </DialogContent>
+              </Dialog>
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+
+interface SortableBlockItemProps {
+  block: Block;
+  isCollapsed: boolean;
+  sortedBlocks: Block[];
+  renderCollapsedPreview: (block: Block) => React.ReactNode;
+  renderBlockContent: (block: Block) => React.ReactNode;
+  toggleCollapse: (id: string) => void;
+  moveBlock: (id: string, direction: 'up' | 'down') => void;
+  duplicateBlock: (id: string) => void;
+  deleteBlock: (id: string) => void;
+  updateBlock: (id: string, content: any) => void;
+}
+
+const SortableBlockItem: React.FC<SortableBlockItemProps> = ({
+  block,
+  isCollapsed,
+  sortedBlocks,
+  renderCollapsedPreview,
+  renderBlockContent,
+  toggleCollapse,
+  moveBlock,
+  duplicateBlock,
+  deleteBlock,
+  updateBlock
+}) => {
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({ id: block.id, disabled: block.type === 'background' });
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    zIndex: isDragging ? 10 : undefined,
+  };
+
+  const blockIndex = sortedBlocks.findIndex(b => b.id === block.id);
+  const isBackgroundBlock = block.type === 'background';
+  const previousBlock = blockIndex > 0 ? sortedBlocks[blockIndex - 1] : undefined;
+  const nextBlock = blockIndex >= 0 && blockIndex < sortedBlocks.length - 1 ? sortedBlocks[blockIndex + 1] : undefined;
+  const canMoveUp = !isBackgroundBlock && blockIndex > 0 && previousBlock?.type !== 'background';
+  const canMoveDown = !isBackgroundBlock && blockIndex < sortedBlocks.length - 1 && nextBlock?.type !== 'background';
+
+  return (
+    <div ref={setNodeRef} style={style} className={isDragging ? 'opacity-50' : ''}>
       <Card key={block.id} className="mb-4 group bg-white dark:bg-gray-800 shadow-md border border-gray-300 rounded-sm">
         <CardContent className={isCollapsed ? "p-0" : "p-2"}>
           <div className="flex items-start space-x-2">
             <div className={`flex flex-col items-center space-y-1 ${isCollapsed ? 'pt-1' : 'pt-2'}`}>
               <Button size="sm" variant="ghost" className="h-6 w-6 p-0" onClick={() => moveBlock(block.id, 'up')} disabled={!canMoveUp}><ChevronUp className="h-4 w-4" /></Button>
-              <GripVertical className="h-5 w-5 text-muted-foreground cursor-grab" />
+              <div {...attributes} {...listeners} className="cursor-grab">
+                <GripVertical className="h-5 w-5 text-muted-foreground" />
+              </div>
               <Button size="sm" variant="ghost" className="h-6 w-6 p-0" onClick={() => moveBlock(block.id, 'down')} disabled={!canMoveDown}><ChevronDown className="h-4 w-4" /></Button>
             </div>
 
@@ -1736,68 +1907,6 @@ export const EnhancedBlockEditor: React.FC<EnhancedBlockEditorProps> = (props) =
           </div>
         </CardContent>
       </Card>
-    );
-  };
-
-  /* =========================
-     Render
-  ========================= */
-  return (
-    <div className="relative min-h-[700px] h-[700px] max-h-[700px] flex flex-col border rounded-md bg-white">
-      <div ref={scrollContainerRef} className="flex-1 overflow-y-auto p-4 border border-gray-300" style={{ backgroundColor: '#ffffe0' }}>
-        {safeBlocks.length === 0 && (
-          <div className="flex items-center justify-center h-full">
-            <div className="text-center">
-              <p className="text-muted-foreground mb-4">ブロックを追加して記事を作成しましょう</p>
-              <Button onClick={() => addBlock('paragraph')} >
-                <Plus className="h-4 w-4 mr-2" />
-                最初のブロックを追加
-              </Button>
-            </div>
-          </div>
-        )}
-
-        {safeBlocks.slice().sort((a, b) => (a.order ?? 0) - (b.order ?? 0)).map(renderBlock)}
-      </div>
-
-      <div className="flex-none border-t border-gray-300 bg-background/95">
-        <div className="p-2">
-          <div className="grid grid-cols-6 gap-1">
-            <Button variant="ghost" className="flex flex-col h-auto py-2" onClick={() => addBlock('heading')}><Type className="h-5 w-5 mb-1" /><span className="text-xs">見出し</span></Button>
-            <Button variant="ghost" className="flex flex-col h-auto py-2" onClick={() => addBlock('paragraph')}><Type className="h-5 w-5 mb-1" /><span className="text-xs">テキスト</span></Button>
-            <Button variant="ghost" className="flex flex-col h-auto py-2" onClick={() => addBlock('dialogue')}><MessageSquare className="h-5 w-5 mb-1" /><span className="text-xs">対話</span></Button>
-            <Button variant="ghost" className="flex flex-col h-auto py-2" onClick={() => addBlock('note')}><AlertTriangle className="h-5 w-5 mb-1" /><span className="text-xs">注意事項</span></Button>
-            <Button variant="ghost" className="flex flex-col h-auto py-2" onClick={() => addBlock('list')}><List className="h-5 w-5 mb-1" /><span className="text-xs">リスト</span></Button>
-            <Button variant="ghost" className="flex flex-col h-auto py-2" onClick={() => addBlock('separator')}><Minus className="h-5 w-5 mb-1" /><span className="text-xs">区切り線</span></Button>
-            <Button variant="ghost" className="flex flex-col h-auto py-2" onClick={() => addBlock('image')}><Image className="h-5 w-5 mb-1" /><span className="text-xs">画像</span></Button>
-            <Button variant="ghost" className="flex flex-col h-auto py-2" onClick={() => addBlock('video')}><Video className="h-5 w-5 mb-1" /><span className="text-xs">動画</span></Button>
-            <Button variant="ghost" className="flex flex-col h-auto py-2" onClick={() => addBlock('button')}><Link className="h-5 w-5 mb-1" /><span className="text-xs">ボタン</span></Button>
-            <Button variant="ghost" className="flex flex-col h-auto py-2" onClick={() => addBlock('form_embed')}><FileText className="h-5 w-5 mb-1" /><span className="text-xs">フォーム</span></Button>
-            {!props.hideBackgroundBlockButton && (
-              <Button variant="ghost" className="flex flex-col h-auto py-2 hover:bg-[#0cb386] group" onClick={() => addBlock('background')} disabled={hasBackgroundBlock}>
-                <Palette className="h-5 w-5 mb-1 text-[#0cb386] group-hover:text-white" />
-                <span className="text-xs text-[#0cb386] group-hover:text-white">背景色</span>
-              </Button>
-            )}
-            {!props.hideTemplateButton && (
-              <Dialog>
-                <DialogTrigger asChild>
-                  <Button variant="ghost" className="flex flex-col h-auto py-2 hover:bg-[#0cb386] group">
-                    <Folder className="h-5 w-5 mb-1 text-[#0cb386] group-hover:text-white" />
-                    <span className="text-xs text-[#0cb386] group-hover:text-white">テンプレート</span>
-                  </Button>
-                </DialogTrigger>
-                <DialogContent>
-                  <DialogHeader>
-                    <DialogTitle>テンプレートを選択</DialogTitle>
-                  </DialogHeader>
-                  <p>ポップアップウィンドウの内容は後で指定されます。</p>
-                </DialogContent>
-              </Dialog>
-            )}
-          </div>
-        </div>
-      </div>
     </div>
   );
-};
+}
