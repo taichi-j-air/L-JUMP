@@ -125,6 +125,25 @@ export function FriendsList({ user }: FriendsListProps) {
     return `${upperCurrency} ${normalized.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
   }
 
+  const getPaymentStatusDisplay = (status?: string | null) => {
+    const normalized = (status || "").toLowerCase()
+    switch (normalized) {
+      case "paid":
+        return { label: "決済済", className: "bg-[rgb(12,179,134)] text-white" }
+      case "refunded":
+        return { label: "返金済", className: "bg-red-500 text-white" }
+      case "pending":
+        return { label: "処理中", className: "bg-muted text-foreground/70" }
+      case "canceled":
+      case "subscription_canceled":
+        return { label: "キャンセル", className: "bg-muted text-foreground/70" }
+      case "expired":
+        return { label: "表示のみ", className: "bg-muted text-foreground/70" }
+      default:
+        return { label: "表示のみ", className: "bg-muted text-foreground/70" }
+    }
+  }
+
   const detailTagNames = useMemo(() => {
     if (!detailFriend) return []
     const tagIds = friendTagMap[detailFriend.id] || []
@@ -850,35 +869,30 @@ export function FriendsList({ user }: FriendsListProps) {
                 )}
                 {detailPayments.length > 0 && (
                   <div className="space-y-1.5">
-                    {detailPayments.map((payment) => (
-                      <div key={payment.id} className="border rounded-md p-2.5 space-y-2">
-                        <div className="flex items-center justify-between">
-                          <span className="text-xs text-muted-foreground">
-                            {formatDateTime(payment.created_at)}
-                          </span>
-                          <span className="font-semibold">
-                            {formatCurrencyDisplay(payment.amount, payment.currency)}
-                          </span>
+                    {detailPayments.map((payment) => {
+                      const paymentStatus = getPaymentStatusDisplay(payment.status)
+                      return (
+                        <div key={payment.id} className="border rounded-md p-2.5 space-y-2">
+                          <div className="flex items-center justify-between">
+                            <span className="text-xs text-muted-foreground">
+                              {formatDateTime(payment.created_at)}
+                            </span>
+                            <span className="font-semibold">
+                              {formatCurrencyDisplay(payment.amount, payment.currency)}
+                            </span>
+                          </div>
+                          <div className="text-sm font-medium break-all">{payment.productLabel}</div>
+                          <div className="flex items-center justify-between text-xs">
+                            <Badge className={cn("text-xs rounded px-2 py-0.5", paymentStatus.className)}>
+                              {paymentStatus.label}
+                            </Badge>
+                            <span className="text-muted-foreground">
+                              {payment.livemode ? "本番" : "テスト"}
+                            </span>
+                          </div>
                         </div>
-                        <div className="text-sm font-medium break-all">{payment.productLabel}</div>
-                        <div className="flex items-center justify-between text-xs">
-                          <Badge
-                            variant={
-                              payment.status === "paid"
-                                ? "default"
-                                : payment.status === "refunded"
-                                  ? "destructive"
-                                  : "secondary"
-                            }
-                          >
-                            {payment.status || "status不明"}
-                          </Badge>
-                          <span className="text-muted-foreground">
-                            {payment.livemode ? "本番" : "テスト"}
-                          </span>
-                        </div>
-                      </div>
-                    ))}
+                      )
+                    })}
                   </div>
                 )}
               </div>
@@ -920,7 +934,7 @@ export function FriendsList({ user }: FriendsListProps) {
                   )}
                 </div>
               </div>
-              <div className="space-y-1.5 max-h-[60vh] overflow-y-auto pr-1">
+              <div className="space-y-1.5 max-h-[55vh] overflow-y-auto pr-1">
                 <h4 className="text-sm font-medium">シナリオ遷移ログ</h4>
                 <div className="space-y-1.5 text-xs">
                   {detailLogs.length === 0 && <div className="text-muted-foreground">履歴なし</div>}
