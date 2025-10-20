@@ -75,8 +75,7 @@ export function ChatWindow({ user, friend, onClose }: ChatWindowProps) {
         const newMessage = supportsMetadata
           ? rawMessage
           : { ...rawMessage, metadata: null }
-        setMessages(prev => {
-          setMessages((prev) => [...prev, JSON.parse(payload.new.message_data) as unknown as ChatMessage]);
+        setMessages(prev => [...prev, newMessage]);
       })
       .subscribe();
 
