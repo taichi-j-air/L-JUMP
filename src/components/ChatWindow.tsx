@@ -76,13 +76,7 @@ export function ChatWindow({ user, friend, onClose }: ChatWindowProps) {
           ? rawMessage
           : { ...rawMessage, metadata: null }
         setMessages(prev => {
-          if (prev.some(message => message.id === newMessage.id)) {
-            return prev
-          }
-          return [...prev, newMessage].sort(
-            (a, b) => new Date(a.sent_at).getTime() - new Date(b.sent_at).getTime()
-          )
-        })
+          setMessages((prev) => [...prev, JSON.parse(payload.new.message_data) as unknown as ChatMessage]);
       })
       .subscribe();
 

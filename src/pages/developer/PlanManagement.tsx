@@ -165,7 +165,19 @@ export default function PlanManagement() {
           monthly_price: editingPlan.monthly_price,
           yearly_price: editingPlan.yearly_price,
           message_limit: editingPlan.message_limit,
-          features: payloadFeatures,
+                  features: { 
+            marketingHighlights: ['Highlight 1', 'Highlight 2'],
+            limits: {
+                scenarios: 5,
+                steps: 10,
+                media_storage_gb: 1,
+            },
+            stripe: {
+                productId: '',
+                monthlyPriceId: '',
+                yearlyPriceId: '',
+            },
+        } as unknown as Json,
           is_active: editingPlan.is_active,
         })
 
@@ -174,15 +186,15 @@ export default function PlanManagement() {
       } else {
         const { error } = await supabase
           .from("plan_configs")
-          .update({
-            plan_type: editingPlan.plan_type,
-            name: editingPlan.name,
-            monthly_price: editingPlan.monthly_price,
-            yearly_price: editingPlan.yearly_price,
-            message_limit: editingPlan.message_limit,
-            features: payloadFeatures,
-            is_active: editingPlan.is_active,
-          })
+          .update({ 
+                name: plan.name,
+                is_active: plan.is_active,
+                message_limit: plan.message_limit,
+                monthly_price: plan.monthly_price,
+                yearly_price: plan.yearly_price,
+                features: plan.features,
+                plan_type: plan.plan_type, 
+            } as any)
           .eq("id", editingPlan.id)
 
         if (error) throw error
