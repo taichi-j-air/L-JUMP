@@ -907,7 +907,12 @@ export function FriendsList({ user }: FriendsListProps) {
                         return (
                           <AccordionItem key={f.id} value={f.id}>
                             <AccordionTrigger className="text-xs">
-                              {f.forms?.name || "フォーム"} - {format(new Date(f.submitted_at), "yyyy/MM/dd HH:mm")}
+                              <span className="font-medium truncate max-w-[70%]">
+                                {f.forms?.name || "フォーム"}
+                              </span>
+                              <span className="text-xs text-muted-foreground ml-2 shrink-0">
+                                {formatDateTime(f.submitted_at)}
+                              </span>
                             </AccordionTrigger>
                             <AccordionContent>
                               <div className="space-y-2">
