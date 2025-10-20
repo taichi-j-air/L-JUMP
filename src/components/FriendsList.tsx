@@ -386,10 +386,31 @@ export function FriendsList({ user }: FriendsListProps) {
                         console.error('Error loading exit logs:', exitLogsResult.error)
                       }
 
-                      const combinedLogs = [
-                        ...((logsResult.data || []).map((l: any) => ({ type: 'registered', date: l.added_at, scenario_id: l.scenario_id }))),
-                        ...((exitLogsResult.data || []).map((l: any) => ({ type: 'exited', date: l.updated_at, scenario_id: l.scenario_id })))
-                      ].sort((a: any, b: any) => new Date(b.date).getTime() - new Date(a.date).getTime())
+                      const registeredEntries = (logsResult.data || [])
+                        .map((l: any) => ({
+                          type: 'registered' as const,
+                          date: l.added_at,
+                          scenario_id: l.scenario_id
+                        }))
+                        .filter((entry) => Boolean(entry.date) && Boolean(entry.scenario_id))
+
+                      const exitEntriesMap = new Map<string, { type: 'exited'; date: string; scenario_id: string }>()
+                      for (const log of exitLogsResult.data || []) {
+                        if (!log?.scenario_id || !log?.updated_at) continue
+                        const existing = exitEntriesMap.get(log.scenario_id)
+                        if (!existing || new Date(log.updated_at).getTime() > new Date(existing.date).getTime()) {
+                          exitEntriesMap.set(log.scenario_id, {
+                            type: 'exited',
+                            date: log.updated_at,
+                            scenario_id: log.scenario_id
+                          })
+                        }
+                      }
+                      const exitEntries = Array.from(exitEntriesMap.values())
+
+                      const combinedLogs = [...registeredEntries, ...exitEntries].sort(
+                        (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()
+                      )
                       setDetailLogs(combinedLogs)
 
                       if (paymentsResult.error) {
