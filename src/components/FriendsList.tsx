@@ -603,34 +603,87 @@ export function FriendsList({ user }: FriendsListProps) {
                       </div>
                     </div>
 
-                    <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
-                      <Button size="sm" variant="outline" onClick={() => setRichMenuDialogFriend(friend)} className="gap-1 h-8 px-2">
-                        <MenuSquare className="h-4 w-4" />
-                        メニュー
-                      </Button>
-                      {blockTagId && (
-                        <Button
-                          size="sm"
-                          variant={(friendTagMap[friend.id] || []).includes(blockTagId) ? "destructive" : "outline"}
-                          onClick={() => toggleBlockTag(friend)}
-                          className="gap-1 h-8 px-2"
-                        >
-                          {(friendTagMap[friend.id] || []).includes(blockTagId) ? "ブロック解除" : "ブロック"}
-                        </Button>
-                      )}
-                      <Button size="sm" variant="outline" onClick={() => setTagDialogFriend(friend)} className="gap-1 h-8 px-2">
-                        <TagIcon className="h-4 w-4" />
-                        タグ
-                      </Button>
-                      <Button size="sm" variant="outline" onClick={() => setScenarioDialogFriend(friend)} className="gap-1 h-8 px-2">
-                        <ListChecks className="h-4 w-4" />
-                        シナリオ
-                      </Button>
-                      <Button size="sm" variant="outline" onClick={() => setSelectedFriend(friend)} className="gap-1 h-8 px-2">
-                        <MessageCircle className="h-4 w-4" />
-                        チャット
-                      </Button>
-                    </div>
+                    <TooltipProvider delayDuration={0}>
+                      <div className="flex items-center gap-1.5" onClick={(e) => e.stopPropagation()}>
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              className="h-8 w-8 p-0"
+                              aria-label="リッチメニュー"
+                              onClick={() => setRichMenuDialogFriend(friend)}
+                            >
+                              <MenuSquare className="h-4 w-4" />
+                            </Button>
+                          </TooltipTrigger>
+                          <TooltipContent>メニュー</TooltipContent>
+                        </Tooltip>
+                        {blockTagId && (
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                className={cn(
+                                  "h-8 w-8 p-0",
+                                  (friendTagMap[friend.id] || []).includes(blockTagId) ? "text-destructive" : ""
+                                )}
+                                aria-label={(friendTagMap[friend.id] || []).includes(blockTagId) ? "ブロック解除" : "ブロック"}
+                                onClick={() => toggleBlockTag(friend)}
+                              >
+                                <Ban className="h-4 w-4" />
+                              </Button>
+                            </TooltipTrigger>
+                            <TooltipContent>
+                              {(friendTagMap[friend.id] || []).includes(blockTagId) ? "ブロック解除" : "ブロック"}
+                            </TooltipContent>
+                          </Tooltip>
+                        )}
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              className="h-8 w-8 p-0"
+                              aria-label="タグ"
+                              onClick={() => setTagDialogFriend(friend)}
+                            >
+                              <TagIcon className="h-4 w-4" />
+                            </Button>
+                          </TooltipTrigger>
+                          <TooltipContent>タグ</TooltipContent>
+                        </Tooltip>
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              className="h-8 w-8 p-0"
+                              aria-label="シナリオ"
+                              onClick={() => setScenarioDialogFriend(friend)}
+                            >
+                              <ListChecks className="h-4 w-4" />
+                            </Button>
+                          </TooltipTrigger>
+                          <TooltipContent>シナリオ</TooltipContent>
+                        </Tooltip>
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              className="h-8 w-8 p-0"
+                              aria-label="チャット"
+                              onClick={() => setSelectedFriend(friend)}
+                            >
+                              <MessageCircle className="h-4 w-4" />
+                            </Button>
+                          </TooltipTrigger>
+                          <TooltipContent>チャット</TooltipContent>
+                        </Tooltip>
+                      </div>
+                    </TooltipProvider>
                   </div>
                 </div>
               </div>
@@ -787,7 +840,7 @@ export function FriendsList({ user }: FriendsListProps) {
             </div>
 
             <div className="grid gap-3 lg:grid-cols-3">
-              <div className="space-y-1.5 max-h-[60vh] overflow-y-auto pr-1">
+              <div className="space-y-1.5 max-h-[55vh] overflow-y-auto pr-1">
                 <div className="flex items-center justify-between">
                   <h4 className="text-sm font-medium">決済履歴</h4>
                   <span className="text-[11px] text-muted-foreground">最新50件</span>
@@ -829,7 +882,7 @@ export function FriendsList({ user }: FriendsListProps) {
                   </div>
                 )}
               </div>
-              <div className="space-y-1.5 max-h-[60vh] overflow-y-auto pr-1">
+              <div className="space-y-1.5 max-h-[55vh] overflow-y-auto pr-1">
                 <h4 className="text-sm font-medium">フォーム回答</h4>
                 <div className="space-y-1.5 text-xs">
                   {detailForms.length === 0 && <div className="text-muted-foreground">履歴なし</div>}
@@ -876,7 +929,7 @@ export function FriendsList({ user }: FriendsListProps) {
                       {detailLogs.map((log: any, idx: number) => {
                         const scenarioName = scenarios.find((s) => s.id === log.scenario_id)?.name || "Unknown"
                         return (
-                          <div key={idx} className="border rounded-md p-2.5 space-y-2">
+                          <div key={idx} className="border rounded-md p-2 space-y-1.5">
                             <div className="flex items-center justify-between">
                               <Badge
                                 className={cn(
@@ -891,9 +944,6 @@ export function FriendsList({ user }: FriendsListProps) {
                               </span>
                             </div>
                             <div className="text-sm font-medium">{scenarioName}</div>
-                            <div className="text-xs text-muted-foreground">
-                              シナリオID: {log.scenario_id}
-                            </div>
                           </div>
                         )
                       })}
