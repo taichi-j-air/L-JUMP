@@ -3073,7 +3073,7 @@ export type Database = {
       affiliate_payout_status: "processing" | "completed" | "failed"
       message_kind: "incoming" | "outgoing"
       page_visibility: "friends_only" | "public"
-      plan_type: "free" | "basic" | "premium" | "developer"
+      plan_type: "free" | "silver" | "gold" | "developer"
       step_message_type: "text" | "media" | "flex" | "restore_access"
     }
     CompositeTypes: {
@@ -3206,7 +3206,7 @@ export const Constants = {
       affiliate_payout_status: ["processing", "completed", "failed"],
       message_kind: ["incoming", "outgoing"],
       page_visibility: ["friends_only", "public"],
-      plan_type: ["free", "basic", "premium", "developer"],
+      plan_type: ["free", "silver", "gold", "developer"],
       step_message_type: ["text", "media", "flex", "restore_access"],
     },
   },

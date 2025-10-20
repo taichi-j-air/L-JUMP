@@ -11,6 +11,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
 import { Eye, Edit, Trash2, Search, Crown, X, ChevronLeft, ChevronRight } from "lucide-react"
 import { toast } from "sonner"
+import { PLAN_TYPE_LABELS, PlanType, normalizePlanType } from "@/types/plans"
 
 interface UserData {
   user_id: string
@@ -25,7 +26,7 @@ interface UserData {
   official_line_name?: string
   email: string
   created_at: string
-  plan_type?: string
+  plan_type?: PlanType
   total_revenue: number
   user_suspended?: boolean
 }
@@ -120,7 +121,7 @@ export default function UserManagement() {
       const usersWithData = profiles?.map(profile => ({
         ...profile,
         email: emailMap.get(profile.user_id) || '未設定',
-        plan_type: activePlanMap.get(profile.user_id) || 'free',
+        plan_type: normalizePlanType(activePlanMap.get(profile.user_id) || 'free'),
         total_revenue: totalRevenueMap.get(profile.user_id) || 0
       })) || []
 
@@ -148,7 +149,7 @@ export default function UserManagement() {
     }
   }
 
-  const handlePremiumToggle = async (userId: string, makePremium: boolean) => {
+  const handlePremiumToggle = async (userId: string, enableGold: boolean) => {
     try {
       // 現在のプランを無効化
       await supabase
@@ -161,18 +162,18 @@ export default function UserManagement() {
         .from('user_plans')
         .insert({
           user_id: userId,
-          plan_type: makePremium ? 'premium' : 'free',
+          plan_type: enableGold ? 'gold' : 'free',
           is_active: true,
-          monthly_revenue: makePremium ? 9800 : 0
+          monthly_revenue: enableGold ? 9800 : 0
         })
 
       if (error) throw error
 
-      toast.success(makePremium ? 'プレミアムアカウントに設定しました' : 'フリーアカウントに設定しました')
+      toast.success(enableGold ? 'ゴールドプランに設定しました' : 'フリープランに設定しました')
       loadUsers()
     } catch (error) {
-      console.error('Error updating premium status:', error)
-      toast.error('プレミアム設定の更新に失敗しました')
+      console.error('Error updating plan status:', error)
+      toast.error('プラン設定の更新に失敗しました')
     }
   }
 
@@ -442,7 +443,9 @@ export default function UserManagement() {
                                    </div>
                                    <div>
                                      <label className="text-sm font-medium">プラン</label>
-                                     <p className="text-sm bg-muted p-2 rounded">{userData.plan_type}</p>
+                                     <p className="text-sm bg-muted p-2 rounded">
+                                       {userData.plan_type ? PLAN_TYPE_LABELS[userData.plan_type] : '未設定'}
+                                     </p>
                                    </div>
                                    <div>
                                      <label className="text-sm font-medium">累計課金金額</label>
@@ -489,10 +492,10 @@ export default function UserManagement() {
                                )}
                                <Button
                                  size="sm"
-                                 variant={userData.plan_type === 'premium' ? 'secondary' : 'default'}
-                                 onClick={() => handlePremiumToggle(userData.user_id, userData.plan_type !== 'premium')}
+                                 variant={userData.plan_type === 'gold' ? 'secondary' : 'default'}
+                                 onClick={() => handlePremiumToggle(userData.user_id, userData.plan_type !== 'gold')}
                                >
-                                 {userData.plan_type === 'premium' ? 'プレミアム解除' : 'プレミアム付与'}
+                                 {userData.plan_type === 'gold' ? 'ゴールド解除' : 'ゴールド付与'}
                                </Button>
                              </>
                            )}

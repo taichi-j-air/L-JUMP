@@ -14,6 +14,7 @@ import { toast } from "sonner";
 import { CheckCircle2, User as UserIcon, Settings, CreditCard, Video, ExternalLink } from "lucide-react";
 import VideoPlayer from "@/components/VideoPlayer";
 import { PlanSelection } from "@/components/PlanSelection";
+import type { PlanType } from "@/types/plans";
 
 interface BasicInfo {
   firstName: string;
@@ -37,7 +38,7 @@ const Onboarding = () => {
   const [hasLineAccount, setHasLineAccount] = useState<boolean | null>(null);
   const [businessType, setBusinessType] = useState("");
   const [showLineAccountDialog, setShowLineAccountDialog] = useState(false);
-  const [selectedPlan, setSelectedPlan] = useState("");
+  const [selectedPlan, setSelectedPlan] = useState<PlanType | "">("");
   const [basicInfo, setBasicInfo] = useState<BasicInfo>({
     firstName: "",
     lastName: "",
