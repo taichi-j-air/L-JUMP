@@ -917,10 +917,10 @@ export default function CMSFriendsPageBuilder() {
                               <Select value={timerStyle} onValueChange={(v) => setTimerStyle(v as any)}>
                                 <SelectTrigger><SelectValue /></SelectTrigger>
                                 <SelectContent className="bg-background">
-                                  <SelectItem value="solid">ソリッド</SelectItem>
-                                  <SelectItem value="glass">画像①（横ラベル）</SelectItem>
-                                  <SelectItem value="outline">画像②（円リング）</SelectItem>
-                                  <SelectItem value="minimal">画像③（ミニマル）</SelectItem>
+                                  <SelectItem value="solid">ノーマル</SelectItem>
+                                  <SelectItem value="glass">パターン2</SelectItem>
+                                  <SelectItem value="outline">パターン3</SelectItem>
+                                  <SelectItem value="minimal">パターン4</SelectItem>
                                 </SelectContent>
                               </Select>
                             </div>

@@ -1629,7 +1629,21 @@ export const EnhancedBlockEditor: React.FC<EnhancedBlockEditorProps> = (props) =
                 </Select>
               </div>
               <div className="space-y-1">
-                <Label>幅</Label>
+                <div className="flex items-center gap-1">
+                  <Label>幅</Label>
+                  <TooltipProvider delayDuration={0}>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <button type="button" className="p-0 flex items-center justify-center" onClick={(e) => e.preventDefault()}>
+                          <AlertCircle className="h-4 w-4 text-white fill-gray-500" />
+                        </button>
+                      </TooltipTrigger>
+                      <TooltipContent>
+                        <p className="text-xs text-muted-foreground">スマホ画面の場合は最大幅の選択を推奨</p>
+                      </TooltipContent>
+                    </Tooltip>
+                  </TooltipProvider>
+                </div>
                 <Select value={block.content.width || 'auto'} onValueChange={(value) => updateBlock(block.id, { ...block.content, width: value })}>
                   <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
