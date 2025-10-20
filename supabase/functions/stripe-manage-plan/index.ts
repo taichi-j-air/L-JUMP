@@ -157,29 +157,18 @@ serve(async (req) => {
       throw new Error("変更先のプラン設定が見つかりません")
     }
 
-    const { data: currentPlanConfig } = await supabaseService
-      .from("plan_configs")
-      .select("plan_type, features")
-      .eq("plan_type", currentPlanType)
-      .maybeSingle()
-
     const targetStripeSettings = parseStripeSettings(targetPlanConfig.features)
-    const currentStripeSettings = parseStripeSettings(currentPlanConfig?.features)
+    const { data: stripeCredentials, error: credentialError } = await supabaseService
+      .from("platform_stripe_credentials")
+      .select("test_secret_key, live_secret_key")
+      .single()
 
-    const managerUserId =
-      targetStripeSettings.managerUserId ?? currentStripeSettings.managerUserId
-    if (!managerUserId) {
-      throw new Error("Stripeの管理者ユーザーIDが設定されていません")
+    if (credentialError) {
+      throw new Error("Stripe認証情報の取得に失敗しました")
     }
 
-    const { data: stripeCredentials, error: credentialError } = await supabaseService
-      .from("stripe_credentials")
-      .select("test_secret_key, live_secret_key")
-      .eq("user_id", managerUserId)
-      .maybeSingle()
-
-    if (credentialError || !stripeCredentials) {
-      throw new Error("Stripe認証情報を取得できませんでした")
+    if (!stripeCredentials) {
+      throw new Error("Stripeキーが登録されていません。先にプラン管理で設定してください")
     }
 
     const monthlyPrice = Number(targetPlanConfig.monthly_price ?? 0)

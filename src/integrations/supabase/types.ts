@@ -1433,6 +1433,36 @@ export type Database = {
         }
         Relationships: []
       }
+      platform_stripe_credentials: {
+        Row: {
+          created_at: string
+          id: string
+          live_publishable_key: string | null
+          live_secret_key: string | null
+          test_publishable_key: string | null
+          test_secret_key: string | null
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          live_publishable_key?: string | null
+          live_secret_key?: string | null
+          test_publishable_key?: string | null
+          test_secret_key?: string | null
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          live_publishable_key?: string | null
+          live_secret_key?: string | null
+          test_publishable_key?: string | null
+          test_secret_key?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
       postback_logs: {
         Row: {
           action: string

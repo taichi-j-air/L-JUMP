@@ -36,6 +36,16 @@ interface PlanConfig {
   is_active: boolean
 }
 
+interface PlatformStripeCredentialsForm {
+  id: string
+  test_publishable_key: string
+  test_secret_key: string
+  live_publishable_key: string
+  live_secret_key: string
+}
+
+const PLATFORM_CREDENTIAL_ID = "00000000-0000-0000-0000-000000000001"
+
 const PLAN_TYPE_OPTIONS: { value: PlanType; label: string }[] = [
   { value: "free", label: PLAN_TYPE_LABELS.free },
   { value: "silver", label: PLAN_TYPE_LABELS.silver },
@@ -58,6 +68,15 @@ export default function PlanManagement() {
   const [plans, setPlans] = useState<PlanConfig[]>([])
   const [editingPlan, setEditingPlan] = useState<PlanConfig | null>(null)
   const [isDialogOpen, setIsDialogOpen] = useState(false)
+  const [platformCredentials, setPlatformCredentials] = useState<PlatformStripeCredentialsForm>({
+    id: PLATFORM_CREDENTIAL_ID,
+    test_publishable_key: "",
+    test_secret_key: "",
+    live_publishable_key: "",
+    live_secret_key: "",
+  })
+  const [credentialsLoading, setCredentialsLoading] = useState(true)
+  const [savingCredentials, setSavingCredentials] = useState(false)
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
@@ -69,6 +88,7 @@ export default function PlanManagement() {
   useEffect(() => {
     if (user) {
       loadPlans()
+      loadPlatformCredentials()
     }
   }, [user])
 
@@ -102,6 +122,33 @@ export default function PlanManagement() {
     } catch (error) {
       console.error("Error loading plans:", error)
       toast.error("プラン情報の取得に失敗しました")
+    }
+  }
+
+  const loadPlatformCredentials = async () => {
+    setCredentialsLoading(true)
+    try {
+      const { data, error } = await supabase
+        .from("platform_stripe_credentials")
+        .select("*")
+        .maybeSingle()
+
+      if (error && error.code !== "PGRST116") {
+        throw error
+      }
+
+      setPlatformCredentials({
+        id: data?.id ?? PLATFORM_CREDENTIAL_ID,
+        test_publishable_key: data?.test_publishable_key ?? "",
+        test_secret_key: data?.test_secret_key ?? "",
+        live_publishable_key: data?.live_publishable_key ?? "",
+        live_secret_key: data?.live_secret_key ?? "",
+      })
+    } catch (error) {
+      console.error("Error loading Stripe credentials:", error)
+      toast.error("Stripeキーの取得に失敗しました")
+    } finally {
+      setCredentialsLoading(false)
     }
   }
 
@@ -243,6 +290,37 @@ export default function PlanManagement() {
     )
   }
 
+  const updatePlatformCredentialField = (field: keyof PlatformStripeCredentialsForm, value: string) => {
+    setPlatformCredentials((prev) => ({ ...prev, [field]: value }))
+  }
+
+  const handleSavePlatformCredentials = async () => {
+    setSavingCredentials(true)
+    try {
+      const payload = {
+        id: PLATFORM_CREDENTIAL_ID,
+        test_publishable_key: platformCredentials.test_publishable_key || null,
+        test_secret_key: platformCredentials.test_secret_key || null,
+        live_publishable_key: platformCredentials.live_publishable_key || null,
+        live_secret_key: platformCredentials.live_secret_key || null,
+      }
+
+      const { error } = await supabase
+        .from("platform_stripe_credentials")
+        .upsert(payload, { onConflict: "id" })
+
+      if (error) throw error
+
+      toast.success("Stripeキーを保存しました")
+      loadPlatformCredentials()
+    } catch (error) {
+      console.error("Error saving Stripe credentials:", error)
+      toast.error("Stripeキーの保存に失敗しました")
+    } finally {
+      setSavingCredentials(false)
+    }
+  }
+
   const handlePlanTypeChange = (value: PlanType) => {
     setEditingPlan((prev) =>
       prev
@@ -299,6 +377,66 @@ export default function PlanManagement() {
             新規プラン作成
           </Button>
         </div>
+
+        <Card className="mb-6">
+          <CardHeader>
+            <CardTitle>Stripeキー設定</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <p className="text-sm text-muted-foreground">
+              プラン決済で共通利用する Stripe の API キーを登録します。テスト・本番両方のキーを入力し、保存してください。
+            </p>
+            {credentialsLoading ? (
+              <div className="text-sm text-muted-foreground">読み込み中...</div>
+            ) : (
+              <div className="grid gap-4 md:grid-cols-2">
+                <div className="space-y-2">
+                  <Label htmlFor="test_publishable_key">テスト公開鍵 (pk_test_...)</Label>
+                  <Input
+                    id="test_publishable_key"
+                    value={platformCredentials.test_publishable_key}
+                    onChange={(e) => updatePlatformCredentialField("test_publishable_key", e.target.value)}
+                    placeholder="pk_test_..."
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="test_secret_key">テストシークレットキー (sk_test_...)</Label>
+                  <Input
+                    id="test_secret_key"
+                    type="password"
+                    value={platformCredentials.test_secret_key}
+                    onChange={(e) => updatePlatformCredentialField("test_secret_key", e.target.value)}
+                    placeholder="sk_test_..."
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="live_publishable_key">本番公開鍵 (pk_live_...)</Label>
+                  <Input
+                    id="live_publishable_key"
+                    value={platformCredentials.live_publishable_key}
+                    onChange={(e) => updatePlatformCredentialField("live_publishable_key", e.target.value)}
+                    placeholder="pk_live_..."
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="live_secret_key">本番シークレットキー (sk_live_...)</Label>
+                  <Input
+                    id="live_secret_key"
+                    type="password"
+                    value={platformCredentials.live_secret_key}
+                    onChange={(e) => updatePlatformCredentialField("live_secret_key", e.target.value)}
+                    placeholder="sk_live_..."
+                  />
+                </div>
+              </div>
+            )}
+            <div className="flex justify-end">
+              <Button onClick={handleSavePlatformCredentials} disabled={savingCredentials}>
+                {savingCredentials ? "保存中..." : "Stripeキーを保存"}
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
 
         <Card>
           <CardHeader>
@@ -358,7 +496,6 @@ export default function PlanManagement() {
                           <div>Product: {stripe?.productId || "未設定"}</div>
                           <div>月額Price: {stripe?.monthlyPriceId || "未設定"}</div>
                           <div>年額Price: {stripe?.yearlyPriceId || "未設定"}</div>
-                          <div>管理ユーザー: {stripe?.managerUserId || "未設定"}</div>
                         </TableCell>
                         <TableCell className="text-xs text-muted-foreground">
                           {marketingHighlights?.length ? (
@@ -541,19 +678,6 @@ export default function PlanManagement() {
                           })
                         }
                         placeholder="price_xxxxx"
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="stripe_manager_user_id">Stripe管理ユーザーID</Label>
-                      <Input
-                        id="stripe_manager_user_id"
-                        value={editingPlan.featureConfig.stripe?.managerUserId || ""}
-                        onChange={(e) =>
-                          updateStripeSettings({
-                            managerUserId: e.target.value.trim() || undefined,
-                          })
-                        }
-                        placeholder="Stripe認証情報を持つユーザーのID"
                       />
                     </div>
                   </div>
