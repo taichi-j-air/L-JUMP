@@ -53,26 +53,31 @@ export const SetUserRichMenuDialog = ({ user, friend, open, onOpenChange }: SetU
       setRichMenus(menus as RichMenu[]);
 
       // Fetch the currently linked rich menu for the user
-      const { data: currentMenuData, error: currentMenuError } = await supabase.functions.invoke('get-user-rich-menu', {
-        body: { userId: friend.line_user_id },
-      });
+      try {
+        const { data: currentMenuData, error: currentMenuError } = await supabase.functions.invoke('get-user-rich-menu', {
+          body: { userId: friend.line_user_id },
+        });
 
-      if (currentMenuError) {
-        if (currentMenuError.context && currentMenuError.context.status === 404) {
-            setCurrentUserMenuId(null);
-            setSelectedMenuId('default');
+        if (currentMenuError) {
+          console.log('No menu linked for user (expected):', currentMenuError);
+          setCurrentUserMenuId(null);
+          setSelectedMenuId('default');
+        } else if (currentMenuData?.richMenuId) {
+          setCurrentUserMenuId(currentMenuData.richMenuId);
+          setSelectedMenuId(currentMenuData.richMenuId);
         } else {
-            throw currentMenuError;
+          setCurrentUserMenuId(null);
+          setSelectedMenuId('default');
         }
-      } else {
-        // Use menuId from response if available
-        setCurrentUserMenuId(currentMenuData.menuId || null);
-        setSelectedMenuId(currentMenuData.menuId || 'default');
+      } catch (menuError) {
+        console.log('Could not fetch user menu (treating as default):', menuError);
+        setCurrentUserMenuId(null);
+        setSelectedMenuId('default');
       }
 
     } catch (error) {
-      console.error("Error loading data for dialog:", error);
-      toast({ title: "エラー", description: `データの読み込みに失敗しました: ${(error as Error).message}`, variant: "destructive" });
+      console.error("Error loading rich menus:", error);
+      toast({ title: "エラー", description: `リッチメニュー一覧の読み込みに失敗しました: ${(error as Error).message}`, variant: "destructive" });
     } finally {
       setLoading(false);
     }
@@ -116,7 +121,19 @@ export const SetUserRichMenuDialog = ({ user, friend, open, onOpenChange }: SetU
       <DialogContent>
         <DialogHeader>
           <DialogTitle>リッチメニューを設定</DialogTitle>
-          <DialogDescription>ユーザー「{friend?.display_name}」に表示するリッチメニューを選択してください。</DialogDescription>
+          <DialogDescription>
+            ユーザー「{friend?.display_name}」に表示するリッチメニューを選択してください。
+            {currentUserMenuId && (
+              <div className="mt-2 text-sm font-medium">
+                現在適用中: {richMenus.find(m => m.id === currentUserMenuId)?.name || 'デフォルトメニュー'}
+              </div>
+            )}
+            {!currentUserMenuId && (
+              <div className="mt-2 text-sm text-muted-foreground">
+                現在: デフォルトメニュー
+              </div>
+            )}
+          </DialogDescription>
         </DialogHeader>
         {loading ? (
           <div className="py-8 text-center">読み込み中...</div>

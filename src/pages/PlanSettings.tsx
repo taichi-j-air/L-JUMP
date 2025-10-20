@@ -30,16 +30,16 @@ interface PlanCard {
 
 const PLAN_ICON_MAP: Record<PlanType, { icon: LucideIcon; color: string }> = {
   free: { icon: Star, color: "text-gray-500" },
-  silver: { icon: Zap, color: "text-blue-500" },
-  gold: { icon: Crown, color: "text-amber-500" },
+  basic: { icon: Zap, color: "text-blue-500" },
+  premium: { icon: Crown, color: "text-amber-500" },
   developer: { icon: Shield, color: "text-purple-600" },
 }
 
-const PUBLIC_PLAN_ORDER: PlanType[] = ["free", "silver", "gold"]
+const PUBLIC_PLAN_ORDER: PlanType[] = ["free", "basic", "premium"]
 const PLAN_RANK: Record<PlanType, number> = {
   free: 0,
-  silver: 1,
-  gold: 2,
+  basic: 1,
+  premium: 2,
   developer: 3,
 }
 

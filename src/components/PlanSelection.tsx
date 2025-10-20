@@ -30,12 +30,12 @@ interface PlanSelectionProps {
 
 const PLAN_ICON_MAP: Record<PlanType, { icon: LucideIcon; color: string }> = {
   free: { icon: Star, color: "text-gray-500" },
-  silver: { icon: Zap, color: "text-blue-500" },
-  gold: { icon: Crown, color: "text-amber-500" },
+  basic: { icon: Zap, color: "text-blue-500" },
+  premium: { icon: Crown, color: "text-amber-500" },
   developer: { icon: Shield, color: "text-purple-600" },
 }
 
-const PLAN_ORDER: PlanType[] = ["free", "silver", "gold"]
+const PLAN_ORDER: PlanType[] = ["free", "basic", "premium"]
 
 const formatLimit = (value: number | null, suffix: string) =>
   value === null ? `無制限` : `${value.toLocaleString()}${suffix}`
@@ -118,7 +118,7 @@ export function PlanSelection({ selectedPlan, onPlanSelect }: PlanSelectionProps
               ...buildLimitHighlights(plan.featureConfig.limits),
             ]
             const displayHighlights = highlights.slice(0, 4)
-            const isRecommended = plan.type === "silver"
+            const isRecommended = plan.type === "basic"
 
             return (
               <Card

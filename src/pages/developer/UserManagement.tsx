@@ -162,7 +162,7 @@ export default function UserManagement() {
         .from('user_plans')
         .insert({
           user_id: userId,
-          plan_type: enableGold ? 'gold' : 'free',
+          plan_type: enableGold ? 'premium' : 'free',
           is_active: true,
           monthly_revenue: enableGold ? 9800 : 0
         })
@@ -490,13 +490,13 @@ export default function UserManagement() {
                                    <Trash2 className="h-4 w-4" />
                                  </Button>
                                )}
-                               <Button
-                                 size="sm"
-                                 variant={userData.plan_type === 'gold' ? 'secondary' : 'default'}
-                                 onClick={() => handlePremiumToggle(userData.user_id, userData.plan_type !== 'gold')}
-                               >
-                                 {userData.plan_type === 'gold' ? 'ゴールド解除' : 'ゴールド付与'}
-                               </Button>
+                                <Button
+                                  size="sm"
+                                  variant={userData.plan_type === 'premium' ? 'secondary' : 'default'}
+                                  onClick={() => handlePremiumToggle(userData.user_id, userData.plan_type !== 'premium')}
+                                >
+                                  {userData.plan_type === 'premium' ? 'ゴールド解除' : 'ゴールド付与'}
+                                </Button>
                              </>
                            )}
                          </div>

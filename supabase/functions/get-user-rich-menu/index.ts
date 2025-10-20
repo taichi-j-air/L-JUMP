@@ -39,8 +39,11 @@ serve(async (req) => {
     if (!getResponse.ok) {
       // A 404 is a valid response meaning no menu is linked, so we must handle it gracefully.
       if (getResponse.status === 404) {
-        return new Response(JSON.stringify({ message: 'No rich menu linked to this user.' }), {
-          status: 404,
+        return new Response(JSON.stringify({ 
+          richMenuId: null,
+          message: 'No rich menu linked to this user.' 
+        }), {
+          status: 200,
           headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         });
       }
@@ -49,7 +52,9 @@ serve(async (req) => {
 
     const responseData = await getResponse.json();
 
-    return new Response(JSON.stringify(responseData), {
+    return new Response(JSON.stringify({ 
+      richMenuId: responseData.richMenuId || null 
+    }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
 

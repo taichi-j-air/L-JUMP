@@ -48,8 +48,8 @@ const PLATFORM_CREDENTIAL_ID = "00000000-0000-0000-0000-000000000001"
 
 const PLAN_TYPE_OPTIONS: { value: PlanType; label: string }[] = [
   { value: "free", label: PLAN_TYPE_LABELS.free },
-  { value: "silver", label: PLAN_TYPE_LABELS.silver },
-  { value: "gold", label: PLAN_TYPE_LABELS.gold },
+  { value: "basic", label: PLAN_TYPE_LABELS.basic },
+  { value: "premium", label: PLAN_TYPE_LABELS.premium },
   { value: "developer", label: PLAN_TYPE_LABELS.developer },
 ]
 
@@ -226,12 +226,12 @@ export default function PlanManagement() {
     } else {
       setEditingPlan({
         id: "new",
-        plan_type: "silver",
+        plan_type: "basic",
         name: "",
         monthly_price: 0,
         yearly_price: 0,
         message_limit: 0,
-        featureConfig: createDefaultPlanFeatures("silver"),
+        featureConfig: createDefaultPlanFeatures("basic"),
         is_active: true,
       })
     }
