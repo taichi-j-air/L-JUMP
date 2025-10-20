@@ -29,6 +29,7 @@ interface Friend {
   display_name: string | null
   picture_url: string | null
   added_at: string
+  updated_at: string
   is_blocked: boolean
   short_uid?: string | null
 }
@@ -295,11 +296,19 @@ export function FriendsList({ user }: FriendsListProps) {
                         >
                           {friend.display_name || "名前未設定"}
                         </button>
-                        <span className="flex items-center gap-0">
+                        <span className="flex items-center gap-2 flex-wrap text-xs">
                           <span className="text-xs text-gray-500">友達追加日時：</span>
                           <Badge variant="secondary" className="text-xs">
                             {format(new Date(friend.added_at), "yyyy/MM/dd HH:mm")}
                           </Badge>
+                          {friend.is_blocked && (
+                            <>
+                              <span className="text-xs text-gray-500">ブロック日時：</span>
+                              <Badge variant="destructive" className="text-xs">
+                                {format(new Date(friend.updated_at), "yyyy/MM/dd HH:mm")}
+                              </Badge>
+                            </>
+                          )}
                         </span>
                         
                       </div>
