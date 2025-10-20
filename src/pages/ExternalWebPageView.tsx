@@ -329,7 +329,7 @@ export default function ExternalWebPageView() {
           />
         )}
 
-        <article className="prose max-w-none dark:prose-invert flex-1 p-4 ql-content">
+        <article className="prose max-w-none dark:prose-invert flex-1 px-4 pb-4 pt-0 ql-content [&>*:first-child]:mt-0 [&>*:first-child>*:first-child]:mt-0">
           {filteredBlocks.length > 0 ? (
             filteredBlocks.map((block) => (
               <div key={block.id} className="not-prose">{renderBlock(block)}</div>
