@@ -132,12 +132,10 @@ export function FriendsList({ user }: FriendsListProps) {
     const tagLookup = new Map(tags.map((tag) => [tag.id, tag.name]))
     return tagIds.map((id) => tagLookup.get(id)).filter((name): name is string => Boolean(name))
   }, [detailFriend, friendTagMap, tags])
-
-  const primaryIdentifier = detailFriend?.short_uid || detailFriend?.display_name || detailFriend?.line_user_id || ""
   const shortUidValue = detailFriend?.short_uid || ""
   const hasShortUid = Boolean(shortUidValue)
-  const nameDisplayValue = hasShortUid ? shortUidValue : (detailFriend?.display_name || "")
-  const hasNameDisplay = Boolean(nameDisplayValue)
+  const displayNameValue = (detailFriend?.display_name || "").trim()
+  const hasDisplayName = displayNameValue.length > 0
 
   useEffect(() => {
     loadFriends()
@@ -661,16 +659,9 @@ export function FriendsList({ user }: FriendsListProps) {
         <DialogContent className="max-w-4xl w-full">
           <DialogHeader>
             <DialogTitle>
-              <button
-                type="button"
-                className="w-full text-left text-lg font-semibold hover:text-primary transition-colors disabled:cursor-not-allowed disabled:text-muted-foreground"
-                onClick={() => copyText(primaryIdentifier, "UID")}
-                disabled={!primaryIdentifier}
-              >
-                {primaryIdentifier || "友だち詳細"}
-              </button>
+              プロフィール情報
             </DialogTitle>
-            <DialogDescription>フォーム回答やシナリオ履歴を確認できます。</DialogDescription>
+            <DialogDescription>プロフィール情報と関連履歴を確認できます。</DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
             <div className="grid gap-4 md:grid-cols-3 lg:grid-cols-4">
@@ -683,13 +674,13 @@ export function FriendsList({ user }: FriendsListProps) {
                 </Avatar>
               </div>
               <div className="grid gap-3 text-sm md:col-span-2 lg:col-span-3">
-                <div className="flex flex-wrap items-center gap-4">
+                <div className="flex flex-wrap items-center gap-6">
                   <div className="space-y-1">
                     <div className="text-xs text-muted-foreground">UID</div>
                     {hasShortUid ? (
                       <button
                         type="button"
-                        className="inline-flex items-center gap-2 rounded px-2 py-1 font-mono text-base hover:bg-primary/10"
+                        className="inline-flex items-center gap-2 text-base font-semibold text-primary transition-colors hover:text-primary/80 focus:outline-none"
                         onClick={() => copyText(shortUidValue, "UID")}
                       >
                         {shortUidValue}
@@ -700,13 +691,13 @@ export function FriendsList({ user }: FriendsListProps) {
                   </div>
                   <div className="space-y-1">
                     <div className="text-xs text-muted-foreground">名前</div>
-                    {hasNameDisplay ? (
+                    {hasDisplayName ? (
                       <button
                         type="button"
-                        className="inline-flex items-center gap-2 rounded px-2 py-1 hover:bg-primary/10"
-                        onClick={() => copyText(nameDisplayValue, "名前")}
+                        className="inline-flex items-center gap-2 font-semibold text-primary transition-colors hover:text-primary/80 focus:outline-none"
+                        onClick={() => copyText(displayNameValue, "名前")}
                       >
-                        {nameDisplayValue}
+                        {displayNameValue}
                       </button>
                     ) : (
                       <div className="text-sm text-muted-foreground">未設定</div>
