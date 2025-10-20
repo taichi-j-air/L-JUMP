@@ -85,10 +85,10 @@ export const SetUserRichMenuDialog = ({ user, friend, open, onOpenChange }: SetU
     try {
       if (selectedMenuId === 'default') {
         // Unlink the current menu, reverting to default
-        const { error } = await supabase.functions.invoke('unlink-rich-menu-from-user', {
+        const { data, error } = await supabase.functions.invoke('unlink-rich-menu-from-user', {
           body: { userId: friend.line_user_id },
         });
-        if (error) throw error;
+        if (error || !data?.success) throw new Error(data?.error || error?.message || 'リッチメニューのデフォルト設定に失敗しました。');
         toast({ title: "成功", description: "リッチメニューをデフォルトに戻しました。" });
       } else {
         // Link the selected menu using its ID
@@ -96,10 +96,10 @@ export const SetUserRichMenuDialog = ({ user, friend, open, onOpenChange }: SetU
         if (!menuToLink) {
           throw new Error("選択されたメニューが見つかりません。");
         }
-        const { error } = await supabase.functions.invoke('link-rich-menu-to-user', {
+        const { data, error } = await supabase.functions.invoke('link-rich-menu-to-user', {
           body: { userId: friend.line_user_id, richMenuId: menuToLink.id },
         });
-        if (error) throw error;
+        if (error || !data?.success) throw new Error(data?.error || error?.message || 'リッチメニューの設定に失敗しました。');
         toast({ title: "成功", description: `「${menuToLink.name}」をユーザーに設定しました。` });
       }
       onOpenChange(false);
