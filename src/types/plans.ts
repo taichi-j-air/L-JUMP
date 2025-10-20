@@ -13,6 +13,7 @@ export interface PlanStripeSettings {
   productId?: string
   monthlyPriceId?: string
   yearlyPriceId?: string
+  managerUserId?: string
 }
 
 export interface PlanFeatureConfig {
@@ -155,6 +156,9 @@ export const parsePlanFeatureConfig = (raw: any, planType: PlanType): PlanFeatur
       yearlyPriceId: trimToUndefined(
         typeof stripeSource.yearlyPriceId === 'string' ? stripeSource.yearlyPriceId : undefined
       ),
+      managerUserId: trimToUndefined(
+        typeof stripeSource.managerUserId === 'string' ? stripeSource.managerUserId : undefined
+      ),
     },
   }
 }
@@ -170,5 +174,6 @@ export const buildPlanFeaturesPayload = (
     productId: trimToUndefined(featureConfig.stripe?.productId),
     monthlyPriceId: trimToUndefined(featureConfig.stripe?.monthlyPriceId),
     yearlyPriceId: trimToUndefined(featureConfig.stripe?.yearlyPriceId),
+    managerUserId: trimToUndefined(featureConfig.stripe?.managerUserId),
   },
 })

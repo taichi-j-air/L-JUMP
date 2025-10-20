@@ -36,6 +36,12 @@ const PLAN_ICON_MAP: Record<PlanType, { icon: LucideIcon; color: string }> = {
 }
 
 const PUBLIC_PLAN_ORDER: PlanType[] = ["free", "silver", "gold"]
+const PLAN_RANK: Record<PlanType, number> = {
+  free: 0,
+  silver: 1,
+  gold: 2,
+  developer: 3,
+}
 
 const formatPrice = (price: number) =>
   new Intl.NumberFormat("ja-JP", { style: "currency", currency: "JPY" }).format(price || 0)
@@ -143,52 +149,126 @@ export default function PlanSettings() {
   const handlePlanChange = async (planType: PlanType) => {
     if (!user || processing) return
 
-    if (planType === "free") {
-      setProcessing(true)
-      try {
-        if (currentPlan) {
-          await supabase.from("user_plans").update({ is_active: false }).eq("id", currentPlan.id)
-        }
+    const selectedPlan = plans.find((p) => p.type === planType)
+    if (!selectedPlan) {
+      toast.error("プランが見つかりません")
+      return
+    }
 
-        const { data, error } = await supabase
-          .from("user_plans")
-          .insert({
-            user_id: user.id,
-            plan_type: "free",
-            is_yearly: false,
-            is_active: true,
-          })
-          .select()
-          .single()
+    const activePlanType = currentPlan ? normalizePlanType(currentPlan.plan_type) : null
 
-        if (error) throw error
-
-        setCurrentPlan(data)
-        toast.success("フリープランに変更しました")
-      } catch (error) {
-        console.error("Error changing to free plan:", error)
-        toast.error("プランの変更に失敗しました")
-      } finally {
-        setProcessing(false)
+    // 初回設定（まだ user_plans が無い）
+    if (!currentPlan) {
+      if (planType === "free") {
+        await createFreePlanRecord()
+      } else {
+        await handleStripeCheckout(selectedPlan)
       }
+      return
+    }
+
+    const currentRank = activePlanType ? PLAN_RANK[activePlanType] ?? 0 : 0
+    const targetRank = PLAN_RANK[planType] ?? 0
+    const samePlanType = activePlanType === planType
+    const switchingToYearly = samePlanType && !currentPlan.is_yearly && isYearly
+    const switchingToMonthly = samePlanType && currentPlan.is_yearly && !isYearly
+
+    if (samePlanType && !switchingToYearly && !switchingToMonthly) {
+      toast.info("すでにこのプランをご利用中です")
+      return
+    }
+
+    const isDowngrade =
+      planType === "free" ||
+      targetRank < currentRank ||
+      (samePlanType && switchingToMonthly)
+
+    if (isDowngrade) {
+      await handleDowngrade(selectedPlan)
     } else {
-      handleStripeCheckout(planType)
+      await handleStripeCheckout(selectedPlan)
     }
   }
 
-  const handleStripeCheckout = async (planType: PlanType) => {
+  const createFreePlanRecord = async () => {
+    if (!user) return
+    setProcessing(true)
+    try {
+      if (currentPlan) {
+        await supabase.from("user_plans").update({ is_active: false }).eq("id", currentPlan.id)
+      }
+
+      const { data, error } = await supabase
+        .from("user_plans")
+        .insert({
+          user_id: user.id,
+          plan_type: "free",
+          is_yearly: false,
+          is_active: true,
+        })
+        .select()
+        .single()
+
+      if (error) throw error
+
+      setCurrentPlan(data)
+      await loadPlans()
+      toast.success("フリープランに変更しました")
+    } catch (error) {
+      console.error("Error changing to free plan:", error)
+      toast.error("プランの変更に失敗しました")
+    } finally {
+      setProcessing(false)
+    }
+  }
+
+  const handleDowngrade = async (plan: PlanCard) => {
+    if (!currentPlan) {
+      await createFreePlanRecord()
+      return
+    }
+
+    if (!currentPlan.id) {
+      toast.error("現在のプラン情報が正しく取得できません")
+      return
+    }
+
+    setProcessing(true)
+    try {
+      const { data, error } = await supabase.functions.invoke("stripe-manage-plan", {
+        body: {
+          user_plan_id: currentPlan.id,
+          target_plan_type: plan.type,
+          is_yearly: isYearly,
+        },
+      })
+
+      if (error) throw error
+      if (!data?.success) {
+        throw new Error(data?.error || "プラン変更に失敗しました")
+      }
+
+      await loadCurrentPlan()
+      await loadPlans()
+      toast.success(data?.message ?? `${plan.name}へ変更しました`)
+    } catch (error) {
+      console.error("Error managing subscription:", error)
+      toast.error(error instanceof Error ? error.message : "プランの変更に失敗しました")
+    } finally {
+      setProcessing(false)
+    }
+  }
+
+  const handleStripeCheckout = async (plan: PlanCard) => {
     if (!user) return
 
     setProcessing(true)
     try {
-      const selectedPlan = plans.find((p) => p.type === planType)
-      if (!selectedPlan) throw new Error("プランが見つかりません")
-
-      const amount = isYearly ? selectedPlan.yearlyPrice : selectedPlan.monthlyPrice
+      const amount = isYearly ? plan.yearlyPrice : plan.monthlyPrice
 
       const { data, error } = await supabase.functions.invoke("create-checkout", {
         body: {
-          plan_type: planType,
+          plan_type: plan.type,
           is_yearly: isYearly,
           amount,
           success_url: `${window.location.origin}/plan-settings?success=true`,

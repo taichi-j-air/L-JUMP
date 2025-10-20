@@ -358,6 +358,7 @@ export default function PlanManagement() {
                           <div>Product: {stripe?.productId || "未設定"}</div>
                           <div>月額Price: {stripe?.monthlyPriceId || "未設定"}</div>
                           <div>年額Price: {stripe?.yearlyPriceId || "未設定"}</div>
+                          <div>管理ユーザー: {stripe?.managerUserId || "未設定"}</div>
                         </TableCell>
                         <TableCell className="text-xs text-muted-foreground">
                           {marketingHighlights?.length ? (
@@ -400,13 +401,13 @@ export default function PlanManagement() {
         </Card>
 
         <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-          <DialogContent className="max-w-4xl">
+          <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
             <DialogHeader>
               <DialogTitle>{editingPlan?.id === "new" ? "プラン作成" : "プラン編集"}</DialogTitle>
             </DialogHeader>
             {editingPlan && (
-              <div className="space-y-6">
-                <div className="grid gap-4 md:grid-cols-2">
+              <div className="space-y-4 pb-2">
+                <div className="grid gap-3 md:grid-cols-2">
                   <div className="space-y-2">
                     <Label htmlFor="name">プラン名</Label>
                     <Input
@@ -432,7 +433,7 @@ export default function PlanManagement() {
                   </div>
                 </div>
 
-                <div className="grid gap-4 md:grid-cols-2">
+                <div className="grid gap-3 md:grid-cols-2">
                   <div className="space-y-2">
                     <Label htmlFor="monthly_price">月額料金 (円)</Label>
                     <Input
@@ -457,7 +458,7 @@ export default function PlanManagement() {
                   </div>
                 </div>
 
-                <div className="grid gap-4 md:grid-cols-2">
+                <div className="grid gap-3 md:grid-cols-2">
                   <div className="space-y-2">
                     <Label htmlFor="message_limit">月間メッセージ制限</Label>
                     <Input
@@ -485,7 +486,7 @@ export default function PlanManagement() {
                   </div>
                 </div>
 
-                <div className="space-y-4">
+                <div className="space-y-3">
                   <div>
                     <Label htmlFor="marketing">マーケティング向け特徴（1行につき1項目）</Label>
                     <Textarea
@@ -504,7 +505,7 @@ export default function PlanManagement() {
                     />
                   </div>
 
-                  <div className="grid gap-4 md:grid-cols-2">
+                  <div className="grid gap-3 md:grid-cols-2">
                     <div className="space-y-2">
                       <Label htmlFor="stripe_product">Stripe Product ID</Label>
                       <Input
@@ -540,6 +541,19 @@ export default function PlanManagement() {
                           })
                         }
                         placeholder="price_xxxxx"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="stripe_manager_user_id">Stripe管理ユーザーID</Label>
+                      <Input
+                        id="stripe_manager_user_id"
+                        value={editingPlan.featureConfig.stripe?.managerUserId || ""}
+                        onChange={(e) =>
+                          updateStripeSettings({
+                            managerUserId: e.target.value.trim() || undefined,
+                          })
+                        }
+                        placeholder="Stripe認証情報を持つユーザーのID"
                       />
                     </div>
                   </div>
