@@ -144,7 +144,6 @@ serve(async (req) => {
       cancel_url: cancelUrl,
       metadata,
       client_reference_id: purchaserId,
-      customer_creation: "always",
       allow_promotion_codes: true,
     };
 
