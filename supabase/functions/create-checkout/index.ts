@@ -28,134 +28,145 @@ serve(async (req) => {
       { auth: { persistSession: false } },
     );
 
-    const { product_id, uid, utm_source, utm_medium, utm_campaign } =
-      await req.json();
+    const authHeader = req.headers.get("authorization") || req.headers.get("Authorization");
+    if (!authHeader) {
+      throw new Error("Authorization header is required");
+    }
 
-    if (!product_id) throw new Error("product_id is required");
+    const token = authHeader.replace("Bearer ", "");
+    const { data: userData, error: userError } = await supabase.auth.getUser(token);
+    if (userError || !userData?.user?.id) {
+      throw new Error("ユーザー情報の取得に失敗しました");
+    }
+    const purchaserId = userData.user.id;
 
-    console.log("create-checkout-session payload", {
-      product_id,
-      uid,
-      utm_source,
-      utm_medium,
-      utm_campaign,
-    });
+    const {
+      plan_type,
+      is_yearly = false,
+      success_url: bodySuccessUrl,
+      cancel_url: bodyCancelUrl,
+    } = await req.json();
 
-    // 商品 + 設定
-    const { data: product, error: productError } = await supabase
-      .from("products")
-      .select(
-        `
-        id,
-        user_id,
-        name,
-        description,
-        stripe_price_id,
-        product_type,
-        price,
-        currency,
-        is_active,
-        product_settings (
-          success_redirect_url,
-          cancel_redirect_url
-        )
-      `,
-      )
-      .eq("id", product_id)
+    if (!plan_type) throw new Error("plan_type is required");
+
+    const { data: plan, error: planError } = await supabase
+      .from("plan_configs")
+      .select("plan_type, name, monthly_price, yearly_price, features, is_active")
+      .eq("plan_type", plan_type)
       .eq("is_active", true)
       .single();
 
-    if (productError || !product) {
-      throw new Error("Product not found or inactive");
-    }
-    if (!product.stripe_price_id) {
-      throw new Error("stripe_price_id is not set for this product");
+    if (planError || !plan) {
+      throw new Error("プランが見つかりません");
     }
 
-    // 管理者のStripe鍵
-    const { data: creds, error: credErr } = await supabase
-      .from("stripe_credentials")
+    const featureConfig = (plan.features ?? {}) as Record<string, unknown>;
+    const stripeConfig =
+      typeof featureConfig === "object" && featureConfig !== null
+        ? (featureConfig.stripe as Record<string, unknown> | undefined)
+        : undefined;
+
+    const priceId =
+      stripeConfig && typeof stripeConfig === "object"
+        ? (is_yearly
+            ? stripeConfig.yearlyPriceId ?? stripeConfig.yearly_price_id
+            : stripeConfig.monthlyPriceId ?? stripeConfig.monthly_price_id)
+        : undefined;
+
+    if (!priceId || typeof priceId !== "string" || !priceId.trim()) {
+      throw new Error("Stripe Price ID が設定されていません");
+    }
+
+    const { data: platformKeys, error: keyError } = await supabase
+      .from("platform_stripe_credentials")
       .select("test_secret_key, live_secret_key")
-      .eq("user_id", product.user_id)
-      .single();
-    if (credErr || !creds)
-      throw new Error("Stripe credentials not found for product owner");
+      .maybeSingle();
 
-    const testStripe = new Stripe(creds.test_secret_key || "", {
-      apiVersion: "2024-06-20",
-    });
-    const liveStripe = new Stripe(creds.live_secret_key || "", {
-      apiVersion: "2024-06-20",
-    });
-
-    // price の livemode から自動判定
-    let stripe: Stripe;
-    let detectedLivemode = false;
-    try {
-      await testStripe.prices.retrieve(product.stripe_price_id);
-      stripe = testStripe;
-      detectedLivemode = false;
-    } catch {
-      try {
-        await liveStripe.prices.retrieve(product.stripe_price_id);
-        stripe = liveStripe;
-        detectedLivemode = true;
-      } catch {
-        throw new Error("Price not found in either test or live mode");
-      }
+    if (keyError) {
+      throw new Error("Stripeキーの取得に失敗しました");
     }
-    console.log("create-checkout-session detected_livemode", detectedLivemode);
+    if (!platformKeys) {
+      throw new Error("Stripeキーが登録されていません。開発者設定でキーを保存してください");
+    }
 
-    const nonce = crypto.randomUUID();
+    const testStripe = platformKeys.test_secret_key
+      ? new Stripe(platformKeys.test_secret_key, { apiVersion: "2024-06-20" })
+      : null;
+    const liveStripe = platformKeys.live_secret_key
+      ? new Stripe(platformKeys.live_secret_key, { apiVersion: "2024-06-20" })
+      : null;
 
-    const metadata: Record<string, string> = {
-      product_id: product.id,
-      manager_user_id: product.user_id,
-      product_type: product.product_type,
-      nonce,
+    if (!testStripe && !liveStripe) {
+      throw new Error("Stripeのシークレットキーが設定されていません");
+    }
+
+    let stripe: Stripe | null = null;
+    let detectedLivemode = false;
+    const tryRetrievePrice = async (client: Stripe | null, live = false) => {
+      if (!client) return false;
+      try {
+        await client.prices.retrieve(priceId.trim());
+        stripe = client;
+        detectedLivemode = live;
+        return true;
+      } catch (error) {
+        console.log(
+          `[create-checkout] Unable to retrieve price ${priceId} in ${live ? "live" : "test"} mode:`,
+          error instanceof Error ? error.message : error,
+        );
+        return false;
+      }
     };
-    if (uid) metadata.uid = uid;
-    if (utm_source) metadata.utm_source = utm_source;
-    if (utm_medium) metadata.utm_medium = utm_medium;
-    if (utm_campaign) metadata.utm_campaign = utm_campaign;
 
-    const settings = (product as any).product_settings?.[0] ?? {};
+    const priceFound = (await tryRetrievePrice(testStripe, false)) || (await tryRetrievePrice(liveStripe, true));
+    if (!priceFound || !stripe) {
+      throw new Error("Stripe価格がテスト・本番のいずれにも見つかりませんでした");
+    }
+
     const origin =
       req.headers.get("origin") ||
-      "https://rtjxurmuaawyzjcdkqxt.lovable.app"; // fallback
-    const successUrl = settings.success_redirect_url || `${origin}/checkout/success`;
-    const cancelUrl = settings.cancel_redirect_url || `${origin}/checkout/cancel`;
+      "https://rtjxurmuaawyzjcdkqxt.lovable.app";
+    const successUrl = bodySuccessUrl || `${origin}/checkout/success`;
+    const cancelUrl = bodyCancelUrl || `${origin}/checkout/cancel`;
 
-    const mode: Stripe.Checkout.SessionCreateParams.Mode =
-      product.product_type === "one_time" ? "payment" : "subscription";
+    const billingCycle = is_yearly ? "yearly" : "monthly";
+    const metadata: Record<string, string> = {
+      plan_type: plan.plan_type,
+      plan_name: String(plan.name ?? ""),
+      billing_cycle: billingCycle,
+      purchaser_id: purchaserId,
+    };
 
     const sessionParams: Stripe.Checkout.SessionCreateParams = {
-      line_items: [{ price: product.stripe_price_id, quantity: 1 }],
-      mode,
+      mode: "subscription",
+      line_items: [{ price: priceId.trim(), quantity: 1 }],
       success_url: successUrl,
       cancel_url: cancelUrl,
       metadata,
-      client_reference_id: uid || "no-uid",
+      client_reference_id: purchaserId,
       customer_creation: "always",
       allow_promotion_codes: true,
     };
 
     const session = await stripe.checkout.sessions.create(sessionParams);
 
-    // 注文レコード（金額はproducts.priceを保存）
+    const amount = is_yearly ? Number(plan.yearly_price ?? 0) : Number(plan.monthly_price ?? 0);
+
     await supabase.from("orders").insert({
-      user_id: product.user_id,
-      product_id: product.id,
+      user_id: purchaserId,
       status: "pending",
-      amount: product.price, // ← amount ではなく price を保存
-      currency: product.currency,
-      friend_uid: uid,
+      amount,
+      currency: "JPY",
       livemode: detectedLivemode,
       stripe_session_id: session.id,
       metadata,
     });
 
-    console.log("[create-checkout-session] Created session:", session.id);
+    console.log("[create-checkout] Created session:", session.id, {
+      plan_type,
+      billingCycle,
+      detectedLivemode,
+    });
 
     return new Response(
       JSON.stringify({ ok: true, url: session.url, id: session.id }),
