@@ -166,6 +166,7 @@ async function handleCheckoutCompleted(event: Stripe.Event, supabaseClient: any)
         subscriptionId: typeof session.subscription === "string" ? session.subscription : null,
         customerId: stripeCustomerId,
         amountMetadata: metadata.plan_amount,
+        livemode: !!session.livemode,
       });
     } catch (error) {
       console.error('[stripe-webhook] Failed to activate purchased plan:', error);
@@ -411,6 +412,7 @@ interface ActivatePlanParams {
   subscriptionId: string | null
   customerId: string | null
   amountMetadata?: string
+  livemode?: boolean
 }
 
 async function activatePurchasedPlan({
@@ -421,6 +423,7 @@ async function activatePurchasedPlan({
   subscriptionId,
   customerId,
   amountMetadata,
+  livemode,
 }: ActivatePlanParams) {
   const isYearly = (billingCycle || '').toLowerCase() === 'yearly'
 
@@ -441,15 +444,66 @@ async function activatePurchasedPlan({
 
   const normalizedAmount = Number.isFinite(planAmount) ? planAmount : 0
 
-  await supabaseClient
+  const { data: activePlans, error: activeError } = await supabaseClient
     .from('user_plans')
-    .update({
-      is_active: false,
-      plan_end_date: new Date().toISOString(),
-      updated_at: new Date().toISOString(),
-    })
+    .select('id, stripe_subscription_id')
     .eq('user_id', userId)
     .eq('is_active', true)
+
+  if (activeError) {
+    console.error('[stripe-webhook] Failed to load active plans:', activeError.message)
+  }
+
+  const { data: platformKeys, error: keysError } = await supabaseClient
+    .from('platform_stripe_credentials')
+    .select('test_secret_key, live_secret_key')
+    .maybeSingle()
+
+  if (keysError) {
+    console.error('[stripe-webhook] Failed to load platform Stripe keys:', keysError.message)
+  }
+
+  let stripeClient: Stripe | null = null
+  if (livemode) {
+    if (platformKeys?.live_secret_key) {
+      stripeClient = new Stripe(platformKeys.live_secret_key, { apiVersion: '2024-06-20' })
+    }
+  } else {
+    if (platformKeys?.test_secret_key) {
+      stripeClient = new Stripe(platformKeys.test_secret_key, { apiVersion: '2024-06-20' })
+    }
+  }
+
+  if (activePlans?.length) {
+    for (const plan of activePlans) {
+      const existingSubId = plan.stripe_subscription_id
+      if (existingSubId && existingSubId !== subscriptionId) {
+        try {
+          if (stripeClient) {
+            await stripeClient.subscriptions.cancel(existingSubId, { prorate: false })
+            console.log('[stripe-webhook] Cancelled previous subscription', existingSubId)
+          } else {
+            console.warn('[stripe-webhook] Stripe client unavailable. Skipping cancellation for', existingSubId)
+          }
+        } catch (error) {
+          console.error('[stripe-webhook] Failed to cancel previous subscription:', existingSubId, error)
+        }
+      }
+    }
+
+    const { error: deactivateError } = await supabaseClient
+      .from('user_plans')
+      .update({
+        is_active: false,
+        plan_end_date: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      })
+      .in('id', activePlans.map((p: any) => p.id))
+
+    if (deactivateError) {
+      console.error('[stripe-webhook] Failed to deactivate previous plans:', deactivateError.message)
+    }
+  }
 
   await supabaseClient.from('user_plans').insert({
     user_id: userId,

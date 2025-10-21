@@ -131,8 +131,8 @@ serve(async (req) => {
     const origin =
       req.headers.get("origin") ||
       "https://rtjxurmuaawyzjcdkqxt.lovable.app";
-    const successUrl = bodySuccessUrl || `${origin}/checkout/success`;
-    const cancelUrl = bodyCancelUrl || `${origin}/checkout/cancel`;
+    const successUrl = bodySuccessUrl || `${origin}/settings/plan?success=true`;
+    const cancelUrl = bodyCancelUrl || `${origin}/settings/plan?canceled=true`;
 
     const billingCycle = is_yearly ? "yearly" : "monthly";
     const metadata: Record<string, string> = {
