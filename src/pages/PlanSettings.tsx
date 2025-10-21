@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react"
 import { supabase } from "@/integrations/supabase/client"
-import { User } from "@supabase/supabase-js"
+import { User, FunctionsHttpError } from "@supabase/supabase-js"
 import { AppHeader } from "@/components/AppHeader"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
@@ -283,7 +283,12 @@ export default function PlanSettings() {
       }
     } catch (error) {
       console.error("Error creating checkout session:", error)
-      toast.error("決済処理の開始に失敗しました")
+      if (error instanceof FunctionsHttpError) {
+        const details = error.context as { error?: string }
+        toast.error(details?.error ?? "決済処理の開始に失敗しました")
+      } else {
+        toast.error("決済処理の開始に失敗しました")
+      }
     } finally {
       setProcessing(false)
     }
