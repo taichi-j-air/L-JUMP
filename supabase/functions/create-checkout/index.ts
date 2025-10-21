@@ -123,6 +123,11 @@ serve(async (req) => {
       throw new Error("Stripe価格がテスト・本番のいずれにも見つかりませんでした");
     }
 
+    const amountValue = is_yearly
+      ? Number(plan.yearly_price ?? plan.monthly_price ?? 0)
+      : Number(plan.monthly_price ?? 0);
+    const amount = Number.isFinite(amountValue) ? amountValue : 0;
+
     const origin =
       req.headers.get("origin") ||
       "https://rtjxurmuaawyzjcdkqxt.lovable.app";
@@ -135,6 +140,8 @@ serve(async (req) => {
       plan_name: String(plan.name ?? ""),
       billing_cycle: billingCycle,
       purchaser_id: purchaserId,
+      plan_amount: String(amount),
+      plan_currency: "JPY",
     };
 
     const sessionParams: Stripe.Checkout.SessionCreateParams = {
@@ -148,8 +155,6 @@ serve(async (req) => {
     };
 
     const session = await stripe.checkout.sessions.create(sessionParams);
-
-    const amount = is_yearly ? Number(plan.yearly_price ?? 0) : Number(plan.monthly_price ?? 0);
 
     await supabase.from("orders").insert({
       user_id: purchaserId,

@@ -134,50 +134,72 @@ async function handleCheckoutCompleted(event: Stripe.Event, supabaseClient: any)
   });
 
   const metadata = session.metadata || {};
+  const purchaserId = metadata.purchaser_id || session.client_reference_id;
+  const planType = metadata.plan_type;
+
+  const stripeCustomerId = typeof session.customer === "string"
+    ? session.customer
+    : session.customer && "id" in session.customer
+      ? session.customer.id!
+      : null;
+
+  await supabaseClient
+    .from('orders')
+    .update({ 
+      status: 'paid',
+      stripe_payment_intent_id: session.payment_intent,
+      stripe_customer_id: stripeCustomerId,
+      metadata,
+      updated_at: new Date().toISOString()
+    })
+    .eq('stripe_session_id', session.id);
+
+  console.log('[stripe-webhook] Order marked paid for session', session.id);
+
+  if (planType && purchaserId) {
+    try {
+      await activatePurchasedPlan({
+        supabaseClient,
+        userId: purchaserId,
+        planType,
+        billingCycle: metadata.billing_cycle,
+        subscriptionId: typeof session.subscription === "string" ? session.subscription : null,
+        customerId: stripeCustomerId,
+        amountMetadata: metadata.plan_amount,
+      });
+    } catch (error) {
+      console.error('[stripe-webhook] Failed to activate purchased plan:', error);
+    }
+    return;
+  }
+
   const uid = metadata.uid;
   const productId = metadata.product_id;
   const managerUserId = metadata.manager_user_id;
 
-    // Update order status to paid and process actions
-    const { data: updatedOrder } = await supabaseClient
-      .from('orders')
-      .update({ 
-        status: 'paid',
-        stripe_payment_intent_id: session.payment_intent,
-        stripe_customer_id: session.customer,
-        updated_at: new Date().toISOString()
-      })
-      .eq('stripe_session_id', session.id)
-      .select()
-      .single();
+  if (uid && productId && managerUserId) {
+    try {
+      console.log('[stripe-webhook] Processing legacy payment success actions');
 
-    console.log(`[stripe-webhook] Order updated to paid status`);
-
-    // Process success actions (tags and scenarios)
-    if (metadata.uid && metadata.product_id && metadata.manager_user_id) {
-      try {
-        console.log('[stripe-webhook] Processing payment success actions');
-        
-        // Get payment amount from session for cumulative tracking
-        let paymentAmount = 0;
-        if (session.amount_total) {
-          paymentAmount = session.amount_total; // Amount in cents
-        }
-        
-        await processPaymentSuccessActions(
-          supabaseClient,
-          metadata.manager_user_id,
-          metadata.product_id,
-          metadata.uid,
-          paymentAmount
-        );
-        console.log('[stripe-webhook] Payment success actions completed');
-      } catch (error) {
-        console.error('[stripe-webhook] Failed to process success actions:', error);
+      let paymentAmount = 0;
+      if (session.amount_total) {
+        paymentAmount = session.amount_total;
       }
-    } else {
-      console.log('[stripe-webhook] Missing required metadata for success actions:', { uid: metadata.uid, product_id: metadata.product_id, manager_user_id: metadata.manager_user_id });
+
+      await processPaymentSuccessActions(
+        supabaseClient,
+        managerUserId,
+        productId,
+        uid,
+        paymentAmount
+      );
+      console.log('[stripe-webhook] Legacy payment success actions completed');
+    } catch (error) {
+      console.error('[stripe-webhook] Failed legacy success actions:', error);
     }
+  } else {
+    console.log('[stripe-webhook] No matching metadata for checkout completion handling');
+  }
 }
 
 async function handlePaymentSucceeded(event: Stripe.Event, supabaseClient: any) {
@@ -379,4 +401,72 @@ async function handleSubscriptionPaymentFailed(event: Stripe.Event, supabaseClie
       .eq('stripe_customer_id', customerId)
       .eq('status', 'paid');
   }
+}
+
+interface ActivatePlanParams {
+  supabaseClient: any
+  userId: string
+  planType: string
+  billingCycle?: string | null
+  subscriptionId: string | null
+  customerId: string | null
+  amountMetadata?: string
+}
+
+async function activatePurchasedPlan({
+  supabaseClient,
+  userId,
+  planType,
+  billingCycle,
+  subscriptionId,
+  customerId,
+  amountMetadata,
+}: ActivatePlanParams) {
+  const isYearly = (billingCycle || '').toLowerCase() === 'yearly'
+
+  const { data: planConfig, error: planError } = await supabaseClient
+    .from('plan_configs')
+    .select('plan_type, monthly_price, yearly_price')
+    .eq('plan_type', planType)
+    .maybeSingle()
+
+  if (planError) {
+    console.error('[stripe-webhook] Failed to load plan config:', planError.message)
+    throw planError
+  }
+
+  const planAmount = isYearly
+    ? Number(planConfig?.yearly_price ?? planConfig?.monthly_price ?? amountMetadata ?? 0)
+    : Number(planConfig?.monthly_price ?? amountMetadata ?? 0)
+
+  const normalizedAmount = Number.isFinite(planAmount) ? planAmount : 0
+
+  await supabaseClient
+    .from('user_plans')
+    .update({
+      is_active: false,
+      plan_end_date: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    })
+    .eq('user_id', userId)
+    .eq('is_active', true)
+
+  await supabaseClient.from('user_plans').insert({
+    user_id: userId,
+    plan_type: planType,
+    is_yearly: isYearly,
+    is_active: true,
+    plan_start_date: new Date().toISOString(),
+    plan_end_date: null,
+    monthly_revenue: normalizedAmount,
+    stripe_customer_id: customerId,
+    stripe_subscription_id: subscriptionId,
+  })
+
+  console.log('[stripe-webhook] Activated plan for user', {
+    userId,
+    planType,
+    isYearly,
+    subscriptionId,
+  })
 }

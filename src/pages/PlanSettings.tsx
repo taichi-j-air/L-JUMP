@@ -279,7 +279,8 @@ export default function PlanSettings() {
       if (error) throw error
 
       if (data?.url) {
-        window.open(data.url, "_blank")
+        window.location.href = data.url
+        return
       }
     } catch (error) {
       console.error("Error creating checkout session:", error)
