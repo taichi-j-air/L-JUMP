@@ -1,5 +1,4 @@
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts"
-import Stripe from "https://esm.sh/stripe@14.21.0?target=deno"
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0"
 
 const corsHeaders = {
@@ -45,22 +44,53 @@ const parseStripeSettings = (raw: unknown): StripeSettings => {
   return result
 }
 
-const detectStripeClient = async (
+const toFormBody = (params: Record<string, string | number | boolean | null | undefined>) => {
+  const body = new URLSearchParams()
+  for (const [key, value] of Object.entries(params)) {
+    if (value === undefined || value === null) continue
+    body.append(key, String(value))
+  }
+  return body.toString()
+}
+
+const stripeRequest = async (
+  apiKey: string,
+  method: string,
+  path: string,
+  params?: Record<string, string | number | boolean | null | undefined>
+) => {
+  const response = await fetch(`https://api.stripe.com/v1/${path}`, {
+    method,
+    headers: {
+      Authorization: `Bearer ${apiKey}`,
+      ...(params ? { "Content-Type": "application/x-www-form-urlencoded" } : {}),
+    },
+    body: params ? toFormBody(params) : undefined,
+  })
+
+  if (!response.ok) {
+    const errorText = await response.text()
+    throw new Error(`Stripe API error (${response.status}): ${errorText}`)
+  }
+
+  return await response.json()
+}
+
+const detectStripeKey = async (
   keys: { test?: string | null; live?: string | null },
   options: { priceId?: string; subscriptionId?: string }
 ) => {
   const tryKey = async (key: string | null | undefined, isLive: boolean) => {
     if (!key) return null
-    const client = new Stripe(key, { apiVersion: "2024-06-20" })
     try {
       if (options.priceId) {
-        await client.prices.retrieve(options.priceId)
+        await stripeRequest(key, "GET", `prices/${encodeURIComponent(options.priceId)}`)
       } else if (options.subscriptionId) {
-        await client.subscriptions.retrieve(options.subscriptionId)
+        await stripeRequest(key, "GET", `subscriptions/${encodeURIComponent(options.subscriptionId)}`)
       } else {
         return null
       }
-      return { stripe: client, isLiveMode: isLive }
+      return { apiKey: key, isLiveMode: isLive }
     } catch (error) {
       console.log(
         `[stripe-manage-plan] Unable to access resource with ${isLive ? "live" : "test"} key:`,
@@ -182,24 +212,17 @@ serve(async (req) => {
         ? targetStripeSettings.yearlyPriceId
         : targetStripeSettings.monthlyPriceId
 
-    const nextSubscriptionId =
-      targetPlanType === "free"
-        ? currentPlan.stripe_subscription_id ?? undefined
-        : typeof currentPlan.stripe_subscription_id === "string"
-          ? currentPlan.stripe_subscription_id
-          : undefined
-
     if (targetPlanType !== "free" && !priceId) {
       throw new Error("Stripe Price ID が設定されていません")
     }
 
-    let targetStripeClient:
-      | { stripe: Stripe; isLiveMode: boolean }
+    let targetStripeAuth:
+      | { apiKey: string; isLiveMode: boolean }
       | null = null
 
     if (targetPlanType === "free") {
       if (currentPlan.stripe_subscription_id) {
-        targetStripeClient = await detectStripeClient(
+        targetStripeAuth = await detectStripeKey(
           {
             test: stripeCredentials.test_secret_key,
             live: stripeCredentials.live_secret_key,
@@ -210,7 +233,7 @@ serve(async (req) => {
         )
       }
     } else {
-      targetStripeClient = await detectStripeClient(
+      targetStripeAuth = await detectStripeKey(
         {
           test: stripeCredentials.test_secret_key,
           live: stripeCredentials.live_secret_key,
@@ -227,34 +250,44 @@ serve(async (req) => {
     let periodEnd: string | null = null
 
     if (targetPlanType === "free") {
-      if (currentPlan.stripe_subscription_id && targetStripeClient) {
-        await targetStripeClient.stripe.subscriptions.cancel(currentPlan.stripe_subscription_id, {
-          invoice_now: false,
-          prorate: true,
-        })
+      if (currentPlan.stripe_subscription_id && targetStripeAuth) {
+        await stripeRequest(
+          targetStripeAuth.apiKey,
+          "POST",
+          `subscriptions/${encodeURIComponent(currentPlan.stripe_subscription_id)}/cancel`,
+          {
+            invoice_now: "false",
+            prorate: "true",
+          }
+        )
       }
       subscriptionId = null
       resultMessage = "フリープランへ変更しました"
     } else {
-      if (!targetStripeClient) {
+      if (!targetStripeAuth) {
         throw new Error("Stripeクライアントを初期化できませんでした")
       }
       if (!currentPlan.stripe_subscription_id) {
         throw new Error("アクティブなStripeサブスクリプションが見つかりません")
       }
 
-      const subscription = await targetStripeClient.stripe.subscriptions.retrieve(
-        currentPlan.stripe_subscription_id
+      const subscription = await stripeRequest(
+        targetStripeAuth.apiKey,
+        "GET",
+        `subscriptions/${encodeURIComponent(currentPlan.stripe_subscription_id)}`
       )
       const primaryItem = subscription.items.data[0]
       if (!primaryItem?.id) {
         throw new Error("Stripeサブスクリプションにプラン項目が見つかりません")
       }
 
-      const updatedSubscription = await targetStripeClient.stripe.subscriptions.update(
-        subscription.id,
+      const updatedSubscription = await stripeRequest(
+        targetStripeAuth.apiKey,
+        "POST",
+        `subscriptions/${encodeURIComponent(subscription.id)}`,
         {
-          items: [{ id: primaryItem.id, price: priceId }],
+          [`items[0][id]`]: primaryItem.id,
+          [`items[0][price]`]: priceId,
           proration_behavior: "create_prorations",
         }
       )
