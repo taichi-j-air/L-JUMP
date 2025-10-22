@@ -182,6 +182,13 @@ serve(async (req) => {
         ? targetStripeSettings.yearlyPriceId
         : targetStripeSettings.monthlyPriceId
 
+    const nextSubscriptionId =
+      targetPlanType === "free"
+        ? currentPlan.stripe_subscription_id ?? undefined
+        : typeof currentPlan.stripe_subscription_id === "string"
+          ? currentPlan.stripe_subscription_id
+          : undefined
+
     if (targetPlanType !== "free" && !priceId) {
       throw new Error("Stripe Price ID が設定されていません")
     }

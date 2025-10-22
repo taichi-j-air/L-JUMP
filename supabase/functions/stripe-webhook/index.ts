@@ -306,7 +306,7 @@ async function handleSubscriptionEvent(event: Stripe.Event, supabaseClient: any)
   // サブスクリプションがキャンセル・期限切れになった場合
   if (event.type === 'customer.subscription.deleted' || 
       (event.type === 'customer.subscription.updated' && subscription.status === 'canceled')) {
-    
+
     console.log('[stripe-webhook] Subscription cancelled, updating order status');
     
     // 該当カスタマーの有料サブスクリプション注文を cancelled に更新
@@ -338,8 +338,26 @@ async function handleSubscriptionEvent(event: Stripe.Event, supabaseClient: any)
       
       console.log('[stripe-webhook] Updated subscriber status to inactive');
     }
+
+    const { data: affectedPlans, error: plansError } = await supabaseClient
+      .from('user_plans')
+      .select('id')
+      .eq('stripe_customer_id', customerId)
+      .eq('is_active', true)
+
+    if (!plansError && affectedPlans?.length) {
+      await supabaseClient
+        .from('user_plans')
+        .update({
+          is_active: false,
+          plan_end_date: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        })
+        .in('id', affectedPlans.map((plan: any) => plan.id))
+      console.log('[stripe-webhook] Deactivated active plans for customer', customerId)
+    }
   }
-  
+
   // サブスクリプションが再アクティブになった場合
   if (event.type === 'customer.subscription.updated' && subscription.status === 'active') {
     console.log('[stripe-webhook] Subscription reactivated');
