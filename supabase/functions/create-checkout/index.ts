@@ -3,11 +3,59 @@ import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import Stripe from "https://esm.sh/stripe@14.21.0?target=deno";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 
+type UiPlanType = "free" | "silver" | "gold" | "developer"
+type DbPlanType = "free" | "basic" | "premium" | "developer"
+
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers":
     "authorization, x-client-info, apikey, content-type",
 };
+
+const normalizePlanTypeValue = (raw: string | null | undefined): UiPlanType => {
+  const normalized = (raw ?? "").toLowerCase()
+  switch (normalized) {
+    case "silver":
+    case "basic":
+      return "silver"
+    case "gold":
+    case "premium":
+      return "gold"
+    case "developer":
+      return "developer"
+    case "free":
+    default:
+      return "free"
+  }
+}
+
+const toDbPlanType = (value: string | null | undefined): DbPlanType => {
+  const normalized = normalizePlanTypeValue(value)
+  switch (normalized) {
+    case "silver":
+      return "basic"
+    case "gold":
+      return "premium"
+    case "developer":
+      return "developer"
+    case "free":
+    default:
+      return "free"
+  }
+}
+
+const coerceBoolean = (value: unknown) => {
+  if (typeof value === "boolean") return value
+  if (typeof value === "string") {
+    const normalized = value.trim().toLowerCase()
+    if (normalized === "true" || normalized === "1") return true
+    if (normalized === "false" || normalized === "0") return false
+  }
+  if (typeof value === "number") {
+    return value !== 0
+  }
+  return false
+}
 
 serve(async (req) => {
   if (req.method === "OPTIONS") {
@@ -40,22 +88,56 @@ serve(async (req) => {
     }
     const purchaserId = userData.user.id;
 
+    const requestBody = await req.json();
     const {
-      plan_type,
+      plan_type: rawPlanType,
       is_yearly = false,
       success_url: bodySuccessUrl,
       cancel_url: bodyCancelUrl,
-    } = await req.json();
+    } = requestBody ?? {};
 
-    if (!plan_type) throw new Error("plan_type is required");
-    console.log("[create-checkout] Request body:", { plan_type, is_yearly, purchaserId });
+    const planTypeInput =
+      typeof rawPlanType === "string" ? rawPlanType.trim().toLowerCase() : "";
+
+    if (!planTypeInput) {
+      throw new Error("plan_type is required");
+    }
+
+    const allowedPlanInputs = new Set([
+      "free",
+      "silver",
+      "gold",
+      "developer",
+      "basic",
+      "premium",
+    ]);
+
+    if (!allowedPlanInputs.has(planTypeInput)) {
+      throw new Error("指定されたプラン種別は利用できません");
+    }
+
+    const normalizedPlanType = normalizePlanTypeValue(planTypeInput);
+    if (normalizedPlanType === "free") {
+      throw new Error("無料プランではチェックアウトは不要です");
+    }
+
+    const dbPlanType = toDbPlanType(planTypeInput);
+    const useYearly = coerceBoolean(is_yearly);
+
+    console.log("[create-checkout] Request body:", {
+      plan_type: rawPlanType,
+      normalizedPlanType,
+      dbPlanType,
+      is_yearly: useYearly,
+      purchaserId,
+    });
 
     const { data: plan, error: planError } = await supabase
       .from("plan_configs")
       .select("plan_type, name, monthly_price, yearly_price, features, is_active")
-      .eq("plan_type", plan_type)
+      .eq("plan_type", dbPlanType)
       .eq("is_active", true)
-      .single();
+      .maybeSingle();
 
     if (planError || !plan) {
       throw new Error("プランが見つかりません");
@@ -69,7 +151,7 @@ serve(async (req) => {
 
     const priceId =
       stripeConfig && typeof stripeConfig === "object"
-        ? (is_yearly
+        ? (useYearly
             ? stripeConfig.yearlyPriceId ?? stripeConfig.yearly_price_id
             : stripeConfig.monthlyPriceId ?? stripeConfig.monthly_price_id)
         : undefined;
@@ -124,7 +206,7 @@ serve(async (req) => {
       throw new Error("Stripe価格がテスト・本番のいずれにも見つかりませんでした");
     }
 
-    const amountValue = is_yearly
+    const amountValue = useYearly
       ? Number(plan.yearly_price ?? plan.monthly_price ?? 0)
       : Number(plan.monthly_price ?? 0);
     const amount = Number.isFinite(amountValue) ? amountValue : 0;
@@ -135,9 +217,10 @@ serve(async (req) => {
     const successUrl = bodySuccessUrl || `${origin}/settings/plan?success=true`;
     const cancelUrl = bodyCancelUrl || `${origin}/settings/plan?canceled=true`;
 
-    const billingCycle = is_yearly ? "yearly" : "monthly";
+    const billingCycle = useYearly ? "yearly" : "monthly";
     const metadata: Record<string, string> = {
       plan_type: plan.plan_type,
+      plan_type_ui: normalizedPlanType,
       plan_name: String(plan.name ?? ""),
       billing_cycle: billingCycle,
       purchaser_id: purchaserId,

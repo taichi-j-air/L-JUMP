@@ -7,6 +7,7 @@ const corsHeaders = {
 }
 
 type PlanType = "free" | "silver" | "gold" | "developer"
+type DbPlanType = "free" | "basic" | "premium" | "developer"
 
 interface StripeSettings {
   productId?: string
@@ -20,6 +21,51 @@ const PLAN_RANK: Record<PlanType, number> = {
   silver: 1,
   gold: 2,
   developer: 3,
+}
+
+const normalizePlanTypeValue = (raw: string | null | undefined): PlanType => {
+  const normalized = (raw ?? "").toLowerCase()
+  switch (normalized) {
+    case "silver":
+    case "basic":
+      return "silver"
+    case "gold":
+    case "premium":
+      return "gold"
+    case "developer":
+      return "developer"
+    case "free":
+    default:
+      return "free"
+  }
+}
+
+const toDbPlanType = (value: string | null | undefined): DbPlanType => {
+  const normalized = normalizePlanTypeValue(value)
+  switch (normalized) {
+    case "silver":
+      return "basic"
+    case "gold":
+      return "premium"
+    case "developer":
+      return "developer"
+    case "free":
+    default:
+      return "free"
+  }
+}
+
+const coerceBoolean = (value: unknown) => {
+  if (typeof value === "boolean") return value
+  if (typeof value === "string") {
+    const normalized = value.trim().toLowerCase()
+    if (normalized === "true" || normalized === "1") return true
+    if (normalized === "false" || normalized === "0") return false
+  }
+  if (typeof value === "number") {
+    return value !== 0
+  }
+  return false
 }
 
 const normalizeSubscriptionId = (input?: string | null) => {
@@ -164,40 +210,74 @@ serve(async (req) => {
     }
     const userId = userData.user.id
 
-    const { user_plan_id: userPlanId, target_plan_type: rawTargetType, is_yearly: isYearly } =
-      await req.json()
+    const body = await req.json()
+    const userPlanIdRaw = body.user_plan_id ?? body.userPlanId ?? null
+    const rawTargetType = body.target_plan_type ?? body.targetPlanType ?? body.rawTargetType
+    const rawIsYearly = body.is_yearly ?? body.isYearly
 
-    console.log("[stripe-manage-plan] Request body:", { rawTargetType, userPlanId, is_yearly: isYearly })
+    const allowedPlanInputs = new Set(["free", "silver", "gold", "developer", "basic", "premium"])
+    const rawTargetString =
+      typeof rawTargetType === "string" ? rawTargetType.trim().toLowerCase() : null
 
-    let normalizedTarget: PlanType | null = null
-    if (rawTargetType) {
-      const rawStr = String(rawTargetType).trim().toLowerCase()
-      if (rawStr === "free" || rawStr === "silver" || rawStr === "gold") {
-        normalizedTarget = rawStr as PlanType
-      }
-    }
-
-    if (!userPlanId || !normalizedTarget) {
+    if (!rawTargetString || !allowedPlanInputs.has(rawTargetString)) {
       throw new Error("リクエストに必要な項目が不足しています")
     }
 
-    const targetPlanType: PlanType = normalizedTarget
+    const userPlanId =
+      typeof userPlanIdRaw === "string" && userPlanIdRaw.trim().length > 0
+        ? userPlanIdRaw
+        : null
 
-    const { data: currentPlan, error: planError } = await supabaseService
-      .from("user_plans")
-      .select("*")
-      .eq("id", userPlanId)
-      .single()
+    const targetPlanType: PlanType = normalizePlanTypeValue(rawTargetString)
+    const targetDbPlanType = toDbPlanType(rawTargetString)
+    const useYearly = coerceBoolean(rawIsYearly)
 
-    if (planError || !currentPlan) {
-      throw new Error("現在のプラン情報が見つかりません")
+    console.log("[stripe-manage-plan] Request body:", {
+      rawTargetType,
+      userPlanId,
+      targetPlanType,
+      targetDbPlanType,
+      is_yearly: useYearly,
+    })
+
+    let currentPlan: any = null
+
+    if (userPlanId) {
+      const { data, error } = await supabaseService
+        .from("user_plans")
+        .select("*")
+        .eq("id", userPlanId)
+        .maybeSingle()
+
+      if (error) {
+        throw new Error("現在のプラン情報が見つかりません")
+      }
+
+      currentPlan = data
     }
 
-    if (currentPlan.user_id !== userId) {
+    if (!currentPlan) {
+      const { data, error } = await supabaseService
+        .from("user_plans")
+        .select("*")
+        .eq("user_id", userId)
+        .eq("is_active", true)
+        .maybeSingle()
+
+      if (error) {
+        throw new Error("現在のプラン情報が見つかりません")
+      }
+
+      currentPlan = data
+    }
+
+    if (currentPlan && currentPlan.user_id !== userId) {
       throw new Error("ご本人のプランのみ変更できます")
     }
 
-    const currentPlanType = currentPlan.plan_type as PlanType
+    const currentPlanType = currentPlan
+      ? normalizePlanTypeValue(currentPlan.plan_type)
+      : "free"
     const currentRank = PLAN_RANK[currentPlanType] ?? 0
     const targetRank = PLAN_RANK[targetPlanType] ?? 0
 
@@ -208,8 +288,8 @@ serve(async (req) => {
     const { data: targetPlanConfig, error: targetPlanError } = await supabaseService
       .from("plan_configs")
       .select("plan_type, name, monthly_price, yearly_price, features")
-      .eq("plan_type", targetPlanType)
-      .single()
+      .eq("plan_type", targetDbPlanType)
+      .maybeSingle()
 
     if (targetPlanError || !targetPlanConfig) {
       throw new Error("変更先のプラン設定が見つかりません")
@@ -231,9 +311,8 @@ serve(async (req) => {
 
     const monthlyPrice = Number(targetPlanConfig.monthly_price ?? 0)
     const yearlyPrice = Number(targetPlanConfig.yearly_price ?? 0)
-    const useYearly = Boolean(isYearly)
 
-    const currentSubscriptionId = normalizeSubscriptionId(currentPlan.stripe_subscription_id)
+    const currentSubscriptionId = normalizeSubscriptionId(currentPlan?.stripe_subscription_id)
 
     const priceId =
       targetPlanType === "free"
@@ -276,7 +355,7 @@ serve(async (req) => {
 
     let resultMessage = ""
     let subscriptionId: string | null = currentSubscriptionId
-    let customerId: string | null = currentPlan.stripe_customer_id
+    let customerId: string | null = currentPlan?.stripe_customer_id ?? null
     let periodEnd: string | null = null
 
     if (targetPlanType === "free") {
@@ -353,23 +432,38 @@ serve(async (req) => {
       resultMessage = `${targetPlanConfig.name}へ変更しました`
     }
 
-    const { error: updateError } = await supabaseService
-      .from("user_plans")
-      .update({
-        plan_type: targetPlanType,
-        is_yearly: targetPlanType === "free" ? false : useYearly,
-        monthly_revenue: targetPlanType === "free" ? 0 : useYearly ? yearlyPrice : monthlyPrice,
-        stripe_subscription_id: subscriptionId,
-        stripe_customer_id: customerId,
-        plan_start_date: new Date().toISOString(),
-        plan_end_date: periodEnd,
-        updated_at: new Date().toISOString(),
-        is_active: true,
-      })
-      .eq("id", currentPlan.id)
+    const planRecordPayload = {
+      plan_type: targetDbPlanType,
+      is_yearly: targetPlanType === "free" ? false : useYearly,
+      monthly_revenue: targetPlanType === "free" ? 0 : useYearly ? yearlyPrice : monthlyPrice,
+      stripe_subscription_id: subscriptionId,
+      stripe_customer_id: customerId,
+      plan_start_date: new Date().toISOString(),
+      plan_end_date: periodEnd,
+      updated_at: new Date().toISOString(),
+      is_active: true,
+    }
 
-    if (updateError) {
-      throw new Error("プラン情報の更新に失敗しました")
+    if (currentPlan?.id) {
+      const { error: updateError } = await supabaseService
+        .from("user_plans")
+        .update(planRecordPayload)
+        .eq("id", currentPlan.id)
+
+      if (updateError) {
+        throw new Error("プラン情報の更新に失敗しました")
+      }
+    } else {
+      const { error: insertError } = await supabaseService
+        .from("user_plans")
+        .insert({
+          ...planRecordPayload,
+          user_id: userId,
+        })
+
+      if (insertError) {
+        throw new Error("プラン情報の作成に失敗しました")
+      }
     }
 
     return new Response(

@@ -193,29 +193,31 @@ export default function PlanSettings() {
     if (!user) return
     setProcessing(true)
     try {
-      if (currentPlan) {
-        await supabase.from("user_plans").update({ is_active: false }).eq("id", currentPlan.id)
-      }
-
-      const { data, error } = await supabase
-        .from("user_plans")
-        .insert({
-          user_id: user.id,
-          plan_type: "free",
+      const { data, error } = await supabase.functions.invoke("stripe-manage-plan", {
+        body: {
+          target_plan_type: "free",
           is_yearly: false,
-          is_active: true,
-        })
-        .select()
-        .single()
+        },
+      })
 
       if (error) throw error
+      if (!data?.success) {
+        throw new Error(data?.error || "プラン変更に失敗しました")
+      }
 
-      setCurrentPlan(data)
+      await loadCurrentPlan()
       await loadPlans()
-      toast.success("フリープランに変更しました")
+      toast.success(data?.message ?? "フリープランに変更しました")
     } catch (error) {
       console.error("Error changing to free plan:", error)
-      toast.error("プランの変更に失敗しました")
+      if (error instanceof FunctionsHttpError) {
+        const details = error.context as { error?: string }
+        toast.error(details?.error ?? "プランの変更に失敗しました")
+      } else {
+        toast.error(
+          error instanceof Error ? error.message : "プランの変更に失敗しました"
+        )
+      }
     } finally {
       setProcessing(false)
     }
