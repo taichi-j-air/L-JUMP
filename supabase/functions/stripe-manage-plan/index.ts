@@ -150,7 +150,8 @@ serve(async (req) => {
       throw new Error("リクエストに必要な項目が不足しています")
     }
 
-    const targetPlanType = String(rawTargetType) as PlanType
+    const normalizedTarget = String(rawTargetType).trim().toLowerCase()
+    const targetPlanType = normalizedTarget as PlanType
     if (!["free", "silver", "gold"].includes(targetPlanType)) {
       throw new Error("指定されたプラン種別はダウングレード対象外です")
     }
