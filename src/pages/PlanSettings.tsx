@@ -30,16 +30,16 @@ interface PlanCard {
 
 const PLAN_ICON_MAP: Record<PlanType, { icon: LucideIcon; color: string }> = {
   free: { icon: Star, color: "text-gray-500" },
-  basic: { icon: Zap, color: "text-blue-500" },
-  premium: { icon: Crown, color: "text-amber-500" },
+  silver: { icon: Zap, color: "text-blue-500" },
+  gold: { icon: Crown, color: "text-amber-500" },
   developer: { icon: Shield, color: "text-purple-600" },
 }
 
-const PUBLIC_PLAN_ORDER: PlanType[] = ["free", "basic", "premium"]
+const PUBLIC_PLAN_ORDER: PlanType[] = ["free", "silver", "gold"]
 const PLAN_RANK: Record<PlanType, number> = {
   free: 0,
-  basic: 1,
-  premium: 2,
+  silver: 1,
+  gold: 2,
   developer: 3,
 }
 
@@ -96,27 +96,26 @@ export default function PlanSettings() {
 
       if (error) throw error
 
-      const formattedPlans: PlanCard[] =
-        data
-          ?.map((plan: any) => {
-            const type = normalizePlanType(plan.plan_type)
-            const featureConfig = parsePlanFeatureConfig(plan.features, type)
-            const visuals = PLAN_ICON_MAP[type]
+      const formattedPlans: PlanCard[] = (data ?? [])
+        .map((plan: any) => {
+          const type = normalizePlanType(plan.plan_type)
+          const featureConfig = parsePlanFeatureConfig(plan.features, type)
+          const visuals = PLAN_ICON_MAP[type]
 
-            return {
-              type,
-              name: plan.name ?? PLAN_TYPE_LABELS[type],
-              monthlyPrice: Number(plan.monthly_price ?? 0),
-              yearlyPrice: Number(plan.yearly_price ?? 0),
-              featureConfig,
-              icon: visuals.icon,
-              color: visuals.color,
-            }
-          })
-          .filter((plan) => PUBLIC_PLAN_ORDER.includes(plan.type))
-          .sort(
-            (a, b) => PUBLIC_PLAN_ORDER.indexOf(a.type) - PUBLIC_PLAN_ORDER.indexOf(b.type)
-          ) || []
+          return {
+            type,
+            name: plan.name ?? PLAN_TYPE_LABELS[type],
+            monthlyPrice: Number(plan.monthly_price ?? 0),
+            yearlyPrice: Number(plan.yearly_price ?? 0),
+            featureConfig,
+            icon: visuals.icon,
+            color: visuals.color,
+          }
+        })
+        .filter((plan): plan is PlanCard => PUBLIC_PLAN_ORDER.includes(plan.type))
+        .sort(
+          (a, b) => PUBLIC_PLAN_ORDER.indexOf(a.type) - PUBLIC_PLAN_ORDER.indexOf(b.type)
+        )
 
       setPlans(formattedPlans)
     } catch (error) {

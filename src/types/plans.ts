@@ -1,5 +1,5 @@
-// Shared plan-related types and defaults for Free/Basic/Premium tiers.
-export type PlanType = 'free' | 'basic' | 'premium' | 'developer'
+// Shared plan-related types and defaults for Free/Silver/Gold tiers.
+export type PlanType = 'free' | 'silver' | 'gold' | 'developer'
 
 export interface PlanLimits {
   scenarioStepLimit: number | null
@@ -23,8 +23,8 @@ export interface PlanFeatureConfig {
 
 export const PLAN_TYPE_LABELS: Record<PlanType, string> = {
   free: 'フリープラン',
-  basic: 'シルバー',
-  premium: 'ゴールド',
+  silver: 'シルバー',
+  gold: 'ゴールド',
   developer: '開発者向け',
 }
 
@@ -36,14 +36,14 @@ export const DEFAULT_PLAN_LIMITS: Record<PlanType, PlanLimits> = {
     totalContentBlockLimit: 5,
     contentBlockPerSiteLimit: 5,
   },
-  basic: {
+  silver: {
     scenarioStepLimit: 50,
     flexMessageTemplateLimit: null,
     memberSiteLimit: 3,
     totalContentBlockLimit: null,
     contentBlockPerSiteLimit: 15,
   },
-  premium: {
+  gold: {
     scenarioStepLimit: null,
     flexMessageTemplateLimit: null,
     memberSiteLimit: null,
@@ -104,18 +104,21 @@ const trimToUndefined = (value?: string | null) => {
 }
 
 export const normalizePlanType = (value: string | null | undefined): PlanType => {
-  switch (value) {
-    case 'basic':
+  const normalized = (value ?? '').toLowerCase()
+
+  switch (normalized) {
     case 'silver':
-      return 'basic'
-    case 'premium':
+    case 'basic':
+      return 'silver'
     case 'gold':
-      return 'premium'
+    case 'premium':
+      return 'gold'
+    case 'free':
+      return 'free'
     case 'developer':
       return 'developer'
-    case 'free':
     default:
-      return 'free'
+      return 'developer'
   }
 }
 
