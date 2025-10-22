@@ -146,6 +146,8 @@ serve(async (req) => {
     const { user_plan_id: userPlanId, target_plan_type: rawTargetType, is_yearly: isYearly } =
       await req.json()
 
+    console.log("[stripe-manage-plan] Request body:", { rawTargetType, userPlanId, is_yearly: isYearly })
+
     let normalizedTarget: PlanType | null = null
     if (rawTargetType) {
       const rawStr = String(rawTargetType).trim().toLowerCase()
