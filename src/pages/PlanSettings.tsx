@@ -238,7 +238,7 @@ export default function PlanSettings() {
       const { data, error } = await supabase.functions.invoke("stripe-manage-plan", {
         body: {
           user_plan_id: currentPlan.id,
-          target_plan_type: plan.type,
+          target_plan_type: plan.type?.toLowerCase?.() || plan.type,
           is_yearly: isYearly,
         },
       })

@@ -146,15 +146,19 @@ serve(async (req) => {
     const { user_plan_id: userPlanId, target_plan_type: rawTargetType, is_yearly: isYearly } =
       await req.json()
 
-    if (!userPlanId || !rawTargetType) {
+    let normalizedTarget: PlanType | null = null
+    if (rawTargetType) {
+      const rawStr = String(rawTargetType).trim().toLowerCase()
+      if (rawStr === "free" || rawStr === "silver" || rawStr === "gold") {
+        normalizedTarget = rawStr as PlanType
+      }
+    }
+
+    if (!userPlanId || !normalizedTarget) {
       throw new Error("リクエストに必要な項目が不足しています")
     }
 
-    const normalizedTarget = String(rawTargetType).trim().toLowerCase()
-    const targetPlanType = normalizedTarget as PlanType
-    if (!["free", "silver", "gold"].includes(targetPlanType)) {
-      throw new Error("指定されたプラン種別はダウングレード対象外です")
-    }
+    const targetPlanType: PlanType = normalizedTarget
 
     const { data: currentPlan, error: planError } = await supabaseService
       .from("user_plans")
