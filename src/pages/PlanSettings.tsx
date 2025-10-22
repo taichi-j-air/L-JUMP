@@ -271,8 +271,8 @@ export default function PlanSettings() {
           plan_type: plan.type,
           is_yearly: isYearly,
           amount,
-          success_url: `${window.location.origin}/plan-settings?success=true`,
-          cancel_url: `${window.location.origin}/plan-settings?canceled=true`,
+          success_url: `${window.location.origin}/settings/plan?success=true`,
+          cancel_url: `${window.location.origin}/settings/plan?canceled=true`,
         },
       })
 
