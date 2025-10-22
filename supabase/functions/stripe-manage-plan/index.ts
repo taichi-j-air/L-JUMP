@@ -22,6 +22,13 @@ const PLAN_RANK: Record<PlanType, number> = {
   developer: 3,
 }
 
+const normalizeSubscriptionId = (input?: string | null) => {
+  if (!input) return null
+  const trimmed = input.trim()
+  if (!trimmed) return null
+  return trimmed.replace(/\/cancel$/i, "")
+}
+
 const parseStripeSettings = (raw: unknown): StripeSettings => {
   if (!raw || typeof raw !== "object") {
     return {}
@@ -59,13 +66,27 @@ const stripeRequest = async (
   path: string,
   params?: Record<string, string | number | boolean | null | undefined>
 ) => {
-  const response = await fetch(`https://api.stripe.com/v1/${path}`, {
+  const url = new URL(`https://api.stripe.com/v1/${path}`)
+  let body: string | undefined
+
+  if (params) {
+    if (method === "GET" || method === "DELETE") {
+      for (const [key, value] of Object.entries(params)) {
+        if (value === undefined || value === null) continue
+        url.searchParams.append(key, String(value))
+      }
+    } else {
+      body = toFormBody(params)
+    }
+  }
+
+  const response = await fetch(url.toString(), {
     method,
     headers: {
       Authorization: `Bearer ${apiKey}`,
-      ...(params ? { "Content-Type": "application/x-www-form-urlencoded" } : {}),
+      ...(body ? { "Content-Type": "application/x-www-form-urlencoded" } : {}),
     },
-    body: params ? toFormBody(params) : undefined,
+    body,
   })
 
   if (!response.ok) {
@@ -212,6 +233,8 @@ serve(async (req) => {
     const yearlyPrice = Number(targetPlanConfig.yearly_price ?? 0)
     const useYearly = Boolean(isYearly)
 
+    const currentSubscriptionId = normalizeSubscriptionId(currentPlan.stripe_subscription_id)
+
     const priceId =
       targetPlanType === "free"
         ? undefined
@@ -228,14 +251,14 @@ serve(async (req) => {
       | null = null
 
     if (targetPlanType === "free") {
-      if (currentPlan.stripe_subscription_id) {
+      if (currentSubscriptionId) {
         targetStripeAuth = await detectStripeKey(
           {
             test: stripeCredentials.test_secret_key,
             live: stripeCredentials.live_secret_key,
           },
           {
-            subscriptionId: currentPlan.stripe_subscription_id,
+            subscriptionId: currentSubscriptionId,
           }
         )
       }
@@ -252,21 +275,43 @@ serve(async (req) => {
     }
 
     let resultMessage = ""
-    let subscriptionId: string | null = currentPlan.stripe_subscription_id
+    let subscriptionId: string | null = currentSubscriptionId
     let customerId: string | null = currentPlan.stripe_customer_id
     let periodEnd: string | null = null
 
     if (targetPlanType === "free") {
-      if (currentPlan.stripe_subscription_id && targetStripeAuth) {
-        await stripeRequest(
-          targetStripeAuth.apiKey,
-          "DELETE",
-          `subscriptions/${encodeURIComponent(currentPlan.stripe_subscription_id)}`,
-          {
-            invoice_now: "false",
-            prorate: "true",
+      if (currentSubscriptionId && targetStripeAuth) {
+        try {
+          await stripeRequest(
+            targetStripeAuth.apiKey,
+            "DELETE",
+            `subscriptions/${encodeURIComponent(currentSubscriptionId)}`,
+            {
+              invoice_now: "false",
+              prorate: "true",
+            }
+          )
+        } catch (cancelError) {
+          if (
+            cancelError instanceof Error &&
+            /unrecognized request url/i.test(cancelError.message)
+          ) {
+            console.warn(
+              "[stripe-manage-plan] Subscription cancel endpoint unavailable, assuming subscription already inactive:",
+              currentSubscriptionId
+            )
+          } else if (
+            cancelError instanceof Error &&
+            /no such subscription/i.test(cancelError.message)
+          ) {
+            console.warn(
+              "[stripe-manage-plan] Subscription already canceled in Stripe:",
+              currentSubscriptionId
+            )
+          } else {
+            throw cancelError
           }
-        )
+        }
       }
       subscriptionId = null
       resultMessage = "フリープランへ変更しました"
@@ -274,14 +319,14 @@ serve(async (req) => {
       if (!targetStripeAuth) {
         throw new Error("Stripeクライアントを初期化できませんでした")
       }
-      if (!currentPlan.stripe_subscription_id) {
+      if (!currentSubscriptionId) {
         throw new Error("アクティブなStripeサブスクリプションが見つかりません")
       }
 
       const subscription = await stripeRequest(
         targetStripeAuth.apiKey,
         "GET",
-        `subscriptions/${encodeURIComponent(currentPlan.stripe_subscription_id)}`
+        `subscriptions/${encodeURIComponent(currentSubscriptionId)}`
       )
       const primaryItem = subscription.items.data[0]
       if (!primaryItem?.id) {
