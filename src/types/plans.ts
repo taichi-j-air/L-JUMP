@@ -113,12 +113,11 @@ export const normalizePlanType = (value: string | null | undefined): PlanType =>
     case 'gold':
     case 'premium':
       return 'gold'
-    case 'free':
-      return 'free'
     case 'developer':
       return 'developer'
+    case 'free':
     default:
-      return 'developer'
+      return 'free'
   }
 }
 

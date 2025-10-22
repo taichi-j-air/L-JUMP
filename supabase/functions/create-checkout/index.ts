@@ -48,6 +48,7 @@ serve(async (req) => {
     } = await req.json();
 
     if (!plan_type) throw new Error("plan_type is required");
+    console.log("[create-checkout] Request body:", { plan_type, is_yearly, purchaserId });
 
     const { data: plan, error: planError } = await supabase
       .from("plan_configs")

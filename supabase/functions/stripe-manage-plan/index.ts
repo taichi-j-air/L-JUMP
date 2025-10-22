@@ -260,8 +260,8 @@ serve(async (req) => {
       if (currentPlan.stripe_subscription_id && targetStripeAuth) {
         await stripeRequest(
           targetStripeAuth.apiKey,
-          "POST",
-          `subscriptions/${encodeURIComponent(currentPlan.stripe_subscription_id)}/cancel`,
+          "DELETE",
+          `subscriptions/${encodeURIComponent(currentPlan.stripe_subscription_id)}`,
           {
             invoice_now: "false",
             prorate: "true",
