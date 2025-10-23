@@ -298,10 +298,8 @@ const detectStripeKey = async (
           current_period_start: currentPeriodStart,
           current_period_end: currentPeriodEnd,
           interval:
-            primaryItem?.price?.recurring?.interval ??
-            currentPlan.is_yearly
-              ? "year"
-              : "month",
+            (primaryItem?.price?.recurring?.interval ??
+              (currentPlan.is_yearly ? "year" : "month")) || null,
           interval_count: primaryItem?.price?.recurring?.interval_count ?? 1,
           unit_amount: typeof primaryItem?.price?.unit_amount === "number" ? primaryItem.price.unit_amount : null,
           currency: primaryItem?.price?.currency ?? "jpy",

@@ -973,7 +973,11 @@ export default function PlanSettings() {
           <AlertDialogFooter className="flex justify-end gap-2">
             {downgradeStep === 1 ? (
               <>
-                <Button variant="outline" onClick={closeDowngradeDialog} disabled={processing}>
+                <Button
+                  className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                  onClick={closeDowngradeDialog}
+                  disabled={processing}
+                >
                   キャンセル
                 </Button>
                 <Button
@@ -989,16 +993,28 @@ export default function PlanSettings() {
               </>
             ) : downgradeStep === 2 ? (
               <>
-                <Button variant="outline" onClick={closeDowngradeDialog} disabled={processing || subscriptionLoading}>
+                <Button
+                  className="bg-green-600 text-white hover:bg-green-700"
+                  onClick={closeDowngradeDialog}
+                  disabled={processing || subscriptionLoading}
+                >
                   考え直す
                 </Button>
-                <Button onClick={() => setDowngradeStep(3)} disabled={processing || subscriptionLoading}>
+                <Button
+                  className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                  onClick={() => setDowngradeStep(3)}
+                  disabled={processing || subscriptionLoading}
+                >
                   はい、進める
                 </Button>
               </>
             ) : (
               <>
-                <Button variant="outline" onClick={closeDowngradeDialog} disabled={processing}>
+                <Button
+                  className="bg-green-600 text-white hover:bg-green-700"
+                  onClick={closeDowngradeDialog}
+                  disabled={processing}
+                >
                   いいえ
                 </Button>
                 <Button
