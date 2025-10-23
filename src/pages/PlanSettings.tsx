@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react"
+import { useState, useEffect, useMemo } from "react"
 import { supabase } from "@/integrations/supabase/client"
 import { User, FunctionsHttpError } from "@supabase/supabase-js"
 import { AppHeader } from "@/components/AppHeader"
@@ -12,8 +12,6 @@ import type { LucideIcon } from "lucide-react"
 import { toast } from "sonner"
 import {
   AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
   AlertDialogContent,
   AlertDialogDescription,
   AlertDialogFooter,
@@ -67,6 +65,9 @@ const formatPrice = (price: number) =>
 const formatLimit = (value: number | null, suffix: string) =>
   value === null ? "無制限" : `${value.toLocaleString()}${suffix}`
 
+const formatCurrency = (value: number) =>
+  new Intl.NumberFormat("ja-JP", { style: "currency", currency: "JPY" }).format(Math.round(value))
+
 const buildLimitHighlights = (limits: PlanFeatureConfig["limits"]) => [
   `シナリオ ${formatLimit(limits.scenarioStepLimit, "ステップ")}`,
   `Flex保存 ${formatLimit(limits.flexMessageTemplateLimit, "通")}`,
@@ -95,6 +96,7 @@ export default function PlanSettings() {
   const [usageLoading, setUsageLoading] = useState(false)
   const [showDowngradeDialog, setShowDowngradeDialog] = useState(false)
   const [downgradePlan, setDowngradePlan] = useState<PlanCard | null>(null)
+  const [downgradeStep, setDowngradeStep] = useState<1 | 2 | 3>(1)
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
@@ -231,8 +233,16 @@ export default function PlanSettings() {
     }
   }
 
+  const closeDowngradeDialog = () => {
+    if (processing) return
+    setShowDowngradeDialog(false)
+    setDowngradePlan(null)
+    setDowngradeStep(1)
+  }
+
   const startDowngradeFlow = async (plan: PlanCard) => {
     setDowngradePlan(plan)
+    setDowngradeStep(1)
     setShowDowngradeDialog(true)
     await loadUsageStats()
   }
@@ -344,6 +354,7 @@ export default function PlanSettings() {
       await loadCurrentPlan()
       await loadPlans()
       await loadUsageStats()
+      setDowngradeStep(1)
       setShowDowngradeDialog(false)
       setDowngradePlan(null)
       toast.success(data?.message ?? `${plan.name}へ変更しました`)
@@ -400,14 +411,6 @@ export default function PlanSettings() {
   const getYearlyDiscount = (plan: PlanCard) => {
     if (!plan.monthlyPrice || !plan.yearlyPrice) return 0
     return Math.round((1 - (plan.yearlyPrice / 12) / plan.monthlyPrice) * 100)
-  }
-
-  if (loading) {
-    return <div className="p-4">読み込み中...</div>
-  }
-
-  if (!user) {
-    return <div className="p-4">ログインが必要です</div>
   }
 
   const activePlanType: PlanType | null = currentPlan
@@ -475,6 +478,71 @@ export default function PlanSettings() {
     !usageLoading &&
     downgradeComparisons.length > 0 &&
     unmetConditions.length === 0
+
+  const prorationInfo = useMemo(() => {
+    if (!currentPlan || !downgradePlan || !activePlanType) return null
+    const planInfo = planDictionary[activePlanType]
+    if (!planInfo) return null
+
+    const nextBillingRaw = currentPlan.plan_end_date
+    if (!nextBillingRaw) return null
+    const nextBilling = new Date(nextBillingRaw)
+    if (Number.isNaN(nextBilling.getTime())) return null
+
+    const today = new Date()
+    if (nextBilling <= today) return null
+
+    const startRaw = currentPlan.plan_start_date
+    const msPerDay = 1000 * 60 * 60 * 24
+    let totalCycleMs: number | null = null
+    if (startRaw) {
+      const startDate = new Date(startRaw)
+      if (!Number.isNaN(startDate.getTime()) && nextBilling > startDate) {
+        totalCycleMs = nextBilling.getTime() - startDate.getTime()
+      }
+    }
+    if (!totalCycleMs || totalCycleMs <= 0) {
+      totalCycleMs = (currentPlan.is_yearly ? 365 : 30) * msPerDay
+    }
+
+    const remainingMs = nextBilling.getTime() - today.getTime()
+    if (remainingMs <= 0) return null
+
+    const remainingDays = Math.ceil(remainingMs / msPerDay)
+    const totalDays = Math.max(1, Math.round(totalCycleMs / msPerDay))
+    const planPrice = currentPlan.is_yearly ? planInfo.yearlyPrice : planInfo.monthlyPrice
+
+    if (!planPrice || planPrice <= 0) {
+      return {
+        nextBilling,
+        remainingDays,
+        totalDays,
+        remainingValue: 0,
+        planPrice: 0,
+        billingPeriodLabel: currentPlan.is_yearly ? "年額" : "月額",
+      }
+    }
+
+    const dailyPrice = planPrice / totalDays
+    const remainingValue = dailyPrice * Math.min(remainingDays, totalDays)
+
+    return {
+      nextBilling,
+      remainingDays,
+      totalDays,
+      remainingValue,
+      planPrice,
+      billingPeriodLabel: currentPlan.is_yearly ? "年額" : "月額",
+    }
+  }, [currentPlan, downgradePlan, activePlanType, planDictionary])
+
+  if (loading) {
+    return <div className="p-4">読み込み中...</div>
+  }
+
+  if (!user) {
+    return <div className="p-4">ログインが必要です</div>
+  }
 
   return (
     <div className="space-y-6">
@@ -652,9 +720,7 @@ export default function PlanSettings() {
         open={showDowngradeDialog}
         onOpenChange={(open) => {
           if (!open) {
-            if (processing) return
-            setShowDowngradeDialog(false)
-            setDowngradePlan(null)
+            closeDowngradeDialog()
           } else {
             setShowDowngradeDialog(true)
           }
@@ -666,76 +732,136 @@ export default function PlanSettings() {
               {downgradePlan ? `${downgradePlan.name}へダウングレード` : "ダウングレード"}
             </AlertDialogTitle>
             <AlertDialogDescription>
-              下位プランの条件を満たす必要があります。現在の利用状況と上限を確認してください。
+              {downgradeStep === 1
+                ? "下位プランの条件を満たす必要があります。現在の利用状況と上限を確認してください。"
+                : downgradeStep === 2
+                ? "次回の決済日までの残り期間と日割りの金額をご確認ください。"
+                : "本当にダウングレードしてよろしいでしょうか？"}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <div className="space-y-4 text-sm">
-            {usageLoading ? (
-              <div className="text-muted-foreground">利用状況を取得しています...</div>
-            ) : !usageStats || !downgradePlan ? (
-              <div className="text-destructive">
-                利用状況を取得できませんでした。時間を置いて再度お試しください。
-              </div>
+            {downgradeStep === 1 ? (
+              usageLoading ? (
+                <div className="text-muted-foreground">利用状況を取得しています...</div>
+              ) : !usageStats || !downgradePlan ? (
+                <div className="text-destructive">
+                  利用状況を取得できませんでした。時間を置いて再度お試しください。
+                </div>
+              ) : (
+                <>
+                  <table className="w-full border-collapse text-sm">
+                    <thead>
+                      <tr className="border-b text-xs text-muted-foreground">
+                        <th className="p-2 text-left">項目</th>
+                        <th className="p-2 text-right">現在の利用状況</th>
+                        <th className="p-2 text-right">{downgradePlan.name} 上限</th>
+                        <th className="p-2 text-center">状態</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {downgradeComparisons.map((item) => {
+                        const exceeds = !isUnlimited(item.limit) && item.current > (item.limit ?? 0)
+                        return (
+                          <tr
+                            key={item.key}
+                            className={`border-b last:border-none ${exceeds ? "text-destructive font-semibold" : ""}`}
+                          >
+                            <td className="p-2">{item.label}</td>
+                            <td className="p-2 text-right">{formatCurrentValue(item.current, item.suffix)}</td>
+                            <td className="p-2 text-right">{formatLimitValue(item.limit, item.suffix)}</td>
+                            <td className="p-2 text-center">{exceeds ? "要削減" : "OK"}</td>
+                          </tr>
+                        )
+                      })}
+                    </tbody>
+                  </table>
+                  {unmetConditions.length > 0 ? (
+                    <div className="text-destructive text-sm">
+                      以下の項目が上限を超えています。減らしてからダウングレードしてください。
+                    </div>
+                  ) : (
+                    <div className="text-muted-foreground text-sm">
+                      条件を満たしています。次のステップへ進めます。
+                    </div>
+                  )}
+                  <p className="text-xs text-muted-foreground">
+                    プラン変更後は下位プランの上限が適用され、超過分は利用できなくなる場合があります。
+                  </p>
+                </>
+              )
+            ) : downgradeStep === 2 ? (
+              prorationInfo ? (
+                <div className="space-y-2">
+                  <p>次回の決済予定日: {prorationInfo.nextBilling.toLocaleDateString("ja-JP")}</p>
+                  <p>
+                    残り日数: {prorationInfo.remainingDays}日 / {prorationInfo.totalDays}日（{prorationInfo.billingPeriodLabel}）
+                  </p>
+                  <p>
+                    現在のプラン料金: {formatCurrency(prorationInfo.planPrice)} / {prorationInfo.billingPeriodLabel}
+                  </p>
+                  <p>
+                    今ダウングレードすると約 {formatCurrency(prorationInfo.remainingValue)} 分の利用価値が失われます。
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    ※ 実際の金額は Stripe の決済状況により多少前後する場合があります。
+                  </p>
+                </div>
+              ) : (
+                <div className="text-muted-foreground">
+                  金額の算出ができませんでしたが、ダウングレードを続行できます。
+                </div>
+              )
             ) : (
-              <>
-                <table className="w-full border-collapse text-sm">
-                  <thead>
-                    <tr className="border-b text-xs text-muted-foreground">
-                      <th className="p-2 text-left">項目</th>
-                      <th className="p-2 text-right">現在の利用状況</th>
-                      <th className="p-2 text-right">{downgradePlan.name} 上限</th>
-                      <th className="p-2 text-center">状態</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {downgradeComparisons.map((item) => {
-                      const exceeds = !isUnlimited(item.limit) && item.current > (item.limit ?? 0)
-                      return (
-                        <tr
-                          key={item.key}
-                          className={`border-b last:border-none ${exceeds ? "text-destructive font-semibold" : ""}`}
-                        >
-                          <td className="p-2">{item.label}</td>
-                          <td className="p-2 text-right">{formatCurrentValue(item.current, item.suffix)}</td>
-                          <td className="p-2 text-right">{formatLimitValue(item.limit, item.suffix)}</td>
-                          <td className="p-2 text-center">{exceeds ? "要削減" : "OK"}</td>
-                        </tr>
-                      )
-                    })}
-                  </tbody>
-                </table>
-                {unmetConditions.length > 0 ? (
-                  <div className="text-destructive text-sm">
-                    以下の項目が上限を超えています。減らしてからダウングレードしてください。
-                  </div>
-                ) : (
-                  <div className="text-muted-foreground text-sm">
-                    条件を満たしています。このままダウングレードできます。
-                  </div>
-                )}
-                <p className="text-xs text-muted-foreground">
-                  プラン変更後は下位プランの上限が適用され、超過分は利用できなくなる場合があります。
+              <div className="space-y-2">
+                <p>
+                  下位プランへの変更後は、利用可能な機能・上限が即時に切り替わります。超過分のデータは利用できなくなる可能性があります。
                 </p>
-              </>
+                <p>
+                  よろしければ「ダウングレード」を押して手続きを完了してください。
+                </p>
+              </div>
             )}
           </div>
-          <AlertDialogFooter>
-            <AlertDialogCancel disabled={processing}>キャンセル</AlertDialogCancel>
-            <AlertDialogAction
-              onClick={async () => {
-                if (downgradePlan) {
-                  await performDowngrade(downgradePlan)
-                }
-              }}
-              className="bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-60 disabled:cursor-not-allowed"
-              disabled={!canConfirmDowngrade}
-            >
-              {processing
-                ? "処理中..."
-                : downgradePlan
-                ? `${downgradePlan.name}へダウングレード`
-                : "ダウングレードする"}
-            </AlertDialogAction>
+          <AlertDialogFooter className="flex justify-end gap-2">
+            {downgradeStep === 1 ? (
+              <>
+                <Button variant="outline" onClick={closeDowngradeDialog} disabled={processing}>
+                  キャンセル
+                </Button>
+                <Button
+                  onClick={() => setDowngradeStep(2)}
+                  disabled={!canConfirmDowngrade || processing}
+                >
+                  ダウングレードに進む
+                </Button>
+              </>
+            ) : downgradeStep === 2 ? (
+              <>
+                <Button variant="outline" onClick={closeDowngradeDialog} disabled={processing}>
+                  考え直す
+                </Button>
+                <Button onClick={() => setDowngradeStep(3)} disabled={processing}>
+                  はい、進める
+                </Button>
+              </>
+            ) : (
+              <>
+                <Button variant="outline" onClick={closeDowngradeDialog} disabled={processing}>
+                  いいえ
+                </Button>
+                <Button
+                  onClick={async () => {
+                    if (downgradePlan) {
+                      await performDowngrade(downgradePlan)
+                    }
+                  }}
+                  className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                  disabled={processing}
+                >
+                  ダウングレード
+                </Button>
+              </>
+            )}
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
