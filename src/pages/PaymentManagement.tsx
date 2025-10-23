@@ -157,6 +157,7 @@ export default function PaymentManagement() {
         .select('*')
         .eq('user_id', activeUser.id)
         .eq('livemode', isLiveMode)
+        .filter('metadata->>plan_type', 'is', 'null') // Exclude platform subscription orders
         .order('created_at', { ascending: false })
 
       if (ordersError) throw ordersError
