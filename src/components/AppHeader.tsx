@@ -1,6 +1,5 @@
-import { LogOut, Plus, Users, Settings } from "lucide-react"
+import { LogOut, Plus, Settings } from "lucide-react"
 import { Button } from "./ui/button"
-import { Badge } from "./ui/badge"
 import { Tabs, TabsList, TabsTrigger } from "./ui/tabs"
 import { Popover, PopoverContent, PopoverTrigger } from "./ui/popover"
 import { supabase } from "@/integrations/supabase/client"
@@ -39,6 +38,7 @@ export function AppHeader({ user }: AppHeaderProps) {
   const [profile, setProfile] = useState<Profile | null>(null)
   const [planStats, setPlanStats] = useState<PlanStats | null>(null);
   const [memberSiteStats, setMemberSiteStats] = useState<MemberSiteStats | null>(null);
+  const [flexMessageCount, setFlexMessageCount] = useState<number | null>(null);
   const [activeAccount, setActiveAccount] = useState<{ account_name: string; line_bot_id: string | null } | null>(null)
   const navigate = useNavigate()
 
@@ -62,6 +62,18 @@ export function AppHeader({ user }: AppHeaderProps) {
     : effectiveContentLimit === -1
       ? "無制限"
       : `${effectiveContentLimit.toLocaleString()}件`;
+  const planFlexLimit = (() => {
+    if (!planNameRaw) return null;
+    if (planNameLower.includes("free") || planNameRaw.includes("フリー")) return 2;
+    if (planNameLower.includes("silver") || planNameRaw.includes("シルバー")) return 10;
+    if (planNameLower.includes("gold") || planNameRaw.includes("ゴールド")) return -1;
+    return null;
+  })();
+  const flexLimitLabel = typeof planFlexLimit === "number"
+    ? planFlexLimit === -1
+      ? "無制限"
+      : `${planFlexLimit.toLocaleString()}件`
+    : "取得中";
 
   useEffect(() => {
     loadProfile()
@@ -72,7 +84,7 @@ export function AppHeader({ user }: AppHeaderProps) {
 
   const loadProfile = async () => {
     try {
-      const [profileResult, quotaResult, planStatsResult, memberSiteStatsResult] = await Promise.all([
+      const [profileResult, quotaResult, planStatsResult, memberSiteStatsResult, flexMessageCountResult] = await Promise.all([
         supabase
           .from('profiles')
           .select('line_channel_id, line_bot_id, friends_count, monthly_message_limit, monthly_message_used')
@@ -97,7 +109,11 @@ export function AppHeader({ user }: AppHeaderProps) {
           }
         })(),
         supabase.rpc('get_user_plan_and_step_stats', { p_user_id: user.id }),
-        supabase.rpc('get_user_member_site_stats', { p_user_id: user.id })
+        supabase.rpc('get_user_member_site_stats', { p_user_id: user.id }),
+        supabase
+          .from('flex_messages')
+          .select('id', { count: 'exact', head: true })
+          .eq('user_id', user.id)
       ])
 
       if (profileResult.error) {
@@ -149,6 +165,12 @@ export function AppHeader({ user }: AppHeaderProps) {
         console.error('Error loading member site stats:', memberSiteStatsResult.error);
       } else if (memberSiteStatsResult.data) {
         setMemberSiteStats(memberSiteStatsResult.data[0] || null);
+      }
+
+      if (flexMessageCountResult.error) {
+        console.error('Error counting flex messages:', flexMessageCountResult.error);
+      } else {
+        setFlexMessageCount(flexMessageCountResult.count ?? null);
       }
 
     } catch (error) {
@@ -284,6 +306,23 @@ export function AppHeader({ user }: AppHeaderProps) {
             <div className="font-bold text-sm py-0.5 px-2">...</div>
           )}
           <div className="text-muted-foreground mt-0.5 text-[10px]">会員サイト数</div>
+        </div>
+
+        {/* Flexメッセージ */}
+        <div className="flex flex-col items-center justify-center leading-tight flex-shrink-0">
+          {typeof flexMessageCount === "number" ? (
+            <div className="font-bold text-sm py-0.5 px-2 text-slate-700">
+              {flexMessageCount.toLocaleString()}
+              {typeof planFlexLimit === "number" && planFlexLimit !== -1 && (
+                <span className="text-xs"> / {planFlexLimit.toLocaleString()}</span>
+              )}
+            </div>
+          ) : (
+            <div className="font-bold text-sm py-0.5 px-2">...</div>
+          )}
+          <div className="text-muted-foreground mt-0.5 text-[10px]">
+            Flex保存（上限 {flexLimitLabel}）
+          </div>
         </div>
 
         {/* コンテンツ数 */}

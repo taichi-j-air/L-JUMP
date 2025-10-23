@@ -1,5 +1,5 @@
 // src/pages/FlexMessageDesigner.tsx
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -736,6 +736,7 @@ export default function FlexMessageDesigner() {
   const [initialLoading, setInitialLoading] = useState(true);
   const [loading, setLoading] = useState(false);
   const [messages, setMessages] = useState<FlexMessageRow[]>([]);
+  const [planName, setPlanName] = useState<string | null>(null);
 
   const [state, setState] = useState<DesignerState>({
     containerType: "bubble",
@@ -764,6 +765,15 @@ export default function FlexMessageDesigner() {
   }, []);
 
   const current = state.bubbles[state.currentIndex];
+  const flexPlanLimit = useMemo(() => {
+    if (!planName) return null;
+    const lower = planName.toLowerCase();
+    if (lower.includes("free") || planName.includes("フリー")) return 2;
+    if (lower.includes("silver") || planName.includes("シルバー")) return 10;
+    if (lower.includes("gold") || planName.includes("ゴールド")) return -1;
+    return null;
+  }, [planName]);
+  const flexLimitReached = typeof flexPlanLimit === "number" && flexPlanLimit !== -1 && messages.length >= flexPlanLimit;
 
   // DnD sensors
   const sensors = useSensors(
@@ -779,9 +789,20 @@ export default function FlexMessageDesigner() {
           navigate("/auth");
           return;
         }
-        const { data, error } = await supabase.from("flex_messages").select("*").order("created_at", { ascending: false });
-        if (error) throw error;
-        setMessages(data || []);
+        const [messagesResult, planResult] = await Promise.all([
+          supabase.from("flex_messages").select("*").order("created_at", { ascending: false }),
+          supabase.rpc('get_user_plan_and_step_stats', { p_user_id: user.id }),
+        ]);
+
+        if (messagesResult.error) throw messagesResult.error;
+        setMessages(messagesResult.data || []);
+
+        if (planResult.error) {
+          console.error("Failed to load plan info:", planResult.error);
+        } else if (planResult.data) {
+          const planRow = planResult.data[0];
+          setPlanName(planRow?.plan_name ?? null);
+        }
       } catch (e) {
         console.error(e);
         toast({ title: "読み込みエラー", description: "保存済みメッセージの取得に失敗しました", variant: "destructive" });
@@ -845,6 +866,19 @@ export default function FlexMessageDesigner() {
   };
 
   const handleAddMessage = async () => {
+    if (flexPlanLimit === null) {
+      toast({ title: "確認中です", description: "プラン情報の取得をお待ちください" });
+      return;
+    }
+    if (typeof flexPlanLimit === "number" && flexPlanLimit !== -1 && messages.length >= flexPlanLimit) {
+      toast({
+        title: "保存上限に達しました",
+        description: `Flexメッセージは${flexPlanLimit.toLocaleString()}件まで保存できます。`,
+        variant: "destructive",
+      });
+      return;
+    }
+
     const initialBubble = defaultBubble("新しいFlexメッセージ");
     const baseState: DesignerState = {
       containerType: "bubble",
@@ -1150,20 +1184,32 @@ export default function FlexMessageDesigner() {
         <div className="grid lg:grid-cols-[260px_1fr_320px] md:grid-cols-[1fr_320px] grid-cols-1 gap-3">
           {/* 左: 保存済み（コンパクト化） */}
           <Card className="h-[calc(100vh-140px)] lg:sticky top-3 overflow-hidden">
-            <CardHeader className="py-2 flex items-center justify-between">
-              <div>
-                <CardTitle className="text-sm">Flexメッセージ</CardTitle>
-                <CardDescription className="text-xs">追加で新規作成 / 項目を選ぶと読込</CardDescription>
+            <CardHeader className="py-2">
+              <div className="flex items-start justify-between gap-2">
+                <div>
+                  <CardTitle className="text-sm">Flexメッセージ</CardTitle>
+                  <CardDescription className="text-xs">追加で新規作成 / 項目を選ぶと読込</CardDescription>
+                </div>
+                <div className="flex flex-col items-end gap-1">
+                  <Button
+                    size="sm"
+                    className="h-7 px-2 text-[11px] bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-60 disabled:cursor-not-allowed"
+                    onClick={handleAddMessage}
+                    disabled={loading || flexPlanLimit === null || flexLimitReached}
+                  >
+                    <Plus className="w-3 h-3 mr-1" />
+                    追加
+                  </Button>
+                  <div className="text-[10px] text-muted-foreground">
+                    Flex保存 {messages.length.toLocaleString()}
+                    {flexPlanLimit === null
+                      ? " / 取得中..."
+                      : flexPlanLimit === -1
+                        ? " / 無制限"
+                        : ` / ${flexPlanLimit.toLocaleString()}件`}
+                  </div>
+                </div>
               </div>
-              <Button
-                size="sm"
-                className="h-7 px-2 text-[11px] bg-primary text-primary-foreground hover:bg-primary/90"
-                onClick={handleAddMessage}
-                disabled={loading}
-              >
-                <Plus className="w-3 h-3 mr-1" />
-                追加
-              </Button>
             </CardHeader>
             <CardContent className="pt-0 overflow-auto h-full">
               {messages.length === 0 ? (
