@@ -52,6 +52,8 @@ interface SubscriptionInfo {
   interval: string | null
   intervalCount: number | null
   liveMode: boolean
+  planLabel: string | null
+  planPrice: number | null
 }
 
 const PLAN_ICON_MAP: Record<PlanType, { icon: LucideIcon; color: string }> = {
@@ -75,8 +77,38 @@ const formatPrice = (price: number) =>
 const formatLimit = (value: number | null, suffix: string) =>
   value === null ? "無制限" : `${value.toLocaleString()}${suffix}`
 
-const formatCurrency = (value: number) =>
-  new Intl.NumberFormat("ja-JP", { style: "currency", currency: "JPY" }).format(Math.round(value))
+const formatCurrency = (value: number, currency: string = "JPY") =>
+  new Intl.NumberFormat("ja-JP", {
+    style: "currency",
+    currency: currency.toUpperCase(),
+    maximumFractionDigits: 2,
+  }).format(value)
+
+const toCurrencyAmount = (amount: number, currency: string | null | undefined) => {
+  const zeroDecimalCurrencies = new Set([
+    "BIF",
+    "CLP",
+    "DJF",
+    "GNF",
+    "JPY",
+    "KMF",
+    "KRW",
+    "MGA",
+    "PYG",
+    "RWF",
+    "UGX",
+    "VND",
+    "VUV",
+    "XAF",
+    "XOF",
+    "XPF",
+  ])
+  const code = (currency ?? "JPY").toUpperCase()
+  if (zeroDecimalCurrencies.has(code)) {
+    return amount
+  }
+  return amount / 100
+}
 
 const buildLimitHighlights = (limits: PlanFeatureConfig["limits"]) => [
   `シナリオ ${formatLimit(limits.scenarioStepLimit, "ステップ")}`,
@@ -242,16 +274,20 @@ export default function PlanSettings() {
       }
 
       const subscription = data.subscription ?? {}
+      const currencyCode = typeof subscription.currency === "string" ? subscription.currency.toUpperCase() : "JPY"
+      const planPriceFromStripe = typeof subscription.plan_price === "number" ? subscription.plan_price : null
       setSubscriptionInfo({
         currentPeriodStart: subscription.current_period_start ?? null,
         currentPeriodEnd: subscription.current_period_end ?? null,
         unitAmount:
           typeof subscription.unit_amount === "number" ? subscription.unit_amount : null,
-        currency: typeof subscription.currency === "string" ? subscription.currency : null,
+        currency: currencyCode,
         interval: typeof subscription.interval === "string" ? subscription.interval : null,
         intervalCount:
           typeof subscription.interval_count === "number" ? subscription.interval_count : null,
         liveMode: Boolean(subscription.live_mode),
+        planLabel: typeof subscription.plan_label === "string" ? subscription.plan_label : null,
+        planPrice: planPriceFromStripe,
       })
     } catch (error) {
       const message =
@@ -559,9 +595,12 @@ export default function PlanSettings() {
         totalCycleMs = nextBilling.getTime() - startDate.getTime()
       }
     }
+    const intervalGuess = subscriptionInfo?.interval ?? (currentPlan.is_yearly ? "year" : "month")
+    const intervalCount = subscriptionInfo?.intervalCount && subscriptionInfo.intervalCount > 0
+      ? subscriptionInfo.intervalCount
+      : 1
+
     if (!totalCycleMs || totalCycleMs <= 0) {
-      const intervalGuess = subscriptionInfo?.interval ?? (currentPlan.is_yearly ? "year" : "month")
-      const intervalCount = subscriptionInfo?.intervalCount ?? 1
       const daysPerInterval = intervalGuess === "year" ? 365 : intervalGuess === "week" ? 7 : 30
       totalCycleMs = daysPerInterval * intervalCount * msPerDay
     }
@@ -571,9 +610,18 @@ export default function PlanSettings() {
 
     const remainingDays = Math.ceil(remainingMs / msPerDay)
     const totalDays = Math.max(1, Math.round(totalCycleMs / msPerDay))
-    let planPrice = currentPlan.is_yearly ? planInfo.yearlyPrice : planInfo.monthlyPrice
+    let planPrice: number | null = null
     if (subscriptionInfo?.unitAmount && subscriptionInfo.unitAmount > 0) {
-      planPrice = subscriptionInfo.unitAmount / 100
+      planPrice = toCurrencyAmount(subscriptionInfo.unitAmount, subscriptionInfo.currency) * intervalCount
+    } else if (subscriptionInfo?.planPrice && subscriptionInfo.planPrice > 0) {
+      planPrice = subscriptionInfo.planPrice
+    } else {
+      planPrice = currentPlan.is_yearly ? planInfo.yearlyPrice : planInfo.monthlyPrice
+    }
+
+    if (typeof planPrice === "string") {
+      const parsed = Number(planPrice)
+      planPrice = Number.isFinite(parsed) ? parsed : null
     }
 
     if (!planPrice || planPrice <= 0) {
@@ -598,9 +646,9 @@ export default function PlanSettings() {
       remainingValue,
       planPrice,
       billingPeriodLabel:
-        subscriptionInfo?.interval === "year"
+        intervalGuess === "year"
           ? "年額"
-          : subscriptionInfo?.interval === "week"
+          : intervalGuess === "week"
             ? "週額"
             : "月額",
       currency: subscriptionInfo?.currency ?? "jpy",
@@ -867,15 +915,25 @@ export default function PlanSettings() {
                 <div className="text-destructive text-sm">{subscriptionError}</div>
               ) : prorationInfo ? (
                 <div className="space-y-2">
+                  {downgradePlan && (
+                    <p>
+                      対象プラン: {downgradePlan.name}（{prorationInfo.billingPeriodLabel}）
+                    </p>
+                  )}
+                  {subscriptionInfo?.plan_label && (
+                    <p className="text-muted-foreground">
+                      Stripe側プラン名: {subscriptionInfo.plan_label}
+                    </p>
+                  )}
                   <p>次回の決済予定日: {prorationInfo.nextBilling.toLocaleDateString("ja-JP")}</p>
                   <p>
                     残り日数: {prorationInfo.remainingDays}日 / {prorationInfo.totalDays}日（{prorationInfo.billingPeriodLabel}）
                   </p>
                   <p>
-                    現在のプラン料金: {formatCurrency(prorationInfo.planPrice)} / {prorationInfo.billingPeriodLabel}
+                    現在のプラン料金: {formatCurrency(prorationInfo.planPrice, prorationInfo.currency ?? "JPY")} / {prorationInfo.billingPeriodLabel}
                   </p>
                   <p>
-                    今ダウングレードすると約 {formatCurrency(prorationInfo.remainingValue)} 分の利用価値が失われます。
+                    今ダウングレードすると約 {formatCurrency(prorationInfo.remainingValue, prorationInfo.currency ?? "JPY")} 分の利用価値が失われます。
                   </p>
                   <p className="text-xs text-muted-foreground">
                     ※ 実際の金額は Stripe の決済状況により多少前後する場合があります。
@@ -904,10 +962,10 @@ export default function PlanSettings() {
                   キャンセル
                 </Button>
                 <Button
-                  onClick={async () => {
+                  onClick={() => {
                     if (!canConfirmDowngrade || processing) return
                     setDowngradeStep(2)
-                    await fetchSubscriptionInfo()
+                    fetchSubscriptionInfo()
                   }}
                   disabled={!canConfirmDowngrade || processing}
                 >
@@ -916,10 +974,10 @@ export default function PlanSettings() {
               </>
             ) : downgradeStep === 2 ? (
               <>
-                <Button variant="outline" onClick={closeDowngradeDialog} disabled={processing}>
+                <Button variant="outline" onClick={closeDowngradeDialog} disabled={processing || subscriptionLoading}>
                   考え直す
                 </Button>
-                <Button onClick={() => setDowngradeStep(3)} disabled={processing}>
+                <Button onClick={() => setDowngradeStep(3)} disabled={processing || subscriptionLoading}>
                   はい、進める
                 </Button>
               </>

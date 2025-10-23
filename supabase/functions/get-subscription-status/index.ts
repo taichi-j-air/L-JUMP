@@ -118,10 +118,16 @@ const stripeRequest = async (
 
   if (!response.ok) {
     const errorText = await response.text()
-    throw new Error(`Stripe API error (${response.status}): ${errorText}`)
+    console.error(`[get-subscription-status] Stripe API error (${response.status}): ${errorText}`)
+    throw new Error(`Stripe API error (${response.status})`)
   }
 
-  return await response.json()
+  try {
+    return await response.json()
+  } catch (err) {
+    console.error("[get-subscription-status] Failed to parse Stripe response:", err)
+    throw new Error("Failed to parse Stripe response")
+  }
 }
 
 const detectStripeKey = async (
@@ -160,36 +166,36 @@ const detectStripeKey = async (
   return detected
 }
 
-serve(async (req) => {
-  if (req.method === "OPTIONS") {
-    return new Response(null, { headers: corsHeaders })
-  }
-
-  if (req.method !== "POST" && req.method !== "GET") {
-    return new Response(JSON.stringify({ success: false, error: "Method Not Allowed" }), {
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
-      status: 405,
-    })
-  }
-
-  const supabaseService = createClient(
-    Deno.env.get("SUPABASE_URL") ?? "",
-    Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "",
-    { auth: { persistSession: false } }
-  )
-
-  try {
-    const authHeader = req.headers.get("Authorization")
-    if (!authHeader) {
-      throw new Error("認証情報が見つかりません")
-    }
-
-    const token = authHeader.replace("Bearer ", "")
-    const { data: userData, error: userError } = await supabaseService.auth.getUser(token)
-    if (userError || !userData?.user?.id) {
-      throw new Error("ユーザー情報を取得できませんでした")
-    }
-    const userId = userData.user.id
+ serve(async (req) => {
+   if (req.method === "OPTIONS") {
+     return new Response(null, { headers: corsHeaders })
+   }
+ 
+   if (req.method !== "POST" && req.method !== "GET") {
+     return new Response(JSON.stringify({ success: false, error: "Method Not Allowed" }), {
+       headers: { ...corsHeaders, "Content-Type": "application/json" },
+       status: 405,
+     })
+   }
+ 
+   const supabaseService = createClient(
+     Deno.env.get("SUPABASE_URL") ?? "",
+     Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "",
+     { auth: { persistSession: false } }
+   )
+ 
+   try {
+     const authHeader = req.headers.get("Authorization")
+     if (!authHeader) {
+       throw new Error("認証情報が見つかりません")
+     }
+ 
+     const token = authHeader.replace("Bearer ", "")
+     const { data: userData, error: userError } = await supabaseService.auth.getUser(token)
+     if (userError || !userData?.user?.id) {
+       throw new Error("ユーザー情報を取得できませんでした")
+     }
+     const userId = userData.user.id
 
     const { data: currentPlan, error: planError } = await supabaseService
       .from("user_plans")
@@ -225,7 +231,7 @@ serve(async (req) => {
 
     const { data: planConfig, error: planConfigError } = await supabaseService
       .from("plan_configs")
-      .select("plan_type, features")
+      .select("plan_type, name, monthly_price, yearly_price, features")
       .eq("plan_type", dbPlanType)
       .maybeSingle()
 
@@ -300,6 +306,8 @@ serve(async (req) => {
           unit_amount: typeof primaryItem?.price?.unit_amount === "number" ? primaryItem.price.unit_amount : null,
           currency: primaryItem?.price?.currency ?? "jpy",
           live_mode: stripeAuth.isLiveMode,
+          plan_label: planConfig?.name ?? null,
+          plan_price: useYearly ? planConfig?.yearly_price ?? null : planConfig?.monthly_price ?? null,
         },
       }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 200 }
