@@ -1195,11 +1195,11 @@ export default function FlexMessageDesigner() {
       </header>
 
       <main className="container mx-auto px-2 py-4 max-w-7xl">
-        <div className="grid lg:grid-cols-[260px_1fr_320px] md:grid-cols-[1fr_320px] grid-cols-1 gap-3">
+        <div className="grid lg:grid-cols-[300px_1fr_320px] md:grid-cols-[1fr_320px] grid-cols-1 gap-3">
           {/* 左: 保存済み（コンパクト化） */}
           <Card className="h-[calc(100vh-140px)] lg:sticky top-3 overflow-hidden">
-            <CardHeader className="py-2">
-              <div className="flex items-start justify-between gap-2">
+            <CardHeader className="py-2 px-3">
+              <div className="flex items-start justify-between gap-2 w-full">
                 <div>
                   <CardTitle className="text-sm">Flexメッセージ</CardTitle>
                   <CardDescription className="text-xs">追加で新規作成 / 項目を選ぶと読込</CardDescription>
@@ -1230,7 +1230,7 @@ export default function FlexMessageDesigner() {
                 </div>
               </div>
             </CardHeader>
-            <CardContent className="pt-0 overflow-auto h-full">
+            <CardContent className="pt-0 overflow-auto h-full px-3">
               {messages.length === 0 ? (
                 <div className="text-xs text-muted-foreground">まだありません</div>
               ) : (

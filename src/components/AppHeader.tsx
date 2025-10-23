@@ -258,7 +258,7 @@ export function AppHeader({ user }: AppHeaderProps) {
         {/* 友達数 */}
         <div className="flex flex-col items-center justify-center leading-tight flex-shrink-0">
           {profile ? (
-            <div className="font-bold text-sm py-0.5 px-2 text-slate-700">
+            <div className="font-bold text-base py-0.5 px-2 text-slate-700">
               {(profile?.friends_count ?? 0).toLocaleString()}<span className="text-xs ml-0.5">人</span>
             </div>
           ) : (
@@ -270,7 +270,7 @@ export function AppHeader({ user }: AppHeaderProps) {
         {/* 月間配信数 */}
         <div className="flex flex-col items-center justify-center leading-tight flex-shrink-0">
           {profile ? (
-            <div className={`font-bold text-sm py-0.5 px-2 ${
+            <div className={`font-bold text-base py-0.5 px-2 ${
               profile.monthly_message_limit && ((profile.monthly_message_limit - (profile.monthly_message_used || 0)) / profile.monthly_message_limit) <= 0.1
               ? 'text-destructive'
               : 'text-slate-700'
@@ -286,7 +286,7 @@ export function AppHeader({ user }: AppHeaderProps) {
         {/* ステップ数 */}
         <div className="flex flex-col items-center justify-center leading-tight flex-shrink-0">
           {planStats ? (
-            <div className="font-bold text-sm py-0.5 px-2 text-slate-700">
+            <div className="font-bold text-base py-0.5 px-2 text-slate-700">
               {planStats.current_steps.toLocaleString()}
               <span className="text-xs"> / {planStats.max_steps === -1 ? '無制限' : planStats.max_steps.toLocaleString()}</span>
             </div>
@@ -299,7 +299,7 @@ export function AppHeader({ user }: AppHeaderProps) {
         {/* フレックス数 */}
         <div className="flex flex-col items-center justify-center leading-tight flex-shrink-0">
           {typeof flexMessageCount === "number" ? (
-            <div className="font-bold text-sm py-0.5 px-2 text-slate-700">
+            <div className="font-bold text-base py-0.5 px-2 text-slate-700">
               {flexMessageCount.toLocaleString()}
               {typeof planFlexLimit === "number" && planFlexLimit !== -1 && (
                 <span className="text-xs"> / {planFlexLimit.toLocaleString()}件</span>
@@ -316,7 +316,7 @@ export function AppHeader({ user }: AppHeaderProps) {
         {/* 会員サイト数 */}
         <div className="flex flex-col items-center justify-center leading-tight flex-shrink-0">
           {memberSiteStats ? (
-            <div className="font-bold text-sm py-0.5 px-2 text-slate-700">
+            <div className="font-bold text-base py-0.5 px-2 text-slate-700">
               {memberSiteStats.current_sites.toLocaleString()}<span className="text-xs"> / {memberSiteStats.max_sites === -1 ? '無制限' : memberSiteStats.max_sites.toLocaleString()}</span>
             </div>
           ) : (
@@ -330,15 +330,15 @@ export function AppHeader({ user }: AppHeaderProps) {
           {memberSiteStats ? (
             <>
               {hasPlanPerSiteLimit ? (
-                <div className="flex items-baseline gap-1 py-0.5 px-2 leading-tight">
+                <div className="flex items-baseline gap-1 py-0.5 px-2 leading-tight font-bold text-base text-slate-700">
                   <span className="text-[10px] text-muted-foreground">各サイト</span>
-                  <span className="text-sm font-bold text-slate-700">{effectiveContentLimit.toLocaleString()}件</span>
+                  <span className="text-sm">{effectiveContentLimit.toLocaleString()}件</span>
                   <span className="text-[10px] text-muted-foreground">/サイト（合計</span>
-                  <span className="text-sm font-bold text-slate-700">{memberSiteStats.current_total_content.toLocaleString()}件</span>
+                  <span className="text-sm">{memberSiteStats.current_total_content.toLocaleString()}件</span>
                   <span className="text-[10px] text-muted-foreground">）</span>
                 </div>
               ) : (
-                <div className="font-bold text-sm py-0.5 px-2 text-slate-700">
+                <div className="font-bold text-base py-0.5 px-2 text-slate-700">
                   {memberSiteStats.current_total_content.toLocaleString()}
                   <span className="text-xs"> / {perSiteLimitLabel}</span>
                 </div>
