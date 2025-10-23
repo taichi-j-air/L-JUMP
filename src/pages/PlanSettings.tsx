@@ -77,34 +77,39 @@ const formatPrice = (price: number) =>
 const formatLimit = (value: number | null, suffix: string) =>
   value === null ? "無制限" : `${value.toLocaleString()}${suffix}`
 
-const formatCurrency = (value: number, currency: string = "JPY") =>
-  new Intl.NumberFormat("ja-JP", {
+const ZERO_DECIMAL_CURRENCIES = new Set([
+  "BIF",
+  "CLP",
+  "DJF",
+  "GNF",
+  "JPY",
+  "KMF",
+  "KRW",
+  "MGA",
+  "PYG",
+  "RWF",
+  "UGX",
+  "VND",
+  "VUV",
+  "XAF",
+  "XOF",
+  "XPF",
+])
+
+const formatCurrency = (value: number, currency: string = "JPY") => {
+  const code = currency.toUpperCase()
+  const isZeroDecimal = ZERO_DECIMAL_CURRENCIES.has(code)
+  return new Intl.NumberFormat("ja-JP", {
     style: "currency",
-    currency: currency.toUpperCase(),
-    maximumFractionDigits: 2,
+    currency: code,
+    minimumFractionDigits: isZeroDecimal ? 0 : 2,
+    maximumFractionDigits: isZeroDecimal ? 0 : 2,
   }).format(value)
+}
 
 const toCurrencyAmount = (amount: number, currency: string | null | undefined) => {
-  const zeroDecimalCurrencies = new Set([
-    "BIF",
-    "CLP",
-    "DJF",
-    "GNF",
-    "JPY",
-    "KMF",
-    "KRW",
-    "MGA",
-    "PYG",
-    "RWF",
-    "UGX",
-    "VND",
-    "VUV",
-    "XAF",
-    "XOF",
-    "XPF",
-  ])
   const code = (currency ?? "JPY").toUpperCase()
-  if (zeroDecimalCurrencies.has(code)) {
+  if (ZERO_DECIMAL_CURRENCIES.has(code)) {
     return amount
   }
   return amount / 100
@@ -203,7 +208,7 @@ export default function PlanSettings() {
         planStatsResult,
         memberSiteStatsResult,
         flexMessageCountResult,
-        siteContentCountsResult,
+        siteListResult,
       ] = await Promise.all([
         supabase.rpc("get_user_plan_and_step_stats", { p_user_id: user.id }),
         supabase.rpc("get_user_member_site_stats", { p_user_id: user.id }),
@@ -213,7 +218,7 @@ export default function PlanSettings() {
           .eq("user_id", user.id),
         supabase
           .from("member_sites")
-          .select("id, member_site_content(count)")
+          .select("id")
           .eq("user_id", user.id),
       ])
 
@@ -224,20 +229,34 @@ export default function PlanSettings() {
       const flexMessages = flexMessageCountResult.count ?? 0
 
       let maxContentBlocksPerSite = 0
-      if (!siteContentCountsResult.error && Array.isArray(siteContentCountsResult.data)) {
-        const counts = (siteContentCountsResult.data as any[]).map((site: any) => {
-          const relation = site.member_site_content
-          if (Array.isArray(relation)) {
-            if (relation.length === 0) return 0
-            const first = relation[0]
-            if (typeof first === "number") return first
-            return first?.count ?? 0
+      if (siteListResult.error) {
+        console.error("Failed to load member sites for counts:", siteListResult.error)
+      }
+
+      if (Array.isArray(siteListResult.data) && siteListResult.data.length > 0) {
+        const siteIds = siteListResult.data
+          .map((site: any) => site.id)
+          .filter((id: any) => typeof id === "string" && id.length > 0)
+        if (siteIds.length > 0) {
+          const { data: contentRows, error: contentError } = await supabase
+            .from("member_site_content")
+            .select("site_id")
+            .in("site_id", siteIds)
+
+          if (!contentError && Array.isArray(contentRows)) {
+            const countsBySite = new Map<string, number>()
+            contentRows.forEach((row: any) => {
+              const siteId = row.site_id
+              if (!siteId) return
+              const current = countsBySite.get(siteId) ?? 0
+              countsBySite.set(siteId, current + 1)
+            })
+            if (countsBySite.size > 0) {
+              maxContentBlocksPerSite = Math.max(...countsBySite.values())
+            }
+          } else if (contentError) {
+            console.error("Failed to load member site content counts:", contentError)
           }
-          if (typeof relation === "number") return relation
-          return 0
-        })
-        if (counts.length > 0) {
-          maxContentBlocksPerSite = Math.max(...counts)
         }
       }
 
@@ -546,13 +565,6 @@ export default function PlanSettings() {
           suffix: "件",
         },
         {
-          key: "totalContentBlockLimit",
-          label: "コンテンツブロック合計",
-          current: usageStats.totalContentBlocks,
-          limit: downgradePlan.featureConfig.limits.totalContentBlockLimit,
-          suffix: "個",
-        },
-        {
           key: "contentBlockPerSiteLimit",
           label: "サイト毎のコンテンツブロック",
           current: usageStats.maxContentBlocksPerSite,
@@ -638,6 +650,7 @@ export default function PlanSettings() {
 
     const dailyPrice = planPrice / totalDays
     const remainingValue = dailyPrice * Math.min(remainingDays, totalDays)
+    const elapsedDays = Math.max(0, totalDays - remainingDays)
 
     return {
       nextBilling,
@@ -651,7 +664,8 @@ export default function PlanSettings() {
           : intervalGuess === "week"
             ? "週額"
             : "月額",
-      currency: subscriptionInfo?.currency ?? "jpy",
+      currency: (subscriptionInfo?.currency ?? "JPY").toUpperCase(),
+      elapsedDays,
     }
   }, [currentPlan, downgradePlan, activePlanType, planDictionary, subscriptionInfo])
 
@@ -929,6 +943,7 @@ export default function PlanSettings() {
                   <p>
                     残り日数: {prorationInfo.remainingDays}日 / {prorationInfo.totalDays}日（{prorationInfo.billingPeriodLabel}）
                   </p>
+                  <p>経過日数: {prorationInfo.elapsedDays}日</p>
                   <p>
                     現在のプラン料金: {formatCurrency(prorationInfo.planPrice, prorationInfo.currency ?? "JPY")} / {prorationInfo.billingPeriodLabel}
                   </p>

@@ -307,7 +307,9 @@ const detectStripeKey = async (
           currency: primaryItem?.price?.currency ?? "jpy",
           live_mode: stripeAuth.isLiveMode,
           plan_label: planConfig?.name ?? null,
-          plan_price: useYearly ? planConfig?.yearly_price ?? null : planConfig?.monthly_price ?? null,
+          plan_price: useYearly
+            ? Number(planConfig?.yearly_price ?? 0)
+            : Number(planConfig?.monthly_price ?? 0),
         },
       }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 200 }
