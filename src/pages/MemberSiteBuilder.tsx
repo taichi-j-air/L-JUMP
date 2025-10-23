@@ -111,6 +111,12 @@ interface MemberSiteStats {
   max_total_content: number;
 }
 
+interface PlanStats {
+  plan_name: string;
+  current_steps: number;
+  max_steps: number;
+}
+
 /* ========== Sortables: 共通スタイル ========== */
 const useSortableStyle = (transform: any, transition: string | undefined, isDragging: boolean) =>
   ({
@@ -233,6 +239,7 @@ const MemberSiteBuilder = () => {
   const [saving, setSaving] = useState(false);
   const [activeTab, setActiveTab] = useState(siteId ? "content-list" : "site-settings");
   const [memberSiteStats, setMemberSiteStats] = useState<MemberSiteStats | null>(null);
+  const [planStats, setPlanStats] = useState<PlanStats | null>(null);
 
   // Site data
   const [site, setSite] = useState<MemberSite | null>(null);
@@ -245,6 +252,31 @@ const MemberSiteBuilder = () => {
     typeof maxAllowedSites === "number" &&
     maxAllowedSites !== -1 &&
     currentSiteCount >= maxAllowedSites;
+
+  const planNameRaw = planStats?.plan_name ?? "";
+  const planNameLower = planNameRaw.toLowerCase();
+  const planContentLimit = (() => {
+    if (!planNameRaw) return null;
+    if (planNameLower.includes("free") || planNameRaw.includes("フリー")) return 5;
+    if (planNameLower.includes("silver") || planNameRaw.includes("シルバー")) return 15;
+    if (planNameLower.includes("gold") || planNameRaw.includes("ゴールド")) return -1;
+    return null;
+  })();
+
+  const contentLimitPerSite =
+    typeof planContentLimit === "number"
+      ? planContentLimit
+      : typeof memberSiteStats?.max_total_content === "number"
+        ? memberSiteStats.max_total_content
+        : -1;
+
+  const isContentLimitReached =
+    typeof contentLimitPerSite === "number" &&
+    contentLimitPerSite !== -1 &&
+    siteContents.length >= contentLimitPerSite;
+
+  const contentLimitLabel =
+    contentLimitPerSite === -1 ? "無制限" : `${contentLimitPerSite}件`;
 
   // Site form
   const [siteName, setSiteName] = useState("");
@@ -374,11 +406,21 @@ const MemberSiteBuilder = () => {
     const fetchUserAndStats = async () => {
       const { data: { user } } = await supabase.auth.getUser();
       if (user) {
-        const { data, error } = await supabase.rpc('get_user_member_site_stats', { p_user_id: user.id });
-        if (error) {
-          console.error('Error fetching member site stats:', error);
-        } else if (data) {
-          setMemberSiteStats(data[0] || null);
+        const [planStatsResult, memberSiteStatsResult] = await Promise.all([
+          supabase.rpc('get_user_plan_and_step_stats', { p_user_id: user.id }),
+          supabase.rpc('get_user_member_site_stats', { p_user_id: user.id }),
+        ]);
+
+        if (planStatsResult.error) {
+          console.error('Error fetching plan stats:', planStatsResult.error);
+        } else if (planStatsResult.data) {
+          setPlanStats(planStatsResult.data[0] || null);
+        }
+
+        if (memberSiteStatsResult.error) {
+          console.error('Error fetching member site stats:', memberSiteStatsResult.error);
+        } else if (memberSiteStatsResult.data) {
+          setMemberSiteStats(memberSiteStatsResult.data[0] || null);
         }
       }
     };
@@ -769,6 +811,14 @@ const MemberSiteBuilder = () => {
 
   const createNewContent = async () => {
     if (!siteId) return;
+    if (isContentLimitReached && contentLimitPerSite !== -1) {
+      toast({
+        title: "上限到達",
+        description: `現在のプランでは1サイトあたり${contentLimitPerSite}件までコンテンツを作成できます。`,
+        variant: "destructive",
+      });
+      return;
+    }
     setSaving(true);
     try {
       const { data, error } = await supabase
@@ -1133,11 +1183,22 @@ const MemberSiteBuilder = () => {
                           <h3 className="text-base font-medium text-white">コンテンツ一覧</h3>
                         </div>
                       </div>
-                      <div className="bg-white p-4 border-b border-border">
-                        <Button size="sm" onClick={createNewContent} disabled={saving} className="w-full bg-[#0cb386] hover:bg-[#0cb386]/90 text-white">
+                      <div className="bg-white p-4 border-b border-border space-y-2">
+                        <Button
+                          size="sm"
+                          onClick={createNewContent}
+                          disabled={saving || isContentLimitReached}
+                          className="w-full bg-[#0cb386] hover:bg-[#0cb386]/90 text-white disabled:opacity-60 disabled:cursor-not-allowed"
+                        >
                           <Plus className="w-4 h-4 mr-2" />
                           コンテンツ追加
                         </Button>
+                        {isContentLimitReached && contentLimitPerSite !== -1 && (
+                          <div className="p-2 text-xs text-destructive-foreground bg-destructive/90 rounded-md flex items-center gap-2">
+                            <AlertCircle className="h-4 w-4" />
+                            <span>コンテンツ数の上限（{contentLimitLabel}まで）に達しました。</span>
+                          </div>
+                        )}
                       </div>
                       <div className="bg-white py-2 px-4 border-b border-border">
                         <div className="text-xs font-medium mb-2">カテゴリ別絞り込み</div>
@@ -1354,7 +1415,7 @@ const MemberSiteBuilder = () => {
                           <CardContent className="p-12">
                             <div className="text-center">
                               <p className="text-muted-foreground mb-4">左側からページを選択して編集するか、新しいページを作成してください</p>
-                              <Button onClick={createNewContent}>
+                              <Button onClick={createNewContent} disabled={saving || isContentLimitReached}>
                                 <Plus className="w-4 h-4 mr-2" />
                                 最初のページを作成
                               </Button>

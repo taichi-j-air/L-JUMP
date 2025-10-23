@@ -42,6 +42,26 @@ export function AppHeader({ user }: AppHeaderProps) {
   const [activeAccount, setActiveAccount] = useState<{ account_name: string; line_bot_id: string | null } | null>(null)
   const navigate = useNavigate()
 
+  const planNameRaw = planStats?.plan_name ?? "";
+  const planNameLower = planNameRaw.toLowerCase();
+  const planContentLimit = (() => {
+    if (!planNameRaw) return null;
+    if (planNameLower.includes("free") || planNameRaw.includes("フリー")) return 5;
+    if (planNameLower.includes("silver") || planNameRaw.includes("シルバー")) return 15;
+    if (planNameLower.includes("gold") || planNameRaw.includes("ゴールド")) return -1;
+    return null;
+  })();
+
+  const fallbackContentLimit = memberSiteStats?.max_total_content ?? -1;
+  const effectiveContentLimit =
+    typeof planContentLimit === "number" ? planContentLimit : fallbackContentLimit;
+  const contentLimitLabel =
+    effectiveContentLimit === -1
+      ? "無制限"
+      : typeof planContentLimit === "number"
+        ? `${effectiveContentLimit.toLocaleString()}件/サイト`
+        : effectiveContentLimit.toLocaleString();
+
   useEffect(() => {
     loadProfile()
     
@@ -269,7 +289,8 @@ export function AppHeader({ user }: AppHeaderProps) {
         <div className="flex flex-col items-center justify-center leading-tight flex-shrink-0">
           {memberSiteStats ? (
             <div className="font-bold text-sm py-0.5 px-2 text-slate-700">
-              {memberSiteStats.current_total_content.toLocaleString()}<span className="text-xs"> / {memberSiteStats.max_total_content === -1 ? '無制限' : memberSiteStats.max_total_content.toLocaleString()}</span>
+              {memberSiteStats.current_total_content.toLocaleString()}
+              <span className="text-xs"> / {contentLimitLabel}</span>
             </div>
           ) : (
             <div className="font-bold text-sm py-0.5 px-2">...</div>
