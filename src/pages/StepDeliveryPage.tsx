@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react"
-import { Plus, MessageSquare, Trash2, ChevronDown, ChevronUp, FolderPlus } from "lucide-react"
+import { Plus, MessageSquare, Trash2, ChevronDown, ChevronUp, FolderPlus, AlertCircle } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
@@ -41,8 +41,15 @@ import {
   verticalListSortingStrategy,
 } from '@dnd-kit/sortable'
 
+interface PlanStats {
+  plan_name: string;
+  current_steps: number;
+  max_steps: number;
+}
+
 export default function StepDeliveryPage() {
   const [user, setUser] = useState<User | null>(null)
+  const [planStats, setPlanStats] = useState<PlanStats | null>(null);
   const [selectedScenario, setSelectedScenario] = useState<StepScenario | null>(null)
   const [selectedStep, setSelectedStep] = useState<Step | null>(null)
   const [loading, setLoading] = useState(true)
@@ -50,11 +57,8 @@ export default function StepDeliveryPage() {
   const [collapsedMessages, setCollapsedMessages] = useState<Set<string>>(new Set())
   const [scenarioStats, setScenarioStats] = useState<Record<string, { registered: number; exited: number; blocked: number; total: number }>>({})
   const [statsRefreshToken, setStatsRefreshToken] = useState(0)
-  // IME対応のため、メッセージ本文はローカルドラフトで保持し、保存はonBlurで行う
   const [draftMessageContents, setDraftMessageContents] = useState<Record<string, string>>({})
-  // シナリオ名もIME対応のためドラフト管理
   const [scenarioNameDraft, setScenarioNameDraft] = useState<string>("")
-  // 編集中のメッセージ（プレビュー用）
   const [editingStepMessages, setEditingStepMessages] = useState<any[]>([])
 
   const { 
@@ -72,8 +76,6 @@ export default function StepDeliveryPage() {
     getFolderIdByScenario,
   } = useScenarioFolders(user?.id)
 
-  // rootScenarios はデータ取得後に計算
-
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
     useSensor(KeyboardSensor, {
@@ -84,12 +86,23 @@ export default function StepDeliveryPage() {
   const { setNodeRef: setRootDropRef, isOver: isOverRoot } = useDroppable({ id: 'root' })
 
   useEffect(() => {
-    // Get user session
     supabase.auth.getSession().then(({ data: { session } }) => {
       setUser(session?.user ?? null)
       setLoading(false)
     })
   }, [])
+
+  useEffect(() => {
+    if (user) {
+      supabase.rpc('get_user_plan_and_step_stats', { p_user_id: user.id }).then(({ data, error }) => {
+        if (error) {
+          console.error('Error fetching plan stats:', error);
+        } else if (data) {
+          setPlanStats(data[0] || null);
+        }
+      });
+    }
+  }, [user]);
 
   const {
     scenarios,
@@ -116,22 +129,18 @@ export default function StepDeliveryPage() {
     refetch
   } = useStepScenarios(user?.id)
 
-  // シナリオ名ドラフトを選択状態に同期（IME対応）
   useEffect(() => {
     setScenarioNameDraft(selectedScenario?.name ?? '')
   }, [selectedScenario?.id, selectedScenario?.name])
 
-  // シナリオに属するステップのみを取得
   const selectedScenarioSteps = selectedScenario 
     ? steps.filter(s => s.scenario_id === selectedScenario.id).sort((a, b) => a.step_order - b.step_order)
     : []
 
-  // 選択されたステップのメッセージを取得
   const selectedStepMessages = selectedStep 
     ? messages.filter(m => m.step_id === selectedStep.id).sort((a, b) => a.message_order - b.message_order)
     : []
 
-  // メッセージ一覧の変化に応じてローカルドラフトを初期化（存在しないIDは削除）
   useEffect(() => {
     setDraftMessageContents((prev) => {
       const next: Record<string, string> = { ...prev }
@@ -144,7 +153,6 @@ export default function StepDeliveryPage() {
     })
   }, [selectedStep?.id, selectedStepMessages.length])
 
-  // 最初のメッセージ配信時刻を計算
   const getFirstMessageDeliveryTime = (scenario: StepScenario) => {
     const scenarioSteps = steps.filter(s => s.scenario_id === scenario.id).sort((a, b) => a.step_order - b.step_order)
     if (scenarioSteps.length === 0) return "ステップなし"
@@ -172,7 +180,6 @@ export default function StepDeliveryPage() {
     return `登録後：${parts.join('')}後`
   }
 
-  // シナリオの移動先を取得（複数の移動先に対応）
   const getTransitionDestinations = (scenarioId: string) => {
     const scenarioTransitions = transitions.filter(t => t.from_scenario_id === scenarioId)
     return scenarioTransitions.map(t => {
@@ -181,14 +188,12 @@ export default function StepDeliveryPage() {
     }).filter(name => name !== '不明なシナリオ')
   }
 
-  // 統計の手動更新イベント
   useEffect(() => {
     const handler = () => setStatsRefreshToken((t) => t + 1)
     window.addEventListener('scenario-stats-updated', handler)
     return () => window.removeEventListener('scenario-stats-updated', handler)
   }, [])
 
-  // シナリオ統計の読み込み（現在参加中・離脱・ブロック・累計）
   useEffect(() => {
     if (!user || scenarios.length === 0) {
       setScenarioStats({})
@@ -198,19 +203,14 @@ export default function StepDeliveryPage() {
     const load = async () => {
       try {
         const [activeRes, exitRes, failRes, totalRes] = await Promise.all([
-          // 現在参加中（離脱を除く）
           supabase.from('step_delivery_tracking').select('scenario_id, friend_id, status').in('scenario_id', scenarioIds).neq('status', 'exited'),
-          // 離脱
           supabase.from('step_delivery_tracking').select('scenario_id, friend_id, status').in('scenario_id', scenarioIds).eq('status','exited'),
-          // ブロック（配信失敗）
           supabase.from('step_delivery_logs').select('scenario_id, friend_id, delivery_status').in('scenario_id', scenarioIds).eq('delivery_status','failed'),
-          // 累計登録（重複なし）
           supabase.from('scenario_friend_logs').select('scenario_id, friend_id').in('scenario_id', scenarioIds),
         ])
         const stats: Record<string, { registered: number; exited: number; blocked: number; total: number }> = {}
         for (const id of scenarioIds) stats[id] = { registered: 0, exited: 0, blocked: 0, total: 0 }
 
-        // 現在参加中 = シナリオ内で status != exited の友だち数（重複排除）
         const activeMap: Record<string, Set<string>> = {}
         ;(activeRes.data || []).forEach((r: any) => {
           const sid = r.scenario_id; const fid = r.friend_id
@@ -220,7 +220,6 @@ export default function StepDeliveryPage() {
         })
         Object.keys(activeMap).forEach(sid => { stats[sid].registered = activeMap[sid].size })
 
-        // 離脱 = status exited の友だち数（重複排除）
         const exitMap: Record<string, Set<string>> = {}
         ;(exitRes.data || []).forEach((r: any) => {
           const sid = r.scenario_id; const fid = r.friend_id
@@ -230,7 +229,6 @@ export default function StepDeliveryPage() {
         })
         Object.keys(exitMap).forEach(sid => { stats[sid].exited = exitMap[sid].size })
 
-        // ブロック = 配信失敗の友だち数（重複排除）
         const blockMap: Record<string, Set<string>> = {}
         ;(failRes.data || []).forEach((r: any) => {
           const sid = r.scenario_id; const fid = r.friend_id
@@ -240,7 +238,6 @@ export default function StepDeliveryPage() {
         })
         Object.keys(blockMap).forEach(sid => { stats[sid].blocked = blockMap[sid].size })
 
-        // 累計登録 = scenario_friend_logs の distinct friend_id 数
         const totalMap: Record<string, Set<string>> = {}
         ;(totalRes.data || []).forEach((r: any) => {
           const sid = r.scenario_id; const fid = r.friend_id
@@ -271,11 +268,17 @@ export default function StepDeliveryPage() {
   const handleAddStep = async () => {
     if (!selectedScenario) return
 
+    if (planStats && planStats.max_steps !== -1 && planStats.current_steps >= planStats.max_steps) {
+      toast.error(`ステップ数の上限に達しました。現在のプランでは${planStats.max_steps}個まで作成できます。`);
+      return;
+    }
+
     const step = await createStep(selectedScenario.id, `ステップ ${selectedScenarioSteps.length + 1}`)
     if (step) {
       setSelectedStep(step as Step)
-      // 新しいステップに自動的にメッセージを追加
       await createMessage(step.id)
+      // Manually increment step count in local state to provide immediate feedback
+      setPlanStats(prev => prev ? { ...prev, current_steps: prev.current_steps + 1 } : null);
     }
   }
 
@@ -314,7 +317,6 @@ export default function StepDeliveryPage() {
   }
 
   const handleDeleteScenario = async (scenarioId: string) => {
-    // フォルダからも即時に外す（件数更新のため）
     removeFromFolder(scenarioId)
     await deleteScenario(scenarioId)
     if (selectedScenario?.id === scenarioId) {
@@ -328,6 +330,8 @@ export default function StepDeliveryPage() {
     if (selectedStep?.id === stepId) {
       setSelectedStep(null)
     }
+    // Manually decrement step count in local state
+    setPlanStats(prev => prev ? { ...prev, current_steps: Math.max(0, prev.current_steps - 1) } : null);
   }
 
   const handleUpdateStepName = async (stepId: string, name: string) => {
@@ -362,7 +366,6 @@ export default function StepDeliveryPage() {
     const activeId = String(active.id)
     const overIdOriginal = String(over.id)
 
-    // フォルダの並び替え（overがフォルダ本体でも許容）
     if (activeId.startsWith('folderItem:') && (overIdOriginal.startsWith('folderItem:') || overIdOriginal.startsWith('folder:'))) {
       const overId = overIdOriginal.startsWith('folder:') ? `folderItem:${overIdOriginal.replace('folder:', '')}` : overIdOriginal
       const folderIds = folders.map(f => `folderItem:${f.id}`)
@@ -375,7 +378,6 @@ export default function StepDeliveryPage() {
       return
     }
 
-    // ルート（未分類）ドロップゾーンにドロップ → フォルダから外す
     if (overIdOriginal === 'root' && !activeId.startsWith('folderItem:')) {
       const root = scenarios.filter(s => !getFolderIdByScenario(s.id))
       const alreadyInRoot = root.some(r => r.id === activeId)
@@ -386,9 +388,8 @@ export default function StepDeliveryPage() {
       return
     }
 
-    // フォルダへのドロップ（シナリオ→フォルダ）
     if (overIdOriginal.startsWith('folder:') || overIdOriginal.startsWith('folderItem:')) {
-      if (activeId.startsWith('folderItem:')) return // フォルダ自体は入れない
+      if (activeId.startsWith('folderItem:')) return
       const folderId = overIdOriginal.replace('folder:', '').replace('folderItem:', '')
       moveToFolder(activeId, folderId)
       return
@@ -397,7 +398,6 @@ export default function StepDeliveryPage() {
     const activeFolderId = getFolderIdByScenario(activeId)
     const overFolderId = getFolderIdByScenario(overIdOriginal)
 
-    // 同一フォルダ内での並び替え
     if (activeFolderId && overFolderId && activeFolderId === overFolderId) {
       const folder = folders.find(f => f.id === activeFolderId)
       if (folder) {
@@ -411,20 +411,17 @@ export default function StepDeliveryPage() {
       return
     }
 
-    // フォルダ間の移動、またはルートからフォルダへの移動
     if (overFolderId && activeFolderId !== overFolderId) {
       moveToFolder(activeId, overFolderId)
       return
     }
 
-    // ルート内での並び替え（またはフォルダからルートへ）
     const root = scenarios.filter(s => !getFolderIdByScenario(s.id))
     if (activeId !== overIdOriginal) {
       const inRoot = root.some(r => r.id === activeId)
       const overIndex = root.findIndex((item) => item.id === overIdOriginal)
 
       if (!inRoot) {
-        // フォルダからルートに出す（指定位置）
         removeFromFolder(activeId)
         const targetScenario = scenarios.find(s => s.id === activeId)
         if (targetScenario) {
@@ -469,6 +466,8 @@ export default function StepDeliveryPage() {
     )
   }
 
+  const isStepLimitReached = planStats && planStats.max_steps !== -1 && planStats.current_steps >= planStats.max_steps;
+
   if (loading || dataLoading || !user) {
     return <div className="flex items-center justify-center min-h-screen">読み込み中...</div>
   }
@@ -504,7 +503,6 @@ export default function StepDeliveryPage() {
               collisionDetection={rectIntersection}
               onDragEnd={handleScenarioDragEnd}
             >
-              {/* フォルダ一覧 */}
               <div className="space-y-2 mb-4">
                 <SortableContext
                   items={folders.map(f => `folderItem:${f.id}`)}
@@ -525,7 +523,6 @@ export default function StepDeliveryPage() {
                 </SortableContext>
               </div>
 
-              {/* ルートのドロップゾーン（未分類に戻す） */}
               <div
                 ref={setRootDropRef}
                 className={`mb-2 h-12 rounded-md border border-dashed border-border text-xs flex items-center justify-center ${isOverRoot ? 'bg-muted ring-2 ring-primary' : 'bg-transparent'} animate-fade-in`}
@@ -533,7 +530,6 @@ export default function StepDeliveryPage() {
                 ここにドロップで「未分類」に戻す
               </div>
 
-              {/* ルートのシナリオ */}
               <SortableContext
                 items={scenarios.filter(s => !getFolderIdByScenario(s.id)).map(s => s.id)}
                 strategy={verticalListSortingStrategy}
@@ -552,11 +548,21 @@ export default function StepDeliveryPage() {
             <div className="w-80 bg-card border-l border-border p-4 overflow-y-auto flex-shrink-0">
               <div className="flex items-center justify-between mb-4">
                 <h2 className="text-lg font-semibold">ステップ作成</h2>
-                <Button onClick={handleAddStep} size="sm" className="gap-2">
+                <Button onClick={handleAddStep} size="sm" className="gap-2" disabled={isStepLimitReached}>
                   <Plus className="h-4 w-4" />
                   ステップ追加
                 </Button>
               </div>
+
+              {isStepLimitReached && (
+                <div className="p-2 mb-4 text-xs text-destructive-foreground bg-destructive/90 rounded-md flex items-center gap-2">
+                  <AlertCircle className="h-4 w-4" />
+                  <div>
+                    <p className="font-bold">ステップ数の上限に達しました。</p>
+                    <p>これ以上追加するにはプランのアップグレードが必要です。</p>
+                  </div>
+                </div>
+              )}
 
               <div className="mb-4">
                 <Label htmlFor="scenario-name">シナリオ名</Label>
@@ -585,7 +591,6 @@ export default function StepDeliveryPage() {
                   onStepUpdate={handleUpdateStepName}
                 />
 
-                {/* シナリオ移動設定 */}
                 <ScenarioTransitionCard
                   currentScenario={selectedScenario}
                   availableScenarios={scenarios}
@@ -594,7 +599,6 @@ export default function StepDeliveryPage() {
                   onRemoveTransition={handleRemoveTransition}
                 />
 
-                {/* 招待コード設定 */}
                 <ScenarioInviteCard
                   scenario={selectedScenario}
                   inviteCodes={inviteCodes}
@@ -603,7 +607,6 @@ export default function StepDeliveryPage() {
                 />
 
 
-                {/* 流入分析 */}
                 <ScenarioAnalytics scenario={selectedScenario} />
               </div>
             </div>
@@ -631,7 +634,6 @@ export default function StepDeliveryPage() {
 
               {!isMessageCreationCollapsed && (
                 <>
-                  {/* Delivery Timing Settings */}
                   <Card className="mb-4">
                     <CardHeader className="py-3">
                       <CardTitle className="text-sm">配信タイミング設定</CardTitle>
@@ -755,10 +757,8 @@ export default function StepDeliveryPage() {
                      </CardContent>
                    </Card>
 
-                   {/* ステップ配信状況 */}
                    <StepDeliveryStatus step={selectedStep} />
 
-                   {/* Messages */}
                    <div className="space-y-4">
                      {selectedStepMessages.length === 0 ? (
                        <Card>
@@ -774,7 +774,6 @@ export default function StepDeliveryPage() {
                               <Select
                                 value="text"
                                  onValueChange={async (value: 'text' | 'media' | 'flex') => {
-                                   // 新しいメッセージを作成
                                    await createMessage(selectedStep.id)
                                 }}
                               >
@@ -803,12 +802,11 @@ export default function StepDeliveryPage() {
                          </CardContent>
                        </Card>
                      ) : (
-                       /* Use StepMessageEditor component */
                         <StepMessageEditor
                           stepId={selectedStep.id}
                           messages={selectedStepMessages.map(msg => ({
                             id: msg.id,
-                            message_type: msg.message_type as any, // 元のタイプを保持
+                            message_type: msg.message_type as any,
                             content: msg.content || '',
                             media_url: msg.media_url,
                             flex_message_id: msg.flex_message_id,
@@ -816,7 +814,6 @@ export default function StepDeliveryPage() {
                             restore_config: (msg as any).restore_config
                           }))}
                           onMessagesChange={async (messages) => {
-                            // データの再取得
                             await refetch()
                           }}
                           onEditingMessagesChange={setEditingStepMessages}
@@ -830,7 +827,6 @@ export default function StepDeliveryPage() {
             </div>
           )}
 
-          {/* Message Preview Panel */}
           {selectedStep && (
             <div className="w-80 border-l border-border pl-4 flex-shrink-0">
               <MessagePreview 
@@ -848,7 +844,6 @@ export default function StepDeliveryPage() {
             </div>
           )}
 
-          {/* Empty state when no scenario is selected */}
           {!selectedScenario && (
             <div className="flex-1 flex items-center justify-center text-center">
               <div className="text-muted-foreground">

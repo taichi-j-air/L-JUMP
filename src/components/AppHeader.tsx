@@ -186,9 +186,9 @@ export function AppHeader({ user }: AppHeaderProps) {
         </Popover>
 
         {/* 現在のプラン */}
-        <div className="flex flex-col items-center justify-center leading-tight">
+        <div className="flex flex-col items-center justify-center leading-tight flex-shrink-0">
           {planStats ? (
-            <div className="font-bold text-sm py-0.5 px-2">
+            <div className="font-bold text-sm py-0.5 px-2 text-slate-700">
               {planStats.plan_name}
             </div>
           ) : (
@@ -197,30 +197,25 @@ export function AppHeader({ user }: AppHeaderProps) {
           <div className="text-muted-foreground mt-0.5 text-[10px]">現在のプラン</div>
         </div>
 
-        {/* ステップ数 */}
-        <div className="flex flex-col items-center justify-center leading-tight">
-          {planStats ? (
-            <div className={`font-bold text-sm py-0.5 px-2 ${
-              planStats.max_steps > 0 && (planStats.current_steps / planStats.max_steps) >= 0.9 
-              ? 'text-destructive' 
-              : ''
-            }`}>
-              {planStats.current_steps.toLocaleString()}
-              <span className="text-xs"> / {planStats.max_steps === -1 ? '無制限' : planStats.max_steps.toLocaleString()}</span>
+        {/* 友達数 */}
+        <div className="flex flex-col items-center justify-center leading-tight flex-shrink-0">
+          {profile ? (
+            <div className="font-bold text-sm py-0.5 px-2 text-slate-700">
+              {(profile?.friends_count ?? 0).toLocaleString()}<span className="text-xs ml-0.5">人</span>
             </div>
           ) : (
             <div className="font-bold text-sm py-0.5 px-2">...</div>
           )}
-          <div className="text-muted-foreground mt-0.5 text-[10px]">ステップ数</div>
+          <div className="text-muted-foreground mt-0.5 text-[10px]">友達数</div>
         </div>
 
         {/* 月間配信数 */}
-        <div className="flex flex-col items-center justify-center leading-tight">
+        <div className="flex flex-col items-center justify-center leading-tight flex-shrink-0">
           {profile ? (
             <div className={`font-bold text-sm py-0.5 px-2 ${
               profile.monthly_message_limit && ((profile.monthly_message_limit - (profile.monthly_message_used || 0)) / profile.monthly_message_limit) <= 0.1
               ? 'text-destructive'
-              : ''
+              : 'text-slate-700'
             }`}>
               残り {((profile?.monthly_message_limit || 200) - (profile?.monthly_message_used || 0)).toLocaleString()} / {(profile?.monthly_message_limit || 200).toLocaleString()}
             </div>
@@ -230,16 +225,21 @@ export function AppHeader({ user }: AppHeaderProps) {
           <div className="text-muted-foreground mt-0.5 text-[10px]">月間配信</div>
         </div>
 
-        {/* 友達数 */}
-        <div className="flex flex-col items-center justify-center leading-tight">
-          {profile ? (
-            <div className="font-bold text-sm py-0.5 px-2">
-              {(profile?.friends_count ?? 0).toLocaleString()}人
+        {/* ステップ数 */}
+        <div className="flex flex-col items-center justify-center leading-tight flex-shrink-0">
+          {planStats ? (
+            <div className={`font-bold text-sm py-0.5 px-2 ${
+              planStats.max_steps > 0 && (planStats.current_steps / planStats.max_steps) >= 0.9 
+              ? 'text-destructive' 
+              : 'text-slate-700'
+            }`}>
+              {planStats.current_steps.toLocaleString()}
+              <span className="text-xs"> / {planStats.max_steps === -1 ? '無制限' : planStats.max_steps.toLocaleString()}</span>
             </div>
           ) : (
             <div className="font-bold text-sm py-0.5 px-2">...</div>
           )}
-          <div className="text-muted-foreground mt-0.5 text-[10px]">友達数</div>
+          <div className="text-muted-foreground mt-0.5 text-[10px]">ステップ数</div>
         </div>
 
       </div>
