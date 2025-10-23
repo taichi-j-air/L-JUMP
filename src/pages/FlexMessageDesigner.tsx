@@ -31,7 +31,6 @@ import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import {
   ArrowLeft,
-  Save,
   Send,
   Plus,
   Trash2,
@@ -43,7 +42,6 @@ import {
   Copy,
   Layers,
   Eye,
-  FilePlus,
   FileEdit,
 } from "lucide-react";
 
@@ -846,8 +844,69 @@ export default function FlexMessageDesigner() {
     setState({ containerType: "bubble", bubbles: [defaultBubble()], currentIndex: 0, loadedMessageId: undefined });
   };
 
+  const handleAddMessage = async () => {
+    const initialBubble = defaultBubble("新しいFlexメッセージ");
+    const baseState: DesignerState = {
+      containerType: "bubble",
+      bubbles: [initialBubble],
+      currentIndex: 0,
+    };
+
+    setLoading(true);
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) {
+        toast({ title: "認証エラー", description: "ログインしてください", variant: "destructive" });
+        return;
+      }
+
+      const payload = buildFlexMessage(baseState);
+      const { data: inserted, error } = await supabase
+        .from("flex_messages")
+        .insert({ user_id: user.id, name: initialBubble.name, content: payload as any })
+        .select()
+        .single();
+      if (error) throw error;
+      if (!inserted) throw new Error("新規作成されたデータを取得できませんでした");
+
+      setState({
+        ...baseState,
+        bubbles: [{ ...initialBubble, name: inserted.name }],
+        loadedMessageId: inserted.id,
+      });
+      setMessages((prev) => [inserted, ...prev]);
+      toast({ title: "作成しました", description: `「${inserted.name}」を追加しました` });
+
+      try {
+        const { data: refreshed, error: fetchErr } = await supabase
+          .from("flex_messages")
+          .select("*")
+          .order("created_at", { ascending: false });
+        if (fetchErr) throw fetchErr;
+        setMessages(refreshed || []);
+      } catch (refreshError: any) {
+        console.error("Failed to refresh Flex message list:", refreshError);
+        toast({
+          title: "リスト更新に失敗しました",
+          description: "ページを再読み込みすると最新の一覧になります",
+          variant: "destructive",
+        });
+      }
+    } catch (e: any) {
+      console.error(e);
+      toast({ title: "作成失敗", description: e.message || "新規作成でエラーが発生しました", variant: "destructive" });
+    } finally {
+      setLoading(false);
+    }
+  };
+
   // Save / Load / Send
-  const saveMessage = async (asNew: boolean = false) => {
+  const saveMessage = async () => {
+    const activeId = state.loadedMessageId;
+    if (!activeId) {
+      toast({ title: "保存できません", description: "左の一覧からメッセージを選択するか、追加ボタンで作成してください", variant: "destructive" });
+      return;
+    }
     const alt = (current?.altText || "").trim();
     if (!alt) {
       toast({ title: "入力エラー", description: "代替テキスト(通知文)を入力してください", variant: "destructive" });
@@ -864,20 +923,20 @@ export default function FlexMessageDesigner() {
 
       const content = buildFlexMessage(state);
       const title = current?.name || "Flexメッセージ";
+      const { error: updateError } = await supabase
+        .from("flex_messages")
+        .update({ name: title, content: content as any })
+        .eq("id", activeId);
+      if (updateError) throw updateError;
+      toast({ title: "保存しました", description: `「${title}」を更新しました` });
 
-      if (!asNew && state.loadedMessageId) {
-        const { error } = await supabase.from("flex_messages").update({ name: title, content: content as any }).eq("id", state.loadedMessageId);
-        if (error) throw error;
-        toast({ title: "上書き保存", description: `「${title}」を上書き保存しました` });
-      } else {
-const { data: newData, error } = await supabase.from("flex_messages").insert({ user_id: user.id, name: title, content: content as any }).select();        if (error) throw error;
-        if (newData && newData[0]) setState((prev) => ({ ...prev, loadedMessageId: newData[0].id }));
-        toast({ title: "新規保存", description: `「${title}」を保存しました` });
-      }
-
-      const { data, error: fetchErr } = await supabase.from("flex_messages").select("*").order("created_at", { ascending: false });
+      const { data, error: fetchErr } = await supabase
+        .from("flex_messages")
+        .select("*")
+        .order("created_at", { ascending: false });
       if (fetchErr) throw fetchErr;
       setMessages(data || []);
+      setState((prev) => ({ ...prev, loadedMessageId: activeId }));
     } catch (e: any) {
       console.error(e);
       toast({ title: "保存失敗", description: e.message || "保存でエラーが発生しました", variant: "destructive" });
@@ -1008,14 +1067,15 @@ const { data: newData, error } = await supabase.from("flex_messages").insert({ u
     }
   };
 
-  const deleteMessage = async (id: string, name: string) => {
-    if (!confirm(`「${name}」を削除しますか？`)) return;
+  const deleteMessage = async (item: FlexMessageRow) => {
+    if (!confirm(`「${item.name}」を削除しますか？`)) return;
+
     try {
-      const { error } = await supabase.from("flex_messages").delete().eq("id", id);
+      const { error } = await supabase.from("flex_messages").delete().eq("id", item.id);
       if (error) throw error;
-      setMessages((prev) => prev.filter((m) => m.id !== id));
-      if (state.loadedMessageId === id) newMessage();
-      toast({ title: "削除", description: `「${name}」を削除しました` });
+      setMessages((prev) => prev.filter((m) => m.id !== item.id));
+      if (state.loadedMessageId === item.id) newMessage();
+      toast({ title: "削除", description: `「${item.name}」を削除しました` });
     } catch (e: any) {
       console.error(e);
       toast({ title: "削除失敗", description: e.message || "削除でエラーが発生しました", variant: "destructive" });
@@ -1047,11 +1107,16 @@ const { data: newData, error } = await supabase.from("flex_messages").insert({ u
     }
   };
 
-  const sendSavedMessage = async (messageContent: any) => {
+  const sendSavedMessage = async (item: FlexMessageRow) => {
+    if (!item.content) {
+      toast({ title: "送信エラー", description: "Flexメッセージの内容が見つかりませんでした", variant: "destructive" });
+      return;
+    }
+
     try {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) { toast({ title: "認証エラー", description: "ログインしてください", variant: "destructive" }); return; }
-      const { error } = await supabase.functions.invoke("send-flex-message", { body: { flexMessage: messageContent, userId: user.id } });
+      const { error } = await supabase.functions.invoke("send-flex-message", { body: { flexMessage: item.content, userId: user.id } });
       if (error) throw error;
       toast({ title: "送信完了", description: "保存済みメッセージを配信しました" });
     } catch (e: any) {
@@ -1085,9 +1150,20 @@ const { data: newData, error } = await supabase.from("flex_messages").insert({ u
         <div className="grid lg:grid-cols-[260px_1fr_320px] md:grid-cols-[1fr_320px] grid-cols-1 gap-3">
           {/* 左: 保存済み（コンパクト化） */}
           <Card className="h-[calc(100vh-140px)] lg:sticky top-3 overflow-hidden">
-            <CardHeader className="py-2">
-              <CardTitle className="text-sm">保存済みメッセージ</CardTitle>
-              <CardDescription className="text-xs">クリックで読込 / 下のボタンで配信</CardDescription>
+            <CardHeader className="py-2 flex items-center justify-between">
+              <div>
+                <CardTitle className="text-sm">Flexメッセージ</CardTitle>
+                <CardDescription className="text-xs">追加で新規作成 / 項目を選ぶと読込</CardDescription>
+              </div>
+              <Button
+                size="sm"
+                className="h-7 px-2 text-[11px] bg-primary text-primary-foreground hover:bg-primary/90"
+                onClick={handleAddMessage}
+                disabled={loading}
+              >
+                <Plus className="w-3 h-3 mr-1" />
+                追加
+              </Button>
             </CardHeader>
             <CardContent className="pt-0 overflow-auto h-full">
               {messages.length === 0 ? (
@@ -1095,16 +1171,48 @@ const { data: newData, error } = await supabase.from("flex_messages").insert({ u
               ) : (
                 <div className="space-y-2">
                   {messages.map((m) => (
-                    <div key={m.id} className={`border rounded-md px-2 py-1.5 ${state.loadedMessageId === m.id ? "border-primary bg-primary/10" : ""}`}>
+                    <div
+                      key={m.id}
+                      className={`border rounded-md px-2 py-1.5 ${
+                        state.loadedMessageId === m.id ? "border-primary bg-primary/10" : ""
+                      }`}
+                    >
                       <div className="min-w-0">
-                        <div className="text-[13px] font-medium whitespace-normal break-words">{m.name}</div>
-                        <div className="text-[10px] text-muted-foreground">{new Date(m.created_at).toLocaleString("ja-JP")}</div>
-                        {state.loadedMessageId === m.id && <div className="text-[10px] text-primary">現在編集中</div>}
+                        <div className="text-[13px] font-medium whitespace-normal break-words">
+                          {m.name || "無題のFlexメッセージ"}
+                        </div>
+                        <div className="text-[10px] text-muted-foreground">
+                          {new Date(m.created_at).toLocaleString("ja-JP")}
+                        </div>
+                        {state.loadedMessageId === m.id && (
+                          <div className="text-[10px] text-primary">現在編集中</div>
+                        )}
                       </div>
                       <div className="mt-1.5 flex gap-1">
-                        <Button size="sm" variant="outline" className="h-6 px-2 text-[11px]" onClick={() => loadMessage(m)}>読込</Button>
-                        <Button size="sm" variant="outline" className="h-6 px-2 text-[11px]" onClick={() => sendSavedMessage(m.content)}>配信</Button>
-                        <Button size="sm" variant="outline" className="h-6 px-2 text-[11px] text-destructive" onClick={() => deleteMessage(m.id, m.name)}>削除</Button>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="h-6 px-2 text-[11px]"
+                          onClick={() => loadMessage(m)}
+                        >
+                          読込
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="h-6 px-2 text-[11px]"
+                          onClick={() => sendSavedMessage(m)}
+                        >
+                          配信
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="h-6 px-2 text-[11px] text-destructive"
+                          onClick={() => deleteMessage(m)}
+                        >
+                          削除
+                        </Button>
                       </div>
                     </div>
                   ))}
@@ -1125,13 +1233,13 @@ const { data: newData, error } = await supabase.from("flex_messages").insert({ u
                     <CardDescription className="text-xs">最小の入力で作成。詳細は各要素を開いて調整。</CardDescription>
                   </div>
                   <div className="flex flex-wrap gap-2">
-                    <Button size="sm" variant="outline" className="h-8 text-xs" onClick={newMessage}>
-                      <FilePlus className="w-4 h-4 mr-1" />新規
-                    </Button>
-                    <Button size="sm" className="h-8 text-xs" onClick={() => saveMessage(true)} disabled={loading}>
-                      <Save className="w-4 h-4 mr-1" />新規保存
-                    </Button>
-                    <Button size="sm" variant="outline" className="h-8 text-xs" onClick={() => saveMessage(false)} disabled={loading || !state.loadedMessageId}>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="h-8 text-xs"
+                      onClick={saveMessage}
+                      disabled={loading || !state.loadedMessageId}
+                    >
                       <FileEdit className="w-4 h-4 mr-1" />上書き保存
                     </Button>
                     <Button size="sm" className="h-8 text-xs bg-[#06c755] hover:bg-[#05b84c]" onClick={sendNow} disabled={loading}>
