@@ -44,6 +44,16 @@ interface UsageStats {
   maxContentBlocksPerSite: number
 }
 
+interface SubscriptionInfo {
+  currentPeriodStart: string | null
+  currentPeriodEnd: string | null
+  unitAmount: number | null
+  currency: string | null
+  interval: string | null
+  intervalCount: number | null
+  liveMode: boolean
+}
+
 const PLAN_ICON_MAP: Record<PlanType, { icon: LucideIcon; color: string }> = {
   free: { icon: Star, color: "text-gray-500" },
   basic: { icon: Zap, color: "text-blue-500" },
@@ -97,6 +107,9 @@ export default function PlanSettings() {
   const [showDowngradeDialog, setShowDowngradeDialog] = useState(false)
   const [downgradePlan, setDowngradePlan] = useState<PlanCard | null>(null)
   const [downgradeStep, setDowngradeStep] = useState<1 | 2 | 3>(1)
+  const [subscriptionInfo, setSubscriptionInfo] = useState<SubscriptionInfo | null>(null)
+  const [subscriptionLoading, setSubscriptionLoading] = useState(false)
+  const [subscriptionError, setSubscriptionError] = useState<string | null>(null)
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
@@ -212,6 +225,45 @@ export default function PlanSettings() {
     }
   }
 
+  const fetchSubscriptionInfo = async () => {
+    setSubscriptionLoading(true)
+    setSubscriptionError(null)
+    try {
+      const { data, error } = await supabase.functions.invoke("get-subscription-status", {
+        body: {},
+      })
+
+      if (error) {
+        throw new Error(error.message || "サブスクリプション情報の取得に失敗しました")
+      }
+
+      if (!data?.success) {
+        throw new Error(data?.error || "サブスクリプション情報の取得に失敗しました")
+      }
+
+      const subscription = data.subscription ?? {}
+      setSubscriptionInfo({
+        currentPeriodStart: subscription.current_period_start ?? null,
+        currentPeriodEnd: subscription.current_period_end ?? null,
+        unitAmount:
+          typeof subscription.unit_amount === "number" ? subscription.unit_amount : null,
+        currency: typeof subscription.currency === "string" ? subscription.currency : null,
+        interval: typeof subscription.interval === "string" ? subscription.interval : null,
+        intervalCount:
+          typeof subscription.interval_count === "number" ? subscription.interval_count : null,
+        liveMode: Boolean(subscription.live_mode),
+      })
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : "サブスクリプション情報の取得に失敗しました"
+      console.error("[PlanSettings] fetchSubscriptionInfo error:", message)
+      setSubscriptionError(message)
+      setSubscriptionInfo(null)
+    } finally {
+      setSubscriptionLoading(false)
+    }
+  }
+
   const loadCurrentPlan = async () => {
     if (!user) return
 
@@ -238,12 +290,18 @@ export default function PlanSettings() {
     setShowDowngradeDialog(false)
     setDowngradePlan(null)
     setDowngradeStep(1)
+    setSubscriptionInfo(null)
+    setSubscriptionError(null)
+    setSubscriptionLoading(false)
   }
 
   const startDowngradeFlow = async (plan: PlanCard) => {
     setDowngradePlan(plan)
     setDowngradeStep(1)
     setShowDowngradeDialog(true)
+    setSubscriptionInfo(null)
+    setSubscriptionError(null)
+    setSubscriptionLoading(false)
     await loadUsageStats()
   }
 
@@ -484,7 +542,7 @@ export default function PlanSettings() {
     const planInfo = planDictionary[activePlanType]
     if (!planInfo) return null
 
-    const nextBillingRaw = currentPlan.plan_end_date
+    const nextBillingRaw = subscriptionInfo?.currentPeriodEnd ?? currentPlan.plan_end_date
     if (!nextBillingRaw) return null
     const nextBilling = new Date(nextBillingRaw)
     if (Number.isNaN(nextBilling.getTime())) return null
@@ -492,7 +550,7 @@ export default function PlanSettings() {
     const today = new Date()
     if (nextBilling <= today) return null
 
-    const startRaw = currentPlan.plan_start_date
+    const startRaw = subscriptionInfo?.currentPeriodStart ?? currentPlan.plan_start_date
     const msPerDay = 1000 * 60 * 60 * 24
     let totalCycleMs: number | null = null
     if (startRaw) {
@@ -502,7 +560,10 @@ export default function PlanSettings() {
       }
     }
     if (!totalCycleMs || totalCycleMs <= 0) {
-      totalCycleMs = (currentPlan.is_yearly ? 365 : 30) * msPerDay
+      const intervalGuess = subscriptionInfo?.interval ?? (currentPlan.is_yearly ? "year" : "month")
+      const intervalCount = subscriptionInfo?.intervalCount ?? 1
+      const daysPerInterval = intervalGuess === "year" ? 365 : intervalGuess === "week" ? 7 : 30
+      totalCycleMs = daysPerInterval * intervalCount * msPerDay
     }
 
     const remainingMs = nextBilling.getTime() - today.getTime()
@@ -510,7 +571,10 @@ export default function PlanSettings() {
 
     const remainingDays = Math.ceil(remainingMs / msPerDay)
     const totalDays = Math.max(1, Math.round(totalCycleMs / msPerDay))
-    const planPrice = currentPlan.is_yearly ? planInfo.yearlyPrice : planInfo.monthlyPrice
+    let planPrice = currentPlan.is_yearly ? planInfo.yearlyPrice : planInfo.monthlyPrice
+    if (subscriptionInfo?.unitAmount && subscriptionInfo.unitAmount > 0) {
+      planPrice = subscriptionInfo.unitAmount / 100
+    }
 
     if (!planPrice || planPrice <= 0) {
       return {
@@ -520,6 +584,7 @@ export default function PlanSettings() {
         remainingValue: 0,
         planPrice: 0,
         billingPeriodLabel: currentPlan.is_yearly ? "年額" : "月額",
+        currency: subscriptionInfo?.currency ?? "jpy",
       }
     }
 
@@ -532,9 +597,15 @@ export default function PlanSettings() {
       totalDays,
       remainingValue,
       planPrice,
-      billingPeriodLabel: currentPlan.is_yearly ? "年額" : "月額",
+      billingPeriodLabel:
+        subscriptionInfo?.interval === "year"
+          ? "年額"
+          : subscriptionInfo?.interval === "week"
+            ? "週額"
+            : "月額",
+      currency: subscriptionInfo?.currency ?? "jpy",
     }
-  }, [currentPlan, downgradePlan, activePlanType, planDictionary])
+  }, [currentPlan, downgradePlan, activePlanType, planDictionary, subscriptionInfo])
 
   if (loading) {
     return <div className="p-4">読み込み中...</div>
@@ -790,7 +861,11 @@ export default function PlanSettings() {
                 </>
               )
             ) : downgradeStep === 2 ? (
-              prorationInfo ? (
+              subscriptionLoading ? (
+                <div className="text-muted-foreground">決済情報を確認しています...</div>
+              ) : subscriptionError ? (
+                <div className="text-destructive text-sm">{subscriptionError}</div>
+              ) : prorationInfo ? (
                 <div className="space-y-2">
                   <p>次回の決済予定日: {prorationInfo.nextBilling.toLocaleDateString("ja-JP")}</p>
                   <p>
@@ -829,7 +904,11 @@ export default function PlanSettings() {
                   キャンセル
                 </Button>
                 <Button
-                  onClick={() => setDowngradeStep(2)}
+                  onClick={async () => {
+                    if (!canConfirmDowngrade || processing) return
+                    setDowngradeStep(2)
+                    await fetchSubscriptionInfo()
+                  }}
                   disabled={!canConfirmDowngrade || processing}
                 >
                   ダウングレードに進む
