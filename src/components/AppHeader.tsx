@@ -1,4 +1,4 @@
-import { LogOut, Plus, Users, Settings } from "lucide-react"
+import { LogOut, Plus, Users, Settings, Zap } from "lucide-react"
 // Logo is now loaded from uploads
 import { Button } from "./ui/button"
 import { Badge } from "./ui/badge"
@@ -19,12 +19,19 @@ interface Profile {
   friends_count?: number
 }
 
+interface PlanStats {
+  plan_name: string;
+  current_steps: number;
+  max_steps: number;
+}
+
 interface AppHeaderProps {
   user: User
 }
 
 export function AppHeader({ user }: AppHeaderProps) {
   const [profile, setProfile] = useState<Profile | null>(null)
+  const [planStats, setPlanStats] = useState<PlanStats | null>(null);
   const [activeAccount, setActiveAccount] = useState<{ account_name: string; line_bot_id: string | null } | null>(null)
   const navigate = useNavigate()
 
@@ -39,7 +46,7 @@ export function AppHeader({ user }: AppHeaderProps) {
   const loadProfile = async () => {
     try {
       // Parallel execution of profile and quota queries
-      const [profileResult, quotaResult] = await Promise.all([
+      const [profileResult, quotaResult, planStatsResult] = await Promise.all([
         // 1. Get profile with minimal columns
         supabase
           .from('profiles')
@@ -47,10 +54,9 @@ export function AppHeader({ user }: AppHeaderProps) {
           .eq('user_id', user.id)
           .single(),
         
-        // 2. Get LINE quota information (will use channelId from first query)
+        // 2. Get LINE quota information
         (async () => {
           try {
-            // First get the channel ID
             const { data: tempProfile } = await supabase
               .from('profiles')
               .select('line_channel_id')
@@ -66,7 +72,10 @@ export function AppHeader({ user }: AppHeaderProps) {
           } catch (error) {
             return { data: null, error: error.message }
           }
-        })()
+        })(),
+
+        // 3. Get plan and step stats
+        supabase.rpc('get_user_plan_and_step_stats', { p_user_id: user.id })
       ])
 
       if (profileResult.error) {
@@ -74,7 +83,6 @@ export function AppHeader({ user }: AppHeaderProps) {
       } else {
         setProfile(profileResult.data)
 
-        // 現在のアクティブLINEアカウントを取得
         const { data: acc } = await supabase
           .from('line_accounts')
           .select('account_name, line_bot_id')
@@ -84,7 +92,6 @@ export function AppHeader({ user }: AppHeaderProps) {
         setActiveAccount(acc ?? null)
       }
 
-      // 友だち数（最新）をカウントして更新
       try {
         const { count: friendsCount } = await supabase
           .from('line_friends')
@@ -95,9 +102,7 @@ export function AppHeader({ user }: AppHeaderProps) {
         console.warn('Failed to refresh friends count:', e)
       }
 
-      // Update profile with quota data if successful
       if (!quotaResult.error && quotaResult.data && !quotaResult.data.error) {
-        console.log('Received quota data:', quotaResult.data)
         setProfile(prev => ({
           ...(prev ?? {
             line_channel_id: undefined,
@@ -110,8 +115,14 @@ export function AppHeader({ user }: AppHeaderProps) {
         }))
       } else if (quotaResult.error || quotaResult.data?.error) {
         console.log('Could not fetch LINE quota:', quotaResult.error || quotaResult.data?.error)
-        // Don't overwrite existing data on error
       }
+
+      if (planStatsResult.error) {
+        console.error('Error loading plan stats:', planStatsResult.error);
+      } else if (planStatsResult.data) {
+        setPlanStats(planStatsResult.data[0] || null);
+      }
+
     } catch (error) {
       console.error('Error:', error)
     }
@@ -134,7 +145,6 @@ export function AppHeader({ user }: AppHeaderProps) {
           alt="L!JUMP" 
           className="h-8 w-auto"
           onError={(e) => {
-            // Fallback to text if image fails to load
             const target = e.target as HTMLImageElement;
             target.style.display = 'none';
             if (target.nextElementSibling) {
@@ -146,7 +156,6 @@ export function AppHeader({ user }: AppHeaderProps) {
       </div>
 
       <div className="flex-1 flex items-center gap-4">
-        {/* LINE公式アカウント切り替えタブ */}
         <Popover>
           <PopoverTrigger asChild>
             <Button variant="outline" size="sm" className="flex items-center gap-2">
@@ -183,6 +192,21 @@ export function AppHeader({ user }: AppHeaderProps) {
             </div>
           </PopoverContent>
         </Popover>
+
+        {/* ステップ数 */}
+        <div className="flex items-center gap-2 text-sm">
+          <Zap className="h-4 w-4 text-muted-foreground" />
+          {planStats ? (
+            <Badge variant={
+              planStats.max_steps > 0 && (planStats.current_steps / planStats.max_steps) >= 0.9 ?
+              "destructive" : "secondary"
+            }>
+              {planStats.plan_name}: {planStats.current_steps.toLocaleString()} / {planStats.max_steps === -1 ? '無制限' : planStats.max_steps.toLocaleString()}
+            </Badge>
+          ) : (
+            <Badge>読み込み中...</Badge>
+          )}
+        </div>
 
         {/* 月間配信数 */}
         <div className="flex items-center gap-2 text-sm">
