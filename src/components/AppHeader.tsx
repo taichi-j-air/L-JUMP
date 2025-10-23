@@ -1,5 +1,4 @@
-import { LogOut, Plus, Users, Settings, Zap } from "lucide-react"
-// Logo is now loaded from uploads
+import { LogOut, Plus, Users, Settings } from "lucide-react"
 import { Button } from "./ui/button"
 import { Badge } from "./ui/badge"
 import { Tabs, TabsList, TabsTrigger } from "./ui/tabs"
@@ -38,23 +37,18 @@ export function AppHeader({ user }: AppHeaderProps) {
   useEffect(() => {
     loadProfile()
     
-    // Periodic refresh every 30 seconds
     const interval = setInterval(loadProfile, 30000)
     return () => clearInterval(interval)
   }, [user.id])
 
   const loadProfile = async () => {
     try {
-      // Parallel execution of profile and quota queries
       const [profileResult, quotaResult, planStatsResult] = await Promise.all([
-        // 1. Get profile with minimal columns
         supabase
           .from('profiles')
           .select('line_channel_id, line_bot_id, friends_count, monthly_message_limit, monthly_message_used')
           .eq('user_id', user.id)
           .single(),
-        
-        // 2. Get LINE quota information
         (async () => {
           try {
             const { data: tempProfile } = await supabase
@@ -73,8 +67,6 @@ export function AppHeader({ user }: AppHeaderProps) {
             return { data: null, error: error.message }
           }
         })(),
-
-        // 3. Get plan and step stats
         supabase.rpc('get_user_plan_and_step_stats', { p_user_id: user.id })
       ])
 
@@ -155,7 +147,7 @@ export function AppHeader({ user }: AppHeaderProps) {
         <span className="text-xl font-semibold hidden">L!JUMP</span>
       </div>
 
-      <div className="flex-1 flex items-center gap-4">
+      <div className="flex-1 flex items-center gap-6">
         <Popover>
           <PopoverTrigger asChild>
             <Button variant="outline" size="sm" className="flex items-center gap-2">
@@ -193,49 +185,63 @@ export function AppHeader({ user }: AppHeaderProps) {
           </PopoverContent>
         </Popover>
 
-        {/* ステップ数 */}
-        <div className="flex items-center gap-2 text-sm">
-          <Zap className="h-4 w-4 text-muted-foreground" />
+        {/* 現在のプラン */}
+        <div className="flex flex-col items-center justify-center leading-tight">
           {planStats ? (
-            <Badge variant={
-              planStats.max_steps > 0 && (planStats.current_steps / planStats.max_steps) >= 0.9 ?
-              "destructive" : "secondary"
-            }>
-              {planStats.plan_name}: {planStats.current_steps.toLocaleString()} / {planStats.max_steps === -1 ? '無制限' : planStats.max_steps.toLocaleString()}
-            </Badge>
+            <div className="font-bold text-sm py-0.5 px-2">
+              {planStats.plan_name}
+            </div>
           ) : (
-            <Badge>読み込み中...</Badge>
+            <div className="font-bold text-sm py-0.5 px-2">...</div>
           )}
+          <div className="text-muted-foreground mt-0.5 text-[10px]">現在のプラン</div>
+        </div>
+
+        {/* ステップ数 */}
+        <div className="flex flex-col items-center justify-center leading-tight">
+          {planStats ? (
+            <div className={`font-bold text-sm py-0.5 px-2 ${
+              planStats.max_steps > 0 && (planStats.current_steps / planStats.max_steps) >= 0.9 
+              ? 'text-destructive' 
+              : ''
+            }`}>
+              {planStats.current_steps.toLocaleString()}
+              <span className="text-xs"> / {planStats.max_steps === -1 ? '無制限' : planStats.max_steps.toLocaleString()}</span>
+            </div>
+          ) : (
+            <div className="font-bold text-sm py-0.5 px-2">...</div>
+          )}
+          <div className="text-muted-foreground mt-0.5 text-[10px]">ステップ数</div>
         </div>
 
         {/* 月間配信数 */}
-        <div className="flex items-center gap-2 text-sm">
-          <span className="text-muted-foreground">月間配信:</span>
+        <div className="flex flex-col items-center justify-center leading-tight">
           {profile ? (
-            <Badge variant={
-              profile && profile.monthly_message_limit ? 
-                ((profile.monthly_message_limit - (profile.monthly_message_used || 0)) / profile.monthly_message_limit) <= 0.1 ? 
-                  "destructive" : "secondary"
-                : "secondary"
-            }>
+            <div className={`font-bold text-sm py-0.5 px-2 ${
+              profile.monthly_message_limit && ((profile.monthly_message_limit - (profile.monthly_message_used || 0)) / profile.monthly_message_limit) <= 0.1
+              ? 'text-destructive'
+              : ''
+            }`}>
               残り {((profile?.monthly_message_limit || 200) - (profile?.monthly_message_used || 0)).toLocaleString()} / {(profile?.monthly_message_limit || 200).toLocaleString()}
-            </Badge>
+            </div>
           ) : (
-            <Badge>読み込み中...</Badge>
+            <div className="font-bold text-sm py-0.5 px-2">...</div>
           )}
+          <div className="text-muted-foreground mt-0.5 text-[10px]">月間配信</div>
         </div>
 
         {/* 友達数 */}
-        <div className="flex items-center gap-2 text-sm">
-          <Users className="h-4 w-4 text-muted-foreground" />
+        <div className="flex flex-col items-center justify-center leading-tight">
           {profile ? (
-            <Badge variant="outline">
-              {(profile?.friends_count ?? 0).toLocaleString()}/人
-            </Badge>
+            <div className="font-bold text-sm py-0.5 px-2">
+              {(profile?.friends_count ?? 0).toLocaleString()}人
+            </div>
           ) : (
-            <Badge variant="outline">.../人</Badge>
+            <div className="font-bold text-sm py-0.5 px-2">...</div>
           )}
+          <div className="text-muted-foreground mt-0.5 text-[10px]">友達数</div>
         </div>
+
       </div>
 
       {/* ログアウトボタン */}
