@@ -11,6 +11,16 @@ import { Check, Star, Zap, Crown, Shield, CreditCard } from "lucide-react"
 import type { LucideIcon } from "lucide-react"
 import { toast } from "sonner"
 import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog"
+import {
   PLAN_TYPE_LABELS,
   PlanFeatureConfig,
   PlanType,
@@ -26,6 +36,14 @@ interface PlanCard {
   featureConfig: PlanFeatureConfig
   icon: LucideIcon
   color: string
+}
+
+interface UsageStats {
+  steps: number
+  flexMessages: number
+  memberSites: number
+  totalContentBlocks: number
+  maxContentBlocksPerSite: number
 }
 
 const PLAN_ICON_MAP: Record<PlanType, { icon: LucideIcon; color: string }> = {
@@ -73,6 +91,10 @@ export default function PlanSettings() {
   const [isYearly, setIsYearly] = useState(false)
   const [processing, setProcessing] = useState(false)
   const [plans, setPlans] = useState<PlanCard[]>([])
+  const [usageStats, setUsageStats] = useState<UsageStats | null>(null)
+  const [usageLoading, setUsageLoading] = useState(false)
+  const [showDowngradeDialog, setShowDowngradeDialog] = useState(false)
+  const [downgradePlan, setDowngradePlan] = useState<PlanCard | null>(null)
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
@@ -85,6 +107,7 @@ export default function PlanSettings() {
     if (!user) return
     loadCurrentPlan()
     loadPlans()
+    loadUsageStats()
   }, [user])
 
   const loadPlans = async () => {
@@ -124,6 +147,69 @@ export default function PlanSettings() {
     }
   }
 
+  const loadUsageStats = async () => {
+    if (!user) return
+
+    setUsageLoading(true)
+    try {
+      const [
+        planStatsResult,
+        memberSiteStatsResult,
+        flexMessageCountResult,
+        siteContentCountsResult,
+      ] = await Promise.all([
+        supabase.rpc("get_user_plan_and_step_stats", { p_user_id: user.id }),
+        supabase.rpc("get_user_member_site_stats", { p_user_id: user.id }),
+        supabase
+          .from("flex_messages")
+          .select("id", { count: "exact", head: true })
+          .eq("user_id", user.id),
+        supabase
+          .from("member_sites")
+          .select("id, member_site_content(count)")
+          .eq("user_id", user.id),
+      ])
+
+      const steps = planStatsResult.data?.[0]?.current_steps ?? 0
+      const memberStats = memberSiteStatsResult.data?.[0] ?? null
+      const memberSites = memberStats?.current_sites ?? 0
+      const totalContentBlocks = memberStats?.current_total_content ?? 0
+      const flexMessages = flexMessageCountResult.count ?? 0
+
+      let maxContentBlocksPerSite = 0
+      if (!siteContentCountsResult.error && Array.isArray(siteContentCountsResult.data)) {
+        const counts = (siteContentCountsResult.data as any[]).map((site: any) => {
+          const relation = site.member_site_content
+          if (Array.isArray(relation)) {
+            if (relation.length === 0) return 0
+            const first = relation[0]
+            if (typeof first === "number") return first
+            return first?.count ?? 0
+          }
+          if (typeof relation === "number") return relation
+          return 0
+        })
+        if (counts.length > 0) {
+          maxContentBlocksPerSite = Math.max(...counts)
+        }
+      }
+
+      setUsageStats({
+        steps,
+        flexMessages,
+        memberSites,
+        totalContentBlocks,
+        maxContentBlocksPerSite,
+      })
+    } catch (error) {
+      console.error("Failed to load usage stats:", error)
+      toast.error("利用状況の取得に失敗しました")
+      setUsageStats(null)
+    } finally {
+      setUsageLoading(false)
+    }
+  }
+
   const loadCurrentPlan = async () => {
     if (!user) return
 
@@ -143,6 +229,12 @@ export default function PlanSettings() {
     } catch (error) {
       console.error("Error loading plan:", error)
     }
+  }
+
+  const startDowngradeFlow = async (plan: PlanCard) => {
+    setDowngradePlan(plan)
+    setShowDowngradeDialog(true)
+    await loadUsageStats()
   }
 
   const handlePlanChange = async (planType: PlanType) => {
@@ -183,7 +275,7 @@ export default function PlanSettings() {
       (samePlanType && switchingToMonthly)
 
     if (isDowngrade) {
-      await handleDowngrade(selectedPlan)
+      await startDowngradeFlow(selectedPlan)
     } else {
       await handleStripeCheckout(selectedPlan)
     }
@@ -223,7 +315,7 @@ export default function PlanSettings() {
     }
   }
 
-  const handleDowngrade = async (plan: PlanCard) => {
+  const performDowngrade = async (plan: PlanCard) => {
     if (!currentPlan) {
       await createFreePlanRecord()
       return
@@ -251,6 +343,9 @@ export default function PlanSettings() {
 
       await loadCurrentPlan()
       await loadPlans()
+      await loadUsageStats()
+      setShowDowngradeDialog(false)
+      setDowngradePlan(null)
       toast.success(data?.message ?? `${plan.name}へ変更しました`)
     } catch (error) {
       console.error("Error managing subscription:", error)
@@ -320,6 +415,66 @@ export default function PlanSettings() {
     : null
 
   const planDictionary = Object.fromEntries(plans.map((plan) => [plan.type, plan]))
+
+  const isUnlimited = (limit: number | null | undefined) =>
+    limit === null || limit === undefined || limit === -1
+
+  const formatLimitValue = (limit: number | null | undefined, suffix: string) =>
+    isUnlimited(limit) ? "無制限" : `${limit!.toLocaleString()}${suffix}`
+
+  const formatCurrentValue = (value: number, suffix: string) =>
+    `${value.toLocaleString()}${suffix}`
+
+  const downgradeComparisons = downgradePlan && usageStats
+    ? [
+        {
+          key: "scenarioStepLimit",
+          label: "シナリオ総ステップ数",
+          current: usageStats.steps,
+          limit: downgradePlan.featureConfig.limits.scenarioStepLimit,
+          suffix: "ステップ",
+        },
+        {
+          key: "flexMessageTemplateLimit",
+          label: "Flexメッセージ保存数",
+          current: usageStats.flexMessages,
+          limit: downgradePlan.featureConfig.limits.flexMessageTemplateLimit,
+          suffix: "通",
+        },
+        {
+          key: "memberSiteLimit",
+          label: "会員サイト作成数",
+          current: usageStats.memberSites,
+          limit: downgradePlan.featureConfig.limits.memberSiteLimit,
+          suffix: "件",
+        },
+        {
+          key: "totalContentBlockLimit",
+          label: "コンテンツブロック合計",
+          current: usageStats.totalContentBlocks,
+          limit: downgradePlan.featureConfig.limits.totalContentBlockLimit,
+          suffix: "個",
+        },
+        {
+          key: "contentBlockPerSiteLimit",
+          label: "サイト毎のコンテンツブロック",
+          current: usageStats.maxContentBlocksPerSite,
+          limit: downgradePlan.featureConfig.limits.contentBlockPerSiteLimit,
+          suffix: "個",
+        },
+      ]
+    : []
+
+  const unmetConditions = downgradeComparisons.filter(
+    (item) => !isUnlimited(item.limit) && item.current > (item.limit ?? 0)
+  )
+
+  const canConfirmDowngrade =
+    !!downgradePlan &&
+    !processing &&
+    !usageLoading &&
+    downgradeComparisons.length > 0 &&
+    unmetConditions.length === 0
 
   return (
     <div className="space-y-6">
@@ -493,6 +648,97 @@ export default function PlanSettings() {
           </CardContent>
         </Card>
       </div>
+      <AlertDialog
+        open={showDowngradeDialog}
+        onOpenChange={(open) => {
+          if (!open) {
+            if (processing) return
+            setShowDowngradeDialog(false)
+            setDowngradePlan(null)
+          } else {
+            setShowDowngradeDialog(true)
+          }
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>
+              {downgradePlan ? `${downgradePlan.name}へダウングレード` : "ダウングレード"}
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              下位プランの条件を満たす必要があります。現在の利用状況と上限を確認してください。
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <div className="space-y-4 text-sm">
+            {usageLoading ? (
+              <div className="text-muted-foreground">利用状況を取得しています...</div>
+            ) : !usageStats || !downgradePlan ? (
+              <div className="text-destructive">
+                利用状況を取得できませんでした。時間を置いて再度お試しください。
+              </div>
+            ) : (
+              <>
+                <table className="w-full border-collapse text-sm">
+                  <thead>
+                    <tr className="border-b text-xs text-muted-foreground">
+                      <th className="p-2 text-left">項目</th>
+                      <th className="p-2 text-right">現在の利用状況</th>
+                      <th className="p-2 text-right">{downgradePlan.name} 上限</th>
+                      <th className="p-2 text-center">状態</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {downgradeComparisons.map((item) => {
+                      const exceeds = !isUnlimited(item.limit) && item.current > (item.limit ?? 0)
+                      return (
+                        <tr
+                          key={item.key}
+                          className={`border-b last:border-none ${exceeds ? "text-destructive font-semibold" : ""}`}
+                        >
+                          <td className="p-2">{item.label}</td>
+                          <td className="p-2 text-right">{formatCurrentValue(item.current, item.suffix)}</td>
+                          <td className="p-2 text-right">{formatLimitValue(item.limit, item.suffix)}</td>
+                          <td className="p-2 text-center">{exceeds ? "要削減" : "OK"}</td>
+                        </tr>
+                      )
+                    })}
+                  </tbody>
+                </table>
+                {unmetConditions.length > 0 ? (
+                  <div className="text-destructive text-sm">
+                    以下の項目が上限を超えています。減らしてからダウングレードしてください。
+                  </div>
+                ) : (
+                  <div className="text-muted-foreground text-sm">
+                    条件を満たしています。このままダウングレードできます。
+                  </div>
+                )}
+                <p className="text-xs text-muted-foreground">
+                  プラン変更後は下位プランの上限が適用され、超過分は利用できなくなる場合があります。
+                </p>
+              </>
+            )}
+          </div>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={processing}>キャンセル</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={async () => {
+                if (downgradePlan) {
+                  await performDowngrade(downgradePlan)
+                }
+              }}
+              className="bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-60 disabled:cursor-not-allowed"
+              disabled={!canConfirmDowngrade}
+            >
+              {processing
+                ? "処理中..."
+                : downgradePlan
+                ? `${downgradePlan.name}へダウングレード`
+                : "ダウングレードする"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   )
 }
