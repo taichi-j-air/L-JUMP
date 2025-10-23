@@ -8,7 +8,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { ArrowLeft, Save, Eye, Plus, Trash2, Settings, Image as ImageIcon, ExternalLink, GripVertical, Copy as CopyIcon, HelpCircle } from "lucide-react";
+import { ArrowLeft, Save, Eye, Plus, Trash2, Settings, Image as ImageIcon, ExternalLink, GripVertical, Copy as CopyIcon, HelpCircle, AlertCircle } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { supabase } from "@/integrations/supabase/client";
@@ -102,6 +102,13 @@ interface Category {
   thumbnail_url: string | null;
   content_blocks?: any[] | null; // JSON array
   ignore_sequential?: boolean;
+}
+
+interface MemberSiteStats {
+  current_sites: number;
+  max_sites: number;
+  current_total_content: number;
+  max_total_content: number;
 }
 
 /* ========== Sortables: 共通スタイル ========== */
@@ -225,11 +232,19 @@ const MemberSiteBuilder = () => {
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [activeTab, setActiveTab] = useState(siteId ? "content-list" : "site-settings");
+  const [memberSiteStats, setMemberSiteStats] = useState<MemberSiteStats | null>(null);
 
   // Site data
   const [site, setSite] = useState<MemberSite | null>(null);
   const [sites, setSites] = useState<MemberSite[]>([]);
   const [siteContents, setSiteContents] = useState<SiteContent[]>([]);
+
+  const maxAllowedSites = memberSiteStats?.max_sites;
+  const currentSiteCount = memberSiteStats?.current_sites ?? sites.length;
+  const isSiteLimitReached =
+    typeof maxAllowedSites === "number" &&
+    maxAllowedSites !== -1 &&
+    currentSiteCount >= maxAllowedSites;
 
   // Site form
   const [siteName, setSiteName] = useState("");
@@ -355,6 +370,21 @@ const MemberSiteBuilder = () => {
     }
   }, [siteId]);
 
+  useEffect(() => {
+    const fetchUserAndStats = async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) {
+        const { data, error } = await supabase.rpc('get_user_member_site_stats', { p_user_id: user.id });
+        if (error) {
+          console.error('Error fetching member site stats:', error);
+        } else if (data) {
+          setMemberSiteStats(data[0] || null);
+        }
+      }
+    };
+    fetchUserAndStats();
+  }, []);
+
   const loadSites = async () => {
     setLoading(true);
     try {
@@ -366,7 +396,9 @@ const MemberSiteBuilder = () => {
       }
       const { data, error } = await supabase.from("member_sites").select("*").eq("user_id", user.id).order("created_at", { ascending: false });
       if (error) throw error;
-      setSites((data || []).map((d: any) => ({ ...d, access_type: (d.access_type || "paid") as "free" | "paid" })));
+      const siteList = (data || []).map((d: any) => ({ ...d, access_type: (d.access_type || "paid") as "free" | "paid" }));
+      setSites(siteList);
+      setMemberSiteStats((prev) => (prev ? { ...prev, current_sites: siteList.length } : prev));
     } catch (error) {
       console.error("Error loading sites:", error);
       toast({ title: "エラー", description: "サイト一覧の読み込みに失敗しました", variant: "destructive" });
@@ -700,6 +732,10 @@ const MemberSiteBuilder = () => {
     }
   };
   const handleCreateSite = async () => {
+    if (isSiteLimitReached && typeof maxAllowedSites === "number") {
+      toast({ title: "上限到達", description: `会員サイト数の上限(${maxAllowedSites}件)に達しました。`, variant: "destructive" });
+      return;
+    }
     setSaving(true);
     try {
       const { data: userData } = await supabase.auth.getUser();
@@ -950,12 +986,18 @@ const MemberSiteBuilder = () => {
                 <CardHeader className="flex flex-col gap-2 py-3">
                   <div className="flex flex-row items-center justify-between">
                     <CardTitle className="text-base">会員サイト一覧</CardTitle>
-                    <Button size="sm" onClick={handleCreateSite} disabled={saving} className="flex items-center gap-2">
+                    <Button size="sm" onClick={handleCreateSite} disabled={saving || isSiteLimitReached} className="flex items-center gap-2">
                       <Plus className="w-4 h-4" />
                       追加
                     </Button>
                   </div>
-                  <div className="text-sm text-muted-foreground">作成中のサイト: {sites.length}件</div>
+                  <div className="text-sm text-muted-foreground">作成したサイト: {sites.length}件</div>
+                  {isSiteLimitReached && (
+                    <div className="p-2 mt-2 text-xs text-destructive-foreground bg-destructive/90 rounded-md flex items-center gap-2">
+                      <AlertCircle className="h-4 w-4" />
+                      <span>サイト数の上限に達しました。</span>
+                    </div>
+                  )}
                 </CardHeader>
                 <CardContent className="p-2">
                   {sites.length === 0 ? (
