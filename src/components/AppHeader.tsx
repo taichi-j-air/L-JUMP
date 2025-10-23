@@ -243,11 +243,7 @@ export function AppHeader({ user }: AppHeaderProps) {
         {/* ステップ数 */}
         <div className="flex flex-col items-center justify-center leading-tight flex-shrink-0">
           {planStats ? (
-            <div className={`font-bold text-sm py-0.5 px-2 ${
-              planStats.max_steps > 0 && (planStats.current_steps / planStats.max_steps) >= 0.9 
-              ? 'text-destructive' 
-              : 'text-slate-700'
-            }`}>
+            <div className="font-bold text-sm py-0.5 px-2 text-slate-700">
               {planStats.current_steps.toLocaleString()}
               <span className="text-xs"> / {planStats.max_steps === -1 ? '無制限' : planStats.max_steps.toLocaleString()}</span>
             </div>
@@ -260,11 +256,7 @@ export function AppHeader({ user }: AppHeaderProps) {
         {/* 会員サイト数 */}
         <div className="flex flex-col items-center justify-center leading-tight flex-shrink-0">
           {memberSiteStats ? (
-            <div className={`font-bold text-sm py-0.5 px-2 ${
-              memberSiteStats.max_sites > 0 && (memberSiteStats.current_sites / memberSiteStats.max_sites) >= 0.9
-              ? 'text-destructive'
-              : 'text-slate-700'
-            }`}>
+            <div className="font-bold text-sm py-0.5 px-2 text-slate-700">
               {memberSiteStats.current_sites.toLocaleString()}<span className="text-xs"> / {memberSiteStats.max_sites === -1 ? '無制限' : memberSiteStats.max_sites.toLocaleString()}</span>
             </div>
           ) : (
@@ -276,11 +268,7 @@ export function AppHeader({ user }: AppHeaderProps) {
         {/* コンテンツ数 */}
         <div className="flex flex-col items-center justify-center leading-tight flex-shrink-0">
           {memberSiteStats ? (
-            <div className={`font-bold text-sm py-0.5 px-2 ${
-              memberSiteStats.max_total_content > 0 && (memberSiteStats.current_total_content / memberSiteStats.max_total_content) >= 0.9
-              ? 'text-destructive'
-              : 'text-slate-700'
-            }`}>
+            <div className="font-bold text-sm py-0.5 px-2 text-slate-700">
               {memberSiteStats.current_total_content.toLocaleString()}<span className="text-xs"> / {memberSiteStats.max_total_content === -1 ? '無制限' : memberSiteStats.max_total_content.toLocaleString()}</span>
             </div>
           ) : (
