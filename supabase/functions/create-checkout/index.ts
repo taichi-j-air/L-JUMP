@@ -251,7 +251,8 @@ serve(async (req) => {
     });
 
     console.log("[create-checkout] Created session:", session.id, {
-      plan_type,
+      plan_type: plan.plan_type,
+      plan_type_ui: normalizedPlanType,
       billingCycle,
       detectedLivemode,
     });
