@@ -52,15 +52,16 @@ export function AppHeader({ user }: AppHeaderProps) {
     return null;
   })();
 
+  const hasPlanPerSiteLimit = typeof planContentLimit === "number" && planContentLimit !== -1;
   const fallbackContentLimit = memberSiteStats?.max_total_content ?? -1;
-  const effectiveContentLimit =
-    typeof planContentLimit === "number" ? planContentLimit : fallbackContentLimit;
-  const contentLimitLabel =
-    effectiveContentLimit === -1
+  const effectiveContentLimit = hasPlanPerSiteLimit
+    ? (planContentLimit as number)
+    : fallbackContentLimit;
+  const perSiteLimitLabel = hasPlanPerSiteLimit
+    ? `${effectiveContentLimit.toLocaleString()}件/サイト`
+    : effectiveContentLimit === -1
       ? "無制限"
-      : typeof planContentLimit === "number"
-        ? `${effectiveContentLimit.toLocaleString()}件/サイト`
-        : effectiveContentLimit.toLocaleString();
+      : `${effectiveContentLimit.toLocaleString()}件`;
 
   useEffect(() => {
     loadProfile()
@@ -288,10 +289,22 @@ export function AppHeader({ user }: AppHeaderProps) {
         {/* コンテンツ数 */}
         <div className="flex flex-col items-center justify-center leading-tight flex-shrink-0">
           {memberSiteStats ? (
-            <div className="font-bold text-sm py-0.5 px-2 text-slate-700">
-              {memberSiteStats.current_total_content.toLocaleString()}
-              <span className="text-xs"> / {contentLimitLabel}</span>
-            </div>
+            <>
+              {hasPlanPerSiteLimit ? (
+                <div className="flex items-baseline gap-1 py-0.5 px-2 leading-tight">
+                  <span className="text-[10px] text-muted-foreground">各サイト</span>
+                  <span className="text-sm font-bold text-slate-700">{effectiveContentLimit.toLocaleString()}件</span>
+                  <span className="text-[10px] text-muted-foreground">/サイト（合計</span>
+                  <span className="text-sm font-bold text-slate-700">{memberSiteStats.current_total_content.toLocaleString()}件</span>
+                  <span className="text-[10px] text-muted-foreground">）</span>
+                </div>
+              ) : (
+                <div className="font-bold text-sm py-0.5 px-2 text-slate-700">
+                  {memberSiteStats.current_total_content.toLocaleString()}
+                  <span className="text-xs"> / {perSiteLimitLabel}</span>
+                </div>
+              )}
+            </>
           ) : (
             <div className="font-bold text-sm py-0.5 px-2">...</div>
           )}
