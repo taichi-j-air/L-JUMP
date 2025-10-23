@@ -24,6 +24,13 @@ interface PlanStats {
   max_steps: number;
 }
 
+interface MemberSiteStats {
+  current_sites: number;
+  max_sites: number;
+  current_total_content: number;
+  max_total_content: number;
+}
+
 interface AppHeaderProps {
   user: User
 }
@@ -31,6 +38,7 @@ interface AppHeaderProps {
 export function AppHeader({ user }: AppHeaderProps) {
   const [profile, setProfile] = useState<Profile | null>(null)
   const [planStats, setPlanStats] = useState<PlanStats | null>(null);
+  const [memberSiteStats, setMemberSiteStats] = useState<MemberSiteStats | null>(null);
   const [activeAccount, setActiveAccount] = useState<{ account_name: string; line_bot_id: string | null } | null>(null)
   const navigate = useNavigate()
 
@@ -43,7 +51,7 @@ export function AppHeader({ user }: AppHeaderProps) {
 
   const loadProfile = async () => {
     try {
-      const [profileResult, quotaResult, planStatsResult] = await Promise.all([
+      const [profileResult, quotaResult, planStatsResult, memberSiteStatsResult] = await Promise.all([
         supabase
           .from('profiles')
           .select('line_channel_id, line_bot_id, friends_count, monthly_message_limit, monthly_message_used')
@@ -67,7 +75,8 @@ export function AppHeader({ user }: AppHeaderProps) {
             return { data: null, error: error.message }
           }
         })(),
-        supabase.rpc('get_user_plan_and_step_stats', { p_user_id: user.id })
+        supabase.rpc('get_user_plan_and_step_stats', { p_user_id: user.id }),
+        supabase.rpc('get_user_member_site_stats', { p_user_id: user.id })
       ])
 
       if (profileResult.error) {
@@ -113,6 +122,12 @@ export function AppHeader({ user }: AppHeaderProps) {
         console.error('Error loading plan stats:', planStatsResult.error);
       } else if (planStatsResult.data) {
         setPlanStats(planStatsResult.data[0] || null);
+      }
+
+      if (memberSiteStatsResult.error) {
+        console.error('Error loading member site stats:', memberSiteStatsResult.error);
+      } else if (memberSiteStatsResult.data) {
+        setMemberSiteStats(memberSiteStatsResult.data[0] || null);
       }
 
     } catch (error) {
@@ -240,6 +255,38 @@ export function AppHeader({ user }: AppHeaderProps) {
             <div className="font-bold text-sm py-0.5 px-2">...</div>
           )}
           <div className="text-muted-foreground mt-0.5 text-[10px]">ステップ数</div>
+        </div>
+
+        {/* 会員サイト数 */}
+        <div className="flex flex-col items-center justify-center leading-tight flex-shrink-0">
+          {memberSiteStats ? (
+            <div className={`font-bold text-sm py-0.5 px-2 ${
+              memberSiteStats.max_sites > 0 && (memberSiteStats.current_sites / memberSiteStats.max_sites) >= 0.9
+              ? 'text-destructive'
+              : 'text-slate-700'
+            }`}>
+              {memberSiteStats.current_sites.toLocaleString()}<span className="text-xs"> / {memberSiteStats.max_sites === -1 ? '無制限' : memberSiteStats.max_sites.toLocaleString()}</span>
+            </div>
+          ) : (
+            <div className="font-bold text-sm py-0.5 px-2">...</div>
+          )}
+          <div className="text-muted-foreground mt-0.5 text-[10px]">会員サイト数</div>
+        </div>
+
+        {/* コンテンツ数 */}
+        <div className="flex flex-col items-center justify-center leading-tight flex-shrink-0">
+          {memberSiteStats ? (
+            <div className={`font-bold text-sm py-0.5 px-2 ${
+              memberSiteStats.max_total_content > 0 && (memberSiteStats.current_total_content / memberSiteStats.max_total_content) >= 0.9
+              ? 'text-destructive'
+              : 'text-slate-700'
+            }`}>
+              {memberSiteStats.current_total_content.toLocaleString()}<span className="text-xs"> / {memberSiteStats.max_total_content === -1 ? '無制限' : memberSiteStats.max_total_content.toLocaleString()}</span>
+            </div>
+          ) : (
+            <div className="font-bold text-sm py-0.5 px-2">...</div>
+          )}
+          <div className="text-muted-foreground mt-0.5 text-[10px]">コンテンツ数</div>
         </div>
 
       </div>
