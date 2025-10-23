@@ -296,6 +296,23 @@ export function AppHeader({ user }: AppHeaderProps) {
           <div className="text-muted-foreground mt-0.5 text-[10px]">ステップ数</div>
         </div>
 
+        {/* フレックス数 */}
+        <div className="flex flex-col items-center justify-center leading-tight flex-shrink-0">
+          {typeof flexMessageCount === "number" ? (
+            <div className="font-bold text-sm py-0.5 px-2 text-slate-700">
+              {flexMessageCount.toLocaleString()}
+              {typeof planFlexLimit === "number" && planFlexLimit !== -1 && (
+                <span className="text-xs"> / {planFlexLimit.toLocaleString()}件</span>
+              )}
+            </div>
+          ) : (
+            <div className="font-bold text-sm py-0.5 px-2">...</div>
+          )}
+          <div className="text-muted-foreground mt-0.5 text-[10px]">
+            フレックス数（上限 {flexLimitLabel}）
+          </div>
+        </div>
+
         {/* 会員サイト数 */}
         <div className="flex flex-col items-center justify-center leading-tight flex-shrink-0">
           {memberSiteStats ? (
@@ -308,24 +325,7 @@ export function AppHeader({ user }: AppHeaderProps) {
           <div className="text-muted-foreground mt-0.5 text-[10px]">会員サイト数</div>
         </div>
 
-        {/* Flexメッセージ */}
-        <div className="flex flex-col items-center justify-center leading-tight flex-shrink-0">
-          {typeof flexMessageCount === "number" ? (
-            <div className="font-bold text-sm py-0.5 px-2 text-slate-700">
-              {flexMessageCount.toLocaleString()}
-              {typeof planFlexLimit === "number" && planFlexLimit !== -1 && (
-                <span className="text-xs"> / {planFlexLimit.toLocaleString()}</span>
-              )}
-            </div>
-          ) : (
-            <div className="font-bold text-sm py-0.5 px-2">...</div>
-          )}
-          <div className="text-muted-foreground mt-0.5 text-[10px]">
-            Flex保存（上限 {flexLimitLabel}）
-          </div>
-        </div>
-
-        {/* コンテンツ数 */}
+        {/* 会員サイトコンテンツ数 */}
         <div className="flex flex-col items-center justify-center leading-tight flex-shrink-0">
           {memberSiteStats ? (
             <>
@@ -347,7 +347,7 @@ export function AppHeader({ user }: AppHeaderProps) {
           ) : (
             <div className="font-bold text-sm py-0.5 px-2">...</div>
           )}
-          <div className="text-muted-foreground mt-0.5 text-[10px]">コンテンツ数</div>
+          <div className="text-muted-foreground mt-0.5 text-[10px]">会員サイトコンテンツ数</div>
         </div>
 
       </div>

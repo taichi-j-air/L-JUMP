@@ -44,6 +44,16 @@ import {
   Eye,
   FileEdit,
 } from "lucide-react";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 
 /* ===================== Types ===================== */
 
@@ -737,6 +747,8 @@ export default function FlexMessageDesigner() {
   const [loading, setLoading] = useState(false);
   const [messages, setMessages] = useState<FlexMessageRow[]>([]);
   const [planName, setPlanName] = useState<string | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<FlexMessageRow | null>(null);
+  const [deleteLoading, setDeleteLoading] = useState(false);
 
   const [state, setState] = useState<DesignerState>({
     containerType: "bubble",
@@ -873,7 +885,7 @@ export default function FlexMessageDesigner() {
     if (typeof flexPlanLimit === "number" && flexPlanLimit !== -1 && messages.length >= flexPlanLimit) {
       toast({
         title: "保存上限に達しました",
-        description: `Flexメッセージは${flexPlanLimit.toLocaleString()}件まで保存できます。`,
+        description: `Flexメッセージは${flexPlanLimit.toLocaleString()}件まで保存できます。上位プランをご利用いただくと上限なしになります。`,
         variant: "destructive",
       });
       return;
@@ -1101,9 +1113,8 @@ export default function FlexMessageDesigner() {
     }
   };
 
-  const deleteMessage = async (item: FlexMessageRow) => {
-    if (!confirm(`「${item.name}」を削除しますか？`)) return;
-
+  const performDeleteMessage = async (item: FlexMessageRow) => {
+    setDeleteLoading(true);
     try {
       const { error } = await supabase.from("flex_messages").delete().eq("id", item.id);
       if (error) throw error;
@@ -1113,6 +1124,9 @@ export default function FlexMessageDesigner() {
     } catch (e: any) {
       console.error(e);
       toast({ title: "削除失敗", description: e.message || "削除でエラーが発生しました", variant: "destructive" });
+    } finally {
+      setDeleteLoading(false);
+      setDeleteTarget(null);
     }
   };
 
@@ -1200,14 +1214,19 @@ export default function FlexMessageDesigner() {
                     <Plus className="w-3 h-3 mr-1" />
                     追加
                   </Button>
-                  <div className="text-[10px] text-muted-foreground">
+                  <div className={`text-[10px] ${flexLimitReached ? "text-destructive" : "text-muted-foreground"}`}>
                     Flex保存 {messages.length.toLocaleString()}
                     {flexPlanLimit === null
                       ? " / 取得中..."
                       : flexPlanLimit === -1
                         ? " / 無制限"
-                        : ` / ${flexPlanLimit.toLocaleString()}件`}
+                        : ` / ${flexPlanLimit.toLocaleString()}件${flexLimitReached ? "（上限）" : ""}`}
                   </div>
+                  {flexPlanLimit !== -1 && flexLimitReached && (
+                    <div className="text-[10px] text-destructive text-right leading-tight">
+                      上限に達しました。上位プランをご利用いただくと上限なしになります。
+                    </div>
+                  )}
                 </div>
               </div>
             </CardHeader>
@@ -1255,7 +1274,7 @@ export default function FlexMessageDesigner() {
                           size="sm"
                           variant="outline"
                           className="h-6 px-2 text-[11px] text-destructive"
-                          onClick={() => deleteMessage(m)}
+                          onClick={() => setDeleteTarget(m)}
                         >
                           削除
                         </Button>
@@ -1511,6 +1530,34 @@ export default function FlexMessageDesigner() {
           </Card>
         </div>
       </main>
+      <AlertDialog
+        open={!!deleteTarget}
+        onOpenChange={(open) => {
+          if (!open && !deleteLoading) {
+            setDeleteTarget(null);
+          }
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Flexメッセージを削除しますか？</AlertDialogTitle>
+            <AlertDialogDescription>
+              {deleteTarget ? `「${deleteTarget.name || "無題のFlexメッセージ"}」を削除します。` : ""}
+              {" "}この操作は元に戻せません。
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={deleteLoading}>キャンセル</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => deleteTarget && performDeleteMessage(deleteTarget)}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              disabled={deleteLoading}
+            >
+              {deleteLoading ? "削除中..." : "削除する"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
