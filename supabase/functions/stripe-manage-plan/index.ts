@@ -432,37 +432,78 @@ serve(async (req) => {
       resultMessage = `${targetPlanConfig.name}へ変更しました`
     }
 
-    const planRecordPayload = {
-      plan_type: targetDbPlanType,
-      is_yearly: targetPlanType === "free" ? false : useYearly,
-      monthly_revenue: targetPlanType === "free" ? 0 : useYearly ? yearlyPrice : monthlyPrice,
-      stripe_subscription_id: subscriptionId,
-      stripe_customer_id: customerId,
-      plan_start_date: new Date().toISOString(),
-      plan_end_date: periodEnd,
-      updated_at: new Date().toISOString(),
-      is_active: true,
-    }
+    if (targetPlanType === "free") {
+      // フリープランへの変更の場合、既存のプランを非アクティブ化し、新しいフリープランを作成する
+      if (currentPlan?.id) {
+        const { error: deactivateError } = await supabaseService
+          .from("user_plans")
+          .update({
+            is_active: false,
+            plan_end_date: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
+            stripe_subscription_id: null,
+          })
+          .eq("id", currentPlan.id);
 
-    if (currentPlan?.id) {
-      const { error: updateError } = await supabaseService
-        .from("user_plans")
-        .update(planRecordPayload)
-        .eq("id", currentPlan.id)
-
-      if (updateError) {
-        throw new Error("プラン情報の更新に失敗しました")
+        if (deactivateError) {
+          throw new Error(`現在のプランの非アクティブ化に失敗しました: ${deactivateError.message}`);
+        }
       }
-    } else {
+
+      // 新しいフリープランレコードを挿入
       const { error: insertError } = await supabaseService
         .from("user_plans")
         .insert({
-          ...planRecordPayload,
           user_id: userId,
-        })
+          plan_type: "free",
+          is_yearly: false,
+          monthly_revenue: 0,
+          is_active: true,
+          plan_start_date: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        });
 
       if (insertError) {
-        throw new Error("プラン情報の作成に失敗しました")
+        // もしユーザーが既にアクティブなフリープランを持っている場合、ユニーク制約違反が起こる可能性がある
+        // その場合は特にエラーとせず、処理を続行する
+        if (insertError.code !== '23505') { // unique_violation
+          throw new Error(`フリープランの作成に失敗しました: ${insertError.message}`);
+        }
+      }
+    } else {
+      // 有料プラン間の変更
+      const planRecordPayload = {
+        plan_type: targetDbPlanType,
+        is_yearly: useYearly,
+        monthly_revenue: useYearly ? yearlyPrice : monthlyPrice,
+        stripe_subscription_id: subscriptionId,
+        stripe_customer_id: customerId,
+        plan_start_date: new Date().toISOString(),
+        plan_end_date: periodEnd,
+        updated_at: new Date().toISOString(),
+        is_active: true,
+      };
+
+      if (currentPlan?.id) {
+        const { error: updateError } = await supabaseService
+          .from("user_plans")
+          .update(planRecordPayload)
+          .eq("id", currentPlan.id);
+
+        if (updateError) {
+          throw new Error(`プラン情報の更新に失敗しました: ${updateError.message}`);
+        }
+      } else {
+        const { error: insertError } = await supabaseService
+          .from("user_plans")
+          .insert({
+            ...planRecordPayload,
+            user_id: userId,
+          });
+
+        if (insertError) {
+          throw new Error(`プラン情報の作成に失敗しました: ${insertError.message}`);
+        }
       }
     }
 
