@@ -272,6 +272,17 @@ const detectStripeKey = async (
     )
 
     const primaryItem = subscription?.items?.data?.[0] ?? null
+    const recurring = primaryItem?.price?.recurring ?? null
+    const planInfo = primaryItem?.plan ?? subscription?.plan ?? null
+    const intervalValue = recurring?.interval ?? planInfo?.interval ?? (currentPlan.is_yearly ? "year" : "month")
+    const intervalCountValue = recurring?.interval_count ?? planInfo?.interval_count ?? (currentPlan.is_yearly ? 1 : 1)
+    const customerRaw = subscription?.customer
+    const customerId =
+      typeof customerRaw === "string"
+        ? customerRaw
+        : customerRaw && typeof customerRaw === "object" && "id" in customerRaw
+          ? (customerRaw.id as string)
+          : null
     const currentPeriodStart =
       typeof subscription.current_period_start === "number"
         ? new Date(subscription.current_period_start * 1000).toISOString()
@@ -297,10 +308,8 @@ const detectStripeKey = async (
           current_plan_type: currentPlanType,
           current_period_start: currentPeriodStart,
           current_period_end: currentPeriodEnd,
-          interval:
-            (primaryItem?.price?.recurring?.interval ??
-              (currentPlan.is_yearly ? "year" : "month")) || null,
-          interval_count: primaryItem?.price?.recurring?.interval_count ?? 1,
+          interval: intervalValue || null,
+          interval_count: intervalCountValue || 1,
           unit_amount: typeof primaryItem?.price?.unit_amount === "number" ? primaryItem.price.unit_amount : null,
           currency: primaryItem?.price?.currency ?? "jpy",
           live_mode: stripeAuth.isLiveMode,
@@ -308,6 +317,7 @@ const detectStripeKey = async (
           plan_price: useYearly
             ? Number(planConfig?.yearly_price ?? 0)
             : Number(planConfig?.monthly_price ?? 0),
+          customer_id: customerId,
         },
       }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 200 }

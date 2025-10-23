@@ -54,6 +54,7 @@ interface SubscriptionInfo {
   liveMode: boolean
   planLabel: string | null
   planPrice: number | null
+  customerId: string | null
 }
 
 const PLAN_ICON_MAP: Record<PlanType, { icon: LucideIcon; color: string }> = {
@@ -295,6 +296,7 @@ export default function PlanSettings() {
       const subscription = data.subscription ?? {}
       const currencyCode = typeof subscription.currency === "string" ? subscription.currency.toUpperCase() : "JPY"
       const planPriceFromStripe = typeof subscription.plan_price === "number" ? subscription.plan_price : null
+      const customerId = typeof subscription.customer_id === "string" ? subscription.customer_id : null
       setSubscriptionInfo({
         currentPeriodStart: subscription.current_period_start ?? null,
         currentPeriodEnd: subscription.current_period_end ?? null,
@@ -307,6 +309,7 @@ export default function PlanSettings() {
         liveMode: Boolean(subscription.live_mode),
         planLabel: typeof subscription.plan_label === "string" ? subscription.plan_label : null,
         planPrice: planPriceFromStripe,
+        customerId,
       })
     } catch (error) {
       const message =
@@ -512,6 +515,67 @@ export default function PlanSettings() {
       }
     } finally {
       setProcessing(false)
+    }
+  }
+
+  const handlePaidPlanDowngrade = async (plan: PlanCard) => {
+    if (!subscriptionInfo?.customerId) {
+      toast.error("Stripeの顧客情報が取得できませんでした")
+      return
+    }
+
+    setProcessing(true)
+    try {
+      const cancelRes = await supabase.functions.invoke("stripe-cancel-subscription", {
+        body: { customerId: subscriptionInfo.customerId },
+      })
+
+      if (cancelRes.error) {
+        throw new Error(cancelRes.error.message || "現在のサブスクリプションの解約に失敗しました")
+      }
+
+      const cancelData = cancelRes.data as { success?: boolean; already_canceled?: boolean; error?: string } | null
+      if (cancelData && cancelData.success === false && !cancelData.already_canceled) {
+        throw new Error(cancelData.error ?? "現在のサブスクリプションの解約に失敗しました")
+      }
+
+      const targetIsYearly = subscriptionInfo.interval === "year"
+      const successUrl = `${window.location.origin}/settings/plan?success=true`
+      const cancelUrl = `${window.location.origin}/settings/plan?canceled=true`
+
+      const { data, error } = await supabase.functions.invoke("create-checkout", {
+        body: {
+          plan_type: plan.type,
+          is_yearly: targetIsYearly,
+          success_url: successUrl,
+          cancel_url: cancelUrl,
+        },
+      })
+
+      if (error) {
+        throw new Error(error.message || "新しい決済の開始に失敗しました")
+      }
+
+      if (data?.url) {
+        window.location.href = data.url
+        return
+      }
+
+      throw new Error("決済URLを取得できませんでした")
+    } catch (error) {
+      console.error("handlePaidPlanDowngrade error:", error)
+      toast.error(error instanceof Error ? error.message : "ダウングレード処理に失敗しました")
+    } finally {
+      setProcessing(false)
+    }
+  }
+
+  const handleFinalizeDowngrade = async () => {
+    if (!downgradePlan) return
+    if (downgradePlan.type === "free") {
+      await performDowngrade(downgradePlan)
+    } else {
+      await handlePaidPlanDowngrade(downgradePlan)
     }
   }
 
@@ -1018,11 +1082,7 @@ export default function PlanSettings() {
                   いいえ
                 </Button>
                 <Button
-                  onClick={async () => {
-                    if (downgradePlan) {
-                      await performDowngrade(downgradePlan)
-                    }
-                  }}
+                  onClick={handleFinalizeDowngrade}
                   className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
                   disabled={processing}
                 >
