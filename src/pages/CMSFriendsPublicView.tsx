@@ -61,16 +61,19 @@ type KnownErrors =
 const renderBlock = (block: Block, uid?: string, viewerAccess?: PagePayload["viewer_access"]) => {
   const { type, content } = block;
 
-  const textStyle = (block.type === 'paragraph' || block.type === 'heading' || block.type === 'note') ? {
-    fontSize: content.fontSize,
-    color: content.color,
-    fontWeight: content.bold ? 'bold' : 'normal',
-    fontStyle: content.italic ? 'italic' : 'normal',
-    textDecoration: content.underline ? 'underline' : 'none',
-    textAlign: content.alignment || 'left',
-    whiteSpace: 'pre-wrap',
-    wordBreak: 'break-word',
-  } as React.CSSProperties : {};
+  const textStyle = (block.type === 'paragraph' || block.type === 'heading' || block.type === 'note')
+    ? ({
+        fontSize: content.fontSize,
+        color: content.color,
+        backgroundColor: content.backgroundColor || 'transparent',
+        fontWeight: content.bold ? 'bold' : 'normal',
+        fontStyle: content.italic ? 'italic' : 'normal',
+        textDecoration: content.underline ? 'underline' : 'none',
+        textAlign: content.alignment || 'left',
+        whiteSpace: 'pre-wrap',
+        wordBreak: 'break-word',
+      } as React.CSSProperties)
+    : {};
 
   switch (type) {
     case 'background':
