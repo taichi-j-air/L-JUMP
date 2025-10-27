@@ -335,6 +335,7 @@ export const EnhancedBlockEditor: React.FC<EnhancedBlockEditorProps> = (props) =
 
   const [expandedBlocks, setExpandedBlocks] = useState<string[]>([]);
   const [templateDialogOpenFor, setTemplateDialogOpenFor] = useState<string | null>(null);
+  const [templateDialogOpen, setTemplateDialogOpen] = useState(false);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const lastAddedBlockTypeRef = useRef<Block['type'] | null>(null);
   const blockIds = useMemo(() => sortedBlocks.map(block => block.id), [sortedBlocks]);
@@ -377,6 +378,34 @@ export const EnhancedBlockEditor: React.FC<EnhancedBlockEditorProps> = (props) =
   }, [sortedBlocks.length]);
 
   const emit = (next: Block[]) => props.onChange(Array.isArray(next) ? next : []);
+
+  const applyTemplate = (templateName: 'present' | 'sales') => {
+    let templateBlocks: Omit<Block, 'id' | 'order'>[] = [];
+
+    if (templateName === 'present') {
+      templateBlocks = [
+        { type: 'image', content: getDefaultContent('image') },
+        { type: 'paragraph', content: { ...getDefaultContent('paragraph'), text: 'プレゼント用のテキストをここに入力します。' } },
+        { type: 'heading', content: { ...getDefaultContent('heading'), text: 'プレゼントのタイトル' } },
+        { type: 'video', content: getDefaultContent('video') },
+        { type: 'paragraph', content: { ...getDefaultContent('paragraph'), text: '動画に関する説明文をここに入力します。' } },
+        { type: 'paragraph', content: { ...getDefaultContent('paragraph'), text: 'さらに補足事項があればここに入力します。' } },
+        { type: 'image', content: getDefaultContent('image') },
+        { type: 'form_embed', content: getDefaultContent('form_embed') },
+      ];
+    } else if (templateName === 'sales') {
+      // TODO: Implement sales template
+    }
+
+    const newBlocks = templateBlocks.map((block) => ({
+      ...block,
+      id: uid(),
+    }));
+
+    const combinedBlocks = [...sortedBlocks, ...newBlocks].map((b, i) => ({ ...b, order: i }));
+
+    emit(combinedBlocks);
+  };
 
   /* -------- CRUD -------- */
   const getDefaultContent = (type: Block['type']) => {
@@ -828,7 +857,7 @@ export const EnhancedBlockEditor: React.FC<EnhancedBlockEditorProps> = (props) =
                   <div className="flex items-center gap-1 rounded-md bg-muted p-1 w-fit">
                     <Button size="sm" variant={block.content.alignment === 'left' ? 'default' : 'ghost'} onClick={() => updateBlock(block.id, { ...block.content, alignment: 'left' })} className="h-8"><AlignLeft className="h-4 w-4" /></Button>
                     <Button size="sm" variant={block.content.alignment === 'center' || !block.content.alignment ? 'default' : 'ghost'} onClick={() => updateBlock(block.id, { ...block.content, alignment: 'center' })} className="h-8"><AlignCenter className="h-4 w-4" /></Button>
-                    <Button size="sm" variant={block.content.alignment === 'right' ? 'default' : 'ghost'} onClick={() => updateBlock(block.id, { ...block.content, alignment: 'right' })} className="h-8"><AlignRight className="h-4 w-4" /></Button>
+                    <Button size="sm" variant={block.content.alignment === 'right' ? 'default' : 'ghost'} className="h-8" onClick={() => updateBlock(block.id, { ...block.content, alignment: 'right' })}><AlignRight className="h-4 w-4" /></Button>
                   </div>
                 </div>
 
@@ -1034,12 +1063,7 @@ export const EnhancedBlockEditor: React.FC<EnhancedBlockEditorProps> = (props) =
               value={block.content.formId || ''}
               onValueChange={(value) => {
                 const nextForm = forms.find(f => f.id === value);
-                updateBlock(block.id, {
-                  ...block.content,
-                  formId: value,
-                  title: nextForm?.name || 'フォーム埋め込み',
-                  formName: nextForm?.name || '',
-                });
+                updateBlock(block.id, { ...block.content, formId: value, title: nextForm?.name || 'フォーム埋め込み', formName: nextForm?.name || '' });
               }}
               disabled={props.requirePublicForms && availableForms.length === 0}
             >
@@ -1788,7 +1812,7 @@ export const EnhancedBlockEditor: React.FC<EnhancedBlockEditorProps> = (props) =
               </Button>
             )}
             {!props.hideTemplateButton && (
-              <Dialog>
+              <Dialog open={templateDialogOpen} onOpenChange={setTemplateDialogOpen}>
                 <DialogTrigger asChild>
                   <Button variant="ghost" className="flex flex-col h-auto py-2 hover:bg-[#0cb386] group">
                     <Folder className="h-5 w-5 mb-1 text-[#0cb386] group-hover:text-white" />
@@ -1799,7 +1823,15 @@ export const EnhancedBlockEditor: React.FC<EnhancedBlockEditorProps> = (props) =
                   <DialogHeader>
                     <DialogTitle>テンプレートを選択</DialogTitle>
                   </DialogHeader>
-                  <p>ポップアップウィンドウの内容は後で指定されます。</p>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 p-4">
+                    <Button onClick={() => {
+                      applyTemplate('present');
+                      setTemplateDialogOpen(false);
+                    }}>① プレゼント用ページ</Button>
+                    <Button onClick={() => {
+                      setTemplateDialogOpen(false);
+                    }} disabled>② セールス用ページ</Button>
+                  </div>
                 </DialogContent>
               </Dialog>
             )}
