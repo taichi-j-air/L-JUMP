@@ -394,7 +394,14 @@ export const EnhancedBlockEditor: React.FC<EnhancedBlockEditorProps> = (props) =
         { type: 'form_embed', content: getDefaultContent('form_embed') },
       ];
     } else if (templateName === 'sales') {
-      // TODO: Implement sales template
+      templateBlocks = [
+        { type: 'image', content: getDefaultContent('image') },
+        { type: 'paragraph', content: { ...getDefaultContent('paragraph'), text: 'セールス用の紹介文をここに入力します。' } },
+        { type: 'video', content: getDefaultContent('video') },
+        { type: 'paragraph', content: { ...getDefaultContent('paragraph'), text: '動画の補足説明やベネフィットを記載します。' } },
+        { type: 'image', content: getDefaultContent('image') },
+        { type: 'button', content: { ...getDefaultContent('button'), text: '今すぐ申し込む', url: '' } },
+      ];
     }
 
     const newBlocks = templateBlocks.map((block) => ({
@@ -1829,8 +1836,9 @@ export const EnhancedBlockEditor: React.FC<EnhancedBlockEditorProps> = (props) =
                       setTemplateDialogOpen(false);
                     }}>① プレゼント用ページ</Button>
                     <Button onClick={() => {
+                      applyTemplate('sales');
                       setTemplateDialogOpen(false);
-                    }} disabled>② セールス用ページ</Button>
+                    }}>② セールス用ページ</Button>
                   </div>
                 </DialogContent>
               </Dialog>
