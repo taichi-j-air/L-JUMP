@@ -97,6 +97,8 @@ const ZERO_DECIMAL_CURRENCIES = new Set([
   "XPF",
 ])
 
+const PENDING_DOWNGRADE_KEY = "pendingPaidDowngradeCheckout"
+
 const formatCurrency = (value: number, currency: string = "JPY") => {
   const code = currency.toUpperCase()
   const isZeroDecimal = ZERO_DECIMAL_CURRENCIES.has(code)
@@ -161,6 +163,91 @@ export default function PlanSettings() {
     loadCurrentPlan()
     loadPlans()
     loadUsageStats()
+  }, [user])
+
+  useEffect(() => {
+    if (!user) return
+
+    const params = new URLSearchParams(window.location.search)
+    const pendingRaw = sessionStorage.getItem(PENDING_DOWNGRADE_KEY)
+
+    const clearPending = () => {
+      sessionStorage.removeItem(PENDING_DOWNGRADE_KEY)
+      if (params.has("success") || params.has("canceled")) {
+        params.delete("success")
+        params.delete("canceled")
+        const query = params.toString()
+        window.history.replaceState({}, document.title, `${window.location.pathname}${query ? `?${query}` : ""}`)
+      }
+    }
+
+    if (!pendingRaw) {
+      if (params.has("success") || params.has("canceled")) {
+        clearPending()
+      }
+      return
+    }
+
+    let pending: { customerId?: string | null; createdAt?: number | null } | null = null
+    try {
+      pending = JSON.parse(pendingRaw)
+    } catch (error) {
+      console.warn("[PlanSettings] Failed to parse pending downgrade payload:", error)
+    }
+
+    if (!pending) {
+      clearPending()
+      return
+    }
+
+    const canceled = params.get("canceled") === "true"
+    if (canceled) {
+      toast.info("ダウングレードをキャンセルしました")
+      clearPending()
+      return
+    }
+
+    const success = params.get("success") === "true"
+    if (!success) {
+      return
+    }
+
+    if (!pending.customerId) {
+      clearPending()
+      return
+    }
+
+    const finalize = async () => {
+      setProcessing(true)
+      try {
+        const cancelRes = await supabase.functions.invoke("stripe-cancel-subscription", {
+          body: { customerId: pending?.customerId },
+        })
+
+        if (cancelRes.error) {
+          throw new Error(cancelRes.error.message || "旧プランの解約に失敗しました")
+        }
+
+        const cancelData = cancelRes.data as { success?: boolean; already_canceled?: boolean; error?: string } | null
+        if (cancelData && cancelData.success === false && !cancelData.already_canceled) {
+          throw new Error(cancelData.error ?? "旧プランの解約に失敗しました")
+        }
+
+        await Promise.all([loadCurrentPlan(), loadUsageStats()])
+        setShowDowngradeDialog(false)
+        setDowngradePlan(null)
+        setDowngradeStep(1)
+        toast.success("旧プランを解約しました")
+      } catch (error) {
+        console.error("[PlanSettings] finalizePendingPaidDowngrade error:", error)
+        toast.error(error instanceof Error ? error.message : "旧プランの解約に失敗しました")
+      } finally {
+        clearPending()
+        setProcessing(false)
+      }
+    }
+
+    finalize()
   }, [user])
 
   const loadPlans = async () => {
@@ -526,22 +613,18 @@ export default function PlanSettings() {
 
     setProcessing(true)
     try {
-      const cancelRes = await supabase.functions.invoke("stripe-cancel-subscription", {
-        body: { customerId: subscriptionInfo.customerId },
-      })
-
-      if (cancelRes.error) {
-        throw new Error(cancelRes.error.message || "現在のサブスクリプションの解約に失敗しました")
-      }
-
-      const cancelData = cancelRes.data as { success?: boolean; already_canceled?: boolean; error?: string } | null
-      if (cancelData && cancelData.success === false && !cancelData.already_canceled) {
-        throw new Error(cancelData.error ?? "現在のサブスクリプションの解約に失敗しました")
-      }
-
       const targetIsYearly = subscriptionInfo.interval === "year"
       const successUrl = `${window.location.origin}/settings/plan?success=true`
       const cancelUrl = `${window.location.origin}/settings/plan?canceled=true`
+
+      sessionStorage.setItem(
+        PENDING_DOWNGRADE_KEY,
+        JSON.stringify({
+          customerId: subscriptionInfo.customerId,
+          targetPlan: plan.type,
+          createdAt: Date.now(),
+        })
+      )
 
       const { data, error } = await supabase.functions.invoke("create-checkout", {
         body: {
@@ -565,6 +648,7 @@ export default function PlanSettings() {
     } catch (error) {
       console.error("handlePaidPlanDowngrade error:", error)
       toast.error(error instanceof Error ? error.message : "ダウングレード処理に失敗しました")
+      sessionStorage.removeItem(PENDING_DOWNGRADE_KEY)
     } finally {
       setProcessing(false)
     }
@@ -1003,16 +1087,18 @@ export default function PlanSettings() {
                       Stripe側プラン名: {subscriptionInfo.plan_label}
                     </p>
                   )}
-                  <p>次回の決済予定日: {prorationInfo.nextBilling.toLocaleDateString("ja-JP")}</p>
                   <p>
-                    残り日数: {prorationInfo.remainingDays}日 / {prorationInfo.totalDays}日（{prorationInfo.billingPeriodLabel}）
+                    次回の決済予定日: <span className="font-bold text-destructive">{prorationInfo.nextBilling.toLocaleDateString("ja-JP")}</span>
+                  </p>
+                  <p>
+                    残り日数: <span className="font-bold text-destructive">{prorationInfo.remainingDays}</span>日 / {prorationInfo.totalDays}日（{prorationInfo.billingPeriodLabel}）
                   </p>
                   <p>経過日数: {prorationInfo.elapsedDays}日</p>
                   <p>
                     現在のプラン料金: {formatCurrency(prorationInfo.planPrice, prorationInfo.currency ?? "JPY")} / {prorationInfo.billingPeriodLabel}
                   </p>
                   <p>
-                    今ダウングレードすると約 {formatCurrency(prorationInfo.remainingValue, prorationInfo.currency ?? "JPY")} 分の利用価値が失われます。
+                    今ダウングレードすると残りの <span className="font-bold text-destructive">{formatCurrency(prorationInfo.remainingValue, prorationInfo.currency ?? "JPY")}</span> 分の価値を破棄することになります。
                   </p>
                   <p className="text-xs text-muted-foreground">
                     ※ 実際の金額は Stripe の決済状況により多少前後する場合があります。

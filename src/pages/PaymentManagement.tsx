@@ -703,89 +703,15 @@ export default function PaymentManagement() {
           </div>
 
           {/* Overview Cards */}
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
+          <div className="mb-6">
             <Card>
               <CardHeader className="p-3">
-                <CardTitle className="text-sm text-muted-foreground flex items-center gap-2">
-                  <DollarSign className="h-4 w-4" />
+                <CardTitle className="text-sm text-muted-foreground flex items-center justify-center gap-2">
                   総売上
                 </CardTitle>
               </CardHeader>
               <CardContent className="p-3 pt-0">
-                <div className="text-lg font-bold">{formatPrice(stats.total_revenue)}</div>
-              </CardContent>
-            </Card>
-            
-            <Card>
-              <CardHeader className="p-3">
-                <CardTitle className="text-sm text-muted-foreground flex items-center gap-2">
-                  <TrendingUp className="h-4 w-4" />
-                  今月売上
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="p-3 pt-0">
-                <div className="text-lg font-bold">{formatPrice(stats.monthly_revenue)}</div>
-              </CardContent>
-            </Card>
-
-            <Card className="cursor-pointer hover:bg-muted/50 transition-colors" onClick={() => {
-              // サブスク会員の詳細を取得（現在のモードに応じて）
-              const subscriptionFriends = orders
-                .filter(order => (order as any).product_type === 'subscription' && order.status === 'paid' && order.livemode === isLiveMode)
-                .map(order => order.friend_uid)
-                .filter((uid, index, self) => uid && self.indexOf(uid) === index)
-              
-              const friendsAsSubscribers = subscriptionFriends
-                .map(uid => {
-                  const friend = friends.find(f => f.short_uid === uid)
-                  return friend ? {
-                    id: friend.id,
-                    display_name: friend.display_name,
-                    short_uid: friend.short_uid,
-                    line_user_id: friend.line_user_id,
-                    orders: orders
-                      .filter(order => order.friend_uid === uid && order.status === 'paid' && order.livemode === isLiveMode)
-                      .map(order => ({
-                        id: order.id,
-                        product_name: order.product_name,
-                        product_type: order.product_type || 'unknown',
-                        amount: order.amount,
-                        currency: order.currency,
-                        status: order.status,
-                        created_at: order.created_at
-                      })),
-                    total_amount: orders
-                      .filter(order => order.friend_uid === uid && order.status === 'paid' && order.livemode === isLiveMode)
-                      .reduce((sum, order) => sum + (order.amount || 0), 0)
-                  } : null
-                })
-                .filter(Boolean)
-              setSubscriberDetails(friendsAsSubscribers)
-              setShowSubscriberDetailDialog(true)
-            }}>
-              <CardHeader className="p-3">
-                <CardTitle className="text-sm text-muted-foreground flex items-center gap-2">
-                  <Users className="h-4 w-4" />
-                  サブスク会員数
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="p-3 pt-0">
-                <div className="text-lg font-bold">{stats.unique_subscription_users}人</div>
-                <div className="text-xs text-muted-foreground">
-                  (クリックで友達一覧)
-                </div>
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardHeader className="p-3">
-                <CardTitle className="text-sm text-muted-foreground flex items-center gap-2">
-                  <CreditCard className="h-4 w-4" />
-                  単発決済数
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="p-3 pt-0">
-                <div className="text-lg font-bold">{stats.successful_one_time}件</div>
+                <div className="text-2xl font-bold text-center py-2">{formatPrice(stats.total_revenue)}</div>
               </CardContent>
             </Card>
           </div>
