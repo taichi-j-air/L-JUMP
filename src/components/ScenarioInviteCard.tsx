@@ -158,7 +158,7 @@ export function ScenarioInviteCard({
                       </div>
                     </div>
 
-                    {/* 再登録設定 */}
+                    {/*
                     <Collapsible
                       open={expandedSettings === code.id}
                       onOpenChange={(open) => setExpandedSettings(open ? code.id : null)}
@@ -200,6 +200,7 @@ export function ScenarioInviteCard({
                         </div>
                       </CollapsibleContent>
                     </Collapsible>
+                    */}
                   </div>
                 </div>
               )

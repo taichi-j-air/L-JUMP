@@ -16,6 +16,10 @@ interface FriendLog {
   added_at: string
   friend_id?: string
   line_user_id?: string
+  friends?: {
+    display_name: string
+    picture_url: string
+  } | null
 }
 
 export function ScenarioAnalytics({ scenario }: ScenarioAnalyticsProps) {
@@ -28,14 +32,14 @@ export function ScenarioAnalytics({ scenario }: ScenarioAnalyticsProps) {
     try {
       const { data, error } = await supabase
         .from('scenario_friend_logs')
-        .select('*')
+        .select('*, friends ( display_name, picture_url )')
         .eq('scenario_id', scenario.id)
         .order('added_at', { ascending: false })
 
       if (error) {
         console.error('友達ログ取得エラー:', error)
       } else {
-        setFriendLogs(data || [])
+        setFriendLogs(data as any || [])
       }
     } catch (error) {
       console.error('分析データ取得失敗:', error)
@@ -45,7 +49,9 @@ export function ScenarioAnalytics({ scenario }: ScenarioAnalyticsProps) {
   }
 
   useEffect(() => {
-    loadAnalytics()
+    if (scenario.id) {
+      loadAnalytics()
+    }
   }, [scenario.id])
 
   const handleToggleDetails = () => {
@@ -83,12 +89,15 @@ export function ScenarioAnalytics({ scenario }: ScenarioAnalyticsProps) {
         {showDetails && (
           <div className="space-y-2">
             <div className="text-xs font-medium">追加履歴</div>
-            <div className="max-h-32 overflow-y-auto space-y-1">
+            <div className="max-h-48 overflow-y-auto space-y-1">
               {friendLogs.map((log) => (
-                <div key={log.id} className="text-xs p-2 bg-muted rounded">
-                  <div>コード: {log.invite_code}</div>
-                  <div className="text-muted-foreground">
-                    {new Date(log.added_at).toLocaleString('ja-JP')}
+                <div key={log.id} className="flex items-center gap-2 text-xs p-2 bg-muted rounded">
+                  <img src={log.friends?.picture_url || '/placeholder.svg'} alt={log.friends?.display_name || 'Friend'} className="w-8 h-8 rounded-full" />
+                  <div className="flex-1">
+                    <div>{log.friends?.display_name || '不明なユーザー'}</div>
+                    <div className="text-muted-foreground">
+                      {new Date(log.added_at).toLocaleString('ja-JP')}
+                    </div>
                   </div>
                 </div>
               ))}
