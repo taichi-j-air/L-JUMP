@@ -1110,13 +1110,30 @@ async function markStepAsDelivered(
         return
       }
 
-      // 現在のシナリオは離脱扱いにする
-      await supabase
-        .from('step_delivery_tracking')
-        .update({ status: 'exited', updated_at: new Date().toISOString() })
-        .eq('scenario_id', scenarioId)
-        .eq('friend_id', friendId)
-        .neq('status', 'exited')
+      // Check if the current scenario has exit prevention enabled
+      const { data: fromScenario, error: fromScenarioError } = await supabase
+        .from('step_scenarios')
+        .select('prevent_auto_exit')
+        .eq('id', scenarioId)
+        .single()
+
+      if (fromScenarioError) {
+        console.error('Error fetching from_scenario details for exit prevention check:', fromScenarioError)
+        // Proceed, but log the error. Defaulting to not exiting might be safer.
+      }
+      
+      if (fromScenario && !fromScenario.prevent_auto_exit) {
+        // 現在のシナリオは離脱扱いにする
+        console.log(`Friend ${friendId} is being exited from scenario ${scenarioId} due to transition.`)
+        await supabase
+          .from('step_delivery_tracking')
+          .update({ status: 'exited', updated_at: new Date().toISOString() })
+          .eq('scenario_id', scenarioId)
+          .eq('friend_id', friendId)
+          .neq('status', 'exited')
+      } else {
+        console.log(`Friend ${friendId} is NOT being exited from scenario ${scenarioId} because prevent_auto_exit is ON.`)
+      }
 
       // 遷移先の最初のステップ詳細を取得
       const { data: firstStep, error: firstErr } = await supabase
